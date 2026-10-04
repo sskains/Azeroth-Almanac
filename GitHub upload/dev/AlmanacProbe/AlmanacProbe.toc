@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Almanac Probe
+## Notes: Test addon for Azeroth Almanac: checks which in-game sources can still describe creatures without the combat log. /aap report
+## Author: skain
+## Version: 0.3.0
+## SavedVariables: AlmanacProbeDB
+
+AlmanacProbe.lua

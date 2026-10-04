@@ -1,0 +1,25 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<!-- A townsfolk orb on the world map (Modules\Townsfolk.lua). No mouse scripts here: the map
+	     canvas asserts on pins that bring their own OnEnter / OnLeave; a child button handles them. -->
+	<Frame name="AzerothAlmanacTownsfolkPinTemplate" mixin="AzerothAlmanacTownsfolkPinMixin" virtual="true">
+		<Size x="16" y="16"/>
+		<Layers>
+			<Layer level="BACKGROUND">
+				<Texture parentKey="Rim"/>
+			</Layer>
+			<Layer level="ARTWORK">
+				<Texture parentKey="Icon"/>
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnLoad method="OnLoad"/>
+		</Scripts>
+	</Frame>
+	<!-- A gathering node on the world map (Modules\NodePins.lua): the same mouse-less pin. -->
+	<Frame name="AzerothAlmanacNodePinTemplate" mixin="AzerothAlmanacNodePinMixin" virtual="true">
+		<Size x="14" y="14"/>
+		<Scripts>
+			<OnLoad method="OnLoad"/>
+		</Scripts>
+	</Frame>
+</Ui>

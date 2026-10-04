@@ -1,0 +1,18 @@
+Azeroth Almanac - Data\Creatures.lua
+
+The creature data in Data\Creatures.lua (levels, Classic health / armor / damage estimates,
+ability spell IDs, immunities, resistances, loot and skinning tables with drop chances, money
+ranges) is derived from the VMaNGOS world database:
+
+  VMaNGOS - https://github.com/vmangos/core
+  Database snapshot "db_latest" (release db-sqlite-4641790), Classic patch 1.12 state.
+
+VMaNGOS is free software released under the GNU General Public License, version 2
+(GPL-2.0). Data\Creatures.lua is a derivative of that database and is likewise distributed
+under the terms of the GPL-2.0 (or, at your option, any later version). A copy of the license
+is available at https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+Thank you to the VMaNGOS contributors, and to the Elysium / LightsHope projects before them.
+
+It was converted by tools\build_creatures.py. Only IDs and numbers are included; names,
+icons and descriptions are supplied by the game client.

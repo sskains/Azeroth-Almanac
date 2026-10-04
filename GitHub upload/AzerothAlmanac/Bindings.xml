@@ -1,0 +1,18 @@
+<Bindings>
+	<Binding name="AZEROTHALMANAC_TOGGLE" header="AZEROTHALMANAC" category="ADDONS">
+		AzerothAlmanac.UI:Toggle()
+	</Binding>
+	<Binding name="AZEROTHALMANAC_SETTINGS" category="ADDONS">
+		AzerothAlmanac.Settings:Toggle()
+	</Binding>
+	<Binding name="AZEROTHALMANAC_INVENTORY" category="ADDONS">
+		AzerothAlmanac.QoL.InventoryWindow:Toggle()
+	</Binding>
+	<Binding name="AZEROTHALMANAC_GEM_MATCH" category="ADDONS">
+		AzerothAlmanac.QoL.GemMatch:Toggle()
+	</Binding>
+	<Binding name="CLICK AzerothAlmanacQuestTargetButton:LeftButton" category="ADDONS">
+	</Binding>
+	<Binding name="CLICK AzerothAlmanacClearMarksButton:LeftButton" category="ADDONS">
+	</Binding>
+</Bindings>

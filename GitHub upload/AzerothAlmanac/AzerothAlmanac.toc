@@ -1,0 +1,78 @@
+## Interface: 16001
+## Title: Azeroth Almanac
+## Notes: An adventurer's journal for WoW Forever: everything you discover, across all your characters. /aa
+## Author: skain
+## Version: 0.17.0
+## SavedVariables: AzerothAlmanacDB
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+
+Locale.lua
+Core.lua
+Modules\Store.lua
+Modules\Characters.lua
+Modules\Places.lua
+Modules\Bestiary.lua
+Data\Creatures.lua
+Modules\CreatureDB.lua
+Modules\Items.lua
+Modules\Merchants.lua
+Modules\Trainers.lua
+Data\Items.lua
+Modules\ItemDB.lua
+Modules\Quests.lua
+Data\Quests.lua
+Modules\QuestDB.lua
+Data\Dungeons.lua
+Modules\Dungeons.lua
+Modules\ArtScan.lua
+QoL\Core.lua
+Data\QoLData.lua
+QoL\WindowUtil.lua
+QoL\Inventory.lua
+QoL\AuctionPrices.lua
+QoL\AuctionVolume.lua
+QoL\Disenchant.lua
+QoL\Crafting.lua
+QoL\Merchant.lua
+QoL\MerchantList.lua
+QoL\QuestTargeter.lua
+QoL\NodeHighlight.lua
+QoL\Travel.lua
+QoL\GemMatchLogic.lua
+QoL\GemMatch.lua
+QoL\FlightCrew.lua
+QoL\WingsWhispers.lua
+QoL\InventoryWindow.lua
+QoL\BagBank.lua
+QoL\Social.lua
+QoL\UnitFrames.lua
+QoL\PartyPlates.lua
+QoL\ThreatMonitor.lua
+QoL\FollowButton.lua
+QoL\SpellRanker.lua
+QoL\HealAssist.lua
+UI\Widgets.lua
+UI\Map.lua
+Data\Townsfolk.lua
+Modules\Townsfolk.lua
+Modules\Flights.lua
+Modules\Gathering.lua
+Modules\Milestones.lua
+Modules\NodePins.lua
+UI\TownsfolkPin.xml
+UI\Toast.lua
+UI\Window.lua
+UI\Pages\Journal.lua
+UI\Pages\Bestiary.lua
+UI\Pages\Items.lua
+UI\Pages\Quests.lua
+UI\Pages\Merchants.lua
+UI\Pages\Trainers.lua
+UI\Pages\Places.lua
+UI\Pages\Townsfolk.lua
+UI\Pages\Gathering.lua
+UI\Pages\Dungeons.lua
+UI\Pages\Characters.lua
+UI\MinimapButton.lua
+UI\Settings.lua
+UI\Options.lua
