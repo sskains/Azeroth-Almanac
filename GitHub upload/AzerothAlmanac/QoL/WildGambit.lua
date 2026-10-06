@@ -121,6 +121,37 @@ local function SameName(a, b)
 	return fa ~= nil and fa == fb and (not sa:find("[%s%-]") or not sb:find("[%s%-]"))
 end
 
+-- a player opponent's face (d = { player = name, race = raceFile, sex = 2|3 }): their live
+-- portrait when they're in sight (target, focus, group, a nameplate), else their race's portrait.
+-- Never a card of theirs (that would give away their hidden card).
+local RACE_FACE = { Scourge = "undead", NightElf = "nightelf", BloodElf = "bloodelf" }
+function WG.PlayerFace(tex, d)
+	tex:SetTexCoord(0, 1, 0, 1)
+	local units = { "target", "focus", "mouseover", "targettarget" }
+	for i = 1, 4 do units[#units + 1] = "party" .. i end
+	for i = 1, 40 do units[#units + 1] = "raid" .. i end
+	for i = 1, 40 do units[#units + 1] = "nameplate" .. i end
+	for _, u in ipairs(units) do
+		if UnitExists(u) and UnitIsPlayer(u) and SameName(GetUnitName and GetUnitName(u, true) or UnitName(u), d.player) then
+			SetPortraitTexture(tex, u)
+			return
+		end
+	end
+	local race = d.race and (RACE_FACE[d.race] or d.race:lower())
+	local gender = d.sex == 3 and "female" or "male"
+	if race and C_Texture and C_Texture.GetAtlasInfo and tex.SetAtlas then
+		for _, pattern in ipairs({ "raceicon128-%s-%s", "raceicon-%s-%s" }) do
+			local atlas = pattern:format(race, gender)
+			if C_Texture.GetAtlasInfo(atlas) then tex:SetAtlas(atlas) return end
+		end
+	end
+	if d.race then
+		tex:SetTexture(("Interface\\CharacterFrame\\TemporaryPortrait-%s-%s"):format(d.sex == 3 and "Female" or "Male", d.race))
+		return
+	end
+	tex:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+end
+
 local function ClassColor(class)
 	local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
 	if c then return { c.r, c.g, c.b } end
@@ -498,7 +529,7 @@ function WG:DiscardPet(key)
 	Tell(("%s's card leaves your deck."):format(p.name or "Your companion"))
 	if frame and frame.prep and frame.prep:IsVisible() then self:ShowPick() end -- (only when the table is open)
 end
-StaticPopupDialogs = StaticPopupDialogs or {}
+-- (StaticPopupDialogs is the game's own table: only our keys are added, never the table reassigned, which taints it)
 StaticPopupDialogs["AZEROTHALMANAC_WG_DISCARD_PET"] = {
 	text = "Discard %s's Wild Gambit card?\n\nIts kills together are lost; adding it again starts it over.",
 	button1 = YES or "Yes", button2 = NO or "No",
@@ -1570,7 +1601,9 @@ local function SetOwner(f, color, diamond)
 		local face = f.ownerFace
 		if diamond then
 			local d = game and game.botDisplay
-			if type(d) == "table" then
+			if type(d) == "table" and d.player then
+				WG.PlayerFace(face, d)
+			elseif type(d) == "table" then
 				if d.unit and UnitExists(d.unit) and UnitGUID(d.unit) == d.guid then SetPortraitTexture(face, d.unit)
 				elseif d.display and SetPortraitTextureFromCreatureDisplayID then SetPortraitTextureFromCreatureDisplayID(face, d.display)
 				else face:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark") end
@@ -1713,9 +1746,9 @@ function Scene(f, card)
 		local w = math.min(1, (ww / wh) / 2.02) -- (the habitat paintings: 1024 x 506)
 		local l = (1 - w) / 2 + (spot - 0.5) * (1 - w) * 0.5
 		f.window:SetTexCoord(l, l + w, 0, 1)
-		local dim = card.tier == 1 and 0.78 or 0.95
+		local dim = 0.95
 		f.window:SetVertexColor(dim, dim, dim)
-		f.window:SetDesaturated(card.tier == 1)
+		f.window:SetDesaturated(false) -- (a grey card keeps its scene in colour; its frame says Poor)
 		return
 	end
 	local kind = SCENE_ART[card.type or ""] and card.type or "Generic"
@@ -1727,9 +1760,9 @@ function Scene(f, card)
 		local w = math.min(1, (ww / wh) / SCENE_ASPECT)
 		local l = (1 - w) / 2 + (spot - 0.5) * (1 - w) * 0.5
 		f.window:SetTexCoord(l, l + w, 0, 1)
-		local dim = card.tier == 1 and 0.78 or 0.95
+		local dim = 0.95
 		f.window:SetVertexColor(dim, dim, dim)
-		f.window:SetDesaturated(card.tier == 1)
+		f.window:SetDesaturated(false) -- (a grey card keeps its scene in colour; its frame says Poor)
 		return
 	end
 	-- the game's talent painting for the type
@@ -1741,9 +1774,9 @@ function Scene(f, card)
 		f.window:SetColorTexture(0.05, 0.035, 0.02, 0.6)
 		return
 	end
-	local dim = card.tier == 1 and 0.5 or 0.8
+	local dim = 0.8
 	f.window:SetVertexColor(dim, dim, dim)
-	f.window:SetDesaturated(card.tier == 1)
+	f.window:SetDesaturated(false) -- (a grey card keeps its scene in colour; its frame says Poor)
 end
 
 -- a painted tier frame: the card's art window, ribbon and panel go where the painting has them,
@@ -2232,7 +2265,7 @@ local function Build()
 		-- an inlay of the class colour, and a gold arrow at its far end on the player's turn
 		local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 		local PW = p.name:GetWidth() + 14
-		local PH = PW / 5.71
+		local PH = PW / 4.4 -- (taller than the painting's own shape, so the name has room)
 		local mine = side == "me"
 		local function X(f) return mine and f * PW or -f * PW end -- (along the plate from its portrait end)
 		local edge = mine and "LEFT" or "RIGHT"
@@ -2247,15 +2280,24 @@ local function Build()
 		p.inlay:SetPoint(edge, p.plate, edge, X(0.17), -0.03 * PH)
 		p.inlay:SetBlendMode("ADD")
 		p.inlay:SetAlpha(0.35)
-		p.coin = p:CreateTexture(nil, "ARTWORK", nil, 1)
-		p.coin:SetSize(0.95 * PH, 0.95 * PH)
+		-- whose turn: a warm glow round the plate
+		p.plateGlow = p:CreateTexture(nil, "BACKGROUND", nil, 1)
+		p.plateGlow:SetPoint("TOPLEFT", p.plate, "TOPLEFT", -18, 16)
+		p.plateGlow:SetPoint("BOTTOMRIGHT", p.plate, "BOTTOMRIGHT", 18, -16)
+		p.plateGlow:SetTexture(GLOW_TEX)
+		p.plateGlow:SetBlendMode("ADD")
+		p.plateGlow:SetVertexColor(1, 0.78, 0.3)
+		p.plateGlow:Hide()
+		-- the score on a bronze coin at the portrait's end, over the frames (it has to be seen)
+		p.coin = p:CreateTexture(nil, "OVERLAY", nil, 5)
+		p.coin:SetSize(1.2 * PH, 1.2 * PH)
 		p.coin:SetTexture(MEDIA .. "Header_ScoreCoin")
 		p.coin:SetPoint("CENTER", p.plate, edge, X(0.078), 0.01 * PH)
-		p.score = p:CreateFontString(nil, "OVERLAY")
-		p.score:SetFont(TITLE_FONT, 20, "")
-		p.score:SetTextColor(1, 0.92, 0.7)
+		p.score = p:CreateFontString(nil, "OVERLAY", nil, 7)
+		p.score:SetFont(TITLE_FONT, 26, "OUTLINE")
+		p.score:SetTextColor(1, 0.95, 0.75)
 		p.score:SetShadowOffset(1, -1)
-		p.score:SetPoint("CENTER", p.coin, "CENTER", 0, 0)
+		p.score:SetPoint("CENTER", p.coin, "CENTER", 0, 1)
 		p.name:SetWidth(0.66 * PW)
 		p.name:SetJustifyH("CENTER")
 		p.name:SetShadowOffset(1, -1)
@@ -2893,6 +2935,22 @@ local function Build()
 	frame.over = over
 
 	ns.NativeWindow(frame, { title = "Wild Gambit", icon = "Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth", close = close, byline = sub })
+	-- tuck the window into a small floating bar (the game goes on; click the bar to come back)
+	local mini = CreateFrame("Button", nil, frame)
+	mini:SetSize(24, 24)
+	mini:SetPoint("RIGHT", close, "LEFT", 2, 0)
+	mini:SetNormalTexture("Interface\\Buttons\\UI-Panel-SmallerButton-Up")
+	mini:SetPushedTexture("Interface\\Buttons\\UI-Panel-SmallerButton-Down")
+	mini:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
+	mini:SetScript("OnClick", function() WG:Collapse("float") end)
+	mini:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:AddLine("Tuck the table away", 1, 0.82, 0)
+		GameTooltip:AddLine("It becomes a small bar you can move; click the bar to come back.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	mini:SetScript("OnLeave", GameTooltip_Hide)
+	frame.mini = mini
 	-- (the byline moves to the bottom-left corner: the players' seats fill the band under the title)
 	sub:ClearAllPoints()
 	sub:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 18, 14)
@@ -2958,6 +3016,10 @@ local function Build()
 				p.turnGlow:SetShown(game.turn == side)
 				p.turnGlow:SetAlpha(0.5 + 0.4 * math.sin(clock * 3))
 				-- the arrow at the end of the nameplate points at the name whose turn it is, nudging at it
+				if p.plateGlow then
+					p.plateGlow:SetShown(game.turn == side)
+					p.plateGlow:SetAlpha(0.45 + 0.35 * math.sin(clock * 3))
+				end
 				if p.turnGem then
 					p.turnGem:SetShown(game.turn == side)
 					local nudge = 3 * math.sin(clock * 4)
@@ -3272,7 +3334,7 @@ function StepAnims(elapsed)
 			elseif a.kind == "strike" then
 				-- winner: lunge toward the loser and back, a little bigger
 				a.f:SetFrameLevel(frame.board:GetFrameLevel() + 30)
-				BoardPlace(a.f, a.dx * 16 * s, a.dy * 16 * s, 1 + 0.06 * s)
+				BoardPlace(a.f, a.dx * 24 * s, a.dy * 24 * s, 1 + 0.1 * s) -- (a clear lunge at each card it takes, one after another)
 			else
 				-- loser: knocked back, squashed, then settles with a small shake
 				local shake = (p > 0.5) and math.sin(p * 40) * 2 * (1 - p) or 0
@@ -3326,14 +3388,17 @@ function Refresh()
 			frame.slots[cell].target:SetShown(ok)
 		end
 	end
-	if game.over then for _, p in pairs(frame.players) do p.turnGlow:Hide() if p.turnGem then p.turnGem:Hide() end end end
+	if game.over then for _, p in pairs(frame.players) do p.turnGlow:Hide() if p.turnGem then p.turnGem:Hide() end if p.plateGlow then p.plateGlow:Hide() end end end
 	local status
 	if game.over then
 		status = ""
+	elseif WG:Paused() then
+		status = WG:PausedNote()
 	elseif game.note then
 		status = game.note
 	elseif game.targeting then
-		status = ("%s: %s  |cff999999(click your spell card again to cancel)|r"):format(game.ability.me.name, Hint(game.ability.me))
+		-- (short enough for the ribbon; clicking the spell card again cancels, as its tooltip says)
+		status = ("%s: %s"):format(game.ability.me.name, Hint(game.ability.me))
 	elseif game.turn == "me" then
 		status = game.selected and "Now pick a square." or "Your turn: choose a card from your hand."
 	else
@@ -3358,6 +3423,8 @@ function PaintPlayer(p, name, portrait, class, color, score)
 	if portrait == "player" then
 		SetPortraitTexture(p.portrait, "player")
 		p.portrait:SetTexCoord(0, 1, 0, 1)
+	elseif type(portrait) == "table" and portrait.player then
+		WG.PlayerFace(p.portrait, portrait)
 	elseif type(portrait) == "string" then
 		if SetPortraitToTexture then SetPortraitToTexture(p.portrait, portrait) else p.portrait:SetTexture(portrait) end
 	elseif type(portrait) == "number" and SetPortraitTextureFromCreatureDisplayID then
@@ -3395,10 +3462,10 @@ end
 TARGET_HINT = {
 	mine = "click one of your cards on the board", theirs = "click an enemy card on the board",
 	small = "click an enemy card with %d spikes or fewer", execute = "click an enemy card next to a bigger card of yours",
-	empty = "click an empty square", pocket = "click one of your cards to trade",
+	empty = "click an empty square", pocket = "click one of your cards on the board",
 }
 function Hint(ab)
-	if ab.target == "pocket" and game and game.pocket then return "now click the enemy card you want for it" end
+	if ab.target == "pocket" and game and game.pocket then return "now click the enemy card to take" end
 	return (TARGET_HINT[ab.target] or ""):format(ab.max or 8)
 end
 
@@ -3555,7 +3622,7 @@ local function Play1(side, h, cell)
 	-- after another); one an ankh saves is struck, then comes straight back
 	for k, cap in ipairs(got) do
 		local from = game.frames[cap.from] or entry.frame
-		local delay = 0.18 + (k - 1) * 0.42
+		local delay = 0.18 + (k - 1) * 0.46
 		if cap.saved then
 			Bump(from, game.frames[cap.cell], cap.side, game.color[side], side == "bot", delay, false)
 			Reborn(cap.cell, delay + 0.55)
@@ -3600,6 +3667,10 @@ end
 function WG:BotTurn()
 	if self:TutorialBotTurn() then return end
 	local g = game
+	if self:Paused() then
+		C_Timer.After(1, function() if game == g and not g.over and g.turn == "bot" then WG:BotTurn() end end)
+		return
+	end
 	local diff = g.tutorial and self.TUTOR_DIFF or self:Difficulty()
 	local function Hands()
 		local hand, theirs = {}, {}
@@ -3610,6 +3681,7 @@ function WG:BotTurn()
 	end
 	C_Timer.After(0.7 + math.random() * 0.6, function()
 		if game ~= g or g.over or g.turn ~= "bot" then return end
+		if WG:Paused() then WG:BotTurn() return end -- (combat came first: it waits)
 		local delay = 0
 		if not g.used.bot and g.rng() < diff.spell then
 			local placed = 0
@@ -3623,6 +3695,7 @@ function WG:BotTurn()
 		end
 		C_Timer.After(delay, function()
 			if game ~= g or g.over or g.turn ~= "bot" then return end
+		if WG:Paused() then WG:BotTurn() return end -- (combat came first: it waits)
 			local hand, theirs = Hands()
 			local h, cell = WL.BotMove(g.board, hand, "bot", diff.threat and theirs or {}, g.rng, diff.slip, diff.pool)
 			if h then Play1("bot", h, cell) end
@@ -3633,8 +3706,11 @@ end
 function WG:ClickCard(f)
 	if not game or game.over or game.turn ~= "me" or (game.flying or 0) > 0 then return end
 	if not self:TutorialAllows("card", f) then return end
+	if self:Paused() then Note(self:PausedNote()) return end
 	for _, e in ipairs(game.hands.me) do
 		if e.frame == f then
+			-- (a spell's target is on the board, never in your hand)
+			if game.targeting then Note(game.ability.me.name .. ": " .. Hint(game.ability.me) .. ".") return end
 			game.selected = (game.selected == e) and nil or e
 			ShowHands()
 			Refresh()
@@ -3675,6 +3751,7 @@ function WG:ClickSquare(cell)
 	self:Ghost(nil)
 	if not game or game.over or game.turn ~= "me" or (game.flying or 0) > 0 then return end
 	if not game.targeting and not self:TutorialAllows("cell", cell) then return end
+	if self:Paused() then Note(self:PausedNote()) return end
 	if game.targeting then
 		local ab = game.ability.me
 		if ab.target == "pocket" then
@@ -3709,6 +3786,7 @@ end
 function WG:AbilityButton()
 	if not game or game.over or game.turn ~= "me" or game.used.me or (game.flying or 0) > 0 then return end
 	if game.tutorial and not game.tutorial.free then return end -- (the spell waits till the tutorial lets go)
+	if self:Paused() then Note(self:PausedNote()) return end
 	local ab = game.ability.me
 	if game.targeting then game.targeting, game.pocket = nil, nil Refresh() return end
 	if ab.target == "none" then self:ApplyAbility("me", nil) return end
@@ -3993,6 +4071,7 @@ local function ClearTable()
 		if p.ankh then p.ankh:Hide() end
 		p.turnGlow:Hide()
 		if p.turnGem then p.turnGem:Hide() end
+		if p.plateGlow then p.plateGlow:Hide() end
 	end
 	frame.status:SetText("")
 	frame.leave:Hide()
@@ -4119,7 +4198,7 @@ function WG:ShowPick()
 	end
 	-- the opponent across the table: the player you're playing, or the creature
 	if self.net then
-		PaintPlayer(frame.players.bot, Short(self.net.opp), nil, nil, nil)
+		PaintPlayer(frame.players.bot, Short(self.net.opp), { player = self.net.opp, race = self.net.oppRace, sex = self.net.oppSex }, nil, nil)
 	else
 		self.nextOpponent = self.nextOpponent or OfferedOpponent()
 		local opp = self.nextOpponent
@@ -4274,7 +4353,7 @@ end
 -- checked against the rules (and the creature's real level); a wrong one ends the game.
 ---------------------------------------------------------------------------
 
-local PREFIX, PROTO = "AzAlmWG", "7"
+local PREFIX, PROTO = "AzAlmWG", "8"
 local POPUP = "AZEROTHALMANAC_WG_CHALLENGE"
 
 local function Send(...)
@@ -4345,11 +4424,9 @@ local function Valid(c)
 		if c.tier < 2 or c.level < 1 or c.level > 90 then return false, "level" end
 		return true
 	end
-	local db = A.DB and A.DB.creature and A.DB.creature[c.npc]
-	if db and type(db[1]) == "number" and db[1] > 0 and c.level > 0 then
-		local lo, hi = db[1], db[2] or db[1]
-		if c.level < lo - 5 or c.level > hi + 5 then return false, "level" end
-	end
+	-- (no check against the database's level range: WoW Forever's creatures don't always match it,
+	-- and a mismatch cancelled real games on one screen only; the spikes above follow the level)
+	if c.level < 0 or c.level > 63 then return false, "level" end
 	return true
 end
 
@@ -4403,7 +4480,8 @@ function WG:SendSetup()
 	net.myClass = db.class or select(2, UnitClass("player"))
 	net.myNonce = math.random(1, 1000000000)
 	net.myPick = frame.chosen
-	Send("S", net.gid, net.myBest, net.myClass, net.myNonce)
+	local _, raceFile = UnitRace("player")
+	Send("S", net.gid, net.myBest, net.myClass, net.myNonce, raceFile or "-", UnitSex and UnitSex("player") or 2)
 	self:TrySetup()
 end
 
@@ -4435,7 +4513,7 @@ function WG:TryBegin()
 	for _, c in ipairs(all) do
 		local ok, why = Valid(c)
 		if not ok then
-			Send("X", net.gid)
+			Send("X", net.gid, "card")
 			Say(("%s's card %s doesn't follow the rules (%s). Game cancelled."):format(Short(net.opp), c.name or "?", why))
 			self.net = nil
 			return
@@ -4449,14 +4527,15 @@ function WG:TryBegin()
 	net.state = "playing"
 	local challengerFirst = net.seed % 2 == 0
 	local first = (challengerFirst == (net.challenger and true or false)) and "me" or "bot"
-	local face
-	for _, c in ipairs(net.oppHand) do if c.display then face = c.display break end end
+	-- their face: their portrait when in sight, else their race's (never a card: the first is their hidden one)
+	local face = { player = net.opp, race = net.oppRace, sex = net.oppSex }
 	self:Begin({ mine = net.hand, theirs = net.oppHand, myReserves = net.reserves, theirReserves = net.oppRes,
 		myClass = net.myClass, oppClass = net.oppClass,
 		oppName = Short(net.opp), oppDisplay = face, seed = net.seed, first = first,
 		pvp = { opp = net.opp, gid = net.gid } })
 	self.net = nil -- the game itself (game.pvp) carries on from here
 	self:StopLooking(true)
+	for _, m in ipairs(net.early or {}) do self.OnMessage(m[1], m[2]) end
 	if first == "me" then Play(SND.challenge) end
 end
 
@@ -4470,7 +4549,7 @@ function WG:SendAbility(cell, cell2)
 	SendTo(game.pvp.opp, "U", game.pvp.gid, game.seq, cell or 0, cell2 or 0)
 end
 
-StaticPopupDialogs = StaticPopupDialogs or {}
+-- (StaticPopupDialogs is the game's own table: only our keys are added, never the table reassigned, which taints it)
 StaticPopupDialogs["AZEROTHALMANAC_WG_FORFEIT"] = {
 	text = "Forfeit this Wild Gambit match?\n\nIt counts as a loss.",
 	button1 = YES or "Yes", button2 = NO or "No",
@@ -4671,17 +4750,35 @@ local function OnMessage(text, sender)
 		WG.pending = nil
 		StaticPopup_Hide(POPUP)
 	elseif kind == "X" and game and game.pvp and game.pvp.gid == gid and not game.over and SameName(sender, game.pvp.opp) then
+		if f[4] == "card" or f[4] == "step" then
+			-- their screen called the game off (a card it couldn't accept, or the two drifted apart):
+			-- nobody wins, nothing is counted
+			Say(f[4] == "card" and ("%s's Almanac couldn't accept one of your cards; the game is cancelled (not counted)."):format(Short(sender))
+				or ("out of step with %s; the game is cancelled (not counted)."):format(Short(sender)))
+			game.over = true
+			frame.leave:Hide()
+			Refresh()
+			return
+		end
 		-- they forfeit (or left): the match is yours
 		Say(("%s forfeits the match."):format(Short(sender)))
 		EndGame("bot")
 	elseif not fromOpp then
 		-- moves of the game in progress
 		if game and game.pvp and game.pvp.gid == gid and SameName(sender, game.pvp.opp) and not game.over then
+			if kind == "P" then
+				-- they're in combat (1) or out of it (0): the game waits for them
+				game.pause = game.pause or {}
+				game.pause.opp = f[4] == "1" or nil
+				Refresh()
+				WG:PaintDock()
+				return
+			end
 			local seq = tonumber(f[4])
 			if kind == "M" or kind == "U" then
 				if seq ~= game.seq + 1 or game.turn ~= "bot" then
 					Say("out of step with your opponent; the game is cancelled.")
-					SendTo(game.pvp.opp, "X", gid)
+					SendTo(game.pvp.opp, "X", gid, "step")
 					game.over = true
 					Refresh()
 					return
@@ -4707,7 +4804,7 @@ local function OnMessage(text, sender)
 						WG:ApplyAbility("bot", cell, cell2)
 					else
 						Say("out of step with your opponent; the game is cancelled.")
-						SendTo(game.pvp.opp, "X", gid)
+						SendTo(game.pvp.opp, "X", gid, "step")
 						game.over = true
 						Refresh()
 					end
@@ -4715,6 +4812,10 @@ local function OnMessage(text, sender)
 			end
 		end
 		return
+	elseif (kind == "M" or kind == "U") and net.state ~= "playing" then
+		-- their first move came before this screen had both hands: kept, and played once it begins
+		net.early = net.early or {}
+		net.early[#net.early + 1] = { text, sender }
 	elseif kind == "A" and net.state == "inviting" then
 		-- accepted: Ready once you've chosen
 		net.state = "accepted"
@@ -4731,6 +4832,8 @@ local function OnMessage(text, sender)
 		if frame:IsShown() and not (game and not game.over) then WG:ShowLobby() end
 	elseif kind == "S" then
 		net.oppBest, net.oppClass, net.oppNonce = tonumber(f[4]), f[5], tonumber(f[6])
+		net.oppRace, net.oppSex = f[7] ~= "-" and f[7] or nil, tonumber(f[8])
+		if frame.prep:IsVisible() then PaintPlayer(frame.players.bot, Short(sender), { player = sender, race = net.oppRace, sex = net.oppSex }) end
 		if not (net.oppBest and WL.ABILITIES[net.oppClass or ""] and net.oppNonce) then return end
 		if frame.prep:IsVisible() then WG:PaintPick() end -- ("... is ready")
 		WG:TrySetup()
@@ -4753,6 +4856,7 @@ local function OnMessage(text, sender)
 		end
 	end
 end
+WG.OnMessage = OnMessage -- (moves that came early are replayed through it once the game begins)
 
 ---------------------------------------------------------------------------
 -- Module
@@ -5015,6 +5119,150 @@ function WG:TutorialBotTurn()
 end
 end -- (the tutorial)
 
+do -- In combat: the game pauses (for both players), and the window tucks itself away
+---------------------------------------------------------------------------
+-- Entering combat pauses a game: your moves wait, the practice gambler waits, and against a player
+-- a P message pauses their screen too (P|gid|1, P|gid|0 when you're out). The window collapses to
+-- a small bar docked at the top, left or right of the screen, or floating where you put it
+-- (Settings: In combat), and comes back when combat ends. The bar's "-" on the window collapses it
+-- by hand (floating, movable). Clicking the bar brings the window back.
+---------------------------------------------------------------------------
+WG.DOCKS = {
+	{ key = "top", name = "Dock at the top" }, { key = "left", name = "Dock on the left" },
+	{ key = "right", name = "Dock on the right" }, { key = "float", name = "Float (movable)" },
+	{ key = "off", name = "Leave the window open" },
+}
+
+-- who has the game paused: "me", "opp" or nil
+function WG:Paused()
+	local g = game
+	if not (g and not g.over and g.pause) then return nil end
+	return (g.pause.me and "me") or (g.pause.opp and "opp") or nil
+end
+function WG:PausedNote()
+	local who = self:Paused()
+	if who == "me" then return "Paused: you're in combat." end
+	if who == "opp" then return ("Paused: %s is in combat."):format(game.botName or "your opponent") end
+end
+
+local function Dock()
+	if WG.dock then return WG.dock end
+	local d = CreateFrame("Button", "AzerothAlmanacWGDock", UIParent, "BackdropTemplate")
+	d:SetSize(270, 52)
+	d:SetFrameStrata("HIGH")
+	d:SetClampedToScreen(true)
+	d:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+	d:SetBackdropColor(0.06, 0.05, 0.035, 0.94)
+	d:SetBackdropBorderColor(0.85, 0.68, 0.3)
+	d.icon = d:CreateTexture(nil, "ARTWORK")
+	d.icon:SetSize(36, 36)
+	d.icon:SetPoint("LEFT", 9, 0)
+	d.icon:SetTexture("Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth")
+	d.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	d.title = d:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	d.title:SetPoint("TOPLEFT", d.icon, "TOPRIGHT", 8, -2)
+	d.title:SetPoint("RIGHT", -10, 0)
+	d.title:SetJustifyH("LEFT")
+	d.line = d:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	d.line:SetPoint("BOTTOMLEFT", d.icon, "BOTTOMRIGHT", 8, 2)
+	d.line:SetPoint("RIGHT", -10, 0)
+	d.line:SetJustifyH("LEFT")
+	d.line:SetWordWrap(false)
+	d:SetMovable(true)
+	d:RegisterForDrag("LeftButton")
+	d:RegisterForClicks("LeftButtonUp")
+	d:SetScript("OnDragStart", function(self) self:StartMoving() end)
+	d:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		-- dragged: it floats there from now on
+		local p, _, rp, x, y = self:GetPoint(1)
+		db.dockPos = { p, rp, x, y }
+		self.mode = "float"
+	end)
+	d:SetScript("OnClick", function() WG:Expand() end)
+	d:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+		GameTooltip:AddLine("Wild Gambit", 1, 0.82, 0)
+		GameTooltip:AddLine("Click to open the table. Drag to move it.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	d:SetScript("OnLeave", GameTooltip_Hide)
+	local acc = 0
+	d:SetScript("OnUpdate", function(self, el)
+		acc = acc + el
+		if acc < 0.4 then return end
+		acc = 0
+		WG:PaintDock()
+	end)
+	d:Hide()
+	WG.dock = d
+	return d
+end
+
+function WG:PaintDock()
+	local d = self.dock
+	if not d then return end
+	local g = game
+	if g and not g.over then
+		local mine, theirs = WL.Count(g.board, "me"), WL.Count(g.board, "bot")
+		d.title:SetText(("Wild Gambit  |cffffffff%d - %d|r  %s"):format(mine, theirs, g.botName or ""))
+		d.line:SetText(self:PausedNote() or (g.turn == "me" and "|cff9be36bYour turn|r" or ("%s's turn"):format(g.botName or "Their")))
+	else
+		d.title:SetText("Wild Gambit")
+		d.line:SetText("Click to open the table.")
+	end
+end
+
+-- tuck the window away into the bar (mode: top / left / right / float)
+function WG:Collapse(mode)
+	if not frame then return end
+	local d = Dock()
+	d:ClearAllPoints()
+	mode = mode or "float"
+	d.mode = mode
+	if mode == "top" then d:SetPoint("TOP", UIParent, "TOP", 0, -110)
+	elseif mode == "left" then d:SetPoint("LEFT", UIParent, "LEFT", 16, 80)
+	elseif mode == "right" then d:SetPoint("RIGHT", UIParent, "RIGHT", -16, 80)
+	else
+		local p = db.dockPos
+		if p then d:SetPoint(p[1], UIParent, p[2], p[3], p[4]) else d:SetPoint("TOP", UIParent, "TOP", 0, -160) end
+	end
+	Zoom(nil)
+	frame:Hide()
+	self:PaintDock()
+	d:Show()
+end
+
+-- the window back from the bar
+function WG:Expand()
+	if self.dock then self.dock:Hide() end
+	self.dockedByCombat = nil
+	if frame then frame:Show() Refresh() end
+end
+
+-- combat starts or ends (PLAYER_REGEN_DISABLED / ENABLED)
+function WG:CombatChanged(on)
+	local g = game
+	if g and not g.over then
+		g.pause = g.pause or {}
+		g.pause.me = on or nil
+		if g.pvp then SendTo(g.pvp.opp, "P", g.pvp.gid, on and 1 or 0) end
+		Refresh()
+	end
+	local mode = db.combatDock or "top"
+	if on then
+		if frame and frame:IsShown() and mode ~= "off" then
+			self:Collapse(mode)
+			self.dockedByCombat = true
+		end
+	elseif self.dockedByCombat then
+		self:Expand()
+	end
+	self:PaintDock()
+end
+end -- (combat)
+
 function WG:OnInitialize(saved)
 	db = saved.wildGambit
 	db.records = db.records or {}
@@ -5046,6 +5294,10 @@ function WG:OnLogin()
 		if event == "UNIT_LEVEL" and unit ~= "pet" then return end
 		C_Timer.After(1, function() pcall(WG.PetSeen) end)
 	end)
+	local combat = CreateFrame("Frame")
+	combat:RegisterEvent("PLAYER_REGEN_DISABLED")
+	combat:RegisterEvent("PLAYER_REGEN_ENABLED")
+	combat:SetScript("OnEvent", function(_, event) WG:CombatChanged(event == "PLAYER_REGEN_DISABLED") end)
 	local events = CreateFrame("Frame")
 	events:RegisterEvent("CHAT_MSG_ADDON")
 	events:SetScript("OnEvent", function(_, _, prefix, text, channel, sender)

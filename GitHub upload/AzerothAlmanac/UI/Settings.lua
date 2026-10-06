@@ -971,28 +971,6 @@ local function BuildGames(P)
 	local GM = Q.GemMatch
 	P:Section(L["Gem Match"], L["Match three or more Classic gems. Match 4 for a power gem that clears 3x3, 5 for an Arcane Crystal that clears a whole colour. Timed (2 minutes) or 30 Moves. Pauses by itself in combat."])
 	P:Buttons({ { L["Play Gem Match"], 150, function() GM:Open() end } })
-	local diffs = Q.WildGambit.DIFFICULTY
-	P:Picker(L["Practice difficulty"], diffs, function()
-		for i, d in ipairs(diffs) do if d.key == (db.difficulty or "normal") then return i end end
-		return 2
-	end, function(i) db.difficulty = diffs[i].key end, nil, nil, L["How hard the practice gambler plays. Easy: it slips up often, ignores your cards' strong sides, is slow with its spell and plays its two strongest cards a tier lower. Hard: it rarely slips."])
-	local tables = Q.WildGambit.TABLES
-	P:Picker(L["Table"], tables, function()
-		for i, t in ipairs(tables) do if t.key == (db.table or "Dark") then return i end end
-		return 1
-	end, function(i) db.table = tables[i].key db.tablePicked = true Q.WildGambit:ApplyTable() end)
-	local boards = Q.WildGambit.BOARDS
-	P:Picker(L["Board"], boards, function()
-		for i, t in ipairs(boards) do if t.key == (db.board or "Glade") then return i end end
-		return 1
-	end, function(i) db.board = boards[i].key Q.WildGambit:ApplyBoard() end)
-	P:Check(L["Holiday boards"], L["During Hallow's End (18 October - 1 November) and the Feast of Winter Veil (16 December - 2 January) the board dresses for the season, whichever board you picked."],
-		function() return db.holidayBoards ~= false end, function(v) db.holidayBoards = v Q.WildGambit:ApplyBoard() end)
-	local backs = Q.WildGambit.BACKS
-	P:Picker(L["Card back"], backs, function()
-		for i, t in ipairs(backs) do if t.key == (db.back or "Almanac") then return i end end
-		return 1
-	end, function(i) db.back = backs[i].key end)
 	P:Check(L["Game sounds"], nil, function() return db.sound end, function(v) db.sound = v end)
 	P:Check(L["Share my best scores with my guild"], L["Guildmates running Azeroth Almanac see each other's bests beside the board."],
 		function() return db.share end, function(v) db.share = v end)
@@ -1026,6 +1004,33 @@ local function BuildGambit(P)
 	local db = Q.db.wildGambit
 	P:Section(L["Wild Gambit"], L["A creature card game. Every creature in your Almanac is a card: Sighted grey, Fought white, Hunted green, Master Hunter blue, Epic Hunter purple, Legendary Hunter orange. Spikes on each side come from the creature's level, tier, home zone and kind; a card with more spikes on the touching side takes its neighbour. Pick a class for the round: each has one spell per match that removes, protects or swaps a card (a removed card's owner is dealt a new one). You can play yourself as your chosen card (stronger for every creature you bring to Master Hunter), and Hunters and Warlocks can add their pet: right-click its portrait. Practise against a gambler, or challenge another Almanac player."])
 	P:Buttons({ { L["Play"], 110, function() Q.WildGambit:Open() end } })
+	local diffs = Q.WildGambit.DIFFICULTY
+	P:Picker(L["Practice difficulty"], diffs, function()
+		for i, d in ipairs(diffs) do if d.key == (db.difficulty or "normal") then return i end end
+		return 2
+	end, function(i) db.difficulty = diffs[i].key end, nil, nil, L["How hard the practice gambler plays. Easy: it slips up often, ignores your cards' strong sides, is slow with its spell and plays its two strongest cards a tier lower. Hard: it rarely slips."])
+	local tables = Q.WildGambit.TABLES
+	P:Picker(L["Table"], tables, function()
+		for i, t in ipairs(tables) do if t.key == (db.table or "Dark") then return i end end
+		return 1
+	end, function(i) db.table = tables[i].key db.tablePicked = true Q.WildGambit:ApplyTable() end)
+	local boards = Q.WildGambit.BOARDS
+	P:Picker(L["Board"], boards, function()
+		for i, t in ipairs(boards) do if t.key == (db.board or "Glade") then return i end end
+		return 1
+	end, function(i) db.board = boards[i].key Q.WildGambit:ApplyBoard() end)
+	P:Check(L["Holiday boards"], L["During Hallow's End (18 October - 1 November) and the Feast of Winter Veil (16 December - 2 January) the board dresses for the season, whichever board you picked."],
+		function() return db.holidayBoards ~= false end, function(v) db.holidayBoards = v Q.WildGambit:ApplyBoard() end)
+	local docks = Q.WildGambit.DOCKS
+	P:Picker(L["In combat"], docks, function()
+		for i, t in ipairs(docks) do if t.key == (db.combatDock or "top") then return i end end
+		return 1
+	end, function(i) db.combatDock = docks[i].key end, nil, nil, L["When you enter combat, the game pauses for both players and the table tucks itself into a small bar: docked at the top, left or right of the screen, or floating where you drag it. It comes back when combat ends."])
+	local backs = Q.WildGambit.BACKS
+	P:Picker(L["Card back"], backs, function()
+		for i, t in ipairs(backs) do if t.key == (db.back or "Almanac") then return i end end
+		return 1
+	end, function(i) db.back = backs[i].key end)
 	P:Check(L["Game sounds"], nil, function() return db.sound end, function(v) db.sound = v end)
 	P:Check(L["Forest sounds at the table"], nil, function() return db.ambience end, function(v) db.ambience = v end)
 	P:Check(L["Accept Wild Gambit challenges"], L["Other Almanac players can challenge you (/aa gambit Name, or the Challenge button on the pick screen)."],

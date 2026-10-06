@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.49.0** · 2026-10-06 · WoW Forever beta (interface 16001)
+**Version 0.50.0** · 2026-10-06 · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
@@ -86,7 +86,7 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
   - Tutorial (0.47.0): the coach note over the bottom row, the gold glow following the cards, every step reachable.
   - Hand sizing (0.46.9): six cards at about 0.69 keep their spikes clear; growth as cards leave.
   - Stealth look: smoke layers rise, badge at the frame's left edge; the zoomed hidden card keeps it.
-  - A "blocked from an action" popup was seen (6 Oct, cause unknown). 0.46.8 keeps the latest 30 blocks in SavedVariables (db.diag) to trace the next one.
+  - "Blocked from an action" popup (SpellStopCasting on Escape / logout): fixed in 0.49.1 (StaticPopupDialogs was being reassigned). Confirm it no longer appears; db.diag keeps the latest 30 blocks.
 - **Open:** GitHub push of the local commits; Tutor portrait art (a dice icon now); Logo_MurlocTacToe / Logo_GemMatch art for the flight prompt.
 
 ## Housekeeping
