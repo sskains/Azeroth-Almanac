@@ -5,7 +5,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "places", title = L["Places"], icon = W.KIND.zone.icon, order = 6 }
+local page = { key = "places", title = L["Places"], icon = W.KIND.zone.icon, order = 7 }
 local list, detail, countText, nameText
 local filter = ""
 local searchBox
@@ -42,7 +42,7 @@ local function CreatureSlots(list)
 		if rec.lo == -1 then lvl = "??" end
 		s[#s + 1] = { name = rec.name or "?", icon = W.FindIcon(W.TYPE_ICON[rec.type or ""] or W.KIND.creature.icon),
 			note = (L["Level %s"]):format(lvl) .. "  " .. ns.Bestiary:TierMarkup(ns.Bestiary:Tier(rec), 12) .. " " .. ns.Bestiary.TIERS[ns.Bestiary:Tier(rec)],
-			tip = L["Click to open in the Bestiary."], onClick = GoTo("bestiary", "ShowCreature", c.npc) }
+			tip = L["Click to open in Creatures."], onClick = GoTo("bestiary", "ShowCreature", c.npc) }
 	end
 	return s
 end
@@ -342,7 +342,8 @@ function page:Build(parent, header)
 	left:SetWidth(330)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return r.kind == "zone" and r.z and r.z.id end, refresh = function() page:Refresh() end },
-		rowHeight = 28,
+		rowHeight = 24,
+		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No places yet. Every zone and place you enter is recorded here."],
 		update = function(row, r)

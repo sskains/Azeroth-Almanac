@@ -8,7 +8,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "townsfolk", title = L["Townsfolk"], icon = W.KIND.townsfolk.icon, order = 5.7 }
+local page = { key = "townsfolk", title = L["People"], icon = W.KIND.townsfolk.icon, order = 8 }
 local list, detail, countText, kindButton, portrait, nameText, titleText, placeText, mapButton, pinButton
 local filter, kindFilter = "", nil
 local shown -- { npc = id } or { node = name }
@@ -420,7 +420,8 @@ function page:Build(parent, header)
 	left:SetWidth(320)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return r.header and r.key end, refresh = function() page:Refresh() end },
-		rowHeight = 28,
+		rowHeight = 24,
+		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No one yet. Trainers, innkeepers, bankers, flight masters, vendors and quest givers are recorded as you meet them."],
 		update = function(row, r)

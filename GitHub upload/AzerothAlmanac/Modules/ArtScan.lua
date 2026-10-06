@@ -339,34 +339,103 @@ end
 
 ---------------------------------------------------------------------------
 -- /aa whatis: the textures and atlases of whatever is under the mouse (hover something, then type
--- the command), so an icon seen in the game can be named exactly
+-- the command), so an icon seen in the game can be named exactly. Every run is also saved to
+-- AzerothAlmanacDB.whatis (last 20 runs), so a long one can be read in full after /reload.
+--   /aa whatis          what's under the mouse (and two levels of children), printed and saved
+--   /aa whatis window   the whole window under the mouse: every texture, atlas and font string,
+--                       with sizes, saved only (chat gets a count); for big windows like talents
+--   /aa whatis clear    forget the saved runs
 ---------------------------------------------------------------------------
 
-function Art:WhatIs()
+local MAX_RUNS, MAX_LINES = 20, 6000
+
+local function SaveRun(kind, root, lines)
+	ns.db.whatis = ns.db.whatis or {}
+	local runs = ns.db.whatis
+	runs[#runs + 1] = { t = time(), date = date("%Y-%m-%d %H:%M:%S"), kind = kind, root = root, n = #lines, lines = lines }
+	while #runs > MAX_RUNS do table.remove(runs, 1) end
+end
+
+local function Size(o)
+	local ok, w, h = pcall(function() return o:GetWidth(), o:GetHeight() end)
+	if ok and w and h then return ("%dx%d"):format(math.floor(w + 0.5), math.floor(h + 0.5)) end
+	return "?"
+end
+
+function Art:WhatIs(arg)
+	arg = (arg or ""):lower()
+	if arg == "clear" then
+		ns.db.whatis = nil
+		return ns.Print("whatis: saved runs cleared.")
+	end
+	local whole = arg == "window" or arg == "all"
 	local foci = (GetMouseFoci and GetMouseFoci()) or { GetMouseFocus and GetMouseFocus() }
-	local seen, n = {}, 0
-	local function Region(r, owner)
-		if Forbidden(r) or seen[r] or not (r.GetObjectType and r:GetObjectType() == "Texture") then return end
+	local seen, lines = {}, {}
+	local maxDepth = whole and 12 or 2
+	local function Add(text)
+		if #lines < MAX_LINES then lines[#lines + 1] = text end
+		if not whole then ns.Print(text) end
+	end
+	local function Region(r, owner, depth)
+		if Forbidden(r) or seen[r] or not r.GetObjectType then return end
 		seen[r] = true
+		local kind = r:GetObjectType()
 		if r.IsShown and not r:IsShown() then return end
-		local atlas = r.GetAtlas and r:GetAtlas()
-		local file = r.GetTextureFileID and r:GetTextureFileID()
-		local path = r.GetTexture and r:GetTexture()
-		if not (atlas or file or path) then return end
-		n = n + 1
-		ns.Print(("%s: %s%s%s"):format(owner, atlas and ("atlas |cffffd100" .. tostring(atlas) .. "|r  ") or "",
-			file and ("file |cffffd100" .. tostring(file) .. "|r  ") or "", (path and path ~= file) and tostring(path) or ""))
+		local pad = whole and string.rep("  ", depth) or ""
+		if kind == "Texture" then
+			local atlas = r.GetAtlas and r:GetAtlas()
+			local file = r.GetTextureFileID and r:GetTextureFileID()
+			local path = r.GetTexture and r:GetTexture()
+			if not (atlas or file or path) then return end
+			local layer = r.GetDrawLayer and r:GetDrawLayer() or ""
+			Add(("%s%s: %s%s%s%s"):format(pad, owner, atlas and ("atlas |cffffd100" .. tostring(atlas) .. "|r  ") or "",
+				file and ("file |cffffd100" .. tostring(file) .. "|r  ") or "", (path and path ~= file) and (tostring(path) .. "  ") or "",
+				whole and ("[" .. Size(r) .. " " .. tostring(layer) .. "]") or ""))
+		elseif kind == "FontString" and whole then
+			local okT, text = pcall(r.GetText, r)
+			if not okT or not text or text == "" or (issecretvalue and issecretvalue(text)) then return end
+			local fo = r.GetFontObject and r:GetFontObject()
+			local foName = fo and fo.GetName and fo:GetName() or "?"
+			local face, size = r:GetFont()
+			local cr, cg, cb = r:GetTextColor()
+			Add(("%s%s: font %s (%s %s) colour %.2f,%.2f,%.2f text \"%s\" [%s]"):format(pad, owner, tostring(foName),
+				tostring(face and face:match("[^\\]+$") or "?"), tostring(size and math.floor(size + 0.5) or "?"), cr or 1, cg or 1, cb or 1,
+				tostring(text):gsub("\n", " "):sub(1, 60), Size(r)))
+		end
 	end
 	local function Frame(f, depth)
-		if not f or Forbidden(f) or depth > 2 then return end
+		if not f or Forbidden(f) or seen[f] or depth > maxDepth then return end
+		seen[f] = true
+		if whole and f.IsShown and not f:IsShown() then return end
 		local name = (f.GetDebugName and f:GetDebugName()) or (f.GetName and f:GetName()) or "?"
-		for _, r in ipairs({ f:GetRegions() }) do Region(r, name) end
-		if depth < 2 then for _, c in ipairs({ f:GetChildren() }) do Frame(c, depth + 1) end end
+		if whole then Add(("%s== %s (%s, %s)"):format(string.rep("  ", depth), name, f:GetObjectType(), Size(f))) end
+		for _, r in ipairs({ f:GetRegions() }) do Region(r, name, depth + 1) end
+		if depth < maxDepth then for _, c in ipairs({ f:GetChildren() }) do Frame(c, depth + 1) end end
 	end
+	local rootName
 	for _, f in ipairs(foci) do
-		if type(f) == "table" and f ~= WorldFrame then Frame(f, 0) end
+		if type(f) == "table" and f ~= WorldFrame and not Forbidden(f) then
+			local start = f
+			if whole then
+				-- climb to the window: the last parent below UIParent
+				while start.GetParent and start:GetParent() and start:GetParent() ~= UIParent and not Forbidden(start:GetParent()) do
+					start = start:GetParent()
+				end
+			end
+			rootName = rootName or (start.GetDebugName and start:GetDebugName()) or (start.GetName and start:GetName()) or "?"
+			Frame(start, 0)
+		end
 	end
-	if n == 0 then ns.Print(L and L["Nothing with a texture under the mouse. Hover the icon, then type /aa whatis."] or "nothing under the mouse") end
+	if #lines == 0 then
+		return ns.Print(L and L["Nothing with a texture under the mouse. Hover the icon, then type /aa whatis."] or "nothing under the mouse")
+	end
+	SaveRun(whole and "window" or "mouse", rootName, lines)
+	if whole then
+		ns.Print(("whatis: %d lines from %s saved%s. /reload to write them to disk."):format(#lines, tostring(rootName),
+			#lines >= MAX_LINES and " (cut at " .. MAX_LINES .. ")" or ""))
+	else
+		ns.Print("whatis: saved too (/reload to write it to disk).")
+	end
 end
 
 -- /aa cards: which of the profession book's paintings this client has (for the page themes)
@@ -386,4 +455,123 @@ function Art:Cards()
 	ns.Print(("profession paintings: %d found, %d missing"):format(#have, #missing))
 	ns.Print("|cff80ff80found:|r " .. table.concat(have, ", "))
 	ns.Print("|cff999999missing:|r " .. table.concat(missing, ", "))
+end
+
+---------------------------------------------------------------------------
+-- /aa atlascheck: tests a list of art names the Wild Gambit card game might use (card frames by
+-- quality, nature / vine frames, class and forest paintings, herb and nature icons, card backs)
+-- against this client, without opening any window. Saved to AzerothAlmanacDB.atlascheck
+-- (written to disk on /reload): found = { name = "WxH" }, missing = { names }.
+---------------------------------------------------------------------------
+
+local QUALITIES = { "gray", "grey", "white", "green", "blue", "purple", "orange", "gold", "heirloom", "artifact", "legendary", "epic", "rare", "uncommon", "common", "poor" }
+local CLASSES = { "druid", "hunter", "mage", "paladin", "priest", "rogue", "shaman", "warlock", "warrior" }
+local COVENANTS = { "NightFae", "Kyrian", "Necrolord", "Venthyr", "Oribos", "Dragonflight", "Neutral", "Horde", "Alliance", "Marine", "Mechagon", "Wood" }
+local CORNERS = { "CornerTopLeft", "CornerTopRight", "CornerBottomLeft", "CornerBottomRight", "EdgeTop", "EdgeLeft" }
+
+local function AtlasCandidates()
+	local list = {}
+	local function Add(n) list[#list + 1] = n end
+	-- card borders by quality
+	for _, q in ipairs(QUALITIES) do
+		for _, pat in ipairs({ "loottoast-itemborder-%s", "collections-itemborder-%s", "auctionhouse-itemicon-border-%s",
+			"dressingroom-itemborder-%s", "bags-glow-%s", "Professions-ChatIcon-Quality-%s", "itemupgrade_%s",
+			"loottoast-bg-%s", "Looting_RarityTag_%s", "lootroll-toast-icon-%s", "GarrMission_PortraitRing_%s",
+			"perks-border-%s", "UI-Frame-%s-CornerTopLeft", "wowlabs-itemborder-%s", "QuestItemBorder-%s" }) do
+			Add(pat:format(q))
+		end
+	end
+	-- whole cards and card-like panels
+	for _, n in ipairs({ "Looting_ItemCard_BG", "Looting_ItemCard_Stroke_Normal", "Looting_RarityTag_Frame",
+		"Adventures-Follower-Card", "Adventures-Card-BG", "Adventures-Card-Frame", "Adventures-Card-Back",
+		"GarrMission_MissionParchment", "GarrMission_FollowerListButton", "GarrMission_PortraitRing_LevelBorder",
+		"Garr_FollowerPortrait_Ring", "collections-background-tile", "collections-background-shadow-large",
+		"Perks-Program-Card", "perks-list-card", "perks-card-frame", "plunderstorm-card", "cardgame-card", "CardBack",
+		"spellbook-item-backplate", "spellbook-list-backplate", "UI-Character-Info-Title", "Talents-inner-frame-c60",
+		"Talents-Square-Box-c60", "Talents-divider-left-c60", "Talents-divider-vertical-c60", "Talents-small-divider-c60",
+		"talents-node-circle-green", "talents-node-circle-yellow", "talents-node-circle-red", "talents-arrow-head-yellow",
+		"talents-arrow-head-locked", "talents-arrow-line-yellow", "talents-arrow-line-locked", "FullAlert-BigSpike",
+		"Cast_Crafting_ShineWipe", "talents-sheen-node", "bags-glow-flash", "bags-glow-white", "Cast_Channel_Sparkles_01",
+		"UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold", "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Silver",
+		"UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged", "UI-HUD-ActionBar-Gryphon-Left", "UI-HUD-ActionBar-Wyvern-Left",
+		"UI-Frame-DiamondMetal-CornerTopLeft", "UI-Frame-Metal-CornerTopLeft", "UI-Frame-GoldMetal-CornerTopLeft",
+		"UI-Frame-Oribos-CornerTopLeft", "UI-Frame-Dragonflight-CornerTopLeft", "QuestLog-frame", "QuestLog-frame-filigree",
+		"Tooltip-Azerite-NineSlice-Center", "Tooltip-Azerite-NineSlice-CornerTopLeft", "UI-QuestTracker-OBJFX-Shine" }) do Add(n) end
+	-- vines, nature and dream frames
+	for _, c in ipairs(COVENANTS) do
+		for _, part in ipairs(CORNERS) do Add(("UI-Frame-%s-%s"):format(c, part)) end
+		Add(("CovenantSanctum-Upgrade-Border-%s"):format(c))
+		Add(("CovenantChoice-Celebration-%sSigil"):format(c))
+		Add(("%s-Header"):format(c))
+	end
+	for _, n in ipairs({ "nightfae-vines", "NightFae-Vine-Left", "ardenweald-vines", "Ardenweald-Frame", "Vines-Left", "vines",
+		"dreamsurge-frame", "EmeraldDream-Frame", "emeralddream-vine", "Dragonflight-Landingpage-Background",
+		"druid-vines", "UI-Frame-Druid-CornerTopLeft", "Druid-Frame", "garden-vine", "Islands-Vines",
+		"talents-heroclass-druid-keeperofthegrove", "talents-heroclass-druid-wildstalker", "talents-heroclass-hunter-packleader",
+		"talent-background-druid", "talent-background-hunter", "talent-background-shaman",
+		"talents-animations-class-druid", "talents-animations-class-hunter",
+		"UI-Character-Info-Druid-BG", "UI-Character-Info-Hunter-BG", "UI-Character-Info-Shaman-BG",
+		"Profession-background-card-Herbalism", "Profession-background-card-Skinning", "Profession-background-card-Leatherworking",
+		"Profession-background-card-Alchemy", "Profession-overview-Card-Herbalism", "Profession-overview-card-generic-herbalism",
+		"Skillbar_Fill_Flipbook_Herbalism", "Skillbar_Flare_Herbalism", "groupfinder-background" }) do Add(n) end
+	for _, c in ipairs(CLASSES) do
+		Add("classicon-" .. c)
+		Add("talent-background-" .. c)
+		Add("UI-Character-Info-" .. c:sub(1, 1):upper() .. c:sub(2) .. "-BG")
+	end
+	return list
+end
+
+-- texture files (classic paintings, card-like art, herb and nature icons, Darkmoon card icons)
+local function FileCandidates()
+	local list = {}
+	local function Add(n) list[#list + 1] = n end
+	for _, t in ipairs({ "DruidRestoration", "DruidBalance", "DruidFeralCombat", "HunterBeastMastery", "HunterSurvival",
+		"HunterMarksmanship", "ShamanRestoration", "ShamanEnhancement", "ShamanElementalCombat" }) do
+		Add("Interface\\TalentFrame\\" .. t .. "-TopLeft")
+	end
+	for i = 1, 19 do Add(("Interface\\Icons\\INV_Misc_Herb_%02d"):format(i)) end
+	for i = 1, 4 do Add(("Interface\\Icons\\INV_Misc_Flower_%02d"):format(i)) end
+	for _, n in ipairs({ "INV_Misc_Root_01", "INV_Misc_Root_02", "Spell_Nature_StrangleVines", "Spell_Nature_Thorns",
+		"Spell_Nature_ProtectionformNature", "Spell_Nature_ResistNature", "Spell_Nature_Regeneration", "Spell_Nature_HealingTouch",
+		"Ability_Druid_Ferociousbite", "Spell_Nature_NatureTouchGrow", "INV_Misc_Ticket_Tarot_Beasts_01", "INV_Misc_Ticket_Tarot_Elementals_01",
+		"INV_Misc_Ticket_Tarot_Portal_01", "INV_Misc_Ticket_Tarot_Warlords_01", "INV_Misc_Ticket_Tarot_BlueDragon_01",
+		"INV_Misc_Ticket_Tarot_Stack_01", "INV_Misc_Ticket_Tarot_Furies_01", "INV_Misc_Ticket_Tarot_Lunacy_01",
+		"INV_Misc_Ticket_Darkmoon_01", "INV_Misc_Gem_Diamond_01", "INV_Misc_Gem_Ruby_01", "INV_Misc_Gem_Sapphire_01",
+		"INV_Misc_Gem_Pearl_04", "INV_Misc_Gem_Variety_01" }) do
+		Add("Interface\\Icons\\" .. n)
+	end
+	for _, f in ipairs({ "Interface\\TargetingFrame\\UI-TargetingFrame-Elite", "Interface\\TargetingFrame\\UI-TargetingFrame-Rare",
+		"Interface\\TargetingFrame\\UI-TargetingFrame-Rare-Elite", "Interface\\QuestFrame\\UI-QuestItemNameFrame",
+		"Interface\\DialogFrame\\UI-DialogBox-Gold-Border", "Interface\\Common\\WhiteIconFrame",
+		"Interface\\LootFrame\\LootToast", "Interface\\Glues\\Common\\TextPanel-Border" }) do Add(f) end
+	return list
+end
+
+function Art:AtlasCheck()
+	local found, missing = {}, {}
+	local nFound, nMissing = 0, 0
+	for _, name in ipairs(AtlasCandidates()) do
+		local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name)
+		if info then
+			found[name] = ("%dx%d"):format(info.width or 0, info.height or 0)
+			nFound = nFound + 1
+		else
+			missing[#missing + 1] = name
+			nMissing = nMissing + 1
+		end
+	end
+	local tester = UIParent:CreateTexture(nil, "BACKGROUND")
+	local files, filesMissing = {}, {}
+	for _, path in ipairs(FileCandidates()) do
+		if tester:SetTexture(path) ~= false and tester:GetTexture() then
+			files[#files + 1] = path
+		else
+			filesMissing[#filesMissing + 1] = path
+		end
+	end
+	tester:Hide()
+	ns.db.atlascheck = { t = time(), version = ns.VERSION, found = found, missing = missing, files = files, filesMissing = filesMissing }
+	ns.Print(("atlas check: %d of %d atlases found, %d of %d texture files found. /reload to write it to disk."):format(
+		nFound, nFound + nMissing, #files, #files + #filesMissing))
 end

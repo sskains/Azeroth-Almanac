@@ -20,7 +20,99 @@ local GAP = 2
 local LABEL_W, HEADER_H = 150, 24
 local BAR_H, NAME_H, GROUP_GAP = 16, 11, 5
 local PREDICT_COLOR = { 0, 0.83, 0.77 }   -- the game's colour for incoming heals
-local HEALTH_COLOR = { 0.28, 0.8, 0.14 }  -- the game's unit-frame green
+local HEALTH_COLOR = { 0.28, 0.8, 0.14 }  -- the game's unit-frame green (the classic bar's tint)
+-- the player frame's own health bar art (from /aa whatis on PlayerFrame...HealthBar): a green
+-- fill, and the plain "status" fill the game tints for incoming heals and absorbs
+local HEALTH_ATLAS = "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health"
+local STATUS_ATLAS = "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health-Status"
+local CLASSIC_BAR = "Interface\\TargetingFrame\\UI-StatusBar"
+
+local function HasAtlas(name)
+	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
+end
+
+-- the fill: the player frame's atlas (already green, so no tint) where the client has it
+local function HealthFill(bar)
+	if HasAtlas(HEALTH_ATLAS) and pcall(bar.SetStatusBarTexture, bar, HEALTH_ATLAS) then
+		local tex = bar:GetStatusBarTexture()
+		if tex and (not tex.GetAtlas or tex:GetAtlas() == HEALTH_ATLAS) then
+			bar.native = true
+			bar:SetStatusBarColor(1, 1, 1)
+			return
+		end
+	end
+	bar.native = false
+	bar:SetStatusBarTexture(CLASSIC_BAR)
+	bar:SetStatusBarColor(unpack(HEALTH_COLOR))
+end
+
+local function StatusFill(tex)
+	if not (HasAtlas(STATUS_ATLAS) and pcall(tex.SetAtlas, tex, STATUS_ATLAS)) then tex:SetTexture(CLASSIC_BAR) end
+end
+
+-- The slot round the player frame's health bar is part of the frame's one big texture
+-- (UI-HUD-UnitFrame-Player-PortraitOn, 198 x 71). From the frame's layout (/aa art): the texture is
+-- centred on the 232 x 100 frame and the health bar sits at 85,-41, 124 x 19, so in the texture the
+-- bar spans x 68..192, y 26.5..45.5. The border is cut from round it in three pieces: the right end
+-- (with the frame's edge), a middle piece stretched along the bar, and the right end mirrored for
+-- the left (the real left end runs into the portrait ring).
+local FRAME_ATLAS, FRAME_W, FRAME_H = "UI-HUD-UnitFrame-Player-PortraitOn", 198, 71
+local SLOT = { top = 23.5, bottom = 48.5, barTop = 26.5, barBottom = 45.5, barRight = 192, capFrom = 186, midFrom = 110, midTo = 170 }
+
+local function BarBorder(bar)
+	local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(FRAME_ATLAS)
+	local file = info and (info.file or info.filename)
+	if not file then return false end
+	local L, Rt, T, B = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
+	local function U(x) return L + (Rt - L) * x / FRAME_W end
+	local function V(y) return T + (B - T) * y / FRAME_H end
+	-- like the game's, the frame art goes *under* the bar: its slot is painted dark inside, and the
+	-- green fill (and the empty part) cover that; only the edges round the bar show
+	local barH = SLOT.barBottom - SLOT.barTop
+	local function Scale() return bar:GetHeight() / barH end
+	local capW = FRAME_W - SLOT.capFrom
+	local function Piece(x1, x2, flip)
+		local t = bar:CreateTexture(nil, "BACKGROUND", nil, -8)
+		t:SetTexture(file)
+		if flip then t:SetTexCoord(U(x2), U(x1), V(SLOT.top), V(SLOT.bottom)) else t:SetTexCoord(U(x1), U(x2), V(SLOT.top), V(SLOT.bottom)) end
+		return t
+	end
+	local right = Piece(SLOT.capFrom, FRAME_W)
+	local left = Piece(SLOT.capFrom, FRAME_W, true)
+	local mid = Piece(SLOT.midFrom, SLOT.midTo)
+	local function Layout()
+		local k = Scale()
+		local up, down = (SLOT.barTop - SLOT.top) * k, (SLOT.bottom - SLOT.barBottom) * k
+		local out = (FRAME_W - SLOT.barRight) * k   -- how far the end piece runs past the bar
+		local w = capW * k
+		right:ClearAllPoints()
+		right:SetPoint("TOPRIGHT", bar, "TOPRIGHT", out, up)
+		right:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", out, -down)
+		right:SetWidth(w)
+		left:ClearAllPoints()
+		left:SetPoint("TOPLEFT", bar, "TOPLEFT", -out, up)
+		left:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -out, -down)
+		left:SetWidth(w)
+		mid:ClearAllPoints()
+		mid:SetPoint("TOPLEFT", left, "TOPRIGHT")
+		mid:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
+	end
+	Layout()
+	bar:HookScript("OnSizeChanged", Layout)
+	bar.border = { left, mid, right }
+	return true
+end
+
+-- alive: the bar's own green; dead / not there: the same fill greyed
+local function HealthDead(bar, dead)
+	local tex = bar:GetStatusBarTexture()
+	if bar.native then
+		if tex and tex.SetDesaturated then tex:SetDesaturated(dead and true or false) end
+		if dead then bar:SetStatusBarColor(0.6, 0.6, 0.6) else bar:SetStatusBarColor(1, 1, 1) end
+	else
+		if dead then bar:SetStatusBarColor(0.45, 0.45, 0.45) else bar:SetStatusBarColor(unpack(HEALTH_COLOR)) end
+	end
+end
 local DIM, OFF, ABSENT = 0.32, 0.55, 0.12
 local HIGHLIGHT_ATLAS = "UI-HUD-ActionBar-IconFrame-Mouseover"
 local SOUND_ALERT = 8959
@@ -774,10 +866,6 @@ end
 -- Icons
 ---------------------------------------------------------------------------
 
-local function HasAtlas(name)
-	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
-end
-
 local function SetFlash(b, on)
 	if b.flashing == on then return end
 	b.flashing = on
@@ -1016,6 +1104,10 @@ local function MakeMarkers(e)
 	glow:SetFrameStrata("HIGH")
 	glow:EnableMouse(false)
 	glow:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 })
+	-- on the game's portrait frames: their own red status glow, which follows the frame's shape
+	glow.tex = glow:CreateTexture(nil, "OVERLAY")
+	glow.tex:SetAllPoints()
+	glow.tex:Hide()
 	glow.pulse = glow:CreateAnimationGroup()
 	glow.pulse:SetLooping("BOUNCE")
 	local fade = glow.pulse:CreateAnimation("Alpha")
@@ -1066,6 +1158,27 @@ local function MakeMarkers(e)
 	end
 end
 
+-- The visible art of a portrait unit frame and the game's own status glow for it: the player frame
+-- and party frames are bigger boxes than their art (the player frame is 232 x 100 round a 198 x 71
+-- picture), so a plain rectangle round the frame looks like a big red box. Returns region, atlas.
+local function FrameGlowArt(target)
+	if target == PlayerFrame then
+		local c = PlayerFrame.PlayerFrameContainer
+		local region = c and c.FrameTexture
+		if region and HasAtlas("UI-HUD-UnitFrame-Player-PortraitOn-Status") then
+			return region, "UI-HUD-UnitFrame-Player-PortraitOn-Status"
+		end
+	end
+	local region = target and (target.Texture or (target.PartyMemberOverlay and target.PartyMemberOverlay.Texture))
+	local atlas = region and region.GetAtlas and region:GetAtlas()
+	if type(atlas) == "string" and atlas:find("PortraitOn") then
+		for _, status in ipairs({ atlas .. "-Status", (atlas:gsub("PortraitOn.*$", "PortraitOn-Status")) }) do
+			if HasAtlas(status) then return region, status end
+		end
+	end
+	return nil
+end
+
 -- Out of combat (it anchors to frames the game may not let us move around in combat).
 -- kind "frame": target is the member's unit frame; kind "row": target is the panel row's bar.
 local function PlaceMarkers(e, kind, target, y, rowH)
@@ -1074,9 +1187,22 @@ local function PlaceMarkers(e, kind, target, y, rowH)
 	local glow, badge = e.glow, e.badge
 	glow:ClearAllPoints()
 	badge:ClearAllPoints()
+	glow.art = nil
+	glow.tex:Hide()
+	glow:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 })
 	if kind == "frame" then
-		glow:SetPoint("TOPLEFT", target, "TOPLEFT", -2, 2)
-		glow:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 2, -2)
+		local region, atlas = FrameGlowArt(target)
+		if region and pcall(glow.tex.SetAtlas, glow.tex, atlas) then
+			-- the frame's own shape: drop the rectangle, glow over the frame's picture
+			glow.art = true
+			glow:SetBackdrop(nil)
+			glow:SetPoint("TOPLEFT", region, "TOPLEFT", 0, 0)
+			glow:SetPoint("BOTTOMRIGHT", region, "BOTTOMRIGHT", 0, 0)
+			glow.tex:Show()
+		else
+			glow:SetPoint("TOPLEFT", target, "TOPLEFT", -2, 2)
+			glow:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 2, -2)
+		end
 		local first = e.buttons[e.order[1]]
 		if first then badge:SetPoint("RIGHT", first, "LEFT", -2, 0) else badge:SetPoint("TOPRIGHT", target, "BOTTOMLEFT", 0, 0) end
 		if e.paw then
@@ -1113,7 +1239,10 @@ local function UpdateMarkers(e)
 	end
 	local c = AGGRO_COLORS[math.min(3, math.max(1, t.level))]
 	if db.aggroGlow then
-		if e.glowLevel ~= t.level then e.glowLevel = t.level e.glow:SetBackdropBorderColor(c[1], c[2], c[3], 1) end
+		if e.glowLevel ~= t.level or e.glowArt ~= e.glow.art then
+			e.glowLevel, e.glowArt = t.level, e.glow.art
+			if e.glow.art then e.glow.tex:SetVertexColor(c[1], c[2], c[3], 1) else e.glow:SetBackdropBorderColor(c[1], c[2], c[3], 1) end
+		end
 		if not e.glow:IsShown() then e.glow:Show() end
 		if t.level >= 3 then
 			if not e.glow.pulse:IsPlaying() then e.glow.pulse:Play() end
@@ -1251,8 +1380,7 @@ local function LayoutPanel(list)
 		local bar = panel.bars[k]
 		if not bar then
 			bar = CreateFrame("StatusBar", nil, panel)
-			bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-			bar:SetStatusBarColor(unpack(HEALTH_COLOR))
+			HealthFill(bar)
 			bar:SetMinMaxValues(0, 1)
 			bar:SetValue(1)
 			-- the game's look: a thin dark outline round a dark red-brown "empty" part
@@ -1262,7 +1390,10 @@ local function LayoutPanel(list)
 			bar.edge:SetColorTexture(0, 0, 0, 0.95)
 			bar.back = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
 			bar.back:SetAllPoints()
-			bar.back:SetColorTexture(0.2, 0.07, 0.06, 1)
+			-- the player frame's empty part is near-black; the classic bar's is dark red-brown
+			if bar.native then bar.back:SetColorTexture(0.03, 0.03, 0.03, 0.9) else bar.back:SetColorTexture(0.2, 0.07, 0.06, 1) end
+			-- the player frame's slot border round it (then the thin black outline isn't needed)
+			if bar.native and BarBorder(bar) then bar.edge:Hide() end
 			-- incoming heals: a teal block that starts where the green ends. It's anchored to the
 			-- bar's own fill, so it lands in the right place even when the health value is hidden
 			-- in combat; a clipping frame cuts it off at the end of the bar.
@@ -1272,14 +1403,14 @@ local function LayoutPanel(list)
 			bar.predHolder = CreateFrame("Frame", nil, bar.predClip)
 			bar.predHolder:SetAllPoints()
 			bar.pred = bar.predHolder:CreateTexture(nil, "ARTWORK")
-			bar.pred:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+			StatusFill(bar.pred)
 			bar.pred:SetVertexColor(PREDICT_COLOR[1], PREDICT_COLOR[2], PREDICT_COLOR[3], 0.9)
 			bar.pred:SetPoint("TOPLEFT", bar:GetStatusBarTexture(), "TOPRIGHT")
 			bar.pred:SetPoint("BOTTOMLEFT", bar:GetStatusBarTexture(), "BOTTOMRIGHT")
 			bar.pred:SetWidth(0.01)
 			-- the hover preview: the same, see-through, right after it
 			bar.prev = bar.predHolder:CreateTexture(nil, "ARTWORK")
-			bar.prev:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+			StatusFill(bar.prev)
 			bar.prev:SetVertexColor(PREDICT_COLOR[1], PREDICT_COLOR[2], PREDICT_COLOR[3], 0.5)
 			bar.prev:SetPoint("TOPLEFT", bar.pred, "TOPRIGHT")
 			bar.prev:SetPoint("BOTTOMLEFT", bar.pred, "BOTTOMRIGHT")
@@ -1661,7 +1792,7 @@ local function UpdateLabels()
 			local dead = res and (res.dead or res.absent)
 			if bar.dead ~= dead then
 				bar.dead = dead
-				if dead then bar:SetStatusBarColor(0.45, 0.45, 0.45) else bar:SetStatusBarColor(unpack(HEALTH_COLOR)) end
+				HealthDead(bar, dead)
 			end
 			label:SetText(name)
 			-- room for the paw print in front of a pet's name

@@ -1,16 +1,16 @@
--- Gathering page: herbs, ore, chests and other objects you've opened, fishing by zone, and the
--- creatures you've skinned. A node's page: how often you've gathered it, your skill at the time,
--- what came out (and, once Studied, everything it can hold; once Mastered, how likely each is),
+-- Gathering page: herbs, ore, chests and other objects you've opened, fishing by zone, and what
+-- you've skinned (by leather / hide; the creatures it came from are on its page). A node's page:
+-- how often you've gathered it, your skill at the time, what came out (and, once Journeyman, everything it can hold; once Expert, how likely each is),
 -- and where you found it (Show on map pins every spot).
 
 local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "gathering", title = L["Gathering"], icon = { "Trade_Herbalism", "INV_Misc_Herb_07", "Trade_Mining" }, order = 6.2 }
+local page = { key = "gathering", title = L["Gathering"], icon = { 237271, "Trade_Herbalism", "INV_Misc_Herb_07" }, order = 6 }
 local list, detail, countText, kindButton, portrait, nameText, kindText, placeText, mapButton
 local filter, kindFilter = "", nil
-local shown -- { node = name } | { fish = map }
+local shown -- { node = name } | { fish = map } | { skin = itemID }
 local collapsed = {}
 
 local NOTE = "|cffbfbfbf"
@@ -38,10 +38,68 @@ local function ItemIcon(item)
 	return instant and select(5, instant(item)) or nil
 end
 
--- the record's face: what comes out of it most often
-local function TopItem(rec)
+local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+
+-- name and quality of an item (the name may still be on its way from the server)
+local function ItemName(id)
+	local ok, name, _, quality = pcall(GetInfo, id)
+	if ok and name then return name, quality end
+	W.waitingItems = true
+	return nil, nil
+end
+
+local function QualityHex(q)
+	local c = q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+	return c and c.hex or "|cffffffff"
+end
+
+-- Skinning by what you skinned: every leather / hide / scrap, with the creatures it came from
+-- (built from each creature's own skinning record: gathered = skins, gather[item] = skins that gave it)
+local function SkinItems()
+	local out = {}
+	for npc, rec in pairs(ns.Store:All("creature")) do
+		for item, n in pairs(rec.gather or {}) do
+			local e = out[item]
+			if not e then e = { item = item, n = 0, sources = {} } out[item] = e end
+			e.n = e.n + n
+			e.sources[#e.sources + 1] = { npc = npc, rec = rec, n = n }
+		end
+	end
+	for _, e in pairs(out) do table.sort(e.sources, function(a, b) return a.n > b.n end) end
+	return out
+end
+
+-- the zones where the creatures that gave it were killed: { [map] = { kills = spots, names = { ... } } }
+local function SkinZones(e)
+	local zones = {}
+	for _, src in ipairs(e.sources) do
+		for map, list in pairs(src.rec.kz or {}) do
+			local z = zones[map]
+			if not z then z = { spots = 0, names = {} } zones[map] = z end
+			z.spots = z.spots + #list
+			z.names[#z.names + 1] = src.rec.name or "?"
+		end
+	end
+	return zones
+end
+
+local function SkinBestZone(e)
 	local best, n = nil, 0
-	for item, c in pairs(rec.items or {}) do if c > n then best, n = item, c end end
+	for map, z in pairs(SkinZones(e)) do if z.spots > n and ns.Store:Get("zone", map) then best, n = map, z.spots end end
+	return best
+end
+
+-- the record's face: what comes out of it most often
+-- the item a node is pictured by: what comes out most often. Chests and other loot containers
+-- that give a mix of things (milk, potions, gloves ...) keep the chest icon instead; an object with
+-- one kind of thing in it (an egg, a crate of one item) still shows that item.
+local function TopItem(rec)
+	local best, n, kinds = nil, 0, 0
+	for item, c in pairs(rec.items or {}) do
+		kinds = kinds + 1
+		if c > n then best, n = item, c end
+	end
+	if rec.kind == "chest" and kinds > 1 then return nil end
 	return best
 end
 
@@ -49,7 +107,6 @@ local function Record(sel)
 	if not sel then return nil end
 	if sel.node then return ns.Store:Get("node", sel.node), "node" end
 	if sel.fish then return ns.Store:Get("fishing", sel.fish), "fish" end
-	if sel.creature then return ns.Store:Get("creature", sel.creature), "skin" end
 end
 
 ---------------------------------------------------------------------------
@@ -89,11 +146,15 @@ local function Describe(rec, isFish)
 	local others = Who(rec)
 	if #others > 0 then b[#b + 1] = { "stat", L["Also gathered by"], table.concat(others, ", ") } end
 
-	-- research: Studied reveals everything it can hold, Mastered how likely each is
-	local B = ns.Bestiary
-	local text = (L["%d / %d"]):format(math.min(rec.gathered or 0, G.MASTERED), G.MASTERED)
-	if need and B then text = text .. "  ·  " .. (L["%d to %s"]):format(need, B.TIERS[tier == 1 and 3 or 4]) elseif B then text = text .. "  ·  " .. B.TIERS[4] end
-	b[#b + 1] = { "bar", nil, math.min(rec.gathered or 0, G.MASTERED), G.MASTERED, text, tier >= 4 and "Mastery" or k.flavor }
+	-- the ranks (the character sheet's blue skill bar, like a creature's): Journeyman reveals
+	-- everything it can hold, Expert how likely each is; past Master the count keeps rolling
+	local n = rec.gathered or 0
+	local nextAt = G.AT[tier + 1]
+	if nextAt then
+		b[#b + 1] = { "skillbar", nil, n, nextAt, (L["%d / %d"]):format(n, nextAt) .. "  ·  " .. (L["%d to %s"]):format(nextAt - n, G.TIERS[tier + 1]) }
+	else
+		b[#b + 1] = { "skillbar", nil, 1, 1, ns.Times(n) .. "  ·  " .. G.TIERS[#G.TIERS] }
+	end
 
 	-- what came out
 	local seen, slots = {}, {}
@@ -163,73 +224,76 @@ local function Describe(rec, isFish)
 	return b
 end
 
--- a skinned creature: what its corpses gave you; its full skinning table once it is Mastered in the
--- Bestiary (the creature's research tier, by kills)
-local function DescribeSkin(npc, rec)
+-- a skinned item: how often you got it, the creatures it came from (each opens in the Bestiary,
+-- with its Classic chance once that creature is Mastered), and where they were killed
+local function DescribeSkinItem(id, e)
 	local B = ns.Bestiary
 	local b = {}
-	local tier = B:Tier(rec)
 	b[#b + 1] = { "banner", L["General"] }
 	b[#b + 1] = { "stat", L["Kind"], L["Skinning"] }
-	b[#b + 1] = { "stat", L["Skinned"], ns.Times(rec.gathered or 0) }
-	if (rec.kills or 0) > 0 then b[#b + 1] = { "stat", L["Kills"], tostring(rec.kills) } end
-	b[#b + 1] = { "stat", L["Research"], B:TierMarkup(tier, 14) .. " " .. B:TierText(tier) }
-	local got = {}
-	for item, n in pairs(rec.gather or {}) do got[#got + 1] = { item = item, n = n } end
-	table.sort(got, function(x, y) return x.n > y.n end)
-	local c = ns.CreatureDB and ns.CreatureDB:Get(npc)
-	local classic = {}
-	if c and c.skin and tier >= 4 then for _, e in ipairs(c.skin) do classic[e.item] = e.chance end end
-	local slots = {}
-	for _, e in ipairs(got) do
-		local note = ("%d / %d"):format(e.n, rec.gathered or e.n)
-		if classic[e.item] then note = note .. "  " .. CLASSIC .. (L["Classic %.0f%%"]):format(classic[e.item]) .. "|r" end
-		slots[#slots + 1] = { item = e.item, note = note, onClick = GoTo("items", "ShowItem", e.item) }
-	end
-	b[#b + 1] = { "banner", (L["What came out (%d)"]):format(#slots) }
-	if #slots > 0 then b[#b + 1] = { "slots", slots } end
-	if c and c.skin and #c.skin > 0 then
-		if tier >= 4 then
-			local more = {}
-			for _, e in ipairs(c.skin) do
-				if not (rec.gather and rec.gather[e.item]) then
-					more[#more + 1] = { item = e.item, grey = true, note = CLASSIC .. (L["Classic %.0f%%"]):format(e.chance) .. "|r" }
-				end
+	b[#b + 1] = { "stat", L["Skinned"], ns.Times(e.n) }
+	b[#b + 1] = { "stat", L["From"], ns.N(#e.sources, "creature", "creatures") }
+	local item = ns.Store:Get("item", id)
+	if item and item.f then b[#b + 1] = { "stat", L["First found"], ns.CharName(item.b) .. ", " .. ns.DateText(item.f) } end
+
+	local from = {}
+	for _, src in ipairs(e.sources) do
+		local rec = src.rec
+		local tier = B and B:Tier(rec) or 1
+		local note = (L["%d of %d skins"]):format(src.n, rec.gathered or src.n)
+		if tier >= 4 and ns.CreatureDB then
+			local c = ns.CreatureDB:Get(src.npc)
+			for _, sk in ipairs(c and c.skin or {}) do
+				if sk.item == id then note = note .. "  " .. CLASSIC .. (L["Classic %.0f%%"]):format(sk.chance) .. "|r" break end
 			end
-			if #more > 0 then
-				b[#b + 1] = { "banner", (L["It can also give (%d)"]):format(#more) }
-				b[#b + 1] = { "slots", more }
-			end
-		else
-			b[#b + 1] = { "small", L["Everything it can give is revealed once it is Mastered in the Bestiary."] }
 		end
+		from[#from + 1] = { name = (B and (B:TierMarkup(tier, 12) .. " ") or "") .. (rec.name or "?"),
+			icon = W.FindIcon(W.TYPE_ICON[rec.type or ""] or W.KIND.creature.icon), note = note,
+			tip = L["Click to open it in Creatures."], onClick = GoTo("bestiary", "ShowCreature", src.npc) }
 	end
-	b[#b + 1] = { "banner", L["The creature"] }
-	b[#b + 1] = { "slots", { { name = rec.name or "?", icon = W.FindIcon(W.TYPE_ICON[rec.type or ""] or W.KIND.creature.icon),
-		note = L["Open in the Bestiary"], tip = L["Its abilities, loot, kills and where it lives."], onClick = GoTo("bestiary", "ShowCreature", npc) } } }
+	b[#b + 1] = { "banner", (L["Came from (%d)"]):format(#from) }
+	b[#b + 1] = { "slots", from }
+
+	local zones = {}
+	for map, z in pairs(SkinZones(e)) do
+		local names = {}
+		for i, n in ipairs(z.names) do if i <= 3 then names[#names + 1] = n end end
+		zones[#zones + 1] = { name = ZoneName(map) or (L["map %d"]):format(map), icon = W.KindIcon("zone"),
+			note = NOTE .. table.concat(names, ", ") .. (#z.names > 3 and " ..." or "") .. "|r",
+			tip = L["Click to see where you killed them on the map."], onClick = function() page:ShowOnMap(map) end }
+	end
+	table.sort(zones, function(x, y) return x.name < y.name end)
+	if #zones > 0 then
+		b[#b + 1] = { "banner", (L["Where (%d)"]):format(#zones) }
+		b[#b + 1] = { "slots", zones }
+	end
+
+	b[#b + 1] = { "banner", L["The item"] }
+	b[#b + 1] = { "slots", { { item = id, note = L["Open in Items"], onClick = GoTo("items", "ShowItem", id) } } }
 	return b
 end
 
 local function Show(sel)
-	local rec, what = Record(sel)
-	if rec and what == "skin" then
-		shown = sel
-		local B = ns.Bestiary
-		portrait:Show()
-		if not B:SetFace(portrait.art, sel.creature, rec) then
-			W.SetIcon(portrait.art, { "INV_Misc_Pelt_Wolf_01" })
+	if sel and sel.skin then
+		local e = SkinItems()[sel.skin]
+		if e then
+			shown = sel
+			local name, q = ItemName(sel.skin)
+			portrait:Show()
+			portrait.art:SetTexture(ItemIcon(sel.skin) or W.FindIcon({ "INV_Misc_Pelt_Wolf_01" }))
 			portrait.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			local c = q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+			portrait:SetRing(c and c.r or 0.62, c and c.g or 0.5, c and c.b or 0.24)
+			nameText:SetText(name or (L["item %d"]):format(sel.skin))
+			kindText:SetText(L["Skinning"])
+			placeText:SetText("")
+			mapButton:SetShown(SkinBestZone(e) ~= nil)
+			detail:SetBlocks(DescribeSkinItem(sel.skin, e))
+			return
 		end
-		local tier = B:Tier(rec)
-		local c = B.TIER_COLORS[tier]
-		portrait:SetRing(c[1], c[2], c[3])
-		nameText:SetText(rec.name or "?")
-		kindText:SetText(B:TierMarkup(tier, 14) .. " " .. L["Skinning"])
-		placeText:SetText("")
-		mapButton:Hide()
-		detail:SetBlocks(DescribeSkin(sel.creature, rec))
-		return
+		sel = nil
 	end
+	local rec, what = Record(sel)
 	shown = rec and sel or nil
 	if not rec then
 		portrait:Hide()
@@ -252,7 +316,7 @@ local function Show(sel)
 	local c = ns.Bestiary and ns.Bestiary.TIER_COLORS[tier] or { 0.62, 0.5, 0.24 }
 	portrait:SetRing(c[1], c[2], c[3])
 	nameText:SetText(isFish and (rec.zone or rec.name or "?") or (rec.name or "?"))
-	kindText:SetText((ns.Bestiary and (ns.Bestiary:TierMarkup(tier, 14) .. " ") or "") .. (isFish and L["Fishing"] or k.label))
+	kindText:SetText(G:TierMarkup(tier, 14, isFish and "fish" or rec.kind) .. " " .. G:Title(tier, isFish and "fish" or rec.kind) .. "  |cff999999" .. (isFish and L["Fishing"] or k.label) .. "|r")
 	local zone = isFish and sel.fish or BestZone(rec)
 	placeText:SetText(NOTE .. (isFish and "" or (ZoneName(zone) or "")) .. "|r")
 	mapButton:SetShown(zone ~= nil and ns.Store:Get("zone", zone) ~= nil)
@@ -289,8 +353,13 @@ local function Collect()
 		local label = rec.zone or ZoneName(map) or "?"
 		if Hit(label) then table.insert(groups.fish, { fish = map, rec = rec, label = label }) end
 	end
-	for npc, rec in pairs(ns.Store:All("creature")) do
-		if (rec.gathered or 0) > 0 and Hit(rec.name) then table.insert(groups.skin, { creature = npc, rec = rec, label = rec.name or "?" }) end
+	for item, e in pairs(SkinItems()) do
+		local name, q = ItemName(item)
+		local label = name or (L["item %d"]):format(item)
+		-- a search finds it by its name or by a creature it came from
+		local hit = Hit(label)
+		if not hit then for _, src in ipairs(e.sources) do if Hit(src.rec.name) then hit = true break end end end
+		if hit then table.insert(groups.skin, { skin = item, data = e, label = label, q = q }) end
 	end
 	local order = { { "herb", L["Herbs"] }, { "ore", L["Ore and stone"] }, { "chest", L["Chests and objects"] }, { "fish", L["Fishing"] }, { "skin", L["Skinning"] } }
 	for _, o in ipairs(order) do
@@ -342,7 +411,8 @@ function page:Build(parent, header)
 	left:SetWidth(320)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return r.header and r.key end, refresh = function() page:Refresh() end },
-		rowHeight = 28,
+		rowHeight = 24,
+		style = "log",   -- the Map & Quest Log look, as on Quests
 		emptyText = L["Nothing gathered yet. Herbs, veins, chests, fishing and skinning are recorded as you go."],
 		update = function(row, r)
 			row.icon:ClearAllPoints()
@@ -359,27 +429,28 @@ function page:Build(parent, header)
 			row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 			row.text:SetFontObject(GameFontHighlight)
 			row.text:SetText(r.label)
-			if r.creature then
-				if not ns.Bestiary:SetFace(row.icon, r.creature, r.rec) then W.SetIcon(row.icon, { "INV_Misc_Pelt_Wolf_01" }) row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
-				row.right:SetText("|cff999999" .. ns.Times(r.rec.gathered or 0) .. "|r")
+			if r.skin then
+				row.icon:SetTexture(ItemIcon(r.skin) or W.FindIcon({ "INV_Misc_Pelt_Wolf_01" }))
+				row.text:SetText(QualityHex(r.q) .. r.label .. "|r")
+				row.right:SetText("|cff999999" .. ns.Times(r.data.n) .. "|r")
 			else
 				local top = TopItem(r.rec)
 				local icon = top and ItemIcon(top)
 				if icon then row.icon:SetTexture(icon) else W.SetIcon(row.icon, ns.Gathering.KIND[r.fish and "fish" or (r.rec.kind or "chest")].icon) end
 				local tier = ns.Gathering:Tier(r.rec)
 				local count = (r.rec.gathered or 0) > 0 and ns.Times(r.rec.gathered) or L["sighted"]
-				row.right:SetText((tier > 1 and ns.Bestiary and (ns.Bestiary:TierMarkup(tier, 14) .. " ") or "") .. "|cff999999" .. count .. "|r")
+				row.right:SetText((tier > 1 and (ns.Gathering:TierMarkup(tier, 14, r.fish and "fish" or r.rec.kind) .. " ") or "") .. "|cff999999" .. count .. "|r")
 			end
 		end,
 		restore = function(r)
-			if r.node then Show({ node = r.node }) elseif r.fish then Show({ fish = r.fish }) elseif r.creature then Show({ creature = r.creature }) end
+			if r.node then Show({ node = r.node }) elseif r.fish then Show({ fish = r.fish }) elseif r.skin then Show({ skin = r.skin }) end
 		end,
 		onClick = function(r)
 			if r.header then
 				collapsed[r.key] = not collapsed[r.key]
 				page:Refresh()
-			elseif r.creature then
-				Show({ creature = r.creature })
+			elseif r.skin then
+				Show({ skin = r.skin })
 			else
 				Show(r.node and { node = r.node } or { fish = r.fish })
 			end
@@ -408,6 +479,11 @@ function page:Build(parent, header)
 	placeText:SetPoint("TOPLEFT", kindText, "BOTTOMLEFT", 0, -3)
 	placeText:SetJustifyH("LEFT")
 	mapButton = W.Button(detail.top, L["Show on map"], 130, function()
+		if shown and shown.skin then
+			local e = SkinItems()[shown.skin]
+			if e then page:ShowOnMap(SkinBestZone(e)) end
+			return
+		end
 		local rec = Record(shown)
 		page:ShowOnMap(shown and shown.fish or BestZone(rec or {}))
 	end)
@@ -424,6 +500,24 @@ end
 
 -- the zone in Places with every spot pinned
 function page:ShowOnMap(map)
+	if shown and shown.skin then
+		-- where the creatures that gave it were killed, each pin named for its creature
+		local e = SkinItems()[shown.skin]
+		local places = ns.UI:GetPage("places")
+		if not (e and map and places) then return end
+		local spots = {}
+		for _, src in ipairs(e.sources) do
+			for _, sp in ipairs(ns.Bestiary and ns.Bestiary:Spots(src.rec, "kz", map) or {}) do
+				sp.sub = src.rec.name
+				spots[#spots + 1] = sp
+			end
+		end
+		local id = shown.skin
+		local name = ItemName(id)
+		places:ShowZone(map, nil, nil, { name = name or (L["item %d"]):format(id), sub = L["Skinning"], icon = ItemIcon(id),
+			spots = spots, x = spots[1] and spots[1].x, y = spots[1] and spots[1].y, onClick = function() page:ShowSkin(id) end })
+		return
+	end
 	local rec, what = Record(shown)
 	local places = ns.UI:GetPage("places")
 	if not (rec and map and places) then return end
@@ -449,7 +543,7 @@ function page:Refresh()
 	local keep
 	for _, r in ipairs(rows) do
 		if shown and ((shown.node and r.node == shown.node) or (shown.fish and r.fish == shown.fish)
-			or (shown.creature and r.creature == shown.creature)) then keep = r end
+			or (shown.skin and r.skin == shown.skin)) then keep = r end
 	end
 	list:SetData(rows)
 	list:Select(keep)
@@ -460,6 +554,12 @@ end
 function page:ShowNode(name)
 	ns.UI:Open("gathering")
 	shown = { node = name }
+	self:Refresh()
+end
+
+function page:ShowSkin(item)
+	ns.UI:Open("gathering")
+	shown = { skin = item }
 	self:Refresh()
 end
 

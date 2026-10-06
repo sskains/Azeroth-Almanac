@@ -19,7 +19,7 @@ local _G = _G
 _G["BINDING_NAME_CLICK AzerothAlmanacQuestTargetButton:LeftButton"] = "Target nearest selected quest mob"
 _G["BINDING_NAME_CLICK AzerothAlmanacClearMarksButton:LeftButton"] = "Clear markers on nearby quest mobs"
 BINDING_NAME_AZEROTHALMANAC_SETTINGS = "Open Almanac settings"
-BINDING_NAME_AZEROTHALMANAC_INVENTORY = "My Characters (inventory)"
+BINDING_NAME_AZEROTHALMANAC_INVENTORY = "Characters: bags, bank and gear"
 BINDING_NAME_AZEROTHALMANAC_GEM_MATCH = "Gem Match"
 
 ns.defaults = {
@@ -47,7 +47,7 @@ ns.defaults = {
 	},
 	auctionVolume = { share = true, tooltip = true, realms = {} },
 	merchant = {
-		repair = true, guildRepair = false, sellJunk = true, report = true, search = true,
+		repair = true, guildRepair = false, sellJunk = true, report = true, search = true, bestReward = true,
 		listView = false, usableOnly = false, unlearnedOnly = false,
 	},
 	follow = { enabled = true, size = 22, x = -2, y = 2, icon = "Ability_Rogue_Sprint" },
@@ -61,6 +61,8 @@ ns.defaults = {
 	crafting = { rankByDaily = true, card = true, badges = true, basis = "avg", tooltip = true, vendorPrices = {}, recipes = {} },
 	inventory = { tooltip = true, alts = true, staleDays = 7, hidden = {}, chars = {}, bankTab = true, restCalibration = {} },
 	games = { sound = true, share = true, mode = "timed", best = { timed = 0, moves = 0 }, guild = {} },
+	wildGambit = { sound = true, ambience = true, table = "Dark", back = "Wild", practice = { w = 0, l = 0, d = 0 } },
+	murloc = { allow = true, friendsOnly = false, menu = true, sound = true, records = {}, practice = { w = 0, l = 0, d = 0 } },
 	social = {
 		autoInvite = true, keywords = "inv, invite", inviteWhispers = true, inviteGuildChat = false,
 		inviteOnlyKnown = false, acceptFriends = true, acceptGuild = true,
@@ -79,6 +81,15 @@ ns.defaults = {
 	},
 	unitFrames = { classBadge = true, classColor = true, xpNeeded = true, xpAlways = true },
 	spellRanker = { autoCheck = true, checkOnOpen = true, autoReplace = true, ignore = {} },
+	talentPlanner = {
+		enabled = true,         -- the Planner tab on the Talents window
+		levelHint = true,       -- chat line on level up: the followed build's next talent
+		glow = true,            -- that talent glows on your Primary/Secondary tab
+		builds = {},            -- class -> { { name, code, order "t:i,..." }, ... }
+		follow = {},            -- "Name-Realm" -> { class, name } of the build being followed
+		chars = {},             -- "Name-Realm" -> { class, code, time }: each character's current talents
+		trees = {},             -- classFile -> the three trees as the game has them (read from the client, merged over the data)
+	},
 }
 
 local function ApplyDefaults(target, defaults)

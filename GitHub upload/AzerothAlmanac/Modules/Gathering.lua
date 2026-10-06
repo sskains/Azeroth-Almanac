@@ -3,8 +3,9 @@
 --   A node is known by its name ("Copper Vein"); the hidden item database names the object once
 --   it has been looted (an object can't be named after the fact otherwise). Each gather records
 --   where (zone and a few spots per zone), your skill at the time, and what came out.
---   Research tiers by times gathered: Studied reveals everything the node can hold (the Classic
---   records); Mastered adds how likely each is.
+--   Tiers by times gathered, named after the profession ranks (fixed, like the creature tiers):
+--   Sighted (seen, never gathered), Apprentice 1, Journeyman 5 (reveals everything the node can
+--   hold: the Classic records), Expert 15 (adds how likely each is), Artisan 50, Master 200.
 --   Fishing is kept per zone: catches, your skill, the pools (schools) you fished from.
 -- found.node[name]   = { name, kind = "herb" | "ore" | "chest", ids = { [objectID] = true }, gathered,
 --                        items = { [item] = times }, qty = { [item] = total }, z = { [map] = n },
@@ -21,7 +22,19 @@ local L = ns.L
 local G = ns:NewModule("Gathering")
 local R = ns.Readable
 
-G.STUDIED, G.MASTERED = 5, 15
+G.TIERS = { L["Sighted"], L["Apprentice"], L["Journeyman"], L["Expert"], L["Artisan"], L["Master"] }
+G.AT = { 0, 1, 5, 15, 50, 200 } -- times gathered for each tier (hard-coded, not a setting)
+G.STUDIED, G.MASTERED = G.AT[3], G.AT[4] -- (what's revealed: everything it holds, then the chances)
+-- the gatherer's title in a rank toast ("Expert Miner"); chests and objects keep the rank alone
+G.TRADE = { herb = L["Herbalist"], ore = L["Miner"], fish = L["Angler"] }
+G.TIER_HINTS = {
+	L["Seen, never gathered."],
+	L["Gathered at least once: what came out is recorded."],
+	L["Everything it can hold is known."],
+	L["How likely each find is, too."],
+	L["A gatherer's milestone: 50 times."],
+	L["Few know it better: 200 times."],
+}
 
 -- the gathering spell just cast decides the kind, and which skill to read
 local SPELLS = {
@@ -32,7 +45,7 @@ local SKILL = { herb = L["Herbalism"], ore = L["Mining"], fish = L["Fishing"] }
 G.KINDS = {
 	{ key = "herb", label = L["Herbs"], icon = { "Trade_Herbalism", "INV_Misc_Herb_07" }, flavor = "Herbalism" },
 	{ key = "ore", label = L["Ore and stone"], icon = { "Trade_Mining", "INV_Ore_Copper_01" }, flavor = "Mining" },
-	{ key = "chest", label = L["Chests and objects"], icon = { "INV_Box_02", "INV_Misc_Bag_10" }, flavor = "Blacksmithing" },
+	{ key = "chest", label = L["Chests and objects"], icon = { 1450989, 132594, "INV_Box_02" }, flavor = "Blacksmithing" },
 	{ key = "fish", label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" }, flavor = "Fishing" },
 }
 G.KIND = {}
@@ -118,18 +131,40 @@ local function Fill(rec, items, where)
 	end
 end
 
--- the tier a node or fishing spot has reached: 1 found, 3 studied, 4 mastered; and how many more
+-- the tier a node or fishing spot has reached (1 Sighted .. 6 Master), and how many more to the next
 function G:Tier(rec)
 	local n = rec and rec.gathered or 0
-	if n >= self.MASTERED then return 4, nil end
-	if n >= self.STUDIED then return 3, self.MASTERED - n end
-	return 1, self.STUDIED - n
+	for t = #self.AT, 2, -1 do
+		if n >= self.AT[t] then return t, self.AT[t + 1] and (self.AT[t + 1] - n) or nil end
+	end
+	return 1, self.AT[2] - n
 end
 
-local function TierCheck(rec, before, label)
+-- a tier's badge: the creature tiers' (same colours), with the profession's own icon for Apprentice
+function G:TierIcon(tier, kind)
+	local B = ns.Bestiary
+	local k = self.KIND[kind or ""]
+	if tier == 2 and k and ns.Widgets and ns.Widgets.FindIcon then return ns.Widgets.FindIcon(k.icon) end
+	return B and B:TierIcon(tier) or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+
+function G:TierMarkup(tier, size, kind)
+	size = size or 16
+	local icon = self:TierIcon(tier, kind)
+	if type(icon) == "string" and not icon:lower():find("^interface\\icons\\") then return ("|T%s:%d:%d|t"):format(icon, size, size) end
+	return ("|T%s:%d:%d:0:0:64:64:5:59:5:59|t"):format(tostring(icon), size, size)
+end
+
+-- the rank as a title: "Expert Miner", "Journeyman Herbalist" (chests: "Expert")
+function G:Title(tier, kind)
+	local trade = self.TRADE[kind or ""]
+	return trade and (self.TIERS[tier] .. " " .. trade) or self.TIERS[tier]
+end
+
+local function TierCheck(rec, before, label, kind)
 	local after = G:Tier(rec)
-	if after > before and after >= 3 and ns.Bestiary then
-		ns:Fire("TOAST", "tier", after == 4 and L["Gathering mastered"] or L["Gathering studied"], label, ns.Bestiary:TierIcon(after), after == 4 and 3 or 2)
+	if after > before and after >= 3 then
+		ns:Fire("TOAST", "tier", G:Title(after, kind), label, G:TierIcon(after, kind), after - 1)
 	end
 end
 
@@ -182,7 +217,7 @@ local function OnLoot()
 				Skill(rec, "fish")
 				rec.pools = rec.pools or {}
 				for name in pairs(pools) do rec.pools[name] = (rec.pools[name] or 0) + 1 end
-				TierCheck(rec, before, (L["Fishing in %s"]):format(where.zone or "?"))
+				TierCheck(rec, before, (L["Fishing in %s"]):format(where.zone or "?"), "fish")
 			end
 			ns:Fire("CHANGED", "fishing", where.map)
 		end
@@ -221,7 +256,7 @@ local function OnLoot()
 				rec.ids[o.id] = true
 				Fill(rec, o.items, where)
 				Skill(rec, rec.kind)
-				TierCheck(rec, before, o.name)
+				TierCheck(rec, before, o.name, rec.kind)
 			end
 			ns:Fire("CHANGED", "node", o.name)
 		end

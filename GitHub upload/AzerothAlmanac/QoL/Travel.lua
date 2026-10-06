@@ -628,7 +628,7 @@ local function ShareRecent()
 	for _, r in pairs(RealmSchedules()) do
 		local lastDep = r.departures[#r.departures]
 		if lastDep and GetServerTime() - lastDep < 86400 then
-			delay = delay + 1
+			delay = delay + 2 -- (each goes to the guild and the group: two messages)
 			C_Timer.After(delay, function()
 				Send(("D|%s|%s|%s|%d|%d"):format(GetRealmName() or "?", r.from, r.to, lastDep, math.floor(r.trip or 0)))
 			end)

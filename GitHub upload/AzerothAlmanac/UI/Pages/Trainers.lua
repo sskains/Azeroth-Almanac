@@ -7,7 +7,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "trainers", title = L["Trainers"], icon = { "INV_Misc_Book_08", "INV_Scroll_04", "Trade_Engraving" }, order = 5.5 }
+local page = { key = "trainers", title = L["Trainers"], icon = { "INV_Misc_Book_08", "INV_Scroll_04", "Trade_Engraving" }, order = 9 }
 local list, detail, countText, filterButton, nameText, subText, iconTex
 local filter, statusFilter = "", nil
 local shown -- { kind = "spell", id } or { kind = "group", group }
@@ -328,7 +328,8 @@ function page:Build(parent, header)
 	left:SetWidth(320)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return r.header and r.group end, refresh = function() page:Refresh() end },
-		rowHeight = 28,
+		rowHeight = 24,
+		style = "log",   -- the Map & Quest Log look, as on Quests
 		emptyText = L["Nothing yet. Open a trainer's window: everything they teach is recorded here, and the recipes in your profession windows."],
 		update = function(row, r)
 			row.icon:ClearAllPoints()

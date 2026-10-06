@@ -175,6 +175,13 @@ function Layout:Section(title, hint)
 end
 function Layout:EndSection() end
 
+-- the search index: every heading and control as its page is built ({ page, text, tip, y })
+local INDEX = {}
+local function Record(self, text, tip)
+	if not (self.pageID and type(text) == "string" and text ~= "") then return end
+	INDEX[#INDEX + 1] = { page = self.pageID, text = text, tip = type(tip) == "string" and tip or nil, y = self.y }
+end
+
 function Layout:Finish()
 	self.content:SetHeight(self.y + 16)
 end
@@ -317,6 +324,22 @@ end
 -- Almanac pages
 ---------------------------------------------------------------------------
 
+-- every heading and control goes into the search index (its label, its tip, where it sits)
+for name, tipAt in pairs({ Section = 1, Check = 1, Stepper = 7, Picker = 6, Color = 4, Input = 3 }) do
+	local orig = Layout[name]
+	Layout[name] = function(self, label, ...)
+		Record(self, label, (select(tipAt, ...)))
+		return orig(self, label, ...)
+	end
+end
+do
+	local orig = Layout.Buttons
+	Layout.Buttons = function(self, list, ...)
+		for _, b in ipairs(list or {}) do Record(self, b[1]) end
+		return orig(self, list, ...)
+	end
+end
+
 local function Opt() return ns.db.settings end
 
 local function BuildGeneral(P)
@@ -327,17 +350,30 @@ local function BuildGeneral(P)
 		function() return Opt().bestiary.tooltip end, function(v) Opt().bestiary.tooltip = v end)
 	P:Stepper(L["Window size %"], 70, 130, 5, function() return math.floor((Opt().window.scale or 1) * 100 + 0.5) end,
 		function(v) ns.UI:SetScale(v / 100) end)
+	P:Stepper(L["Scroll speed %"], 50, 200, 10, function() return Opt().window.scroll or 100 end,
+		function(v) Opt().window.scroll = v end)
+	P:Check(L["Smooth scrolling"], L["The mouse wheel glides lists and pages a few lines per notch. Shift + wheel jumps half a page."],
+		function() return Opt().window.smooth ~= false end, function(v) Opt().window.smooth = v end)
 	P:Buttons({
 		{ L["Open the Almanac"], 160, function() ns.UI:Open() end },
 		{ L["Reset window positions"], 190, function() ns.UI:ResetPosition() ns.MinimapButton:ResetPosition() S:ResetPosition() end },
 	})
 
+	P:Section(L["Almanac players"], L["Other players running Azeroth Almanac (your guild, group, online friends, and players you target or mouse over) are found with hidden addon messages, so features like Murloc Tac Toe know who can play. Nothing goes to a public channel."])
+	P:Check(L["Let other Almanac players see me"], L["Off: your Almanac never says hello or answers; it only notices others' hellos."],
+		function() return Opt().peers.share end, function(v) Opt().peers.share = v end)
+	P:Check(L["Mark Almanac players on tooltips"], L["An Almanac badge on the tooltip of players who have it."],
+		function() return Opt().peers.tooltip end, function(v) Opt().peers.tooltip = v end)
+	P:Check(L["Tell me when a newer version is out"], L["A quest from the Almanac itself when someone's copy is newer than yours. /aa version quest shows it."],
+		function() return Opt().peers.nudge end, function(v) Opt().peers.nudge = v end)
+	P:Text(function() return (L["%d other Almanac players known."]):format(ns.Peers and ns.Peers:Count() or 0) end)
+
 	P:Section(L["Key bindings"], L["Set these in Options > Keybindings, under Azeroth Almanac (in the AddOns section)."])
-	P:Text(L["Open or close the Almanac  •  Open Almanac settings  •  My Characters  •  Gem Match\nTarget nearest selected quest mob  •  Clear markers on nearby quest mobs"])
+	P:Text(L["Open or close the Almanac  •  Open Almanac settings  •  Characters (bags, bank, gear)  •  Gem Match\nTarget nearest selected quest mob  •  Clear markers on nearby quest mobs"])
 
 	P:Section(L["Slash commands"])
 	P:Text("|cffffd100/aa|r " .. L["the Almanac"] .. "      |cffffd100/aa settings|r " .. L["this window"] .. "      |cffffd100/aa stats|r " .. L["what's recorded"] .. "\n"
-		.. "|cffffd100/aa scan|r " .. L["full auction house scan"] .. "      |cffffd100/aa inv|r " .. L["My Characters"] .. "      |cffffd100/aa games|r " .. L["Gem Match"] .. "\n"
+		.. "|cffffd100/aa scan|r " .. L["full auction house scan"] .. "      |cffffd100/aa inv|r " .. L["Characters: bags, bank, gear"] .. "      |cffffd100/aa games|r " .. L["Gem Match"] .. "      |cffffd100/aa mtt|r " .. L["Murloc Tac Toe"] .. "\n"
 		.. "|cffffd100/aa heal|r " .. L["Healer Assist (test, debug, on, off)"] .. "      |cffffd100/aa threat|r " .. L["threat preview"] .. "\n"
 		.. "|cffffd100/aa ranks|r " .. L["old spell ranks on your bars"] .. "      |cffffd100/aa node herb/ore/chest/other|r " .. L["classify the node you face"] .. "      |cffffd100/qt|r " .. L["quest tracker buttons"])
 
@@ -348,7 +384,7 @@ end
 local TOASTS = {
 	{ "zone", L["New zones"] }, { "subzone", L["New places within a zone"] },
 	{ "instance", L["New dungeons and raids"] }, { "level", L["Level ups"] },
-	{ "creature", L["New creatures"] }, { "tier", L["Research tier reached (Studied, Mastered)"] },
+	{ "creature", L["New creatures"] }, { "tier", L["Research tier reached (Hunted, Journeyman and up)"] },
 	{ "merchant", L["New merchants"] }, { "item", L["Rare and better items"] },
 	{ "quest", L["New quests"] }, { "trainer", L["New trainers"] },
 	{ "flight", L["New flight paths"] }, { "node", L["New gathering nodes"] },
@@ -374,7 +410,7 @@ local function BuildAlerts(P)
 		L["Below this tier, discoveries only go in the journal. Common (white) is routine finds: places, creatures, merchants, quests, nodes."])
 	P:Picker(L["Sound for"], showList, function() return t.soundTier or 2 end, function(i) t.soundTier = i end, nil, 1,
 		L["Alerts below this tier are silent."])
-	P:Text(L["Alert colours: Common (white) routine finds; Uncommon (green) new zones, trainers, flight paths, elites, Studied, level-ups; Rare (blue) dungeons, rare creatures, Mastered, every tenth level; Epic (purple) rare elites and first milestones; Legendary (orange) level 60, world bosses, the greatest milestones. Several Common finds in a row become one alert."], "GameFontDisableSmall")
+	P:Text(L["Alert colours: Common (white) routine finds; Uncommon (green) new zones, trainers, flight paths, elites, Hunted and Journeyman, level-ups; Rare (blue) dungeons, rare creatures, Master Hunter and Expert, every tenth level; Epic (purple) rare elites and first milestones; Legendary (orange) level 60, world bosses, the greatest milestones. Several Common finds in a row become one alert."], "GameFontDisableSmall")
 	P:Buttons({
 		{ L["Show a test alert"], 150, function() if ns.Toast then ns.Toast:Test() end end },
 		{ L["Reset position"], 130, function() if ns.Toast then ns.Toast:ResetPosition() end end },
@@ -386,14 +422,19 @@ local function BuildAlerts(P)
 end
 
 local function BuildTiers(P)
-	P:Section(L["Research tiers"], L["How many kills it takes to learn more about a creature. Studied reveals every ability; Mastered reveals immunities, resistances and the full loot table."])
-	for _, r in ipairs({ { "normal", L["Creatures"] }, { "rare", L["Rares"] }, { "boss", L["Bosses"] } }) do
-		local key = r[1]
-		P:Stepper(r[2] .. ": " .. L["Studied"], 1, 50, 1, function() return Opt().tiers[key].studied end,
-			function(n) Opt().tiers[key].studied = math.min(n, Opt().tiers[key].mastered) end)
-		P:Stepper(r[2] .. ": " .. L["Mastered"], 1, 100, 1, function() return Opt().tiers[key].mastered end,
-			function(n) Opt().tiers[key].mastered = math.max(n, Opt().tiers[key].studied) end, 1)
+	-- fixed (not settings): the same tiers for every player, so Wild Gambit cards match too
+	local B, G = ns.Bestiary, ns.Gathering
+	P:Section(L["Research tiers"], L["How many kills or gathers it takes to learn more. Hunted reveals every ability; Master Hunter reveals immunities, resistances and the full loot table. Journeyman reveals everything a node can hold; Expert adds how likely each find is. The last two tiers are milestones (and a creature's Wild Gambit card turns Epic and Legendary)."])
+	local function Row(names, at, unit)
+		local parts = {}
+		for t = 2, 6 do parts[#parts + 1] = ("%s %s"):format(names[t], ns.N(at[t], unit, unit .. "s")) end
+		return table.concat(parts, "  ·  ")
 	end
+	for _, r in ipairs({ { "normal", L["Creatures"] }, { "rare", L["Rares and bosses"] } }) do
+		local t = B.TIER_KILLS[r[1]]
+		P:Text("|cffffd100" .. r[2] .. ":|r  " .. Row(B.TIERS, { 0, 1, t.studied, t.mastered, t.revered, t.exalted }, "kill"))
+	end
+	if G then P:Text("|cffffd100" .. L["Gathering and fishing"] .. ":|r  " .. Row(G.TIERS, G.AT, "gather")) end
 end
 
 local function BuildRecords(P)
@@ -453,7 +494,7 @@ local function BuildQuests(P)
 	end
 	P:Check(L["Ping the turn-in NPC (\"On my way\")"], nil, function() return db.pingTurnIns end, function(v) db.pingTurnIns = v R() end)
 
-	P:Section(L["Drop sources"], L["Which mobs drop each quest item: creatures in your Bestiary that the Almanac's records say drop it, plus what you learn by looting."])
+	P:Section(L["Drop sources"], L["Which mobs drop each quest item: creatures in your Almanac that the Almanac's records say drop it, plus what you learn by looting."])
 	P:Check(L["Learn drop sources when looting quest items"], nil, function() return db.learnFromLoot end, function(v) db.learnFromLoot = v end)
 	P:Text(function() return (L["Learned by you: |cffffffff%d|r items"]):format(QT:LearnedCount()) end, nil, 1)
 	P:Buttons({
@@ -526,9 +567,10 @@ local function BuildNodes(P)
 	local m = ns.db.settings.nodes
 	local NP = ns.NodePins
 	local function R() if NP then NP:Refresh() end end
-	P:Section(L["On the maps"], L["Every spot where you gathered or sighted a herb, vein or chest, from the Almanac's records. Gathered spots in full colour, sighted-only spots dimmer. Hover for the node, click for a waypoint, shift-click to open it in Gathering. The herb button at the top right of the world map shows or hides them."])
+	P:Section(L["On the maps"], L["Every spot where you gathered or sighted a herb, vein or chest, from the Almanac's records. Gathered spots in full colour, sighted-only spots dimmer. Hover for the node, click for a waypoint, shift-click to open it in Gathering. The herb buttons at the top right of the world map and on the minimap's rim show or hide them (drag the minimap one around the edge)."])
 	P:Check(L["Show them on the world map"], nil, function() return m.map end, function(v) m.map = v R() end)
 	P:Check(L["Show them on the minimap"], nil, function() return m.minimap end, function(v) m.minimap = v R() end)
+	P:Check(L["Herb button on the minimap"], L["Left-click shows or hides the pins, right-click opens these settings, drag moves it around the minimap. /aa nodes does the same as a click."], function() return m.mmButton ~= false end, function(v) m.mmButton = v R() end, 1)
 	P:Check(L["Herbs"], nil, function() return m.herb end, function(v) m.herb = v R() end, 1)
 	P:Check(L["Ore and stone"], nil, function() return m.ore end, function(v) m.ore = v R() end, 1)
 	P:Check(L["Chests and objects"], nil, function() return m.chest end, function(v) m.chest = v R() end, 1)
@@ -635,6 +677,10 @@ local function BuildMerchants(P)
 		if items == 0 then return L["No junk in your bags right now."] end
 		return (L["Junk in your bags right now: |cffffffff%d|r items worth %s"]):format(items, ns.MoneyText(value))
 	end, nil, 1)
+
+	P:Section(L["Quest turn-ins"])
+	P:Check(L["Mark the quest reward that sells for the most"], L["At a quest turn-in with a choice of rewards, the one a vendor pays the most for (times how many you get) shows a gold coin in its bottom right corner."],
+		function() return db.bestReward end, function(v) db.bestReward = v end)
 	P:Section(L["Vendor window"])
 	P:Check(L["Search box and List button"], L["Searches the vendor's whole stock, not just the page you're on. The List button swaps the page grid for one scrolling list with filters for usable items and unlearned recipes."],
 		function() return db.search end, function(v) db.search = v Q.MerchantList:Refresh() end)
@@ -684,7 +730,7 @@ local function BuildWings(P)
 	P:Check(L["A quip when I land"], nil, function() return db.landing end, Set("landing"), 1)
 	P:Check(L["The name in the middle of the screen"], nil, function() return db.center end, Set("center"), 1)
 	P:Check(L["Tell my party who's flying me"], nil, function() return db.party end, Set("party"), 1)
-	P:Check(L["Offer Gem Match on longer flights"], L["On flights of 45 seconds or more."], function() return db.gemPrompt end, Set("gemPrompt"))
+	P:Check(L["Offer a game on longer flights"], L["Wild Gambit, Murloc Tac Toe or Gem Match (one recommended each time), on flights of 45 seconds or more."], function() return db.gemPrompt end, Set("gemPrompt"))
 	P:Text(function()
 		local name, count = WW:Favorite()
 		return name and (L["Your most loyal flyer: |cffffffff%s|r, %d rides together."]):format(name, count) or L["No flights logged on this character yet."]
@@ -698,7 +744,7 @@ local function BuildTownsfolk(P)
 	local TF = ns.Townsfolk
 	local function R() TF:Refresh() end
 	P:Section(L["On the world map"], L["Trainers, services, vendors and mailboxes you have met, with Plus Everything's icons. An NPC counts once you target it, mouse over it or talk to it; a mailbox once you open it. Hover a pin for the name and title, click it for a waypoint. The spyglass button at the top right of the map shows or hides them (right-click: what shows)."])
-	P:Check(L["Show discovered townsfolk on the world map"], nil, function() return s.enabled end, function(v) s.enabled = v s.mapHidden = false R() end)
+	P:Check(L["Show discovered people on the world map"], nil, function() return s.enabled end, function(v) s.enabled = v s.mapHidden = false R() end)
 	P:Check(L["Only my faction"], L["Leave out NPCs who'd be hostile to the character you're playing."], function() return s.factionOnly end, function(v) s.factionOnly = v R() end, 1)
 	P:Check(L["Only my class's trainers"], nil, function() return s.myClassOnly end, function(v) s.myClassOnly = v R() end, 1)
 	P:Check(L["Also on continent maps"], L["Smaller pins on Kalimdor and the Eastern Kingdoms."], function() return s.continent end, function(v) s.continent = v R() end, 1)
@@ -706,7 +752,7 @@ local function BuildTownsfolk(P)
 	P:Stepper(L["Pin size"], 10, 28, 2, function() return s.size end, function(v) s.size = v R() end, 1)
 	P:Text(function()
 		local folk, mail = TF:Counts()
-		return (L["Met so far: |cffffffff%d|r townsfolk, |cffffffff%d|r mailboxes"]):format(folk, mail)
+		return (L["Met so far: |cffffffff%d|r people, |cffffffff%d|r mailboxes"]):format(folk, mail)
 	end, nil, 1)
 	P:Buttons({ { L["Check map positions"], 180, function() TF:Check() end } })
 	P:Text(L["Talk to a trainer or vendor and press Check: it says how far the database position is from you, to confirm the map placement on this client."], "GameFontDisableSmall")
@@ -717,6 +763,17 @@ local function BuildTownsfolk(P)
 			P:Check(g.label, nil, function() return s.groups[g.key] end, function(v) s.groups[g.key] = v R() end)
 		end
 	end
+end
+
+local function BuildTalents(P)
+	local db = Q.db.talentPlanner
+	local TP = Q.TalentPlanner
+	P:Section(L["Talent Planner"], L["A Planner tab on your Talents window, after Primary and Secondary: plan WoW Forever talents for any class at any level (click to add a point, right-click to remove), save and follow builds, share talentsforever.com links, and stage a plan on your real talents to check and Apply. The trees are read from the game itself, so placements and tooltips are WoW Forever's own. /aa talents opens it."])
+	P:Check(L["Show the Planner tab"], nil, function() return db.enabled end, function(v) db.enabled = v TP:Apply() end)
+	P:Check(L["On level up, say the followed build's next talent"], nil, function() return db.levelHint end, function(v) db.levelHint = v end)
+	P:Check(L["Make that talent glow on my talents"], nil, function() return db.glow end, function(v) db.glow = v TP:UpdateGlow() end)
+	P:Buttons({ { L["Open the Planner"], 150, function() TP:Open() end } })
+	P:Text(L["Talent data from talentsforever.com (CC BY 4.0), corrected by the game's own trees."], "GameFontDisableSmall")
 end
 
 local function BuildRanks(P)
@@ -738,8 +795,8 @@ end
 local function BuildInventory(P)
 	local db = Q.db.inventory
 	local INV = Q.Inventory
-	P:Section(L["My Characters"], L["Every character's bags, bank, gear, mailbox, auctions and professions, saved as you play them (the bank when you open it). /aa inv, or the minimap button's menu."])
-	P:Buttons({ { L["Open My Characters"], 170, function() Q.InventoryWindow:Open() end } })
+	P:Section(L["Characters: bags, bank and gear"], L["Every character's bags, bank, gear, auctions and professions, saved as you play them (the bank when you open it), on the tabs of the Almanac's Characters page. /aa inv opens it on the Bags tab."])
+	P:Buttons({ { L["Open Characters"], 170, function() Q.InventoryWindow:Open() end } })
 	P:Check(L["Who has an item, in item tooltips"], nil, function() return db.tooltip end, function(v) db.tooltip = v end)
 	P:Check(L["Bank tab on the backpack"], L["Bags | Bank tabs under the bag window; Bank shows this character's bank as last seen, from anywhere."],
 		function() return db.bankTab end, function(v) db.bankTab = v Q.BagBank:Apply() end)
@@ -914,6 +971,28 @@ local function BuildGames(P)
 	local GM = Q.GemMatch
 	P:Section(L["Gem Match"], L["Match three or more Classic gems. Match 4 for a power gem that clears 3x3, 5 for an Arcane Crystal that clears a whole colour. Timed (2 minutes) or 30 Moves. Pauses by itself in combat."])
 	P:Buttons({ { L["Play Gem Match"], 150, function() GM:Open() end } })
+	local diffs = Q.WildGambit.DIFFICULTY
+	P:Picker(L["Practice difficulty"], diffs, function()
+		for i, d in ipairs(diffs) do if d.key == (db.difficulty or "normal") then return i end end
+		return 2
+	end, function(i) db.difficulty = diffs[i].key end, nil, nil, L["How hard the practice gambler plays. Easy: it slips up often, ignores your cards' strong sides, is slow with its spell and plays its two strongest cards a tier lower. Hard: it rarely slips."])
+	local tables = Q.WildGambit.TABLES
+	P:Picker(L["Table"], tables, function()
+		for i, t in ipairs(tables) do if t.key == (db.table or "Dark") then return i end end
+		return 1
+	end, function(i) db.table = tables[i].key db.tablePicked = true Q.WildGambit:ApplyTable() end)
+	local boards = Q.WildGambit.BOARDS
+	P:Picker(L["Board"], boards, function()
+		for i, t in ipairs(boards) do if t.key == (db.board or "Glade") then return i end end
+		return 1
+	end, function(i) db.board = boards[i].key Q.WildGambit:ApplyBoard() end)
+	P:Check(L["Holiday boards"], L["During Hallow's End (18 October - 1 November) and the Feast of Winter Veil (16 December - 2 January) the board dresses for the season, whichever board you picked."],
+		function() return db.holidayBoards ~= false end, function(v) db.holidayBoards = v Q.WildGambit:ApplyBoard() end)
+	local backs = Q.WildGambit.BACKS
+	P:Picker(L["Card back"], backs, function()
+		for i, t in ipairs(backs) do if t.key == (db.back or "Almanac") then return i end end
+		return 1
+	end, function(i) db.back = backs[i].key end)
 	P:Check(L["Game sounds"], nil, function() return db.sound end, function(v) db.sound = v end)
 	P:Check(L["Share my best scores with my guild"], L["Guildmates running Azeroth Almanac see each other's bests beside the board."],
 		function() return db.share end, function(v) db.share = v end)
@@ -924,21 +1003,53 @@ local function BuildGames(P)
 	P:Buttons({ { L["Reset my best scores"], 170, function() StaticPopup_Show("AZEROTHALMANAC_RESET_GEMS") end } })
 end
 
+Confirm("AZEROTHALMANAC_RESET_MTT", L["Erase your Murloc Tac Toe records and title?"], function() Q.MurlocTacToe:ResetRecords() end)
+
+local function BuildMurloc(P)
+	local db = Q.db.murloc
+	local MTT = Q.MurlocTacToe
+	P:Section(L["Murloc Tac Toe"], L["Tic-tac-toe, Murlocs against Gnolls, with another player running Azeroth Almanac (same faction, your realm or a connected one). Whoever challenges plays the Murlocs and moves first; sides swap on every rematch. Or practise against a gnoll."])
+	P:Buttons({ { L["Play"], 110, function() MTT:Open() end }, { L["Practice vs. a Gnoll"], 170, function() MTT:Practice() end },
+		{ L["Challenge my target"], 170, function() MTT:Challenge("target") end } })
+	P:Check(L["Accept challenges"], L["Off: challenges are turned down for you, without a popup."], function() return db.allow end, function(v) db.allow = v end)
+	P:Check(L["Only from friends, guild and group"], nil, function() return db.friendsOnly end, function(v) db.friendsOnly = v end)
+	P:Check(L["\"Murloc Tac Toe\" on player right-click menus"], L["Applies after /reload."], function() return db.menu end, function(v) db.menu = v end)
+	P:Check(L["Game sounds"], L["The murlocs' and gnolls' own voices."], function() return db.sound end, function(v) db.sound = v end)
+	P:Text(function()
+		local title, w, l, d, p = MTT:Summary()
+		return (L["Your title: |cffffd100%s|r     %d wins, %d losses, %d draws     Practice %d - %d - %d"]):format(title, w, l, d, p.w, p.l, p.d)
+	end, nil, 1)
+	P:Buttons({ { L["Erase my records"], 150, function() StaticPopup_Show("AZEROTHALMANAC_RESET_MTT") end } })
+end
+
+local function BuildGambit(P)
+	local db = Q.db.wildGambit
+	P:Section(L["Wild Gambit"], L["A creature card game. Every creature in your Almanac is a card: Sighted grey, Fought white, Hunted green, Master Hunter blue, Epic Hunter purple, Legendary Hunter orange. Spikes on each side come from the creature's level, tier, home zone and kind; a card with more spikes on the touching side takes its neighbour. Pick a class for the round: each has one spell per match that removes, protects or swaps a card (a removed card's owner is dealt a new one). You can play yourself as your chosen card (stronger for every creature you bring to Master Hunter), and Hunters and Warlocks can add their pet: right-click its portrait. Practise against a gambler, or challenge another Almanac player."])
+	P:Buttons({ { L["Play"], 110, function() Q.WildGambit:Open() end } })
+	P:Check(L["Game sounds"], nil, function() return db.sound end, function(v) db.sound = v end)
+	P:Check(L["Forest sounds at the table"], nil, function() return db.ambience end, function(v) db.ambience = v end)
+	P:Check(L["Accept Wild Gambit challenges"], L["Other Almanac players can challenge you (/aa gambit Name, or the Challenge button on the pick screen)."],
+		function() return db.allow ~= false end, function(v) db.allow = v end)
+	P:Check(L["Find a match across the realm"], L["While you look for a match, the Almanac also joins a hidden channel (and leaves it when you stop), so any Almanac player on the realm can pair with you. Off: only your guild, group and the Almanac players you've met."],
+		function() return db.realmSearch ~= false end, function(v) db.realmSearch = v end)
+	P:Text(function() local p = db.practice return (L["Practice: %d won, %d lost, %d drawn"]):format(p.w, p.l, p.d) end)
+end
+
 -- Sidebar order. id is what S:Open(name) accepts (the label and aliases work too).
 local PAGE_LIST = {
 	{ cat = L["Azeroth Almanac"] },
-	{ id = "general", label = L["General"], icon = "INV_Misc_Book_09", build = BuildGeneral, aliases = { "options", "almanac" },
+	{ id = "general", label = L["General"], icon = 133742, build = BuildGeneral, aliases = { "options", "almanac" },
 		desc = L["The minimap button, the window, key bindings and slash commands."] },
 	{ id = "alerts", label = L["Discovery alerts"], icon = "INV_Misc_Note_01", build = BuildAlerts, aliases = { "toasts" },
 		desc = L["Which discoveries get an alert."] },
 	{ id = "tiers", label = L["Research tiers"], icon = "INV_Misc_Head_Dragon_01", build = BuildTiers,
-		desc = L["How many kills reveal more of a creature in the Bestiary."] },
+		desc = L["How many kills reveal more of a creature on the Creatures page."] },
 	{ id = "records", label = L["Records"], icon = "INV_Scroll_03", build = BuildRecords,
 		desc = L["What's recorded, and erasing it."] },
 	{ cat = L["Questing"] },
 	{ id = "quests", label = L["Quest Targeter"], icon = "Ability_Hunter_SniperShot", build = BuildQuests, aliases = { "qt", "targeter" },
 		desc = L["Target buttons in the quest tracker, raid markers on quest mobs and where quest items drop."] },
-	{ id = "nodes", label = L["Gathering"], icon = "Trade_Herbalism", build = BuildNodes, aliases = { "gathering", "node" },
+	{ id = "nodes", label = L["Gathering"], icon = 237271, build = BuildNodes, aliases = { "gathering", "node" },
 		desc = L["A sparkle on the herb, ore or chest node you're facing."] },
 	{ cat = L["Economy"] },
 	{ id = "auction", label = L["Auction House"], icon = "INV_Misc_Coin_02", build = BuildAuction, aliases = { "ah", "scan" },
@@ -955,12 +1066,14 @@ local PAGE_LIST = {
 	{ id = "wings", label = L["Wings & Whispers"], icon = "Ability_Hunter_EagleEye", build = BuildWings,
 		desc = L["Meet the gryphon, wind rider, hippogryph or bat carrying you on every flight."] },
 	{ cat = L["World"] },
-	{ id = "townsfolk", label = L["Townsfolk"], icon = "INV_Misc_Spyglass_03", build = BuildTownsfolk, aliases = { "tf", "map" },
+	{ id = "townsfolk", label = L["People"], icon = 8197123, build = BuildTownsfolk, aliases = { "tf", "map", "people" },
 		desc = L["The trainers, services, vendors and mailboxes you've met, on the world map."] },
 	{ cat = L["Characters"] },
 	{ id = "ranks", label = L["Spell Ranks"], icon = "INV_Misc_Book_09", build = BuildRanks, aliases = { "rank", "spellranker" },
 		desc = L["Old spell ranks on your action bars: found, marked, and replaced when you train a new rank."] },
-	{ id = "inventory", label = L["My Characters"], icon = "INV_Misc_Bag_08", build = BuildInventory, aliases = { "inv", "bags" },
+	{ id = "talents", label = L["Talent Planner"], icon = 132222, build = BuildTalents, aliases = { "talent", "planner" },
+		desc = L["Plan WoW Forever talents for any class on a Planner tab of your Talents window, and stage them in game."] },
+	{ id = "inventory", label = L["Bags and bank"], icon = "INV_Misc_Bag_08", build = BuildInventory, aliases = { "inv", "bags" },
 		desc = L["Bags, bank, gear, mail, auctions and professions of every character on your account."] },
 	{ cat = L["Group"] },
 	{ id = "group", label = L["Group Settings"], icon = "INV_Letter_15", build = BuildGroup, aliases = { "social", "threat", "unitframes", "follow" },
@@ -970,6 +1083,10 @@ local PAGE_LIST = {
 	{ cat = L["Fun"] },
 	{ id = "games", label = L["Gem Match"], icon = "INV_Misc_Gem_Ruby_02", build = BuildGames, aliases = { "gems", "game" },
 		desc = L["A match-three game with Classic gems, for flights and queues."] },
+	{ id = "gambit", label = L["Wild Gambit"], icon = "INV_10_Inscription_DarkmoonCards_Wild_Earth", build = BuildGambit, aliases = { "wild", "cards" },
+		desc = L["The creature card game: your Almanac's creatures as cards."] },
+	{ id = "murloc", label = L["Murloc Tac Toe"], icon = "INV_Misc_Fish_02", build = BuildMurloc, aliases = { "mtt", "tictactoe" },
+		desc = L["Tic-tac-toe against another Azeroth Almanac player: Murlocs against Gnolls."] },
 }
 
 -- faint profession-book paintings behind each page, as Plus Everything had them
@@ -992,6 +1109,8 @@ local PAGE_ART = {
 	group = { "Profession-overview-card-generic-firstaid", "Profession-overview-Card" },
 	healer = { "Profession-overview-card-generic-firstaid", "Profession-overview-Card" },
 	games = { "Profession-overview-Card-Jewelcrafting", "Profession-overview-Card-Alchemy" },
+	gambit = { "Profession-overview-Card-Herbalism", "Profession-overview-Card" },
+	murloc = { "Profession-overview-card-generic-fishing", "Profession-overview-card-generic-cooking", "Profession-overview-Card" },
 }
 
 ---------------------------------------------------------------------------
@@ -1067,6 +1186,7 @@ local function BuildPage(def)
 	page.scroll, page.content = scroll, content
 
 	local P = NewLayout(content)
+	P.pageID = def.id
 	local ok, err = pcall(def.build, P)
 	if not ok then
 		P:Text("|cffff6060" .. L["This page could not be built:"] .. "|r " .. tostring(err))
@@ -1098,9 +1218,128 @@ end
 
 -- the sidebar, as My Characters' character list: grey capital headings, entries with a round icon,
 -- a faint hover and a flat gold fill on the page that's open
+-- a setting found by the search: its page opens, scrolled to it, and the row flashes
+local function ShowFound(hit)
+	SelectPage(hit.page)
+	local page = pages[hit.page]
+	if not page then return end
+	local y = math.max(0, hit.y - 40)
+	local max = math.max(0, page.content:GetHeight() - page.scroll:GetHeight())
+	pcall(page.scroll.SetVerticalScroll, page.scroll, math.min(y, max))
+	if not page.flash then
+		page.flash = page.content:CreateTexture(nil, "BACKGROUND")
+		page.flash:SetColorTexture(1, 0.82, 0.25, 0.22)
+		page.flash:SetHeight(28)
+	end
+	page.flash:ClearAllPoints()
+	page.flash:SetPoint("TOPLEFT", 0, -hit.y)
+	page.flash:SetPoint("RIGHT", page.content, "RIGHT", 0, 0)
+	page.flash:SetAlpha(1)
+	page.flash:Show()
+	local t = 0
+	page.flashTicker = page.flashTicker or CreateFrame("Frame")
+	page.flashTicker:SetScript("OnUpdate", function(self, e)
+		t = t + e
+		if t > 1.6 then page.flash:Hide() self:SetScript("OnUpdate", nil) else page.flash:SetAlpha(1 - t / 1.6) end
+	end)
+end
+
+local function Plain(s) return ((s or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "")):lower() end
+
 local function BuildNav()
 	local inset = W.Inset(frame)
-	inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -62)
+	inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -92)
+	-- search every setting (all pages are built the first time, so their controls are known)
+	local results
+	local search = W.Search(frame, NAV_W - 12, function(text)
+		text = strtrim and strtrim(text) or text
+		if text == "" then
+			if results then results:Hide() end
+			inset.scroll:Show()
+			return
+		end
+		if not frame.indexed then
+			frame.indexed = true
+			local keep = frame.selected
+			for _, d in ipairs(PAGE_LIST) do if d.id and not pages[d.id] then pages[d.id] = BuildPage(d) pages[d.id]:Hide() end end
+			if keep then SelectPage(keep) end
+		end
+		local hits, seen = {}, {}
+		for _, d in ipairs(PAGE_LIST) do
+			if d.id then
+				local words = Plain(d.label .. " " .. (d.desc or "") .. " " .. table.concat(d.aliases or {}, " "))
+				if words:find(text, 1, true) then hits[#hits + 1] = { page = d.id, text = d.label, y = 0, isPage = true } seen[d.id .. ":0"] = true end
+			end
+		end
+		for _, e in ipairs(INDEX) do
+			local key = e.page .. ":" .. e.y
+			if not seen[key] and (Plain(e.text):find(text, 1, true) or (e.tip and Plain(e.tip):find(text, 1, true))) then
+				seen[key] = true
+				hits[#hits + 1] = e
+			end
+		end
+		inset.scroll:Hide()
+		results:Show()
+		results:SetHits(hits, text)
+	end)
+	search:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -66)
+	if search.Instructions then search.Instructions:SetText(L["Search settings"]) end
+	frame.search = search
+	-- the results, in place of the page list
+	results = CreateFrame("Frame", nil, inset)
+	results:SetPoint("TOPLEFT", 4, -6)
+	results:SetPoint("BOTTOMRIGHT", -6, 6)
+	results:Hide()
+	results.rows = {}
+	results.none = results:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	results.none:SetPoint("TOPLEFT", 6, -4)
+	results.none:SetWidth(NAV_W - 30)
+	results.none:SetJustifyH("LEFT")
+	function results:SetHits(hits, text)
+		local defs = {}
+		for _, d in ipairs(PAGE_LIST) do if d.id then defs[d.id] = d end end
+		local maxRows = math.floor((self:GetHeight() > 0 and self:GetHeight() or 560) / 34)
+		for i = 1, math.max(#self.rows, math.min(#hits, maxRows)) do
+			local hit = hits[i]
+			local row = self.rows[i]
+			if not row and hit then
+				row = CreateFrame("Button", nil, self)
+				row:SetSize(NAV_W - 22, 32)
+				row:SetPoint("TOPLEFT", 0, -(i - 1) * 34)
+				local hover = row:CreateTexture(nil, "HIGHLIGHT")
+				hover:SetAllPoints()
+				W.RowHover(hover)
+				row.icon = W.Portrait(row, 18)
+				row.icon:SetPoint("TOPLEFT", 4, -3)
+				row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+				row.label:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 6, 1)
+				row.label:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+				row.label:SetJustifyH("LEFT")
+				row.label:SetWordWrap(false)
+				row.where = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+				row.where:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -2)
+				row.where:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+				row.where:SetJustifyH("LEFT")
+				row.where:SetWordWrap(false)
+				row:SetScript("OnClick", function(r) if r.hit then ShowFound(r.hit) end end)
+				self.rows[i] = row
+			end
+			if row then
+				if hit and i <= maxRows then
+					local d = defs[hit.page]
+					row.hit = hit
+					W.SetIcon(row.icon.art, { d and d.icon })
+					row.label:SetText(hit.isPage and ("|cffffd100" .. hit.text .. "|r") or hit.text)
+					row.where:SetText(hit.isPage and L["Page"] or (d and d.label or ""))
+					row:Show()
+				else
+					row:Hide()
+				end
+			end
+		end
+		self.none:SetText(#hits == 0 and (L["No setting matches \"%s\"."]):format(text) or "")
+		self.none:SetShown(#hits == 0)
+	end
 	inset:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 10)
 	inset:SetWidth(NAV_W)
 	local scroll = W.Try("ScrollFrame", nil, inset, "UIPanelScrollFrameTemplate")
@@ -1130,11 +1369,11 @@ local function BuildNav()
 			row.pageID = def.id
 			row.active = row:CreateTexture(nil, "BACKGROUND")
 			row.active:SetAllPoints()
-			row.active:SetColorTexture(unpack(W.SELECTED))
+			W.RowSelected(row.active)
 			row.active:Hide()
 			local hover = row:CreateTexture(nil, "HIGHLIGHT")
 			hover:SetAllPoints()
-			hover:SetColorTexture(1, 1, 1, 0.05)
+			W.RowHover(hover)
 			local icon = W.Portrait(row, 20)
 			icon:SetPoint("LEFT", 6, 0)
 			W.SetIcon(icon.art, { def.icon })
@@ -1152,6 +1391,7 @@ local function BuildNav()
 	child:SetHeight(y + 4)
 	scroll:HookScript("OnSizeChanged", function() W.FitScrollBar(scroll, y + 4) end)
 	W.FitScrollBar(scroll, y + 4)
+	inset.scroll = scroll
 	frame.nav = inset
 end
 
@@ -1195,7 +1435,7 @@ local function Build()
 	BuildNav()
 	-- the page area: a dark recess like the Settings panel's right side
 	local body = W.Inset(frame)
-	body:SetPoint("TOPLEFT", frame.nav, "TOPRIGHT", 8, 0)
+	body:SetPoint("TOPLEFT", frame, "TOPLEFT", 10 + NAV_W + 8, -62) -- (the search box sits over the page list)
 	body:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 10)
 	frame.body = body
 	frame:Hide()

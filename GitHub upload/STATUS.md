@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.17.0** · 2026-10-04 · WoW Forever beta (interface 16001)
+**Version 0.49.0** · 2026-10-06 · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
@@ -24,9 +24,14 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
 | 24 | "My Characters" look across the Almanac | 🧪 | 0.10.1 |
 | 25 | Townsfolk on the world map | 🧪 | 0.11.0 |
 | 26 | Toast tiers (Common → Legendary, batching, minimum tier and sound settings) | 🧪 | 0.15.0 |
-| 27 | Gathering nodes on the world map and minimap | 🧪 | 0.16.0 |
+| 27 | Gathering nodes on the world map and minimap | ✅ (0.17.6 fix) | 0.16.0 → 0.17.6 |
 | 28 | Bug check and polish pass (22 fixes, loot-card slots, coin art) | 🧪 | 0.16.1 |
 | 29 | Spell Ranker (spellbook button, checks on open, auto-replace on training) | 🧪 | 0.17.0 |
+| 30 | Gathering toggle button on the minimap rim | 🧪 | 0.17.1 → 0.17.2 |
+| 32 | Ctrl-click items to try them on in the dressing room, everywhere | 🧪 | 0.17.3 |
+| 37 | My Characters merged into the Characters page (tabs, name plate, list) | 🧪 | 0.18.0 |
+| 33 | My Characters profession bars in the Skills window's blue style | 🧪 | 0.17.4 |
+| WG | Wild Gambit card game: practice (Easy/Normal/Hard), player matches, class spells, hidden card, guided tutorial, holiday boards, header nameplates | 🧪 | → 0.49.0 |
 
 ## Not started
 
@@ -43,6 +48,9 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
 | 19 | More on items: sets, suffixes, containers, crafts |
 | 20 | World events |
 | 21 | Data plumbing: Forever cache overlay, saved-data caps and migrations, localization |
+| 34 | Travels: your trail drawn on the map over time (planned; draw test passed: lines and dots both work) |
+| 60 | Talent Planner (from Plus Everything, trees read from the game) | built, needs testing | 0.21.0 |
+| 31 | Rivals: PvP encounters, wins and deaths, labels instead of tiers (planned, parked) |
 
 ## Needs checking in game first
 
@@ -54,12 +62,32 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
 - **Positions:**
   - Minimap pin scale: the standard yards per zoom level.
   - Flight paths you aren't standing at: converted from the flight map.
+  - Gathering minimap button: default spot (55° clockwise of the Almanac button; `/aa nodes button` puts it back) and whether it clashes with other minimap buttons.
 - **Spell Ranker:**
   - Button placement in this client's spellbook.
   - Auto-replace with `PickupSpell` / `PlaceAction` out of combat.
+- **Talent Planner (0.21.0):** Planner tab on the Talents window; placements, arrows, tooltips, Stage + Apply.
+- **Skinning by item (0.19.5):** list of leathers / hides, item page with Came from and Where, Show on map kill spots.
+- **Quest reward coin (0.18.4):** gold coin on the best-selling reward choice at turn-in; position on the icon.
+- **Dark panels (0.18.3):** the recipe list background shows in plain dark panels (list panes, detail bodies without a painting).
+- **Characters page (0.18.0):** list rows, name plate fit (chips in two rows, XP bar), tab art and icons, each tab's contents at the narrower width (bag rows, paper doll, profession cards), search, right-click hide / remove.
+- **No more "blocked SetPassThroughButtons" in combat** (0.17.7), with the world map open or after opening it.
+- **Townsfolk pins on zone maps** after the 0.17.6 layer fix (gathering pins confirmed).
+- **My Characters professions:** blue rank bars built from `common-stat-bar-BG` cut into three pieces (10 px caps guessed) - check the corners aren't stretched or clipped.
+- **Dressing room:**
+  - Ctrl-click on item slots, the Items list and icon, and Journal item entries opens the dressing room; the magnifier shows while Ctrl is held over wearables.
 - **Gathering:**
   - Sightings depend on soft-interact targeting, which the gathering highlight turns on.
   - Skill is not recorded when the Professions heading is folded.
+
+- **Wild Gambit (0.46-0.49), from the latest screenshots:**
+  - Header nameplates came out short and the score coin didn't show (0.48.0): make the plates taller, let the name run to the vs, score on the coin.
+  - Holiday boards (0.49.0): the slots sit inside each board's stone frame (inner edges measured from the art).
+  - Tutorial (0.47.0): the coach note over the bottom row, the gold glow following the cards, every step reachable.
+  - Hand sizing (0.46.9): six cards at about 0.69 keep their spikes clear; growth as cards leave.
+  - Stealth look: smoke layers rise, badge at the frame's left edge; the zoomed hidden card keeps it.
+  - A "blocked from an action" popup was seen (6 Oct, cause unknown). 0.46.8 keeps the latest 30 blocks in SavedVariables (db.diag) to trace the next one.
+- **Open:** GitHub push of the local commits; Tutor portrait art (a dice icon now); Logo_MurlocTacToe / Logo_GemMatch art for the flight prompt.
 
 ## Housekeeping
 

@@ -8,12 +8,24 @@ local L = ns.L
 local W = ns.Widgets
 local B = ns.Bestiary
 
-local page = { key = "bestiary", title = L["Bestiary"], icon = W.KIND.creature.icon, order = 2 }
-local list, detail, countText, filterButton, model, nameText, subText, tierBar, firstText, badge, killPin
+-- the page's own icon (picked by name): the legendary beast upgrade stone, else the creature icon
+local page = { key = "bestiary", title = L["Creatures"], icon = { "Icon_UpgradeStone_Beast_Legendary", unpack(W.KIND.creature.icon) }, order = 3 }
+local list, detail, countText, filterButton, model, nameText, subText, tierBar, firstText, badge, killPin, face, gambitCard
+local favButton -- (Wild Gambit's favourite star)
+local FAV_TEXTURE = "Interface\\AddOns\\AzerothAlmanac\\Media\\Badge_Favorite" -- (a ruby heart in gold)
+local FAV_MARKUP = "|T" .. FAV_TEXTURE .. ":13:13|t"
 local filter, kindFilter, zoneFilter = "", nil, nil -- zoneFilter: nil (all), "here", or a uiMapID
 local zoneButton
-local tierOn = { true, true, true, true } -- the tier filter buttons in the header
-local tierButtons = {}
+local tierFilter -- nil (everything) or a tier 1..6 (Sighted .. 200 kills), the header's dropdown
+local tierButton
+local TierLabel, TierMenu -- (below)
+local tierCounts = { 0, 0, 0, 0, 0, 0 }
+-- the tiers as the filter shows them: the research tiers, then 50 and 200 kills (Wild Gambit's
+-- Epic and Legendary), in the item quality colours
+local FILTER_TIERS = {
+	{ B.TIERS[1], "ff9d9d9d" }, { B.TIERS[2], "ffffffff" }, { B.TIERS[3], "ff1eff00" },
+	{ B.TIERS[4], "ff0070dd" }, { B.TIERS[5], "ffa335ee" }, { B.TIERS[6], "ffff8000" },
+}
 local shown -- npc id on the page
 
 local RARITY = {
@@ -98,7 +110,7 @@ local function Describe(npc, rec)
 	local b = {}
 	local tier = B:Tier(rec)
 	local c = CDB:Get(npc)
-	local th = ns.db.settings.tiers[B:Group(rec)] or ns.db.settings.tiers.normal
+	local th = B:Kills(rec)
 
 	-- General
 	b[#b + 1] = { "banner", L["General"] }
@@ -162,7 +174,7 @@ local function Describe(npc, rec)
 		b[#b + 1] = { "small", (L["Seen starting a cast %s (the game hides which spell)."]):format(ns.Times(rec.casts)) }
 	end
 	if hidden > 0 then
-		b[#b + 1] = { "small", CLASSIC .. (L["%s not yet seen. All are revealed at Studied (%s)."]):format(ns.N(hidden, "more ability", "more abilities"), ns.N(th.studied, "kill", "kills")) .. "|r" }
+		b[#b + 1] = { "small", CLASSIC .. (L["%s not yet seen. All are revealed at Hunted (%s)."]):format(ns.N(hidden, "more ability", "more abilities"), ns.N(th.studied, "kill", "kills")) .. "|r" }
 	end
 
 	-- Defenses
@@ -178,7 +190,7 @@ local function Describe(npc, rec)
 			for i, v in ipairs(c.res) do if v and v ~= 0 then res[#res + 1] = ("%s %d"):format(CDB.RESIST_NAMES[i], v) end end
 			b[#b + 1] = { "stat", L["Resistances"], #res > 0 and table.concat(res, ", ") or L["none"] }
 		else
-			b[#b + 1] = { "small", CLASSIC .. (L["Immunities and resistances are revealed at Mastered (%s)."]):format(ns.N(th.mastered, "kill", "kills")) .. "|r" }
+			b[#b + 1] = { "small", CLASSIC .. (L["Immunities and resistances are revealed at Master Hunter (%s)."]):format(ns.N(th.mastered, "kill", "kills")) .. "|r" }
 		end
 	end
 
@@ -223,7 +235,7 @@ local function Describe(npc, rec)
 				for _, e in ipairs(unseen) do if e.chance >= 1 then common = common + 1 end end
 				local text = common > 0 and (L["%s and %s not yet found."]):format(ns.N(common, "more common drop", "more common drops"), ns.N(#unseen - common, "rare one", "rare ones"))
 					or (L["%s not yet found."]):format(ns.N(#unseen, "rare drop", "rare drops"))
-				b[#b + 1] = { "small", CLASSIC .. text .. " " .. L["The full table is revealed at Mastered."] .. "|r" }
+				b[#b + 1] = { "small", CLASSIC .. text .. " " .. L["The full table is revealed at Master Hunter."] .. "|r" }
 			end
 		end
 		if tier >= 2 and c.goldHi then
@@ -305,12 +317,15 @@ local function Show(npc, keepModel)
 	detail:SetTheme(rec and (TYPE_THEME[rec.type or ""] or { "Skinning", "Mining" }) or nil)
 	if not rec then
 		model:Hide()
+		if face then face:Hide() end
 		nameText:SetText("")
 		subText:SetText("")
 		tierBar:Hide()
 		badge:Hide()
 		firstText:SetText("")
 		killPin:Hide()
+		if gambitCard then gambitCard:Hide() end
+		if favButton then favButton:Hide() end
 		detail:SetBlocks(nil, L["Select a creature."])
 		return
 	end
@@ -324,7 +339,10 @@ local function Show(npc, keepModel)
 			C_Timer.After(1, function()
 				if model.npc == npc then
 					local ok, d = pcall(model.GetDisplayInfo, model)
-					if ok then B:KeepFace(npc, d) end
+					if ok then
+						B:KeepFace(npc, d)
+						if gambitCard and shown == npc then pcall(gambitCard.ShowCreature, gambitCard, npc) end
+					end
 				end
 			end)
 		end
@@ -332,21 +350,42 @@ local function Show(npc, keepModel)
 		pcall(model.SetFacing, model, model.facing)
 	end
 	nameText:SetText(NameColor(rec) .. (rec.name or "?") .. "|r")
+	if face then
+		if not B:SetFace(face.art, npc, rec) then
+			W.SetIcon(face.art, W.TYPE_ICON[rec.type or ""] or W.KIND.creature.icon)
+			face.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		end
+		local kind = W.DragonFor(rec)
+		if kind == "boss" or kind == "worldboss" then face:SetRing(1, 0.5, 0)
+		elseif kind == "elite" then face:SetRing(1, 0.82, 0)
+		elseif kind then face:SetRing(0.78, 0.78, 0.95)
+		else face:SetRing(0.62, 0.5, 0.24) end
+		W.SetDragon(face.dragon, kind, face, face:GetWidth())
+		face:Show()
+	end
 	subText:SetText((L["Level %s %s %s"]):format(LevelText(rec), Rarity(rec), rec.family or rec.type or ""))
-	local tier, need = B:Tier(rec)
-	local th = ns.db.settings.tiers[B:Group(rec)] or ns.db.settings.tiers.normal
-	local goal = tier == 1 and 1 or tier == 2 and th.studied or th.mastered
+	local tier, need = B:FullTier(rec)
+	local th = B:Kills(rec)
 	tierBar:Show()
-	-- one bar from 0 to Mastered, with a marker at each tier; the Fishing bar until Studied,
-	-- the Mining bar from Studied, the green First Aid bar once Mastered
+	-- the skills bar towards the next tier (Fought, Studied, Mastered, Revered at 50, Exalted at
+	-- 200); past 200 it stays full and the kills keep counting
 	local kills = rec.kills or 0
-	tierBar:SetFlavor(tier >= 4 and "Mastery" or tier == 3 and "Mining" or "Fishing")
-	local text = (L["%d / %d kills"]):format(math.min(kills, th.mastered), th.mastered)
-	if need and B.TIERS[tier + 1] then text = text .. "  ·  " .. (L["%d to %s"]):format(need, B.TIERS[tier + 1])
-	elseif tier == 4 then text = ns.N(kills, "kill", "kills") .. "  ·  " .. B.TIERS[4] end
-	tierBar:Set(nil, math.min(kills, th.mastered), th.mastered, text)
-	tierBar:SetMarkers({ { 1, 2 }, { th.studied, 3 }, { th.mastered, 4 } }, kills, th.mastered)
+	local t1, t3, t4, t5, t6 = B:Thresholds(rec)
+	local at = { t1, t3, t4, t5, t6 } -- the kills for tiers 2 .. 6
+	-- the next tier with more kills to go (bosses and rares go Fought and Studied at one kill)
+	local nextTier = tier + 1
+	while at[nextTier - 1] and at[nextTier - 1] <= kills do nextTier = nextTier + 1 end
+	while nextTier < 6 and at[nextTier] and at[nextTier] <= at[nextTier - 1] do nextTier = nextTier + 1 end
+	local nextAt = at[nextTier - 1]
+	if nextAt then
+		tierBar:Set(nil, kills, nextAt, (L["%d / %d kills"]):format(kills, nextAt) .. "  ·  " .. (L["%d to %s"]):format(nextAt - kills, B.TIERS[nextTier]))
+	else
+		tierBar:Set(nil, 1, 1, ns.N(kills, "kill", "kills") .. "  ·  " .. B.TIERS[6])
+	end
+	tierBar:SetMarkers({ { t1, 2 }, { t3, 3 }, { t4, 4 }, { t5, 5 }, { t6, 6 } }, kills, nextAt or kills)
 	badge:SetTier(tier, need, npc, rec)
+	if gambitCard then pcall(gambitCard.ShowCreature, gambitCard, npc) end
+	if favButton then favButton:SetCreature(npc) end
 	firstText:SetText(NOTE .. (L["First met by %s on %s."]):format(ns.CharName(rec.b), ns.DateText(rec.f)) .. "|r")
 	killPin.rec = rec
 	killPin:SetShown(rec.lastKill ~= nil)
@@ -375,18 +414,73 @@ local function Matches(rec)
 	return true
 end
 
--- every other filter applies first; the tier buttons count what's left in each tier
-local function Collect()
-	local rows, total, perTier = {}, 0, { 0, 0, 0, 0 }
-	for npc, rec in pairs(ns.Store:All("creature")) do
-		total = total + 1
-		if Matches(rec) then
-			local tier = B:Tier(rec)
-			perTier[tier] = perTier[tier] + 1
-			if tierOn[tier] then rows[#rows + 1] = { npc = npc, rec = rec } end
+-- a creature's place in the tier filter: its research tier, or 50 / 200 kills past Mastered
+local function FilterTier(rec)
+	return (B:FullTier(rec))
+end
+
+local function TierIconFor(t)
+	return B:TierIcon(t)
+end
+
+local function TierName(t)
+	local f = FILTER_TIERS[t]
+	return ("|c%s%s|r"):format(f[2], f[1])
+end
+
+-- the button's label, and the chosen tier's round badge beside it
+function TierLabel()
+	local badge = tierButton and tierButton.badge
+	if badge then
+		badge:SetShown(tierFilter ~= nil)
+		if tierFilter then
+			B:SetTierTexture(badge.art, tierFilter)
+			badge.art:SetTexture(TierIconFor(tierFilter))
+			badge:SetRing(B:TierRing(tierFilter))
+		end
+		if tierButton.label then
+			tierButton.label:ClearAllPoints()
+			tierButton.label:SetPoint("LEFT", tierFilter and 30 or 10, 0)
+			tierButton.label:SetPoint("RIGHT", tierButton.arrow, "LEFT", -4, 0)
 		end
 	end
-	for t, b in ipairs(tierButtons) do b:SetCount(perTier[t]) end
+	if not tierFilter then return L["Every tier"] end
+	return TierName(tierFilter)
+end
+
+function TierMenu(anchor)
+	local items = { { title = true, text = L["Tier"] } }
+	local all = 0
+	for t = 1, 6 do all = all + tierCounts[t] end
+	local function Pick(value)
+		tierFilter = value
+		tierButton:SetText(TierLabel())
+		page:Refresh()
+	end
+	items[#items + 1] = { text = L["Everything"] .. "  |cff999999" .. all .. "|r", selected = tierFilter == nil, run = function() Pick(nil) end }
+	for t = 1, 6 do
+		local f = FILTER_TIERS[t]
+		items[#items + 1] = { text = ("|c%s%s|r  |cff999999%d|r"):format(f[2], f[1], tierCounts[t]), icon = TierIconFor(t), ring = { B:TierRing(t) },
+			selected = tierFilter == t, run = function() Pick(t) end }
+	end
+	W.Menu(anchor, items)
+end
+
+-- world objects that answer as units (supply baskets, crates ...): kept out of Creatures
+-- (B:IsObject). Every other filter applies first; the tier menu counts what's left in each tier
+local function Collect()
+	local rows, total = {}, 0
+	for t = 1, 6 do tierCounts[t] = 0 end
+	for npc, rec in pairs(ns.Store:All("creature")) do
+		if not B:IsObject(rec) then
+			total = total + 1
+			if Matches(rec) then
+				local tier = FilterTier(rec)
+				tierCounts[tier] = tierCounts[tier] + 1
+				if not tierFilter or tierFilter == tier then rows[#rows + 1] = { npc = npc, rec = rec } end
+			end
+		end
+	end
 	table.sort(rows, function(a, b) return (a.rec.name or "") < (b.rec.name or "") end)
 	return rows, total
 end
@@ -463,86 +557,26 @@ end
 page.ZoneMenu = ZoneMenu
 
 function page:Build(parent, header)
-	local search = W.Search(header, 110, function(text)
+	local search = W.Search(header, 104, function(text)
 		filter = text
 		page:Refresh()
 	end)
 	search:SetPoint("LEFT", header, "LEFT", 16, -2)
-	filterButton = W.Dropdown(header, FilterLabel(), 112, function(self) FilterMenu(self) end)
-	filterButton:SetPoint("LEFT", search, "RIGHT", 12, 0)
-	zoneButton = W.Dropdown(header, ZoneLabel(), 112, function(self) ZoneMenu(self) end)
-	zoneButton:SetPoint("LEFT", filterButton, "RIGHT", 8, 0)
+	filterButton = W.Dropdown(header, FilterLabel(), 132, function(self) FilterMenu(self) end)
+	filterButton:SetPoint("LEFT", search, "RIGHT", 10, 0)
+	zoneButton = W.Dropdown(header, ZoneLabel(), 120, function(self) ZoneMenu(self) end)
+	zoneButton:SetPoint("LEFT", filterButton, "RIGHT", 6, 0)
 	countText = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 
-	-- tier filters: each tier's badge (its icon in a ring of its colour, glowing while shown) with
-	-- the number of creatures at that tier. Click: show or hide that tier. Right-click: only that
-	-- tier (again: all tiers).
-	local SIZE = 24
-	for t = 4, 1, -1 do
-		local b = CreateFrame("Button", nil, header)
-		b:SetSize(SIZE, SIZE)
-		b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-		b.glow = b:CreateTexture(nil, "BACKGROUND", nil, -2)
-		b.glow:SetTexture(W.CIRCLE)
-		b.glow:SetBlendMode("ADD")
-		b.glow:SetPoint("CENTER")
-		b.glow:SetSize(SIZE * 1.12, SIZE * 1.12)
-		b.badge = W.Portrait(b, SIZE)
-		b.badge:SetAllPoints()
-		b.badge:EnableMouse(false)
-		B:SetTierTexture(b.badge.art, t)
-		local hl = b:CreateTexture(nil, "HIGHLIGHT")
-		hl:SetTexture(W.CIRCLE)
-		hl:SetBlendMode("ADD")
-		hl:SetAllPoints()
-		hl:SetVertexColor(1, 0.9, 0.6, 0.12)
-		b.count = b:CreateFontString(nil, "OVERLAY")
-		b.count:SetFontObject(W.Font("NumberFontNormalSmall", "NumberFontNormal", "GameFontHighlightSmall"))
-		b.count:SetPoint("BOTTOMRIGHT", 4, -2)
-		function b:SetCount(n) self.n = n self.count:SetText(n) end
-		function b:Look()
-			local c = B.TIER_COLORS[t]
-			local on = tierOn[t]
-			if on then self.badge:SetRing(c[1], c[2], c[3]) else self.badge:SetRing(0.3, 0.3, 0.3) end
-			if self.badge.art.SetDesaturated then self.badge.art:SetDesaturated(not on or t == 1) end
-			self.badge.art:SetAlpha(on and 1 or 0.4)
-			self.glow:SetVertexColor(c[1], c[2], c[3], 0.14)
-			self.glow:SetShown(on)
-			self.count:SetTextColor(on and 1 or 0.5, on and 1 or 0.5, on and 1 or 0.5)
-		end
-		b:SetScript("OnClick", function(self, mouse)
-			if mouse == "RightButton" then
-				local only = true
-				for i = 1, 4 do if (i == t) ~= tierOn[i] then only = false end end
-				for i = 1, 4 do tierOn[i] = only or i == t end
-			else
-				tierOn[t] = not tierOn[t]
-			end
-			if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
-			for _, other in ipairs(tierButtons) do other:Look() end
-			page:Refresh()
-		end)
-		b:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-			GameTooltip:AddLine(B:TierMarkup(t, 20) .. " " .. B:TierText(t))
-			GameTooltip:AddLine(B.TIER_HINTS[t], 1, 1, 1, true)
-			GameTooltip:AddLine(" ")
-			GameTooltip:AddLine((L["%d creatures at this tier"]):format(self.n or 0), 0.8, 0.8, 0.8)
-			GameTooltip:AddLine(tierOn[t] and L["Click to hide them."] or L["Click to show them."], 0.6, 0.8, 1)
-			GameTooltip:AddLine(L["Right-click: only this tier."], 0.6, 0.8, 1)
-			GameTooltip:Show()
-		end)
-		b:SetScript("OnLeave", GameTooltip_Hide)
-		tierButtons[t] = b
-		b:Look()
-	end
+	-- the tier filter: one dropdown, Everything or a single tier, each in its quality colour with
+	-- its icon and how many creatures are at it
+	tierButton = W.Dropdown(header, TierLabel(), 212, function(self) TierMenu(self) end) -- (room for "Legendary Hunter" on one line)
+	tierButton:SetPoint("LEFT", zoneButton, "RIGHT", 6, 0)
+	tierButton.badge = W.Portrait(tierButton, 18)
+	tierButton.badge:SetPoint("LEFT", 8, 0)
+	tierButton.badge:EnableMouse(false)
+	tierButton:SetText(TierLabel())
 	countText:SetPoint("RIGHT", header, "RIGHT", -12, -2)
-	-- Sighted ... Mastered from left to right, left of the count
-	for t = 4, 1, -1 do
-		local btn = tierButtons[t]
-		if t == 4 then btn:SetPoint("RIGHT", header, "RIGHT", -168, -2)
-		else btn:SetPoint("RIGHT", tierButtons[t + 1], "LEFT", -16, 0) end
-	end
 
 	local left = W.Inset(parent)
 	left:SetPoint("TOPLEFT", 0, 0)
@@ -559,16 +593,28 @@ function page:Build(parent, header)
 				row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 				if row.icon.SetDesaturated then row.icon:SetDesaturated(r.rec.type == "Critter" or r.rec.type == nil) end
 			end
-			row.text:SetText(NameColor(r.rec) .. (r.rec.name or "?") .. "|r")
-			local tier = B:Tier(r.rec)
+			local WGm = ns.QoL and ns.QoL.WildGambit
+			local star = (WGm and WGm.IsFavorite and WGm:IsFavorite(r.npc)) and (FAV_MARKUP .. " ") or ""
+			row.text:SetText(star .. NameColor(r.rec) .. (r.rec.name or "?") .. "|r")
+			-- elites, rares and bosses: the target frame's dragon round the face
+			if type(row.dragon) ~= "table" then
+				row.dragon = row.icon:GetParent():CreateTexture(nil, "OVERLAY", nil, 3)
+			end
+			local dragon = W.SetDragon(row.dragon, W.DragonFor(r.rec), row.icon, row.icon:GetWidth())
+			if row.hasDragon ~= dragon then
+				row.hasDragon = dragon
+				row.text:SetPoint("LEFT", row.icon, "RIGHT", dragon and 15 or 7, 0)
+			end
+			local tier = B:FullTier(r.rec) -- (Revered and Exalted too)
 			-- the tier as a small badge at the right end (the creature's face once Fought)
 			if type(row.tierTex) ~= "table" then
-				row.tierTex = row:CreateTexture(nil, "OVERLAY")
-				row.tierTex:SetSize(18, 18)
-				row.tierTex:SetPoint("RIGHT", -6, 0)
+				row.tierTex = W.Portrait(row, 21) -- (round in a ring of the tier's colour, as the detail badge)
+				row.tierTex:SetPoint("RIGHT", -5, 0)
+				row.tierTex:EnableMouse(false)
 			end
 			row.tierTex:Show()
-			B:SetTierTexture(row.tierTex, tier)
+			B:SetTierTexture(row.tierTex.art, tier)
+			row.tierTex:SetRing(B:TierRing(tier))
 			row.right:ClearAllPoints()
 			row.right:SetPoint("RIGHT", row.tierTex, "LEFT", -6, 0)
 			row.right:SetText("|cff999999" .. LevelText(r.rec) .. "|r")
@@ -581,8 +627,23 @@ function page:Build(parent, header)
 	detail:SetPoint("TOPLEFT", left, "TOPRIGHT", 6, 0)
 	detail:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
 
-	-- the model, in a dark recessed box; drag to turn it
-	local box = W.Inset(detail.top)
+	-- your Wild Gambit card for the creature fills the top left (its spikes inside the box); without
+	-- Wild Gambit, the model in a dark recessed box. The page's own model stays (unseen with the
+	-- card), as it learns the creature's appearance for its face badge and the card.
+	local WG = ns.QoL and ns.QoL.WildGambit
+	local ok, card = false, nil
+	if WG and WG.Showcase then ok, card = pcall(WG.Showcase, WG, detail.top) end
+	local box
+	if ok and card then
+		box = CreateFrame("Frame", nil, detail.top)
+		card:SetParent(box)
+		card:SetScale(0.94) -- 92 x 124 and 17 of spike each side: about 149, clear of the panel edges
+		card:SetPoint("CENTER", box, "CENTER")
+		card:Hide()
+		gambitCard = card
+	else
+		box = W.Inset(detail.top)
+	end
 	box:SetPoint("TOPLEFT", 0, 0)
 	box:SetSize(170, 170)
 	model = W.Try("PlayerModel", nil, box)
@@ -598,10 +659,77 @@ function page:Build(parent, header)
 		self.dragX = x
 		pcall(self.SetFacing, self, self.facing)
 	end)
+	if gambitCard then
+		model:SetAlpha(0)
+		model:EnableMouse(false)
+		gambitCard:SetFrameLevel(model:GetFrameLevel() + 4)
+		-- the favourite heart (top left of the card box): a favourite is always on Wild Gambit's
+		-- pick table and drawn more often; five at most, a sixth replaces one of them
+		favButton = CreateFrame("Button", nil, box)
+		favButton:SetSize(26, 26)
+		favButton:SetPoint("TOPLEFT", box, "TOPLEFT", 4, -4) -- (top left of the card box, clear of the card)
+		favButton:SetFrameLevel(gambitCard:GetFrameLevel() + 30)
+		favButton.icon = favButton:CreateTexture(nil, "ARTWORK")
+		favButton.icon:SetAllPoints()
+		favButton.icon:SetTexture(FAV_TEXTURE)
+		favButton:SetHighlightTexture(FAV_TEXTURE, "ADD")
+		function favButton:Paint()
+			local on = WG:IsFavorite(self.npc)
+			self.icon:SetDesaturated(not on)
+			self.icon:SetAlpha(on and 1 or 0.45)
+		end
+		function favButton:SetCreature(npc)
+			self.npc = npc
+			self:Paint()
+			self:Show()
+		end
+		local function Changed(npc)
+			favButton:Paint()
+			pcall(gambitCard.ShowCreature, gambitCard, npc)
+			page:Refresh()
+		end
+		local function Name(n)
+			local r = ns.Store:Get("creature", n)
+			return type(r) == "table" and r.name or ("#" .. tostring(n))
+		end
+		favButton:SetScript("OnClick", function(self)
+			local npc = self.npc
+			if not npc then return end
+			if WG:IsFavorite(npc) then WG:SetFavorite(npc, false) Changed(npc) return end
+			if WG:SetFavorite(npc, true) ~= "full" then Changed(npc) return end
+			-- five already: choose one to replace
+			local items = { { text = (L["Five favourites already. Replace one with %s:"]):format(Name(npc)), title = true } }
+			for _, old in ipairs(WG:Favorites()) do
+				local oldNpc = old
+				items[#items + 1] = { text = Name(oldNpc), icon = FAV_TEXTURE, run = function()
+					WG:SetFavorite(npc, true, oldNpc)
+					Changed(npc)
+				end }
+			end
+			items[#items + 1] = { text = L["Keep them all"], run = function() end }
+			W.Menu(self, items)
+		end)
+		favButton:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			local on = WG:IsFavorite(self.npc)
+			GameTooltip:AddLine(on and L["Favourite"] or L["Make it a favourite"], 1, 0.82, 0)
+			GameTooltip:AddLine((L["A favourite is always on Wild Gambit's pick table and is drawn more often with your chosen card. Up to %d (%d now)."]):format(WG.FAV_MAX, #WG:Favorites()), 1, 1, 1, true)
+			if on then GameTooltip:AddLine(L["Click to remove it."], 0.6, 0.6, 0.6) end
+			GameTooltip:Show()
+		end)
+		favButton:SetScript("OnLeave", GameTooltip_Hide)
+		favButton:Hide()
+	end
 
+	-- the creature's face in a ring left of its name, in the target frame's dragon when it's an
+	-- elite, rare or boss; the name and level line start after it
+	local FACE, NAME_X = 44, 92
+	face = W.Portrait(detail.top, FACE)
+	face:SetPoint("CENTER", box, "TOPRIGHT", 14 + FACE / 2, -6 - FACE / 2)
+	face.dragon = face:CreateTexture(nil, "OVERLAY", nil, 3)
 	nameText = detail.top:CreateFontString(nil, "OVERLAY")
 	W.HeroFont(nameText, 26)
-	nameText:SetPoint("TOPLEFT", box, "TOPRIGHT", 14, -6)
+	nameText:SetPoint("TOPLEFT", box, "TOPRIGHT", NAME_X, -6)
 	nameText:SetPoint("RIGHT", detail.top, "RIGHT", -72, 0)
 	nameText:SetJustifyH("LEFT")
 	subText = detail.top:CreateFontString(nil, "OVERLAY")
@@ -609,7 +737,7 @@ function page:Build(parent, header)
 	subText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -6)
 	subText:SetPoint("RIGHT", detail.top, "RIGHT", -72, 0)
 	subText:SetJustifyH("LEFT")
-	tierBar = W.Bar(detail.top, "Fishing") -- the profession window's Fishing / Mining bars
+	tierBar = W.SkillBar(detail.top) -- the character sheet's blue skill bar
 	-- tier milestones: a tick on the bar and the tier's icon under it, lit once reached
 	tierBar.marks = {}
 	function tierBar:SetMarkers(list, kills, max)
@@ -678,7 +806,7 @@ function page:Build(parent, header)
 	tierBar.bar:HookScript("OnSizeChanged", function()
 		if tierBar.markList then tierBar:SetMarkers(tierBar.markList, tierBar.markKills, tierBar.markMax) end
 	end)
-	tierBar:SetPoint("TOPLEFT", subText, "BOTTOMLEFT", 0, -14)
+	tierBar:SetPoint("TOPLEFT", subText, "BOTTOMLEFT", 14 - NAME_X, -14)
 	tierBar:SetPoint("RIGHT", detail.top, "RIGHT", -72, 0)
 	firstText = detail.top:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	firstText:SetPoint("TOPLEFT", tierBar, "BOTTOMLEFT", 0, -28) -- below the tier markers
@@ -717,11 +845,21 @@ function page:Build(parent, header)
 	local BADGE = 48
 	badge = W.Portrait(detail.top, BADGE)
 	badge:SetPoint("TOPRIGHT", detail.top, "TOPRIGHT", -10, -8)
+	-- Master Hunter and up: a soft glow in the tier's colour that breathes, behind a quieter ring
 	badge.glow = badge:CreateTexture(nil, "BACKGROUND", nil, -1)
-	badge.glow:SetTexture(W.CIRCLE)
+	badge.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
 	badge.glow:SetBlendMode("ADD")
 	badge.glow:SetPoint("CENTER")
-	badge.glow:SetSize(BADGE * 1.35, BADGE * 1.35)
+	badge.glow:SetSize(BADGE * 1.7, BADGE * 1.7)
+	badge.pulse = 0
+	badge:SetScript("OnUpdate", function(self, elapsed)
+		if not self.glow:IsShown() then return end
+		self.pulse = self.pulse + elapsed
+		local p = 0.5 + 0.5 * math.sin(self.pulse * 2.2)
+		self.glow:SetAlpha(0.22 + 0.33 * p)
+		local size = BADGE * (1.6 + 0.15 * p)
+		self.glow:SetSize(size, size)
+	end)
 	-- Fought shows the creature's face with the attack sword in the corner, as the Quest Targeter
 	badge.corner = badge:CreateTexture(nil, "OVERLAY")
 	badge.corner:SetSize(16, 16)
@@ -731,11 +869,16 @@ function page:Build(parent, header)
 	function badge:SetTier(tier, need, npc, rec)
 		self.tier, self.need = tier, need
 		local c = B.TIER_COLORS[tier]
-		self:SetRing(c[1], c[2], c[3])
+		if tier >= 4 then
+			-- the ring goes quiet (half its colour, half bronze); the glow carries the tier
+			self:SetRing(c[1] * 0.45 + 0.62 * 0.55, c[2] * 0.45 + 0.5 * 0.55, c[3] * 0.45 + 0.24 * 0.55)
+		else
+			self:SetRing(c[1], c[2], c[3])
+		end
 		B:SetTierTexture(self.art, tier)
 		self.corner:Hide()
-		self.glow:SetVertexColor(c[1], c[2], c[3], 0.45)
-		self.glow:SetShown(tier == 4)
+		self.glow:SetVertexColor(c[1], c[2], c[3])
+		self.glow:SetShown(tier >= 4)
 		self:Show()
 	end
 	badge:SetScript("OnEnter", function(self)
@@ -751,6 +894,7 @@ function page:Build(parent, header)
 	end)
 	badge:SetScript("OnLeave", GameTooltip_Hide)
 	badge:Hide()
+
 	Show(nil)
 end
 
@@ -761,7 +905,7 @@ function page:Refresh()
 	for _, r in ipairs(rows) do if r.npc == shown then keep = r end end
 	list:SetData(rows)
 	list:Select(keep)
-	countText:SetText((L["%d of %d creatures"]):format(#rows, total))
+	countText:SetText((L["%d of %d"]):format(#rows, total))
 	if shown then Show(shown, true) end
 end
 

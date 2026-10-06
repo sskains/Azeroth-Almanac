@@ -39,28 +39,64 @@ local function Settings() return ns.db.settings end
 -- Tiers
 ---------------------------------------------------------------------------
 
-B.TIERS = { L["Sighted"], L["Fought"], L["Studied"], L["Mastered"] }
+-- the research tiers (1-4, what the Almanac reveals), then two kill milestones past Mastered
+-- (5 at 50 kills, 6 at 200: Wild Gambit's Epic and Legendary cards). B:Tier gives 1-4,
+-- B:FullTier all six.
+B.TIERS = { L["Sighted"], L["Fought"], L["Hunted"], L["Master Hunter"], L["Epic Hunter"], L["Legendary Hunter"] }
+B.EPIC_KILLS, B.LEGENDARY_KILLS = 50, 200 -- (normal creatures; bosses and rares 10 and 40)
+-- the kills for each tier by group (hard-coded, not a setting): Hunted, Master Hunter, Epic, Legendary
+B.TIER_KILLS = {
+	normal = { studied = 5, mastered = 15, revered = 50, exalted = 200 },
+	boss = { studied = 1, mastered = 3, revered = 10, exalted = 40 },
+	rare = { studied = 1, mastered = 3, revered = 10, exalted = 40 },
+}
+function B:Kills(rec) return B.TIER_KILLS[self:Group(rec)] or B.TIER_KILLS.normal end
+
+-- the kills for every tier of a creature (its group's: normal, rare, boss)
+function B:Thresholds(rec)
+	local t = self:Kills(rec)
+	return 1, t.studied, t.mastered, t.revered, t.exalted
+end
 
 -- each tier's badge: an icon (first one the client has) in a ring of the tier's colour
---   Sighted: icon 134442 (picked from the macro icons), grey
---   Fought: icon 132223, bronze
---   Studied: an open book, silver
---   Mastered: the gold chevrons icon (file 4622480, picked from the macro icon list), gold
+--   Sighted: the blue engineering scope, grey
+--   Fought: the starter one-handed sword, bronze
+--   Studied: the uncommon beast upgrade stone (green), silver
+--   Mastered: the rare beast upgrade stone (blue), gold
+-- (each with the old icon after it, for a client without the newer one)
 local ATTACK = "Interface\\CURSOR\\Attack"
 B.TIER_ICONS = {
-	{ 134442, "INV_Misc_Spyglass_02", "INV_Misc_Spyglass_03" },
-	{ 132223, ATTACK },
-	{ "INV_Misc_Book_11", "INV_Misc_Book_07", "INV_Misc_Book_09" },
-	{ 4622480, "Interface\\PvPRankBadges\\PvPRank03", "Spell_Holy_SealOfWisdom" },
+	{ "INV_Engineering_90_Scope_Blue", 134442, "INV_Misc_Spyglass_02" },
+	{ "INV_Sword_1H_PanStart_A_01", 132223, ATTACK },
+	{ "Icon_UpgradeStone_Beast_Uncommon", "INV_Misc_Book_11", "INV_Misc_Book_09" },
+	{ "Icon_UpgradeStone_Beast_Rare", 4238797, "Spell_Holy_SealOfWisdom" },
+	{ "Icon_UpgradeStone_Beast_Epic", "INV_Misc_Gem_Amethyst_01" },
+	{ "Icon_UpgradeStone_Beast_Legendary", "INV_Misc_Gem_Opal_01" },
 }
 B.ATTACK_ICON = ATTACK
-B.TIER_COLORS = { { 0.62, 0.62, 0.62 }, { 0.76, 0.48, 0.22 }, { 0.82, 0.85, 0.92 }, { 1, 0.82, 0.25 } }
+-- the item quality colours: Poor grey, Common white, Uncommon green, Rare blue, Epic purple,
+-- Legendary orange (rings, names and bars all take these)
+B.TIER_COLORS = { { 0.62, 0.62, 0.62 }, { 1, 1, 1 }, { 0.12, 1, 0 }, { 0, 0.44, 0.87 },
+	{ 0.64, 0.21, 0.93 }, { 1, 0.5, 0 } }
 B.TIER_HINTS = {
 	L["Seen, not yet fought."],
 	L["Killed at least once: health, armour, melee damage and money are known."],
 	L["Every ability it can use is known."],
 	L["Everything is known: immunities, resistances and the full loot table."],
+	L["A foe you know by heart: 50 kills. Its Wild Gambit card is Epic."],
+	L["Few in Azeroth know it better: 200 kills. Its Wild Gambit card is Legendary."],
 }
+
+-- all six tiers: the research tier, then Revered and Exalted by kills once Mastered
+function B:FullTier(rec)
+	local tier, need = self:Tier(rec)
+	if tier < 4 then return tier, need end
+	local k = rec.kills or 0
+	local _, _, _, revered, exalted = self:Thresholds(rec)
+	if k >= exalted then return 6, nil end
+	if k >= revered then return 5, exalted - k end
+	return 4, revered - k
+end
 
 function B:TierIcon(tier)
 	local list = B.TIER_ICONS[tier] or B.TIER_ICONS[1]
@@ -176,12 +212,18 @@ end
 
 -- paints a tier's own icon on a texture
 function B:SetTierTexture(texture, tier)
-	if texture.SetDesaturated then texture:SetDesaturated(tier == 1) end
+	if texture.SetDesaturated then texture:SetDesaturated(false) end -- Sighted keeps its colours too
 	local icon = self:TierIcon(tier)
 	texture:SetTexture(icon)
 	if type(icon) == "string" and not icon:lower():find("^interface\\icons\\") then texture:SetTexCoord(0, 1, 0, 1)
 	else texture:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 	return false
+end
+
+-- the colour of a tier's ring (the research tiers' own; 50 and 200 kills purple and orange)
+function B:TierRing(tier)
+	local c = B.TIER_COLORS[tier] or B.TIER_COLORS[1]
+	return c[1], c[2], c[3]
 end
 
 -- the tier's name in its colour
@@ -197,8 +239,22 @@ function B:Group(rec)
 end
 
 -- 1 Sighted, 2 Fought, 3 Studied, 4 Mastered; and kills needed for the next tier
+-- world objects that answer as units (supply baskets and crates, barrels, chests ...): no creature
+-- type and an object's name. They stay recorded but out of Creatures and Wild Gambit.
+local OBJECT_WORDS = { "basket", "crate", "barrel", "chest", "box", "sack", "keg", "bundle", "supplies",
+	"cart", "wagon", "pile", "stack", "trunk", "cask", "lockbox", "strongbox", "satchel", "bag of" }
+function B:IsObject(rec)
+	if not rec or (rec.type ~= nil and rec.type ~= "Not specified") then return false end
+	if (rec.kills or 0) > 0 then return false end
+	local name = (rec.name or ""):lower()
+	for _, w in ipairs(OBJECT_WORDS) do
+		if name:find(w, 1, true) then return true end
+	end
+	return false
+end
+
 function B:Tier(rec)
-	local t = Settings().tiers[self:Group(rec)] or Settings().tiers.normal
+	local t = self:Kills(rec)
 	local k = rec.kills or 0
 	if k >= t.mastered then return 4, nil end
 	if k >= t.studied then return 3, t.mastered - k end
@@ -209,7 +265,14 @@ end
 local function TierCheck(npc, rec, before)
 	local after = B:Tier(rec)
 	if after > before and after >= 3 then
-		ns:Fire("TOAST", "tier", after == 4 and L["Creature mastered"] or L["Creature studied"], rec.name or "?", B:TierIcon(after), after == 4 and 3 or 2)
+		-- (the rank, then the creature: "Master Hunter" / "Greater Tarantula")
+		ns:Fire("TOAST", "tier", B.TIERS[after], rec.name or "?", B:TierIcon(after), after == 4 and 3 or 2)
+	end
+	-- the kill milestones past Mastered (Epic and Legendary toasts)
+	local _, _, _, revered, exalted = B:Thresholds(rec)
+	if after == 4 and (rec.kills == revered or rec.kills == exalted) then
+		local t = rec.kills == exalted and 6 or 5
+		ns:Fire("TOAST", "tier", B.TIERS[t], rec.name or "?", B:TierIcon(t), t == 6 and 5 or 4)
 	end
 end
 
@@ -694,7 +757,7 @@ local function TooltipLine(tooltip)
 			local a = list[i]
 			tooltip:AddLine("   " .. (a.icon and ("|T" .. a.icon .. ":14:14:0:0:64:64:5:59:5:59|t ") or "") .. a.name, 0.85, 0.85, 0.85)
 		end
-		if #list > MAX then tooltip:AddLine("   " .. (L["+%d more in the Bestiary"]):format(#list - MAX), 0.6, 0.6, 0.6) end
+		if #list > MAX then tooltip:AddLine("   " .. (L["+%d more on the Creatures page"]):format(#list - MAX), 0.6, 0.6, 0.6) end
 	end
 end
 

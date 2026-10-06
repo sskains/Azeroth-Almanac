@@ -1,7 +1,9 @@
 -- Ported from Plus Everything (same author) for Azeroth Almanac's quality-of-life helpers.
--- Inventory window (/aa inv): every character on the account with their bags, bank, gear,
--- mailbox, auctions and professions, a search across all of them, and portraits: the game's
--- live 3D model for the character you're playing, the class emblem for the others.
+-- My Characters: every character's bags, bank, gear, mailbox, auctions and professions, a search
+-- across all of them, and portraits (the game's live 3D model for the character you're playing, the
+-- class emblem for the others). Since 0.18.0 this is drawn inside the Almanac's Characters page
+-- (UI\Pages\Characters.lua): IW:BuildHeader / IW:SetHeader for the name plate, IW:Draw for a tab,
+-- IW:DrawSearch for the search. /aa inv opens that page.
 
 local _, A = ...
 local ns = A.QoL
@@ -49,8 +51,6 @@ local PROFESSION_ICONS = {
 	[762] = "Ability_Mount_RidingHorse",
 }
 
-local frame
-local state = { selected = nil, tab = "bags", search = "", showHidden = false }
 local pools = {}
 local pending
 
@@ -93,6 +93,79 @@ local function Text(parent, font, size, flags, template)
 	return fs
 end
 
+-- The Skills window's rank bar (character sheet): common-stat-bar-BG as the frame (bronze edge,
+-- dark inside; cut into left / middle / right so the corners don't stretch), the blue
+-- common-stat-bar-blue fill cropped to the rank, and the count in white on top.
+-- bar:SetRank(rank, max) or bar:SetFill(0-1, text). Falls back to a dark box and a blue bar.
+local SKILL_BG, SKILL_FILL = "common-stat-bar-BG", "common-stat-bar-blue"
+local function AtlasInfo(name)
+	if not (C_Texture and C_Texture.GetAtlasInfo) then return nil end
+	local ok, info = pcall(C_Texture.GetAtlasInfo, name)
+	return ok and info or nil
+end
+
+local function SkillBar(parent, height)
+	local b = CreateFrame("Frame", nil, parent)
+	b:SetHeight(height)
+	local bg = AtlasInfo(SKILL_BG)
+	local fillInfo = AtlasInfo(SKILL_FILL)
+	b.native = bg ~= nil and fillInfo ~= nil
+	if b.native then
+		-- three pieces from the atlas: 10 source pixels for each cap
+		local file = bg.file or bg.filename
+		local l, r, t, bt = bg.leftTexCoord, bg.rightTexCoord, bg.topTexCoord, bg.bottomTexCoord
+		local capU = (r - l) * (10 / (bg.width or 67))
+		local capW = math.floor(10 * height / (bg.height or 29) + 0.5)
+		local left = b:CreateTexture(nil, "BORDER")
+		left:SetTexture(file)
+		left:SetTexCoord(l, l + capU, t, bt)
+		left:SetPoint("TOPLEFT") left:SetPoint("BOTTOMLEFT")
+		left:SetWidth(capW)
+		local right = b:CreateTexture(nil, "BORDER")
+		right:SetTexture(file)
+		right:SetTexCoord(r - capU, r, t, bt)
+		right:SetPoint("TOPRIGHT") right:SetPoint("BOTTOMRIGHT")
+		right:SetWidth(capW)
+		local mid = b:CreateTexture(nil, "BORDER")
+		mid:SetTexture(file)
+		mid:SetTexCoord(l + capU, r - capU, t, bt)
+		mid:SetPoint("TOPLEFT", left, "TOPRIGHT") mid:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
+		b.fill = b:CreateTexture(nil, "ARTWORK")
+		b.fill:SetTexture(fillInfo.file or fillInfo.filename)
+		b.fillCoords = { fillInfo.leftTexCoord, fillInfo.rightTexCoord, fillInfo.topTexCoord, fillInfo.bottomTexCoord }
+	else
+		local box = b:CreateTexture(nil, "BORDER")
+		box:SetAllPoints()
+		box:SetColorTexture(0.02, 0.02, 0.02, 0.85)
+		b.fill = b:CreateTexture(nil, "ARTWORK")
+		b.fill:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+		b.fill:SetVertexColor(0.05, 0.25, 0.65)
+	end
+	-- the fill sits inside the frame: a sixth of the height above and below, as in the Skills window
+	b.insetY = math.max(2, math.floor(height / 6 + 0.5))
+	b.insetX = math.max(3, b.insetY - 1)
+	b.fill:SetPoint("TOPLEFT", b.insetX, -b.insetY)
+	b.fill:SetPoint("BOTTOMLEFT", b.insetX, b.insetY)
+	b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	b.text:SetPoint("CENTER", 0, 0)
+	b.text:SetShadowOffset(1, -1)
+	function b:SetFill(fill, text)
+		fill = math.max(0, math.min(1, fill or 0))
+		local inner = math.max(1, (self:GetWidth() or 0) - 2 * self.insetX)
+		self.fill:SetShown(fill > 0)
+		self.fill:SetWidth(math.max(1, inner * fill))
+		if self.fillCoords then
+			local l, r, t, bt = unpack(self.fillCoords)
+			self.fill:SetTexCoord(l, l + (r - l) * fill, t, bt)   -- cropped, not squashed
+		end
+		self.text:SetText(text or "")
+	end
+	function b:SetRank(rank, max)
+		self:SetFill((max or 0) > 0 and rank / max or 0, ("%d / %d"):format(rank or 0, max or 0))
+	end
+	return b
+end
+
 local function Pool(name, parent, make)
 	local pool = pools[name]
 	if not pool then pool = { used = 0, frames = {} } pools[name] = pool end
@@ -124,7 +197,7 @@ local function QualityColor(quality)
 	return 1, 1, 1
 end
 
-local function Refresh() if IW.Refresh then IW:Refresh() end end
+local function Refresh() if IW.onChange then IW.onChange() end end
 
 -- Item info may still be loading; redraw once it arrives.
 local function WhenLoaded(item)
@@ -187,11 +260,12 @@ end
 local function MakePortrait(parent, size)
 	local p = CreateFrame("Frame", nil, parent)
 	p:SetSize(size, size)
+	-- the chosen character: a soft glow in the class colour (not a solid halo)
 	p.glow = p:CreateTexture(nil, "BACKGROUND", nil, -1)
-	p.glow:SetTexture(CIRCLE)
+	p.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
 	p.glow:SetBlendMode("ADD")
 	p.glow:SetPoint("CENTER")
-	p.glow:SetSize(size * 1.35, size * 1.35)
+	p.glow:SetSize(size * 1.45, size * 1.45)
 	p.ring = p:CreateTexture(nil, "BACKGROUND")
 	p.ring:SetTexture(CIRCLE)
 	p.ring:SetAllPoints()
@@ -214,7 +288,8 @@ local function MakePortrait(parent, size)
 		if p.model then return p.model end
 		local m = CreateFrame("PlayerModel", nil, p)
 		m:SetPoint("CENTER", 0, -1)
-		m:SetSize(size * 0.84, size * 0.84)
+		-- (the square inside the circle, so nothing pokes out; the ring sits over its edge)
+		m:SetSize(size * 0.74, size * 0.74)
 		m:SetFrameLevel(p:GetFrameLevel() + 1)
 		m:SetScript("OnShow", function(self) self:Load() end)
 		function m:Load()
@@ -227,6 +302,15 @@ local function MakePortrait(parent, size)
 		p.model = m
 		return m
 	end
+	-- a carved ring over the portrait's edge (custom art, Media\\Ring_Class, tinted the class colour),
+	-- above the model, so the portrait always sits behind it
+	local rim = CreateFrame("Frame", nil, p)
+	rim:SetPoint("CENTER")
+	rim:SetSize((size - 6) / 0.766, (size - 6) / 0.766) -- (the ring's hole: 49 of its 64 px radius)
+	rim:SetFrameLevel(p:GetFrameLevel() + 2)
+	p.rim = rim:CreateTexture(nil, "OVERLAY")
+	p.rim:SetAllPoints()
+	p.rim:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Class")
 	-- Faction banner tucked on the bottom right, above the model.
 	local badge = CreateFrame("Frame", nil, p)
 	badge:SetSize(size * 0.46, size * 0.46)
@@ -237,7 +321,8 @@ local function MakePortrait(parent, size)
 	function p:Set(c, selected)
 		local r, g, b = INV:ClassColor(c)
 		self.ring:SetVertexColor(r, g, b)
-		self.glow:SetVertexColor(r, g, b, 0.5)
+		self.rim:SetVertexColor(r * 0.6 + 0.4, g * 0.6 + 0.4, b * 0.6 + 0.4)
+		self.glow:SetVertexColor(r, g, b, 0.35)
 		self.glow:SetShown(selected)
 		local faction = c.faction or FACTION_BY_RACE[c.raceFile or ""]
 		if faction == "Alliance" or faction == "Horde" then
@@ -415,9 +500,11 @@ local function EmptyNote(content, text)
 end
 
 local model
+local summary   -- the average item level line (IW:Draw's summaryText)
 
 local function DrawGear(content, c)
-	local y0 = 8
+	local y0 = 4
+	local STEP = SLOT + 5   -- the paper doll's row spacing (kept tight so the page needs no scroll)
 	local total, n = 0, 0
 	local slotPool = Pool("gearslot", content, MakeItemButton)
 	local function Place(list, x, stepX, stepY, startY)
@@ -441,22 +528,27 @@ local function DrawGear(content, c)
 			end
 		end
 	end
-	Place(GEAR_LEFT, 20, 0, SLOT + 8, y0)
-	Place(GEAR_RIGHT, MAIN_W - 40 - SLOT - 20, 0, SLOT + 8, y0)
+	Place(GEAR_LEFT, 20, 0, STEP, y0)
+	Place(GEAR_RIGHT, MAIN_W - 40 - SLOT - 20, 0, STEP, y0)
 	local bottomX = (MAIN_W - 40) / 2 - (#GEAR_BOTTOM * (SLOT + 10)) / 2
-	Place(GEAR_BOTTOM, bottomX, SLOT + 10, 0, y0 + 8 * (SLOT + 8) + 6)
+	Place(GEAR_BOTTOM, bottomX, SLOT + 10, 0, y0 + 8 * STEP + 4)
 
-	-- The character in the middle: a 3D model when possible, else the portrait art.
+	-- The character in the middle: the live 3D model for the character you're playing; the class
+	-- emblem for the others (round, as on their portraits); the portrait art if neither works.
 	if not model then
 		model = CreateFrame("DressUpModel", nil, content)
 		model.fallback = content:CreateTexture(nil, "ARTWORK")
+		model.mask = content:CreateMaskTexture()
+		model.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+		model.mask:SetAllPoints(model.fallback)
+		if model.fallback.AddMaskTexture then model.fallback:AddMaskTexture(model.mask) end
 		model.caption = Text(content)
 		model.caption:SetFontObject("GameFontDisableSmall")
 	end
 	local mx, mw = 20 + SLOT + 30, MAIN_W - 40 - 2 * (SLOT + 50)
 	model:ClearAllPoints()
 	model:SetPoint("TOPLEFT", mx, -y0)
-	model:SetSize(mw, 8 * (SLOT + 8) - 8)
+	model:SetSize(mw, 8 * STEP - 6)
 	model.fallback:ClearAllPoints()
 	model.fallback:SetPoint("CENTER", model, "CENTER")
 	model.fallback:SetSize(160, 160)
@@ -466,25 +558,15 @@ local function DrawGear(content, c)
 	if c.key == INV:Me().key then
 		shown = pcall(model.SetUnit, model, "player")
 		model.caption:SetText("")
-	elseif c.raceID and model.SetCustomRace then
-		shown = pcall(function()
-			model:SetCustomRace(c.raceID, c.sex == 3 and 1 or 0)
-			model:Undress()
-			for _, item in pairs(c.gear or {}) do
-				local link = INV.Link(item)
-				if link then model:TryOn(link) end
-			end
-		end)
-		model.caption:SetText(shown and "Race and gear as saved; face and hair aren't stored" or "")
 	end
 	model:SetShown(shown)
 	model.fallback:SetShown(not shown)
 	if not shown then
-		SetPortrait(model.fallback, c)
+		if c.key == INV:Me().key or not SetClassIcon(model.fallback, c) then SetPortrait(model.fallback, c) end
 		model.caption:SetText("")
 	end
-	frame.gearSummary:SetText(n > 0 and ("Average item level |cffffffff%.1f|r"):format(total / n) or "")
-	return y0 + 9 * (SLOT + 8) + 20
+	if summary then summary:SetText(n > 0 and ("Average item level |cffffffff%.1f|r"):format(total / n) or "") end
+	return y0 + 9 * STEP + 12
 end
 
 local function DrawRows(content, rows, y)
@@ -506,14 +588,9 @@ local function DrawRows(content, rows, y)
 		r.right = Text(r)
 		r.right:SetJustifyH("RIGHT")
 		r.right:SetPoint("RIGHT", -8, 0)
-		r.bar = r:CreateTexture(nil, "ARTWORK")
-		r.bar:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+		r.bar = SkillBar(r, 20)
 		r.bar:SetPoint("LEFT", r.icon, "RIGHT", 180, 0)
-		r.bar:SetHeight(12)
-		r.barBg = r:CreateTexture(nil, "BORDER")
-		r.barBg:SetColorTexture(0, 0, 0, 0.6)
-		r.barBg:SetPoint("LEFT", r.bar, "LEFT")
-		r.barBg:SetSize(260, 14)
+		r.bar:SetWidth(260)
 		r:SetHighlightTexture(WHITE)
 		r:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.05)
 		r:SetScript("OnEnter", function(self)
@@ -541,11 +618,7 @@ local function DrawRows(content, rows, y)
 		r.sub:SetText(data.sub or "")
 		r.right:SetText(data.right or "")
 		r.bar:SetShown(data.fill ~= nil)
-		r.barBg:SetShown(data.fill ~= nil)
-		if data.fill then
-			r.bar:SetWidth(math.max(1, 260 * data.fill))
-			r.bar:SetVertexColor(0.85, 0.62, 0.15)
-		end
+		if data.fill then r.bar:SetFill(data.fill, data.barText) end
 		y = y + 38
 	end
 	return y
@@ -602,7 +675,7 @@ local PROFESSION_ART = {
 }
 local SECONDARY = { [185] = true, [129] = true, [356] = true, [762] = true }
 
--- A painted card: icon, name, and a gold rank bar along the bottom.
+-- A painted card: icon, name, and the Skills window's blue rank bar along the bottom.
 local function ProfessionCard(content, p, x, y, width, height)
 	local card = Get(Pool("profcard", content, function(parent)
 		local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -630,19 +703,8 @@ local function ProfessionCard(content, p, x, y, width, height)
 		f.sub = Text(f)
 		f.sub:SetFontObject("GameFontHighlightSmall")
 		f.sub:SetPoint("TOPLEFT", f.name, "BOTTOMLEFT", 0, -3)
-		f.barBg = f:CreateTexture(nil, "ARTWORK")
-		f.barBg:SetColorTexture(0, 0, 0, 0.75)
-		f.barBg:SetPoint("BOTTOMLEFT", 12, 12)
-		f.barBg:SetPoint("BOTTOMRIGHT", -12, 12)
-		f.barBg:SetHeight(16)
-		f.bar = f:CreateTexture(nil, "OVERLAY", nil, -1)
-		f.bar:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-		f.bar:SetVertexColor(0.9, 0.62, 0.15)
-		f.bar:SetPoint("TOPLEFT", f.barBg, 1, -1)
-		f.bar:SetPoint("BOTTOMLEFT", f.barBg, 1, 1)
-		f.barText = Text(f)
-		f.barText:SetFontObject("GameFontHighlightSmall")
-		f.barText:SetPoint("CENTER", f.barBg)
+		f.bar = SkillBar(f, 24)
+		f.bar:SetPoint("BOTTOMLEFT", 12, 10)   -- width set per card, so the fill is right the first time
 		return f
 	end))
 	card:ClearAllPoints()
@@ -654,10 +716,9 @@ local function ProfessionCard(content, p, x, y, width, height)
 	card.shade:SetWidth(math.min(260, width - 2))
 	card.icon:SetTexture("Interface\\Icons\\" .. (PROFESSION_ICONS[p.id] or "INV_Misc_Book_09"))
 	card.name:SetText(p.name)
-	local fill = p.max > 0 and math.min(1, p.rank / p.max) or 0
 	card.sub:SetText(SECONDARY[p.id] and "Secondary skill" or "Profession")
-	card.bar:SetWidth(math.max(1, (width - 26) * fill))
-	card.barText:SetText(("%d / %d"):format(p.rank, p.max))
+	card.bar:SetWidth(width - 24)
+	card.bar:SetRank(p.rank, p.max)
 end
 
 local function DrawProfessions(content, c)
@@ -686,8 +747,9 @@ local function DrawProfessions(content, c)
 end
 
 -- Search across every shown character.
-local function DrawSearch(content)
-	local term = state.search:lower()
+local function DrawSearch(content, term)
+	local shownTerm = term
+	term = (term or ""):lower()
 	local found, order = {}, {}
 	for _, c in ipairs(INV:Characters(false)) do
 		local function consider(item)
@@ -710,7 +772,7 @@ local function DrawSearch(content)
 		for _, e in ipairs(c.auctions and c.auctions.items or {}) do consider(e[1]) end
 	end
 	table.sort(order, function(a, b) return a.name < b.name end)
-	local y = SectionHeader(content, 4, "Interface\\Common\\UI-Searchbox-Icon", ("Search: \"%s\""):format(state.search),
+	local y = SectionHeader(content, 4, "Interface\\Common\\UI-Searchbox-Icon", ("Search: \"%s\""):format(shownTerm),
 		("%d items found"):format(#order))
 	if #order == 0 then return y + EmptyNote(content, "Nothing matches on your characters.") end
 	local rows = {}
@@ -754,7 +816,7 @@ StaticPopupDialogs["AZEROTHALMANAC_REMOVE_CHARACTER"] = {
 	button2 = NO,
 	OnAccept = function(_, key)
 		INV:Remove(key)
-		if state.selected == key then state.selected = nil end
+		if IW.onRemoved then IW.onRemoved(key) end
 	end,
 	timeout = 0,
 	whileDead = true,
@@ -762,93 +824,7 @@ StaticPopupDialogs["AZEROTHALMANAC_REMOVE_CHARACTER"] = {
 	preferredIndex = 3,
 }
 
-local function DrawSidebar()
-	local list = INV:Characters(state.showHidden)
-	local pool = Pool("char", frame.charContent, function(p)
-		local r = CreateFrame("Button", nil, p)
-		r:SetSize(SIDE_W - 30, ROW_H - 4)
-		r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-		r.bg = r:CreateTexture(nil, "BACKGROUND")
-		r.bg:SetAllPoints()
-		r.portrait = MakePortrait(r, 40)
-		r.portrait:SetPoint("LEFT", 6, 0)
-		r.name = Text(r)
-		r.name:SetFontObject("GameFontNormal")
-		r.name:SetPoint("TOPLEFT", r.portrait, "TOPRIGHT", 10, -2)
-		r.info = Text(r)
-		r.info:SetFontObject("GameFontDisableSmall")
-		r.info:SetPoint("TOPLEFT", r.name, "BOTTOMLEFT", 0, -2)
-		r.info:SetPoint("RIGHT", r, "RIGHT", -6, 0)
-		r.info:SetWordWrap(false)
-		r.money = Text(r)
-		r.money:SetFontObject("GameFontHighlightSmall")
-		r.money:SetPoint("TOPLEFT", r.info, "BOTTOMLEFT", 0, -2)
-		r.rested = Text(r)
-		r.rested:SetFontObject("GameFontHighlightSmall")
-		r.rested:SetJustifyH("RIGHT")
-		r.rested:SetPoint("BOTTOMRIGHT", r, "BOTTOMRIGHT", -6, 8)
-		r.restIcon = r:CreateTexture(nil, "OVERLAY")
-		r.restIcon:SetTexture(REST_ICON)
-		r.restIcon:SetTexCoord(unpack(REST_COORDS))
-		r.restIcon:SetSize(14, 14)
-		r.restIcon:SetPoint("RIGHT", r.rested, "LEFT", -2, 0)
-		r:SetHighlightTexture(WHITE)
-		r:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.05)
-		r:SetScript("OnClick", function(self, button)
-			if button == "RightButton" then
-				CharacterMenu(self, self.char)
-			else
-				state.selected = self.char.key
-				state.search = ""
-				frame.search:SetText("")
-				Refresh()
-			end
-		end)
-		return r
-	end)
-	local y = 0
-	local lastRealm
-	for _, c in ipairs(list) do
-		if c.realm ~= lastRealm then
-			lastRealm = c.realm
-			local h = Get(Pool("realm", frame.charContent, function(p)
-				local fs = CreateFrame("Frame", nil, p)
-				fs:SetSize(SIDE_W - 30, 18)
-				fs.text = Text(fs)
-				fs.text:SetFontObject("GameFontDisableSmall")
-				fs.text:SetPoint("LEFT", 4, 0)
-				return fs
-			end))
-			h:ClearAllPoints()
-			h:SetPoint("TOPLEFT", 0, -y)
-			h.text:SetText((c.realm or "?"):upper())
-			y = y + 20
-		end
-		local r = Get(pool)
-		r:ClearAllPoints()
-		r:SetPoint("TOPLEFT", 0, -y)
-		r.char = c
-		local selected = c.key == state.selected
-		r.bg:SetColorTexture(0.45, 0.33, 0.12, selected and 0.5 or 0)
-		r.portrait:Set(c, selected)
-		local cr, cg, cb = INV:ClassColor(c)
-		r.name:SetText(c.name .. (c.key == INV:Me().key and "  |cff999999(you)|r" or ""))
-		r.name:SetTextColor(cr, cg, cb)
-		r.info:SetText(("%s %s %s%s"):format(c.level or "?", c.race or "", c.class and (LOCALIZED_CLASS_NAMES_MALE or {})[c.class] or "",
-			c.zone and ("  |cff808080- " .. c.zone .. "|r") or ""))
-		r.money:SetText(Money(c.money))
-		local _, share = INV:Rested(c)
-		r.rested:SetText(share and share > 0 and ("|cff80b3ff%d%% rested|r"):format(math.floor(share * 100 + 0.5)) or "")
-		r.restIcon:SetShown(share and c.resting and true or false)
-		r:SetAlpha(INV:IsHidden(c.key) and 0.45 or 1)
-		y = y + ROW_H
-	end
-	frame.charContent:SetHeight(math.max(10, y))
-	frame.total:SetText(("Account gold: %s"):format(Money(INV:TotalMoney())))
-end
-
-local function DrawHeader(c)
-	local h = frame.header
+function IW:SetHeader(h, c)
 	h.portrait:Set(c, true)
 	local r, g, b = INV:ClassColor(c)
 	h.name:SetText(c.name)
@@ -863,16 +839,16 @@ local function DrawHeader(c)
 	-- The chip row: gold, location, hearthstone, rest.
 	local chips = h.chips
 	for _, chip in pairs(chips) do chip.char = c end
-	chips.money:SetLabel(Money(c.money), 180)
+	chips.money:SetLabel(Money(c.money), 160)
 	if c.zone then
 		local place = (c.subzone and c.subzone ~= "" and c.subzone ~= c.zone) and (c.subzone .. ", " .. c.zone) or c.zone
-		chips.location:SetLabel(place, 250)
+		chips.location:SetLabel(place, 230)
 		chips.location:Show()
 	else
 		chips.location:Hide()
 	end
 	if c.hearth then
-		chips.hearth:SetLabel(c.hearth, 150)
+		chips.hearth:SetLabel(c.hearth, 140)
 		chips.hearth:Show()
 	else
 		chips.hearth:Hide()
@@ -886,13 +862,16 @@ local function DrawHeader(c)
 	else
 		chips.rest:Hide()
 	end
-	local x = 0
-	for _, key in ipairs({ "money", "location", "hearth", "rest" }) do
-		local chip = chips[key]
-		if chip:IsShown() then
-			chip:ClearAllPoints()
-			chip:SetPoint("TOPLEFT", h.info, "BOTTOMLEFT", x, -7)
-			x = x + chip:GetWidth() + 20
+	-- two rows: gold and rest, then where they are and where the hearthstone is set
+	for row, keys in ipairs({ { "money", "rest" }, { "location", "hearth" } }) do
+		local x = 0
+		for _, key in ipairs(keys) do
+			local chip = chips[key]
+			if chip:IsShown() then
+				chip:ClearAllPoints()
+				chip:SetPoint("TOPLEFT", h.info, "BOTTOMLEFT", x, -5 - (row - 1) * 19)
+				x = x + chip:GetWidth() + 18
+			end
 		end
 	end
 
@@ -925,129 +904,33 @@ local function DrawHeader(c)
 	end
 end
 
+
 ---------------------------------------------------------------------------
--- Window
+-- The Almanac's Characters page draws with these (My Characters merged into it, 0.18.0)
 ---------------------------------------------------------------------------
 
-function IW:Refresh()
-	if not frame or not frame:IsShown() then return end
-	ReleaseAll()
-	if model then model:Hide() model.fallback:Hide() model.caption:SetText("") end
-	frame.gearSummary:SetText("")
-	local me = INV:Me()
-	if not state.selected or not INV:Settings().chars[state.selected] then state.selected = me.key end
-	local c = INV:Settings().chars[state.selected]
-	c.key = state.selected
-	DrawSidebar()
-	DrawHeader(c)
+IW.TABS = {
+	{ key = "story", label = "Story", icon = "Interface\\Icons\\INV_Misc_Book_09" },
+	{ key = "gear", label = "Gear", icon = "Interface\\Icons\\INV_Chest_Chain_05" },
+	{ key = "bags", label = "Bags", icon = "Interface\\Icons\\INV_Misc_Bag_08" },
+	{ key = "bank", label = "Bank", icon = "Interface\\Icons\\INV_Misc_Bag_10_Blue" },
+	{ key = "auctions", label = "Auctions", icon = "Interface\\Icons\\INV_Misc_Coin_02" },
+	{ key = "professions", label = "Professions", icon = "Interface\\Icons\\Trade_BlackSmithing" },
+}
 
-	for _, tab in ipairs(frame.tabs) do
-		local on = tab.key == state.tab and state.search == ""
-		tab:SetBackdropColor(on and 0.45 or 0.14, on and 0.33 or 0.11, on and 0.12 or 0.06, 0.95)
-		local count = ""
-		if tab.key == "mail" and c.mail then count = (" (%d)"):format(#c.mail.items)
-		elseif tab.key == "auctions" and c.auctions then count = (" (%d)"):format(#c.auctions.items) end
-		tab:SetText(tab.label .. count)
-	end
+IW.MakePortrait = MakePortrait
+IW.Money = Money
 
-	local content = frame.content
-	local height
-	if #state.search >= 2 then
-		height = DrawSearch(content)
-	elseif state.tab == "bags" then
-		height = c.bags and DrawContainers(content, c.bags) or EmptyNote(content, "No bags seen yet. Log in on this character.")
-	elseif state.tab == "bank" then
-		height = c.bank and DrawContainers(content, c.bank, "Bank")
-			or EmptyNote(content, "This character's bank hasn't been seen yet. Open the bank on them once and it's remembered.")
-	elseif state.tab == "gear" then
-		height = DrawGear(content, c)
-	elseif state.tab == "mail" then
-		height = DrawMail(content, c)
-	elseif state.tab == "auctions" then
-		height = DrawAuctions(content, c)
-	else
-		height = DrawProfessions(content, c)
-	end
-	content:SetHeight(math.max(10, height))
-end
-
-local function Build()
-	frame = CreateFrame("Frame", "AzerothAlmanacInventory", UIParent, "BackdropTemplate")
-	frame:SetSize(WIN_W, WIN_H)
-	Backdrop(frame, { 0.035, 0.03, 0.025, 0.97 }, { 0.4, 0.32, 0.16, 1 })
-	frame:SetPoint("CENTER")
-	-- same layer as the game's windows: whichever was clicked last is in front
-	frame:SetFrameStrata("MEDIUM")
-	frame:SetToplevel(true)
-	frame:HookScript("OnShow", frame.Raise)
-	frame:SetClampedToScreen(true)
-	frame:SetMovable(true)
-	frame:EnableMouse(true)
-	frame:RegisterForDrag("LeftButton")
-	frame:SetScript("OnDragStart", frame.StartMoving)
-	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-	frame:Hide()
-	tinsert(UISpecialFrames, "AzerothAlmanacInventory")
-
-	local titleBg = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
-	titleBg:SetColorTexture(0.08, 0.065, 0.045, 1)
-	titleBg:SetPoint("TOPLEFT", 1, -1)
-	titleBg:SetPoint("TOPRIGHT", -1, -1)
-	titleBg:SetHeight(42)
-	local icon = frame:CreateTexture(nil, "ARTWORK")
-	icon:SetSize(28, 28)
-	icon:SetPoint("TOPLEFT", 14, -8)
-	icon:SetTexture("Interface\\Icons\\INV_Misc_Bag_08")
-	local title = Text(frame, TITLE_FONT, 22)
-	title:SetTextColor(unpack(GOLD))
-	title:SetPoint("LEFT", icon, "RIGHT", 10, -1)
-	title:SetText("My Characters")
-	frame.total = Text(frame)
-	frame.total:SetFontObject("GameFontHighlight")
-	frame.total:SetPoint("RIGHT", frame, "TOPRIGHT", -44, -22)
-	local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-	close:SetPoint("TOPRIGHT", -6, -6)
-
-	-- Sidebar
-	local side = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	Backdrop(side, { 0.06, 0.05, 0.04, 0.9 }, { 0.22, 0.18, 0.1, 1 })
-	side:SetPoint("TOPLEFT", 12, -52)
-	side:SetPoint("BOTTOMLEFT", 12, 12)
-	side:SetWidth(SIDE_W)
-	local search = CreateFrame("EditBox", nil, side, "SearchBoxTemplate")
-	search:SetSize(SIDE_W - 24, 22)
-	search:SetPoint("TOPLEFT", 14, -8)
-	search:SetScript("OnTextChanged", function(self, user)
-		if SearchBoxTemplate_OnTextChanged then SearchBoxTemplate_OnTextChanged(self) end
-		state.search = self:GetText() or ""
-		if user ~= false then Refresh() end
-	end)
-	if type(search.Instructions) == "table" then search.Instructions:SetText("Search all characters") end
-	frame.search = search
-	local scroll = CreateFrame("ScrollFrame", nil, side, "UIPanelScrollFrameTemplate")
-	scroll:SetPoint("TOPLEFT", 6, -38)
-	scroll:SetPoint("BOTTOMRIGHT", -26, 34)
-	local charContent = CreateFrame("Frame", nil, scroll)
-	charContent:SetSize(SIDE_W - 30, 10)
-	scroll:SetScrollChild(charContent)
-	frame.charContent = charContent
-	local showHidden = CreateFrame("CheckButton", nil, side, "UICheckButtonTemplate")
-	showHidden:SetSize(22, 22)
-	showHidden:SetPoint("BOTTOMLEFT", 8, 6)
-	showHidden:SetScript("OnClick", function(self) state.showHidden = self:GetChecked() and true or false Refresh() end)
-	local showHiddenText = Text(side)
-	showHiddenText:SetFontObject("GameFontHighlightSmall")
-	showHiddenText:SetPoint("LEFT", showHidden, "RIGHT", 2, 0)
-	showHiddenText:SetText("Show hidden characters (right-click to hide)")
-
+-- The header card inside parent: portrait (live model for you, class emblem for the others, both
+-- with the faction banner), name, class line, chips (gold, rest, location, hearthstone), data
+-- freshness top right and the XP / rested bar along the bottom. Fill it with IW:SetHeader(h, c).
+function IW:BuildHeader(parent)
 	-- Header card: portrait | name, class line and a row of chips (gold, location, hearthstone,
 	-- rest) | data freshness top-right; the XP bar runs along the bottom.
-	local header = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	Backdrop(header, { 0.06, 0.05, 0.04, 0.9 }, { 0.22, 0.18, 0.1, 1 })
-	header:SetPoint("TOPLEFT", MAIN_X, -52)
-	header:SetSize(MAIN_W, 112)
+	local header = CreateFrame("Frame", nil, parent)
+	header:SetAllPoints(parent)
 	header.portrait = MakePortrait(header, 76)
-	header.portrait:SetPoint("TOPLEFT", 14, -12)
+	header.portrait:SetPoint("TOPLEFT", 0, 0)
 	header.name = Text(header, TITLE_FONT, 26)
 	header.name:SetPoint("TOPLEFT", header.portrait, "TOPRIGHT", 16, 4)
 	header.info = Text(header)
@@ -1056,7 +939,7 @@ local function Build()
 	header.updated = Text(header)
 	header.updated:SetFontObject("GameFontDisableSmall")
 	header.updated:SetJustifyH("RIGHT")
-	header.updated:SetPoint("TOPRIGHT", -14, -12)
+	header.updated:SetPoint("TOPRIGHT", 0, 0)
 	header.updated:SetSpacing(3)
 
 	-- A small icon + label; labels are cut short so the row never overflows.
@@ -1145,8 +1028,8 @@ local function Build()
 	-- XP bar along the bottom: XP on the left, rested XP on the right (so they never overlap).
 	local bar = CreateFrame("Frame", nil, header, "BackdropTemplate")
 	Backdrop(bar, { 0, 0, 0, 0.7 }, { 0.35, 0.28, 0.14, 1 })
-	bar:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 14 + 76 + 16, 12)
-	bar:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -14, 12)
+	bar:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 76 + 16, 0)
+	bar:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
 	bar:SetHeight(15)
 	bar.rested = bar:CreateTexture(nil, "BORDER")
 	bar.rested:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -1189,80 +1072,89 @@ local function Build()
 	end)
 	bar:SetScript("OnLeave", GameTooltip_Hide)
 	header.xpBar = bar
-	frame.header = header
-
-	-- Tabs
-	frame.tabs = {}
-	local x = MAIN_X
-	for _, spec in ipairs(TABS) do
-		local tab = CreateFrame("Button", nil, frame, "BackdropTemplate")
-		Backdrop(tab, { 0.14, 0.11, 0.06, 0.95 }, { 0.45, 0.36, 0.16, 0.9 })
-		tab:SetSize(108, 26)
-		tab:SetPoint("TOPLEFT", x, -172)
-		local fs = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		fs:SetPoint("CENTER")
-		tab:SetFontString(fs)
-		tab:SetHighlightTexture(WHITE)
-		tab:GetHighlightTexture():SetVertexColor(1, 0.85, 0.4, 0.1)
-		tab.key, tab.label = spec.key, spec.label
-		tab:SetScript("OnClick", function()
-			state.tab = spec.key
-			state.search = ""
-			frame.search:SetText("")
-			Refresh()
-		end)
-		tinsert(frame.tabs, tab)
-		x = x + 112
-	end
-	frame.gearSummary = Text(frame)
-	frame.gearSummary:SetFontObject("GameFontNormal")
-	frame.gearSummary:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -18, -178)
-
-	-- Content
-	local body = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	Backdrop(body, { 0.05, 0.045, 0.035, 0.9 }, { 0.22, 0.18, 0.1, 1 })
-	body:SetPoint("TOPLEFT", MAIN_X, -204)
-	body:SetPoint("BOTTOMRIGHT", -12, 12)
-	local bodyScroll = CreateFrame("ScrollFrame", nil, body, "UIPanelScrollFrameTemplate")
-	bodyScroll:SetPoint("TOPLEFT", 6, -6)
-	bodyScroll:SetPoint("BOTTOMRIGHT", -28, 6)
-	local content = CreateFrame("Frame", nil, bodyScroll)
-	content:SetSize(MAIN_W - 40, 10)
-	bodyScroll:SetScrollChild(content)
-	frame.content = content
-
-	if ns.NativeWindow(frame, { title = "My Characters", icon = "Interface\\Icons\\INV_Misc_Bag_08",
-		hide = { titleBg, icon, title }, close = close }) then
-		frame.total:ClearAllPoints()
-		frame.total:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -31)
-		ns.NativeInset(side)
-		ns.NativeInset(header)
-		ns.NativeInset(body)
-	end
-	frame:SetScript("OnShow", Refresh)
+	return header
 end
 
+-- A tab's contents (gear, bags, bank, auctions, professions) drawn into content, width wide.
+-- summaryText (optional) gets the average item level on the Gear tab. Returns the height used.
+function IW:Draw(content, c, tab, width, summaryText)
+	MAIN_W = width + 40
+	summary = summaryText
+	ReleaseAll()
+	if model then model:Hide() model.fallback:Hide() model.caption:SetText("") end
+	if summary then summary:SetText("") end
+	if not c then return EmptyNote(content, "Nothing saved for this character yet. Log in on them once.") end
+	if tab == "bags" then
+		return c.bags and DrawContainers(content, c.bags) or EmptyNote(content, "No bags seen yet. Log in on this character.")
+	elseif tab == "bank" then
+		return c.bank and DrawContainers(content, c.bank, "Bank")
+			or EmptyNote(content, "This character's bank hasn't been seen yet. Open the bank on them once and it's remembered.")
+	elseif tab == "gear" then
+		return DrawGear(content, c)
+	elseif tab == "mail" then
+		return DrawMail(content, c)
+	elseif tab == "auctions" then
+		return DrawAuctions(content, c)
+	end
+	return DrawProfessions(content, c)
+end
+
+-- Search every shown character's bags, bank, gear, mail and auctions.
+function IW:DrawSearch(content, term, width)
+	MAIN_W = width + 40
+	summary = nil
+	ReleaseAll()
+	if model then model:Hide() model.fallback:Hide() model.caption:SetText("") end
+	return DrawSearch(content, term)
+end
+
+-- The saved inventory record for an Almanac character (keys differ: the Almanac uses the realm's
+-- short name, the inventory GetRealmName()).
+function IW:Find(almanacKey, ac)
+	if not INV then return nil end
+	local chars = INV:Settings().chars
+	local name = ac and ac.name or (almanacKey or ""):match("^([^-]+)")
+	local function Pick(key) local c = chars[key] if c then c.key = key end return c end
+	if ac and ac.realmName and chars[(name or "") .. "-" .. ac.realmName] then return Pick(name .. "-" .. ac.realmName) end
+	if name and chars[name .. "-" .. (GetRealmName() or "")] and (not ac or ac.classFile == nil or chars[name .. "-" .. GetRealmName()].class == ac.classFile) then
+		return Pick(name .. "-" .. GetRealmName())
+	end
+	for key, c in pairs(chars) do
+		if c.name == name and (not ac or not ac.classFile or c.class == ac.classFile) then return Pick(key) end
+	end
+	return nil
+end
+
+function IW:Me() return INV and INV:Me() end
+function IW:IsHidden(invKey) return INV and invKey and INV:IsHidden(invKey) end
+function IW:TotalMoney() return INV and INV:TotalMoney() or 0 end
+function IW:Rested(c) if INV and c then return INV:Rested(c) end end
+function IW:Menu(owner, c) if c then CharacterMenu(owner, c) end end
+
 ---------------------------------------------------------------------------
--- Module API
+-- Module API: /aa inv, the key binding and the minimap menu open the Characters page
 ---------------------------------------------------------------------------
 
 function IW:OnLogin()
 	INV = ns.Inventory
 	INV.OnChange = function()
-		if frame and frame:IsShown() and not pending then
+		if not pending then
 			pending = true
 			C_Timer.After(0.3, function() pending = false Refresh() end)
 		end
 	end
 end
 
-function IW:Open(key)
-	if not frame then Build() end
-	if key then state.selected = key end
-	frame:Show()
-	Refresh()
+local function Page() return A.UI and A.UI.GetPage and A.UI:GetPage("characters") end
+
+function IW:Open(key, tab)
+	if not A.UI then return end
+	A.UI:Open("characters")
+	local page = Page()
+	if page and page.ShowInventory then page:ShowInventory(key, tab or "bags") end
 end
 
 function IW:Toggle()
-	if frame and frame:IsShown() then frame:Hide() else self:Open() end
+	local page = Page()
+	if A.UI:IsShown() and page and page.IsShownNow and page:IsShownNow() then A.UI:Toggle() else self:Open() end
 end

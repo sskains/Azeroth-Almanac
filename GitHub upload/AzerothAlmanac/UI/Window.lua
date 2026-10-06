@@ -9,7 +9,7 @@ local W = ns.Widgets
 local UI = ns.UI
 local Window = ns:NewModule("Window")
 
-local WIDTH, HEIGHT = 880, 580
+local WIDTH, HEIGHT = 880, 680   -- tall enough for the Characters page's gear and professions without scrolling
 local frame, pages, order, current = nil, {}, {}, nil
 
 function UI:GetPage(key) return pages[key] end
@@ -25,13 +25,25 @@ local function SavePosition()
 	ns.db.settings.window.point = { p, rp, x, y }
 end
 
-local function SetPortrait(icon)
+-- a page's icon on a texture: its icon file, or (def.portraitUnit) that unit's own portrait, as the
+-- Characters page shows the character you're playing
+local function ApplyIcon(texture, def, crop)
+	if def and def.portraitUnit and SetPortraitTexture then
+		SetPortraitTexture(texture, def.portraitUnit)
+		if crop then texture:SetTexCoord(0.12, 0.88, 0.12, 0.88) else texture:SetTexCoord(0, 1, 0, 1) end
+		return
+	end
+	texture:SetTexCoord(0, 1, 0, 1)
+	texture:SetTexture(W.FindIcon(def and def.icon or ns.ICON))
+end
+
+local function SetPortrait(icon, def)
 	local portrait = frame.GetPortrait and frame:GetPortrait()
 	if type(portrait) ~= "table" then portrait = (type(frame.PortraitContainer) == "table" and frame.PortraitContainer.portrait) or nil end
 	if type(portrait) ~= "table" then return end
 	-- a plain texture under a round mask: SetPortraitToTexture spoils the icon file for every
 	-- other texture that shows it (the Bestiary's side tab went black)
-	portrait:SetTexture(icon)
+	if def and def.portraitUnit then ApplyIcon(portrait, def) else portrait:SetTexCoord(0, 1, 0, 1) portrait:SetTexture(icon) end
 	if not portrait.almanacMask and frame.CreateMaskTexture and portrait.AddMaskTexture then
 		local mask = frame:CreateMaskTexture()
 		mask:SetAllPoints(portrait)
@@ -112,7 +124,7 @@ function UI:ShowPage(key)
 	current = def
 	ns.db.settings.window.tab = def.key
 	SetTitle(L["Azeroth Almanac"] .. " - " .. def.title)
-	SetPortrait(W.FindIcon(def.icon or ns.ICON))
+	SetPortrait(W.FindIcon(def.icon or ns.ICON), def)
 	for i, d in ipairs(order) do if d == def then SelectTab(i) end end
 	UpdateBack()
 	if def.Refresh then
@@ -217,7 +229,8 @@ local function Build()
 		else
 			tab.icon:SetAllPoints()
 		end
-		tab.icon:SetTexture(W.FindIcon(def.icon or ns.ICON))
+		ApplyIcon(tab.icon, def, true)
+		tab.def = def
 		-- the selected tab's frame (or a glow); our own texture, because this client draws a checked
 		-- texture opaque over the icon (the selected tab went black)
 		tab.glow = tab:CreateTexture(nil, "OVERLAY")
@@ -321,3 +334,14 @@ ns:On("CHANGED", function()
 		end
 	end)
 end)
+
+-- pages that show a unit's portrait (Characters: the character you're playing) follow it as it changes
+local function RefreshPortraits()
+	if not frame then return end
+	for _, tab in ipairs(frame.tabs or {}) do
+		if tab.def and tab.def.portraitUnit then ApplyIcon(tab.icon, tab.def, true) end
+	end
+	if current and current.portraitUnit then SetPortrait(nil, current) end
+end
+ns:RegisterEvent("UNIT_PORTRAIT_UPDATE", function(_, unit) if unit == "player" then RefreshPortraits() end end)
+ns:RegisterEvent("PLAYER_ENTERING_WORLD", function() C_Timer.After(1, RefreshPortraits) end)

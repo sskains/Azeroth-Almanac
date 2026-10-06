@@ -24,7 +24,7 @@ local ICON = {
 	quest = { "INV_Misc_Note_01", "INV_Letter_15" },
 	merchant = { "INV_Misc_Coin_02", "INV_Misc_Coin_01" },
 	trainer = { "INV_Misc_Book_08", "INV_Scroll_04" },
-	townsfolk = { "INV_Misc_Spyglass_03", "INV_Misc_Head_Human_01" },
+	townsfolk = { 8197123, "INV_Misc_Spyglass_03", "INV_Misc_Head_Human_01" },
 	flight = { "Ability_Mount_Gryphon_01", "INV_Misc_Map_01" },
 	herb = { "Trade_Herbalism", "INV_Misc_Herb_07" },
 	ore = { "Trade_Mining", "INV_Ore_Copper_01" },
@@ -101,7 +101,7 @@ end
 Add("elite1", "elite", 1, L["First elite"], L["Met an elite creature."])
 Add("rarecreature1", "rarecreature", 1, L["Something rare"], L["Met a rare creature."])
 Add("boss1", "boss", 1, L["Bossfall"], L["Slew a boss."])
-Add("mastered1", "mastered", 1, L["First mastery"], L["Mastered a creature: everything about it is known."])
+Add("mastered1", "mastered", 1, L["First Master Hunter"], L["A creature reached Master Hunter: everything about it is known."])
 Add("instance1", "instance", 1, L["Into the depths"], L["Found a dungeon."])
 Add("flight1", "flight", 1, L["Wings"], L["Learned a flight path."])
 Add("epic1", "epic", 1, L["Epic find"], L["Came across an epic item."])
@@ -112,7 +112,7 @@ Add("skin1", "skin", 1, L["First pelt"], L["Skinned a creature."])
 Add("chars2", "chars", 2, L["A second life"], L["A second character joined the Almanac."], 3)
 -- counts
 Series("creature", { 10, 25, 50, 100, 250, 500, 1000 }, L["%d creatures"], L["Discovered %d kinds of creature."])
-Series("mastered", { 5, 10, 25, 50, 100 }, L["%d creatures mastered"], L["Mastered %d kinds of creature."])
+Series("mastered", { 5, 10, 25, 50, 100 }, L["%d Master Hunter creatures"], L["%d kinds of creature at Master Hunter."])
 Series("kills", { 100, 500, 1000, 5000, 10000 }, L["%d kills"], L["Defeated %d creatures."])
 Series("elite", { 10, 50 }, L["%d elites"], L["Met %d kinds of elite creature."])
 Series("rarecreature", { 5, 20 }, L["%d rares"], L["Met %d rare creatures."])
@@ -124,7 +124,7 @@ Series("rare", { 10, 25, 50, 100 }, L["%d rare items"], L["Came across %d rare o
 Series("quest", { 10, 25, 50, 100, 250, 500 }, L["%d quests done"], L["Completed %d different quests."])
 Series("merchant", { 10, 25, 50, 100 }, L["%d merchants"], L["Visited %d merchants."])
 Series("trainer", { 5, 10, 25 }, L["%d trainers"], L["Trained with %d trainers."])
-Series("townsfolk", { 25, 50, 100, 200 }, L["%d townsfolk"], L["Met %d townsfolk."])
+Series("townsfolk", { 25, 50, 100, 200 }, L["%d people"], L["Met %d people."])
 Series("flight", { 5, 10, 20, 30 }, L["%d flight paths"], L["Learned %d flight paths."])
 Series("herb", { 50, 100, 250, 500, 1000 }, L["%d herbs gathered"], L["Gathered herbs %d times."])
 Series("ore", { 50, 100, 250, 500, 1000 }, L["%d veins mined"], L["Mined %d times."])

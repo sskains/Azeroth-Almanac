@@ -12,10 +12,28 @@ local _, ns = ...
 local L = ns.L
 local Store = ns:NewModule("Store")
 
-local VERSION = 1
+local VERSION = 4
 
 local MIGRATIONS = {
-	-- [2] = function(db) ... end,
+	-- 2: Mastered now takes 15 kills of a normal creature (was 10); a setting left at the old
+	-- default moves with it
+	[2] = function(db)
+		local t = db.settings and db.settings.tiers and db.settings.tiers.normal
+		if t and t.mastered == 10 then t.mastered = 15 end
+	end,
+	-- 3: bosses and rares (rare elites, world and dungeon bosses) go Studied at 1 kill and
+	-- Mastered at 3 (were 3 and 5); settings left at the old defaults move with them
+	[3] = function(db)
+		local tiers = db.settings and db.settings.tiers
+		for _, key in ipairs({ "boss", "rare" }) do
+			local t = tiers and tiers[key]
+			if t and t.studied == 3 and t.mastered == 5 then t.studied, t.mastered = 1, 3 end
+		end
+	end,
+	-- 4: the tier kills are fixed now (Bestiary.TIER_KILLS), no longer a setting
+	[4] = function(db)
+		if db.settings then db.settings.tiers = nil end
+	end,
 }
 
 local function ApplyDefaults(target, defaults)

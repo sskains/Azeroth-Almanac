@@ -17,6 +17,9 @@ local TF = ns:NewModule("Townsfolk")
 local R = ns.Readable
 
 local PIN_TEMPLATE = "AzerothAlmanacTownsfolkPinTemplate"
+-- The pin template (UI\TownsfolkPin.xml) names this mixin; it must exist when the XML loads, so it's
+-- created here and filled with the map's pin methods once the map code is there (DefineProvider).
+AzerothAlmanacTownsfolkPinMixin = AzerothAlmanacTownsfolkPinMixin or {}
 local ICONS = "Interface\\Icons\\"
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local REVEAL_YARDS = 250 -- spawns of a met NPC within this distance of where it was met
@@ -231,7 +234,8 @@ function TF:Meet(unit, talked)
 		if not known and #rec.w < 8 then rec.w[#rec.w + 1] = ("%d:%.0f:%.0f"):format(here.c, here.x, here.y) end
 	end
 	local close = talked
-	if not close and CheckInteractDistance then
+	-- CheckInteractDistance is restricted for addons in combat (the game blocks it and blames us)
+	if not close and CheckInteractDistance and not (InCombatLockdown and InCombatLockdown()) then
 		local ok, near = pcall(CheckInteractDistance, unit, 3)
 		close = ok and R(near) and true or false
 	end
@@ -446,11 +450,32 @@ end
 -- World map
 ---------------------------------------------------------------------------
 
+-- Pins need a frame level type, or the map puts them at the bottom, under a zone map's exploration
+-- overlay (city maps have none, which is why pins only showed in cities). Shared with NodePins.
+function ns.LiftMapPin(pin)
+	local done = false
+	for _, kind in ipairs({ "PIN_FRAME_LEVEL_AREA_POI", "PIN_FRAME_LEVEL_VIGNETTE", "PIN_FRAME_LEVEL_TOPMOST" }) do
+		if pin.UseFrameLevelType and pcall(pin.UseFrameLevelType, pin, kind)
+			and pin.ApplyFrameLevel and pcall(pin.ApplyFrameLevel, pin) then done = true break end
+	end
+	local canvas = pin:GetParent()
+	if canvas and (not done or pin:GetFrameLevel() <= canvas:GetFrameLevel() + 1) then
+		pin:SetFrameLevel(canvas:GetFrameLevel() + 1500)
+	end
+end
+
 -- defined once the map's own code is there (the world map can load late)
 local Provider
 local function DefineProvider()
 	if Provider or not (MapCanvasPinMixin and MapCanvasDataProviderMixin and CreateFromMixins) then return end
-	AzerothAlmanacTownsfolkPinMixin = CreateFromMixins(MapCanvasPinMixin)
+	Mixin(AzerothAlmanacTownsfolkPinMixin, MapCanvasPinMixin)   -- the map's pin methods; ours below override them
+
+	-- The map sets mouse pass-through on every pin it places; that call is protected in combat and
+	-- gets blamed on the addon (ADDON_ACTION_BLOCKED SetPassThroughButtons). These pins never take
+	-- the mouse themselves (a child button does), so they skip it, as HandyNotes / TomTom pins do.
+	function AzerothAlmanacTownsfolkPinMixin:SetPassThroughButtons() end
+	function AzerothAlmanacTownsfolkPinMixin:SetPropagateMouseClicks() end
+	function AzerothAlmanacTownsfolkPinMixin:SetPropagateMouseMotion() end
 
 	function AzerothAlmanacTownsfolkPinMixin:OnLoad()
 		if self.SetScalingLimits then self:SetScalingLimits(1, 1.0, 1.25) end
@@ -477,6 +502,7 @@ local function DefineProvider()
 		self:SetSize(size, size)
 		TF.MakeOrb(self, self.Icon, self.Rim, p.key)
 		self:SetPosition(p.x, p.y)
+		ns.LiftMapPin(self)
 	end
 
 	function AzerothAlmanacTownsfolkPinMixin:OnMouseEnter() if self.point then ShowTooltip(self, self.point) end end
@@ -527,7 +553,7 @@ local function BuildPopup(anchor)
 	f:Hide()
 	local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	title:SetPoint("TOPLEFT", 12, -10)
-	title:SetText(L["Townsfolk on the map"])
+	title:SetText(L["People on the map"])
 	local close = W.Try("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", 2, 2)
 	local scroll = W.Try("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
@@ -571,7 +597,7 @@ local function BuildPopup(anchor)
 		local get = function() return s[key] end
 		Track(Check(label, get, function(v) s[key] = v TF:Refresh() end), get)
 	end
-	Opt(L["Show discovered townsfolk"], "enabled")
+	Opt(L["Show discovered people"], "enabled")
 	Opt(L["Only my faction"], "factionOnly")
 	Opt(L["Only my class's trainers"], "myClassOnly")
 	Opt(L["Also on continent maps"], "continent")
@@ -603,7 +629,7 @@ local function CreateMapButton()
 	b.icon = b:CreateTexture(nil, "ARTWORK")
 	b.icon:SetPoint("TOPLEFT", 2, -2)
 	b.icon:SetPoint("BOTTOMRIGHT", -2, 2)
-	b.icon:SetTexture(ICONS .. "INV_Misc_Spyglass_03")
+	b.icon:SetTexture(8197123)   -- the Townsfolk icon (picked with /aa whatis)
 	b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	if b.CreateMaskTexture and b.icon.AddMaskTexture then
 		local mask = b:CreateMaskTexture()
@@ -630,11 +656,11 @@ local function CreateMapButton()
 		local s = S()
 		local off = not s.enabled or s.mapHidden
 		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-		GameTooltip:AddLine(L["Townsfolk"])
-		GameTooltip:AddLine(off and L["|cffffd100Left-click:|r show the townsfolk you've met"] or L["|cffffd100Left-click:|r hide townsfolk on the map"], 1, 1, 1)
+		GameTooltip:AddLine(L["People"])
+		GameTooltip:AddLine(off and L["|cffffd100Left-click:|r show the people you've met"] or L["|cffffd100Left-click:|r hide people on the map"], 1, 1, 1)
 		GameTooltip:AddLine(L["|cffffd100Right-click:|r choose what shows"], 1, 1, 1)
 		local folk, mail = TF:Counts()
-		GameTooltip:AddLine((L["Met so far: %d townsfolk, %d mailboxes"]):format(folk, mail), 0.6, 0.6, 0.6)
+		GameTooltip:AddLine((L["Met so far: %d people, %d mailboxes"]):format(folk, mail), 0.6, 0.6, 0.6)
 		local shownMap = WorldMapFrame and WorldMapFrame.GetMapID and WorldMapFrame:GetMapID()
 		if shownMap then
 			local n = #TF:Points(shownMap)
@@ -704,9 +730,9 @@ function TF:Check()
 	local npc = ns.NpcFromGuid(R(UnitGUID(unit)))
 	local e = self:Get(npc)
 	local where = ns.Where()
-	if not e then ns.Print(L["Target a townsfolk NPC (trainer, vendor, innkeeper ...) next to you first."]) return end
+	if not e then ns.Print(L["Target an NPC who lives in town (trainer, vendor, innkeeper ...) next to you first."]) return end
 	local rect = MapRect(where.map)
-	if not rect then ns.Print(L["This client can't turn world positions into map positions; townsfolk show where you talked to them."]) return end
+	if not rect then ns.Print(L["This client can't turn world positions into map positions; people show where you talked to them."]) return end
 	local best
 	for _, sp in ipairs(e.spawns) do
 		local x, y = OnMap(rect, sp)

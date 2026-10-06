@@ -11,7 +11,7 @@ local WW = ns:NewModule("WingsWhispers")
 local CREW = ns.FlightCrew or {}
 local CREW_SIZE = 4          -- regulars at each flight master
 local RARE_CHANCE = 0.02     -- a rare guest instead
-local GEM_PROMPT_MIN = 45    -- seconds: only offer Gem Match on flights at least this long
+local GEM_PROMPT_MIN = 45    -- seconds: only offer a game on flights at least this long
 local GEM_PROMPT_SHOW = 25   -- seconds the prompt stays up
 
 -- Horde flight masters around Lordaeron use bats.
@@ -114,50 +114,143 @@ local function Rides(key)
 end
 
 ---------------------------------------------------------------------------
--- Gem Match prompt
+-- A game for the flight: Wild Gambit (its logo as the button), Murloc Tac Toe or Gem Match, one of
+-- them recommended (a different one each time, glowing gold)
 ---------------------------------------------------------------------------
 
+local GAMES = {
+	{ key = "gambit", name = "Wild Gambit", module = "WildGambit", logo = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit",
+		pitch = "How about a hand of Wild Gambit?", tip = "Your Almanac's creatures as cards: a quick round against a nearby creature." },
+	{ key = "murloc", name = "Murloc Tac Toe", module = "MurlocTacToe", icon = "INV_Misc_Head_Murloc_01",
+		pitch = "Fancy a quick Murloc Tac Toe?", tip = "Murlocs against gnolls, three in a row. Mrglglgl!" },
+	{ key = "gem", name = "Gem Match", module = "GemMatch", icon = "INV_Misc_Gem_Ruby_02",
+		pitch = "Pass the flight with some Gem Match?", tip = "A match-three game with Classic gems. It pauses by itself in combat." },
+}
+local lastPick
+
+-- the games you have, and today's recommendation
+local function Available()
+	local list = {}
+	for _, g in ipairs(GAMES) do if ns[g.module] and ns[g.module].Open then list[#list + 1] = g end end
+	return list
+end
+local function Recommend(list)
+	local choices = {}
+	for _, g in ipairs(list) do if g.key ~= lastPick then choices[#choices + 1] = g end end
+	if #choices == 0 then choices = list end
+	local g = choices[math.random(#choices)]
+	lastPick = g and g.key
+	return g
+end
+
+-- a row of the three games' buttons (the logo for Wild Gambit, an icon and name for the others);
+-- onPlay runs after a game opens (to close what offered it)
+local function GameRow(parent, onPlay)
+	local row = CreateFrame("Frame", nil, parent)
+	row:SetSize(330, 34)
+	row.buttons = {}
+	local x = 0
+	for i, g in ipairs(GAMES) do
+		local b = CreateFrame("Button", nil, row)
+		b.game = g
+		if g.logo then
+			b:SetSize(120, 34)
+			b.art = b:CreateTexture(nil, "ARTWORK")
+			b.art:SetAllPoints()
+			b.art:SetTexture(g.logo)
+		else
+			b:SetSize(100, 34)
+			b.art = b:CreateTexture(nil, "ARTWORK")
+			b.art:SetSize(26, 26)
+			b.art:SetPoint("LEFT", 2, 0)
+			b.art:SetTexture("Interface\\Icons\\" .. g.icon)
+			b.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			b.label = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+			b.label:SetPoint("LEFT", b.art, "RIGHT", 5, 0)
+			b.label:SetPoint("RIGHT", -2, 0)
+			b.label:SetJustifyH("LEFT")
+			b.label:SetText(g.name)
+		end
+		b.glow = b:CreateTexture(nil, "BACKGROUND")
+		b.glow:SetPoint("TOPLEFT", -8, 8)
+		b.glow:SetPoint("BOTTOMRIGHT", 8, -8)
+		b.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+		b.glow:SetBlendMode("ADD")
+		b.glow:SetVertexColor(1, 0.8, 0.3)
+		b.glow:Hide()
+		b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+		b:SetPoint("LEFT", x, 0)
+		x = x + b:GetWidth() + 6
+		b:SetScript("OnClick", function(self)
+			local m = ns[self.game.module]
+			if onPlay then onPlay() end
+			if m and m.Open then m:Open() end
+		end)
+		b:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+			GameTooltip:SetText(self.game.name)
+			GameTooltip:AddLine(self.game.tip, 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", GameTooltip_Hide)
+		row.buttons[i] = b
+	end
+	row:SetWidth(x - 6)
+	-- shows the games you have, the recommended one glowing; returns it
+	function row:Offer()
+		local list = Available()
+		local have = {}
+		for _, g in ipairs(list) do have[g.key] = true end
+		local pick = Recommend(list)
+		local x2 = 0
+		for _, b in ipairs(self.buttons) do
+			b:SetShown(have[b.game.key] and true or false)
+			if have[b.game.key] then b:ClearAllPoints() b:SetPoint("LEFT", x2, 0) x2 = x2 + b:GetWidth() + 6 end
+			b.glow:SetShown(pick and b.game.key == pick.key)
+		end
+		self:SetWidth(math.max(1, x2 - 6))
+		return pick
+	end
+	-- the recommended game's glow breathes
+	row:SetScript("OnUpdate", function(self, e)
+		self.t = (self.t or 0) + e
+		local a = 0.45 + 0.35 * math.sin(self.t * 3)
+		for _, b in ipairs(self.buttons) do if b.glow:IsShown() then b.glow:SetAlpha(a) end end
+	end)
+	return row
+end
+WW.GameRow = GameRow
+
 local function BuildPrompt()
-	local f = CreateFrame("Button", "AzerothAlmanacWingsGemPrompt", UIParent, "BackdropTemplate")
-	f:SetSize(250, 34)
+	local f = CreateFrame("Frame", "AzerothAlmanacWingsGemPrompt", UIParent, "BackdropTemplate")
+	f:SetSize(360, 82)
 	f:SetPoint("TOP", UIParent, "TOP", 0, -200)
 	f:SetFrameStrata("DIALOG")
 	f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
 		edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
 	f:SetBackdropBorderColor(1, 0.82, 0)
-	f.icon = f:CreateTexture(nil, "ARTWORK")
-	f.icon:SetSize(24, 24)
-	f.icon:SetPoint("LEFT", 6, 0)
-	f.icon:SetTexture("Interface\\Icons\\INV_Misc_Gem_Ruby_02")
 	f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	f.text:SetPoint("LEFT", f.icon, "RIGHT", 8, 0)
-	f.text:SetPoint("RIGHT", -24, 0)
+	f.text:SetPoint("TOPLEFT", 12, -10)
+	f.text:SetPoint("TOPRIGHT", -26, -10)
 	f.text:SetJustifyH("LEFT")
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetSize(20, 20)
-	close:SetPoint("RIGHT", -3, 0)
+	close:SetPoint("TOPRIGHT", -3, -3)
 	close:SetScript("OnClick", function() f:Hide() end)
-	f:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-	f:SetScript("OnClick", function(self)
-		self:Hide()
-		if ns.GemMatch then ns.GemMatch:Open() end
-	end)
-	f:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-		GameTooltip:SetText("Gem Match")
-		GameTooltip:AddLine("A match-three game with Classic gems, to pass the flight. It pauses by itself in combat.", 1, 1, 1, true)
-		GameTooltip:Show()
-	end)
-	f:SetScript("OnLeave", GameTooltip_Hide)
+	f.row = GameRow(f, function() f:Hide() end)
+	f.row:SetPoint("BOTTOM", f, "BOTTOM", 0, 10)
 	f:Hide()
 	return f
 end
 
 local function ShowGemPrompt(flight)
-	if not db.gemPrompt or not ns.GemMatch then return end
+	if not db.gemPrompt or #Available() == 0 then return end
 	if flight.planned and flight.planned < GEM_PROMPT_MIN then return end
 	prompt = prompt or BuildPrompt()
-	prompt.text:SetText(flight.planned and ("Play Gem Match? (%s flight)"):format(Clock(flight.planned)) or "Play Gem Match while you fly?")
+	local pick = prompt.row:Offer()
+	local pitch = pick and pick.pitch or "A game while you fly?"
+	prompt.text:SetText(flight.planned and ("%s  |cffaaaaaa(%s flight)|r"):format(pitch, Clock(flight.planned)) or pitch)
+	prompt:SetWidth(math.max(300, prompt.row:GetWidth() + 30))
 	prompt:Show()
 	prompt.token = (prompt.token or 0) + 1
 	local token = prompt.token
@@ -315,10 +408,9 @@ local function BuildPanel()
 	f.count:SetJustifyH("RIGHT")
 	f.count:SetJustifyV("MIDDLE")
 
-	f.gem = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-	f.gem:SetSize(170, 22)
-	f.gem:SetPoint("BOTTOMRIGHT", -12, 10)
-	f.gem:SetScript("OnClick", function() f:Hide() if ns.GemMatch then ns.GemMatch:Open() end end)
+	-- a game for the flight (the three games' buttons; one recommended)
+	f.gem = GameRow(f, function() f:Hide() end)
+	f.gem:SetPoint("BOTTOMRIGHT", -14, 34) -- (its own line, over "Don't show these again" and the counter)
 
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetSize(24, 24)
@@ -410,12 +502,12 @@ function WW.ShowPanel(info)
 		height = height + 10 + 18 + 4 + f.fact:GetStringHeight()
 	end
 	local showGem = info.gem ~= nil and not info.landing
-	-- the bottom row: "Don't show these again", the ride counter and the Gem Match button
-	height = math.max(height + 40, PORTRAIT + 24)
+	-- the bottom row: "Don't show these again", the ride counter and the games
+	height = math.max(height + (showGem and 80 or 40), PORTRAIT + (showGem and 52 or 24))
 	f.optOut:SetChecked(false)
 	-- the counter sits left of the Gem Match button, or in the bottom-right corner
 	f.count:ClearAllPoints()
-	if showGem then f.count:SetPoint("RIGHT", f.gem, "LEFT", -12, 0) else f.count:SetPoint("BOTTOMRIGHT", -16, 14) end
+	f.count:SetPoint("BOTTOMRIGHT", -16, 14)
 	f:SetHeight(height)
 
 	f.segments = { { fs = f.text, text = body } }
@@ -428,7 +520,7 @@ function WW.ShowPanel(info)
 	f.persist = not info.landing
 
 	f.gem:SetShown(showGem)
-	if type(info.gem) == "number" then f.gem:SetText(("Play Gem Match (%s)"):format(Clock(info.gem))) else f.gem:SetText("Play Gem Match") end
+	if showGem then f.gem:Offer() end
 	f:SetAlpha(1)
 	f:Show()
 	if db.sound and look.sound and PlaySoundFile then pcall(PlaySoundFile, look.sound, "SFX") end

@@ -20,6 +20,7 @@ local function Update()
 	local name, realm = UnitFullName("player")
 	c.name = name
 	c.realm = realm or GetRealmName()
+	c.realmName = GetRealmName()   -- the inventory records use this one
 	local className, classFile = UnitClass("player")
 	c.class, c.classFile = className, classFile
 	local raceName, raceFile = UnitRace("player")

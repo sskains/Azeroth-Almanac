@@ -7,7 +7,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "merchants", title = L["Merchants"], icon = { "INV_Misc_Coin_02", "INV_Misc_Coin_01", "INV_Misc_Bag_08" }, order = 5 }
+local page = { key = "merchants", title = L["Merchants"], icon = { "INV_Misc_Coin_02", "INV_Misc_Coin_01", "INV_Misc_Bag_08" }, order = 10 }
 local list, detail, countText, nameText, placeText, checkedText, mapButton, pinButton
 local filter = ""
 local shown
@@ -142,7 +142,8 @@ function page:Build(parent, header)
 	left:SetWidth(320)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return r.header end, refresh = function() page:Refresh() end },
-		rowHeight = 28,
+		rowHeight = 24,
+		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No merchants yet. Every vendor you open is recorded here, with their whole stock."],
 		update = function(row, r)

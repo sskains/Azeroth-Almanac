@@ -314,7 +314,7 @@ local function FlushBatch()
 		return
 	end
 	Enqueue({ title = L["New discoveries"], text = (L["%s and %d more"]):format(list[1].text or "?", #list - 1),
-		sub = nil, icon = { "INV_Misc_Book_09" }, quality = 1 })
+		sub = nil, icon = { 133742, "INV_Misc_Book_09" }, quality = 1 })
 end
 
 -- quality = the tier (1 Common ... 5 Legendary). force: shown even when alerts are off (tests)
@@ -390,7 +390,7 @@ end)
 function Toast:Test()
 	Toast:Show(L["New place discovered"], "The Dagger Hills of Westbrook Garrison", "Westfall", W.KIND.subzone.icon, 1, true)
 	Toast:Show(L["New zone discovered"], "Westfall", L["Eastern Kingdoms"], W.KIND.zone.icon, 2, true)
-	Toast:Show(L["Creature mastered"], "Riverpaw Outrunner", nil, ns.Bestiary and ns.Bestiary:TierIcon(4), 3, true)
+	Toast:Show(ns.Bestiary and ns.Bestiary.TIERS[4] or L["Master Hunter"], "Riverpaw Outrunner", nil, ns.Bestiary and ns.Bestiary:TierIcon(4), 3, true)
 	Toast:Show(L["Milestone reached"], L["First elite"], nil, { "Ability_Warrior_BattleShout" }, 4, true)
 	Toast:Show(L["Level %d"]:format(60), "Westfall", nil, W.KIND.level.icon, 5, true)
 	if frame then

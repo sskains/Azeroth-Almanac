@@ -6,7 +6,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "dungeons", title = L["Dungeons"], icon = W.KIND.instance.icon, order = 6.5 }
+local page = { key = "dungeons", title = L["Dungeons"], icon = W.KIND.instance.icon, order = 7.5 }
 local list, detail, countText, nameText, subText
 local filter = ""
 local shown
@@ -86,7 +86,7 @@ local function Describe(id, rec)
 			local tip = {}
 			if (e.b.wipes or 0) > 0 then tip[#tip + 1] = (L["Wiped %s."]):format(ns.Times(e.b.wipes)) end
 			if e.b.first then tip[#tip + 1] = (L["First met by %s on %s."]):format(ns.CharName(e.b.first.c, true), ns.DateText(e.b.first.t)) end
-			if e.b.npc then tip[#tip + 1] = L["Click to open in the Bestiary."] end
+			if e.b.npc then tip[#tip + 1] = L["Click to open in Creatures."] end
 			s[#s + 1] = { name = e.b.name or "?", icon = W.FindIcon(c and W.TYPE_ICON[c.type or ""] or W.KIND.creature.icon),
 				note = note, tip = table.concat(tip, "\n"), onClick = e.b.npc and OpenCreature(e.b.npc) or nil }
 		end
@@ -190,7 +190,8 @@ function page:Build(parent, header)
 	left:SetWidth(300)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return r.header and r.key end, refresh = function() page:Refresh() end },
-		rowHeight = 28,
+		rowHeight = 24,
+		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No dungeons yet. Every dungeon and raid your characters enter is recorded here, with its bosses as you meet them."],
 		update = function(row, r)

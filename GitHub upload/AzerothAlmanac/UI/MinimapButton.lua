@@ -30,11 +30,12 @@ end
 local function MenuItems()
 	return {
 		{ title = true, icon = ns.ICON, text = L["Azeroth Almanac"] },
-		{ icon = "INV_Misc_Book_09", text = L["Journal"], run = function() ns.UI:Open("journal") end },
+		{ icon = 133742, text = L["Journal"], run = function() ns.UI:Open("journal") end },
 		{ icon = W.KIND.zone.icon, text = L["Places"], run = function() ns.UI:Open("places") end },
 		{ icon = W.KIND.character.icon, text = L["Characters"], run = function() ns.UI:Open("characters") end },
-		{ icon = "INV_Misc_Bag_08", text = L["My Characters"], run = function() ns.QoL.InventoryWindow:Toggle() end },
 		{ icon = "INV_Misc_Gem_Ruby_02", text = L["Gem Match"], run = function() ns.QoL.GemMatch:Toggle() end },
+		{ icon = "INV_Misc_Fish_02", text = L["Murloc Tac Toe"], run = function() ns.QoL.MurlocTacToe:Toggle() end },
+		{ icon = "INV_10_Inscription_DarkmoonCards_Wild_Earth", text = L["Wild Gambit"], run = function() ns.QoL.WildGambit:Toggle() end },
 		{ icon = "INV_Misc_Gear_01", text = L["Settings"], run = function() ns.Settings:Open() end },
 		{ icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up", text = L["Hide this button"], run = function()
 			MB:SetShown(false)

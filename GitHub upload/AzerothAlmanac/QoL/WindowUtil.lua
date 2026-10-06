@@ -242,5 +242,14 @@ function ns.NativeInset(f)
 	inset:EnableMouse(false)
 	inset:SetFrameLevel(f:GetFrameLevel())
 	f.inset = inset
+	-- the same recipe list background as the Almanac's dark panels (Widgets W.Inset)
+	local list = inset:CreateTexture(nil, "BACKGROUND", nil, 2)
+	list:SetPoint("TOPLEFT", 3, -3)
+	list:SetPoint("BOTTOMRIGHT", -3, 3)
+	local set = false
+	for _, name in ipairs({ "Professions-background-summarylist", "auctionhouse-background-summarylist" }) do
+		if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) and pcall(list.SetAtlas, list, name) then set = true break end
+	end
+	list:SetShown(set)
 	return inset
 end

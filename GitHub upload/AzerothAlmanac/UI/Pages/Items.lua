@@ -1,5 +1,5 @@
 -- Items page: every item you've come across. Left: the list (search, quality filter, "owned now").
--- Right, on parchment: the item (hover its icon for the game's own tooltip), how and when it was
+-- Right, on parchment: the item's own tooltip card, then (hover its icon for the game's tooltip) how and when it was
 -- first found, who owns it now, and every source you've met: creatures that dropped it (with your
 -- own drop rate), merchants selling it, quests rewarding it, objects and containers it came from,
 -- fishing and crafting. Sources you haven't met are only counted, from the Classic records.
@@ -9,7 +9,7 @@ local L = ns.L
 local W = ns.Widgets
 local IDB = ns.ItemDB
 
-local page = { key = "items", title = L["Items"], icon = { "INV_Chest_Chain_05", "INV_Misc_Bag_08", "INV_Sword_04" }, order = 3 }
+local page = { key = "items", title = L["Items"], icon = { 515958, "INV_Chest_Chain_05", "INV_Misc_Bag_08" }, order = 4 }
 local list, detail, countText, qualityButton, iconButton, nameText, typeText, firstText
 local filter, qualityFilter, ownedOnly = "", nil, false
 local shown
@@ -56,8 +56,43 @@ local function CreatureName(npc)
 	return c and c.name or nil
 end
 
+---------------------------------------------------------------------------
+-- The item's own tooltip card at the top of the page: the game's tooltip (a GameTooltip of our own,
+-- so it never fights the mouse-over one), laid into the page and scrolling with it. Other addons'
+-- tooltip lines (and the Almanac's vendor / disenchant lines) show on it as they do on hover.
+---------------------------------------------------------------------------
+
+local cardHolder, card
+
+local function CardHeight()
+	if not (card and shown) then return 0 end
+	local i = Info(shown)
+	card:SetOwner(cardHolder, "ANCHOR_NONE")
+	card:ClearAllPoints()
+	card:SetPoint("TOPLEFT", cardHolder, "TOPLEFT", 0, 0)
+	card:SetFrameStrata(cardHolder:GetFrameStrata())
+	card:SetFrameLevel(cardHolder:GetFrameLevel() + 5)
+	local ok = pcall(card.SetHyperlink, card, i.link or ("item:" .. shown))
+	if not ok then pcall(card.SetItemByID, card, shown) end
+	card:Show()
+	local h = math.floor((card:GetHeight() or 0) + 0.5)
+	cardHolder:SetSize(math.max(card:GetWidth() or 1, 1), math.max(h, 1))
+	return h
+end
+
+local function MakeCard(parent)
+	cardHolder = CreateFrame("Frame", nil, parent)
+	cardHolder:SetSize(1, 1)
+	local ok, tip = pcall(CreateFrame, "GameTooltip", "AzerothAlmanacItemCard", cardHolder, "GameTooltipTemplate")
+	if not ok then return end
+	card = tip
+	card:SetClampedToScreen(false)
+	cardHolder:SetScript("OnHide", function() card:Hide() end)
+end
+
 local function Describe(id, rec)
 	local b = {}
+	if cardHolder then b[#b + 1] = { "frame", cardHolder, CardHeight } end
 	local db = IDB:Get(id)
 	local src = rec.src or {}
 	local i = Info(id)
@@ -87,7 +122,7 @@ local function Describe(id, rec)
 			for _, d in ipairs(db.drops) do if d.id == npc then note = note .. CLASSIC .. "  " .. (L["Classic %.1f%%"]):format(d.chance) .. "|r" end end
 		end
 		slots[#slots + 1] = { name = c and c.name or ("creature " .. npc), icon = W.FindIcon(W.TYPE_ICON[c and c.type or ""] or W.KIND.creature.icon), note = note,
-			tip = L["Click to open in the Bestiary."], onClick = function() local p = ns.UI:GetPage("bestiary") if p then p:ShowCreature(npc) end end }
+			tip = L["Click to open in Creatures."], onClick = function() local p = ns.UI:GetPage("bestiary") if p then p:ShowCreature(npc) end end }
 	end
 	if #slots > 0 or (db and db.droppers > 0) then
 		b[#b + 1] = { "banner", L["Dropped by"] }
@@ -268,6 +303,7 @@ local function QualityMenu(anchor)
 end
 
 function page:Build(parent, header)
+	MakeCard(parent)
 	local search = W.Search(header, 180, function(text)
 		filter = text
 		page:Refresh()
@@ -299,7 +335,8 @@ function page:Build(parent, header)
 			row.text:SetText(QualityHex(i.quality or r.rec.q) .. (i.name or r.rec.name or ("item " .. r.id)) .. "|r")
 			row.right:SetText("|cff999999" .. (HOW[r.rec.how or ""] or "") .. "|r")
 		end,
-		onClick = function(r) Show(r.id) end,
+		itemOf = function(r) return r.id end,
+		onClick = function(r) W.ItemModifiedClick(r.id) Show(r.id) end,
 	})
 	list:SetAllPoints(left)
 
@@ -308,7 +345,7 @@ function page:Build(parent, header)
 	detail:SetPoint("TOPLEFT", left, "TOPRIGHT", 6, 0)
 	detail:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
 
-	-- the item's icon in a slot frame; hover for the game's tooltip, shift-click to link it
+	-- the item's icon in a slot frame; hover for the game's tooltip, shift-click to link it, ctrl-click to try it on
 	iconButton = CreateFrame("Button", nil, detail.top)
 	iconButton:SetSize(46, 46)
 	iconButton:SetPoint("TOPLEFT", 2, -2)
@@ -327,11 +364,9 @@ function page:Build(parent, header)
 	end)
 	iconButton:SetScript("OnLeave", GameTooltip_Hide)
 	iconButton:SetScript("OnClick", function(self)
-		if IsModifiedClick and IsModifiedClick("CHATLINK") and self.id then
-			local link = Info(self.id).link
-			if link and ChatEdit_InsertLink then ChatEdit_InsertLink(link) end
-		end
+		if self.id then W.ItemModifiedClick(Info(self.id).link or self.id) end
 	end)
+	W.ItemCursor(iconButton, function(self) return self.id end)
 
 	nameText = detail.top:CreateFontString(nil, "OVERLAY")
 	W.HeroFont(nameText, 26)

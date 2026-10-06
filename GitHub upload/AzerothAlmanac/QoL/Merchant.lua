@@ -1,6 +1,8 @@
 -- Ported from Plus Everything (same author) for Azeroth Almanac's quality-of-life helpers.
 -- Merchant: when you open a vendor, repairs your gear (optionally from guild funds first) and
 -- sells your grey junk, then says what it did in chat. Each part has its own switch.
+-- Also: at a quest turn-in with reward choices, the one that sells to a vendor for the most gets a
+-- gold coin in the bottom right corner (merchant.bestReward).
 
 local _, A = ...
 local ns = A.QoL
@@ -111,6 +113,72 @@ local function SellJunk()
 end
 
 ---------------------------------------------------------------------------
+-- Quest turn-in: a gold coin on the reward choice worth the most at a vendor
+---------------------------------------------------------------------------
+
+local marks = {}          -- button -> coin texture
+local retry = false
+
+local function ClearMarks()
+	for _, coin in pairs(marks) do coin:Hide() end
+end
+
+-- the reward choice buttons by choice index (the quest frame's shared QuestInfo buttons)
+local function ChoiceButtons()
+	local out = {}
+	local rf = QuestInfoRewardsFrame or (QuestInfoFrame and QuestInfoFrame.rewardsFrame)
+	local list = rf and rf.RewardButtons
+	if not list then
+		list = {}
+		for i = 1, 12 do list[i] = _G["QuestInfoRewardsFrameQuestInfoItem" .. i] end
+	end
+	for _, b in pairs(list) do
+		if b and b:IsVisible() and b.type == "choice" and b.GetID then out[b:GetID()] = b end
+	end
+	return out
+end
+
+local function Coin(button)
+	local coin = marks[button]
+	if coin then return coin end
+	coin = button:CreateTexture(nil, "OVERLAY", nil, 7)
+	coin:SetSize(16, 16)
+	local icon = button.Icon or (button.GetName and button:GetName() and _G[button:GetName() .. "IconTexture"])
+	coin:SetPoint("BOTTOMRIGHT", icon or button, "BOTTOMRIGHT", 3, -3)
+	local ok = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("Coin-Gold") and pcall(coin.SetAtlas, coin, "Coin-Gold")
+	if not ok then coin:SetTexture("Interface\\MoneyFrame\\UI-GoldIcon") end
+	marks[button] = coin
+	return coin
+end
+
+local function MarkBestReward()
+	ClearMarks()
+	if not (db and db.bestReward) then return end
+	if not (QuestFrameRewardPanel and QuestFrameRewardPanel:IsVisible()) then return end
+	local n = GetNumQuestChoices and GetNumQuestChoices() or 0
+	if n < 2 then return end
+	local values, best, waiting = {}, 0, false
+	for i = 1, n do
+		local link = GetQuestItemLink and GetQuestItemLink("choice", i)
+		local _, _, count = GetQuestItemInfo("choice", i)
+		local price = link and select(11, GetInfo(link))
+		if price == nil then waiting = true end
+		values[i] = (price or 0) * math.max(1, count or 1)
+		if values[i] > best then best = values[i] end
+	end
+	if waiting and not retry then
+		-- item info still arriving: look again in a moment
+		retry = true
+		C_Timer.After(0.5, function() retry = false MarkBestReward() end)
+	end
+	if best <= 0 then return end
+	local buttons = ChoiceButtons()
+	for i = 1, n do
+		if values[i] == best and buttons[i] then Coin(buttons[i]):Show() end
+	end
+end
+
+---------------------------------------------------------------------------
 -- Module API
 ---------------------------------------------------------------------------
 
@@ -127,6 +195,27 @@ function MR:OnLogin()
 			SellJunk()
 		end)
 	end)
+
+	-- the quest frame lays its reward buttons out on QUEST_COMPLETE; mark after it has
+	local quest = CreateFrame("Frame")
+	for _, e in ipairs({ "QUEST_COMPLETE", "QUEST_FINISHED", "QUEST_DETAIL", "QUEST_PROGRESS", "GET_ITEM_INFO_RECEIVED" }) do
+		pcall(quest.RegisterEvent, quest, e)
+	end
+	quest:SetScript("OnEvent", function(_, event)
+		if event == "QUEST_COMPLETE" then
+			C_Timer.After(0.05, MarkBestReward)
+			C_Timer.After(0.4, MarkBestReward)
+		elseif event == "GET_ITEM_INFO_RECEIVED" then
+			if next(marks) and QuestFrameRewardPanel and QuestFrameRewardPanel:IsVisible() and not retry then
+				retry = true
+				C_Timer.After(0.2, function() retry = false MarkBestReward() end)
+			end
+		else
+			ClearMarks()
+		end
+	end)
+	-- the map's quest details reuse the same buttons: never leave a coin on them there
+	if QuestInfo_Display then hooksecurefunc("QuestInfo_Display", function() ClearMarks() C_Timer.After(0.05, MarkBestReward) end) end
 end
 
 -- For the settings page: what's in your bags right now.

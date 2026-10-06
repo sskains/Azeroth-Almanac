@@ -3,7 +3,9 @@
 -- minimap (pins placed from your world position, following zoom, indoors / outdoors and a rotating
 -- minimap). Gathered spots in full colour, sighted-only spots dimmer. Hover: the node and how often
 -- you've gathered or seen it. Click: a waypoint; shift-click: its Gathering page.
--- settings.nodes = { map, minimap, herb, ore, chest, sighted, size, mmSize }
+-- A herb button on each map shows or hides them: top right of the world map, and on the minimap's
+-- rim (drag it around the edge like the Almanac's own minimap button).
+-- settings.nodes = { map, minimap, herb, ore, chest, sighted, size, mmSize, mmButton, mmPos }
 
 local _, ns = ...
 local L = ns.L
@@ -11,9 +13,13 @@ local NP = ns:NewModule("NodePins")
 local R = ns.Readable
 
 local PIN_TEMPLATE = "AzerothAlmanacNodePinTemplate"
+-- The pin template (UI\TownsfolkPin.xml) names this mixin; it must exist when the XML loads, so it's
+-- created here and filled with the map's pin methods once the map code is there (DefineProvider).
+AzerothAlmanacNodePinMixin = AzerothAlmanacNodePinMixin or {}
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local RIM = { herb = { 0.35, 0.85, 0.35 }, ore = { 0.85, 0.6, 0.3 }, chest = { 1, 0.82, 0.25 } }
-local KIND_ICON = { herb = "Interface\\Icons\\Trade_Herbalism", ore = "Interface\\Icons\\Trade_Mining", chest = "Interface\\Icons\\INV_Box_02" }
+local GATHER_ICON = 237271   -- the Gathering icon (picked with /aa whatis); the map and minimap buttons
+local KIND_ICON = { herb = "Interface\\Icons\\Trade_Herbalism", ore = "Interface\\Icons\\Trade_Mining", chest = 1450989 }   -- the chest icon picked with /aa whatis (file 1450989)
 
 local function S() return ns.db.settings.nodes end
 
@@ -23,9 +29,17 @@ local function ItemIcon(item)
 end
 
 -- the node's face: what comes out of it most often, else its kind
+-- (chests with a mix of loot keep the chest icon, as on the Gathering page)
 local function NodeIcon(rec)
-	local best, n = nil, 0
-	for item, c in pairs(rec.items or {}) do if c > n then best, n = item, c end end
+	local best, n, kinds = nil, 0, 0
+	for item, c in pairs(rec.items or {}) do
+		kinds = kinds + 1
+		if c > n then best, n = item, c end
+	end
+	if rec.kind == "chest" then
+		if kinds ~= 1 then best = nil end
+		return ItemIcon(best) or KIND_ICON.chest
+	end
 	if not best and rec.ids then
 		for id in pairs(rec.ids) do
 			local list = ns.ItemDB and ns.ItemDB:ObjectLoot(id)
@@ -116,7 +130,14 @@ end
 local Provider
 local function DefineProvider()
 	if Provider or not (MapCanvasPinMixin and MapCanvasDataProviderMixin and CreateFromMixins) then return end
-	AzerothAlmanacNodePinMixin = CreateFromMixins(MapCanvasPinMixin)
+	Mixin(AzerothAlmanacNodePinMixin, MapCanvasPinMixin)   -- the map's pin methods; ours below override them
+
+	-- The map sets mouse pass-through on every pin it places; that call is protected in combat and
+	-- gets blamed on the addon (ADDON_ACTION_BLOCKED SetPassThroughButtons). These pins never take
+	-- the mouse themselves (a child button does), so they skip it, as HandyNotes / TomTom pins do.
+	function AzerothAlmanacNodePinMixin:SetPassThroughButtons() end
+	function AzerothAlmanacNodePinMixin:SetPropagateMouseClicks() end
+	function AzerothAlmanacNodePinMixin:SetPropagateMouseMotion() end
 	function AzerothAlmanacNodePinMixin:OnLoad()
 		if self.SetScalingLimits then self:SetScalingLimits(1, 1.0, 1.25) end
 		-- the map takes over the scripts of a pin that takes the mouse: a child button does it
@@ -133,17 +154,27 @@ local function DefineProvider()
 		self.point, self.uiMap = p, uiMap
 		Dress(self, p, (S().size or 14) * (p.sighted and 0.85 or 1))
 		self:SetPosition(p.x / 100, p.y / 100)
+		if ns.LiftMapPin then ns.LiftMapPin(self) end
 	end
 
 	Provider = CreateFromMixins(MapCanvasDataProviderMixin)
 	function Provider:RemoveAllData() self:GetMap():RemoveAllPinsByTemplate(PIN_TEMPLATE) end
-	function Provider:RefreshAllData()
+	local function Fill(self)
 		self:RemoveAllData()
+		NP.lastPins = 0
 		if not (ns.db and S().map) then return end
 		local map = self:GetMap()
 		local shown = map:GetMapID()
 		if not shown then return end
-		for _, p in ipairs(NP:Points(shown)) do map:AcquirePin(PIN_TEMPLATE, p, shown) end
+		for _, p in ipairs(NP:Points(shown)) do
+			map:AcquirePin(PIN_TEMPLATE, p, shown)
+			NP.lastPins = NP.lastPins + 1
+		end
+	end
+	function Provider:RefreshAllData()
+		local ok, err = pcall(Fill, self)
+		NP.lastError = not ok and tostring(err) or nil
+		if not ok then ns.Debug("node map pins: " .. tostring(err)) end
 	end
 	function Provider:OnMapChanged() self:RefreshAllData() end
 end
@@ -162,7 +193,7 @@ local function CreateMapButton()
 	b.icon = b:CreateTexture(nil, "ARTWORK")
 	b.icon:SetPoint("TOPLEFT", 2, -2)
 	b.icon:SetPoint("BOTTOMRIGHT", -2, 2)
-	b.icon:SetTexture("Interface\\Icons\\Trade_Herbalism")
+	b.icon:SetTexture(GATHER_ICON)
 	b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	if b.CreateMaskTexture and b.icon.AddMaskTexture then
 		local mask = b:CreateMaskTexture()
@@ -320,6 +351,7 @@ local function UpdateMinimap()
 	for i = used + 1, #mmPins do
 		if mmPins[i].point then mmPins[i]:Hide() mmPins[i].point = nil end
 	end
+	NP.mmShown = used
 end
 
 local ticker = CreateFrame("Frame")
@@ -331,6 +363,134 @@ ticker:SetScript("OnUpdate", function(_, dt)
 	if not ok then ns.Debug("node minimap: " .. tostring(err)) end
 end)
 
+
+---------------------------------------------------------------------------
+-- Minimap button: on the minimap's rim, like the Almanac's own button.
+-- Left-click: show / hide the pins on the minimap; right-click: settings; drag: move it around.
+---------------------------------------------------------------------------
+
+-- first placement: a little clockwise of the Almanac's own button, wherever you put that,
+-- so the two never sit on top of each other
+local function DefaultAngle()
+	local book = ns.db.settings.minimap and ns.db.settings.minimap.angle or 200
+	return (book + 55) % 360
+end
+
+local function PlaceMiniButton(b)
+	if not S().mmPos then S().mmPos = DefaultAngle() end
+	local angle = math.rad(S().mmPos)
+	local radius = Minimap:GetWidth() / 2 + 10
+	b:ClearAllPoints()
+	b:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * radius, math.sin(angle) * radius)
+end
+
+local function DragMiniButton(b)
+	local mx, my = Minimap:GetCenter()
+	local cx, cy = GetCursorPosition()
+	local scale = Minimap:GetEffectiveScale()
+	S().mmPos = math.deg(math.atan2(cy / scale - my, cx / scale - mx))
+	PlaceMiniButton(b)
+end
+
+local function MiniButtonTooltip(self)
+	GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+	GameTooltip:AddLine(L["Gathering nodes"])
+	GameTooltip:AddLine(S().minimap and L["|cffffd100Left-click:|r hide them on the minimap"] or L["|cffffd100Left-click:|r show where you gathered and sighted herbs, veins and chests on the minimap"], 1, 1, 1)
+	GameTooltip:AddLine(L["|cffffd100Right-click:|r settings"], 1, 1, 1)
+	GameTooltip:AddLine(L["|cffffd100Drag:|r move around the minimap"], 1, 1, 1)
+	if S().minimap then GameTooltip:AddLine((L["Nearby: %d"]):format(NP.mmShown or 0), 0.6, 0.6, 0.6) end
+	GameTooltip:Show()
+end
+
+local function CreateMiniButton()
+	local b = CreateFrame("Button", "AzerothAlmanacNodesMinimapButton", Minimap)
+	b:SetSize(31, 31)
+	b:SetFrameStrata("MEDIUM")
+	b:SetFrameLevel(9)
+	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	b:RegisterForDrag("LeftButton")
+	b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+	local bg = b:CreateTexture(nil, "BACKGROUND")
+	bg:SetSize(20, 20)
+	bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+	bg:SetPoint("TOPLEFT", 7, -5)
+	b.icon = b:CreateTexture(nil, "ARTWORK")
+	b.icon:SetSize(18, 18)
+	b.icon:SetPoint("TOPLEFT", 7, -6)
+	b.icon:SetTexture(GATHER_ICON)
+	if b.CreateMaskTexture and b.icon.AddMaskTexture then
+		local mask = b:CreateMaskTexture()
+		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+		mask:SetAllPoints(b.icon)
+		b.icon:AddMaskTexture(mask)
+	else
+		b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	end
+	local border = b:CreateTexture(nil, "OVERLAY")
+	border:SetSize(53, 53)
+	border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+	border:SetPoint("TOPLEFT")
+
+	b:SetScript("OnClick", function(self, button)
+		if button == "RightButton" then
+			GameTooltip:Hide()
+			if ns.Settings then ns.Settings:Open("nodes") end
+			return
+		end
+		S().minimap = not S().minimap
+		PlaySound(S().minimap and (SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856) or (SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF or 857))
+		NP:Refresh()
+		pcall(UpdateMinimap)
+		MiniButtonTooltip(self)
+	end)
+	b:SetScript("OnDragStart", function(self)
+		GameTooltip:Hide()
+		self:SetScript("OnUpdate", DragMiniButton)
+	end)
+	b:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+	b:SetScript("OnEnter", MiniButtonTooltip)
+	b:SetScript("OnLeave", GameTooltip_Hide)
+	function b:UpdateLook()
+		local on = S().minimap
+		self.icon:SetDesaturated(not on)
+		self.icon:SetAlpha(on and 1 or 0.5)
+		self:SetShown(S().mmButton ~= false)
+	end
+	PlaceMiniButton(b)
+	b:UpdateLook()
+	return b
+end
+
+function NP:ResetMiniButton()
+	S().mmPos = DefaultAngle()
+	if self.miniButton then PlaceMiniButton(self.miniButton) end
+end
+
+---------------------------------------------------------------------------
+-- /aa maptest: what the world map side is doing
+---------------------------------------------------------------------------
+
+function NP:Diagnose(out)
+	local map = WorldMapFrame
+	local shown = map and map.GetMapID and map:GetMapID()
+	out[#out + 1] = ("Gathering pins: provider %s, mixin %s, world map setting %s"):format(
+		self.provider and "yes" or "NO", (AzerothAlmanacNodePinMixin and AzerothAlmanacNodePinMixin.SetPosition) and "ready" or "NOT READY",
+		tostring(ns.db and S().map))
+	if shown then
+		local n = 0
+		if map.EnumeratePinsByTemplate then
+			local level
+			local ok = pcall(function() for pin in map:EnumeratePinsByTemplate(PIN_TEMPLATE) do n = n + 1 level = level or pin:GetFrameLevel() end end)
+			local canvas = map.ScrollContainer and map.ScrollContainer.Child
+			if level and canvas then out[#out + 1] = ("  pin frame level %d (map canvas %d)"):format(level, canvas:GetFrameLevel()) end
+			if not ok then n = -1 end
+		end
+		out[#out + 1] = ("  map %d: %d spots in the records, %d pins asked for, %d pins on the map"):format(
+			shown, #self:Points(shown), self.lastPins or 0, n)
+	end
+	if self.lastError then out[#out + 1] = "  |cffff6060last error:|r " .. self.lastError end
+end
+
 ---------------------------------------------------------------------------
 -- Module
 ---------------------------------------------------------------------------
@@ -339,10 +499,13 @@ function NP:Refresh()
 	mmDirty = true
 	if self.provider then pcall(self.provider.RefreshAllData, self.provider) end
 	if self.button then self.button:UpdateLook() end
+	if self.miniButton then self.miniButton:UpdateLook() end
 end
 
 function NP:OnLogin()
 	pcall(self.SetupWorldMap, self)
+	local ok, b = pcall(CreateMiniButton)
+	if ok then self.miniButton = b else ns.Print("gathering minimap button failed: " .. tostring(b)) end
 end
 ns:RegisterEvent("ADDON_LOADED", function(_, name)
 	if name == "Blizzard_WorldMap" then pcall(NP.SetupWorldMap, NP) end

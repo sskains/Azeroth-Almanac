@@ -29,6 +29,86 @@ local function TryAtlas(t, ...)
 end
 W.TryAtlas = TryAtlas
 
+---------------------------------------------------------------------------
+-- Item clicks, the game's way, for every item the Almanac shows (slots, lists, icons):
+-- Ctrl-click (the game's DRESSUP binding) tries it on in the dressing room, Shift-click
+-- (CHATLINK) links it in chat. Holding Ctrl over something you can wear shows the magnifier.
+---------------------------------------------------------------------------
+
+local function Modified(action, fallback)
+	if IsModifiedClick then return IsModifiedClick(action) end
+	return fallback and fallback() or false
+end
+
+local function ItemLink(item)
+	if type(item) == "string" then return item end
+	if not item then return nil end
+	local getInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+	local ok, _, link = pcall(getInfo, item)
+	return ok and link or nil
+end
+
+-- can it go on the dressing room model? (armour, weapons, tabards, shirts)
+function W.IsDressable(item)
+	if not item then return false end
+	local id = type(item) == "number" and item or tonumber(tostring(item):match("item:(%d+)"))
+	if C_Item and C_Item.IsDressableItemByID and id then
+		local ok, yes = pcall(C_Item.IsDressableItemByID, id)
+		if ok then return yes and true or false end
+	end
+	if IsDressableItem then
+		local ok, yes = pcall(IsDressableItem, ItemLink(item) or ("item:" .. tostring(id)))
+		if ok then return yes and true or false end
+	end
+	local instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+	local equipLoc = instant and id and select(4, instant(id))
+	return equipLoc ~= nil and equipLoc ~= "" and equipLoc ~= "INVTYPE_BAG" and equipLoc ~= "INVTYPE_AMMO"
+		and equipLoc ~= "INVTYPE_QUIVER" and equipLoc ~= "INVTYPE_NON_EQUIP_IGNORE"
+end
+
+-- handles a modified click on an item (ID or link); true when it did something with it
+function W.ItemModifiedClick(item)
+	if not item then return false end
+	if Modified("DRESSUP", IsControlKeyDown) then
+		if W.IsDressable(item) then
+			local link = ItemLink(item) or ("item:" .. tostring(item))
+			local dress = DressUpItemLink or DressUpLink
+			if dress then pcall(dress, link) end
+		end
+		return true   -- Ctrl-click never also opens a page, as in the game's own windows
+	end
+	if Modified("CHATLINK", IsShiftKeyDown) then
+		local link = ItemLink(item)
+		-- true only when a chat box took it, so Shift-click still opens pages otherwise
+		if link and ChatEdit_InsertLink and ChatEdit_InsertLink(link) then return true end
+	end
+	return false
+end
+
+-- the magnifier while Ctrl is held over a wearable item; getItem(frame) returns its ID or link
+local function CursorFor(frame)
+	local item = frame.itemCursorGet and frame.itemCursorGet(frame)
+	if item and Modified("DRESSUP", IsControlKeyDown) and W.IsDressable(item) and ShowInspectCursor then
+		ShowInspectCursor()
+	elseif ResetCursor then
+		ResetCursor()
+	end
+end
+function W.ItemCursor(frame, getItem)
+	frame.itemCursorGet = getItem
+	frame:HookScript("OnEnter", function(self)
+		CursorFor(self)
+		self:RegisterEvent("MODIFIER_STATE_CHANGED")
+	end)
+	frame:HookScript("OnLeave", function(self)
+		self:UnregisterEvent("MODIFIER_STATE_CHANGED")
+		if ResetCursor then ResetCursor() end
+	end)
+	frame:HookScript("OnEvent", function(self, event)
+		if event == "MODIFIER_STATE_CHANGED" and self:IsMouseOver() then CursorFor(self) end
+	end)
+end
+
 local function Try(frameType, name, parent, template)
 	local ok, f = pcall(CreateFrame, frameType, name, parent, template)
 	if ok and f then return f, true end
@@ -55,23 +135,23 @@ W.FONT_SMALL = function() return Font("QuestFontNormalSmall", "GameFontBlackSmal
 -- Icons are lists of candidates: some icon files don't exist on this client (INV_Misc_Map_01 shows a
 -- red X), so the first one the game can load is used, and the book icon is the last resort.
 W.KIND = {
-	zone = { label = L["Zone"], icon = { "INV_Scroll_03", "INV_Misc_Map08", "INV_Misc_Map02" } },
+	zone = { label = L["Zone"], icon = { 4624629, "INV_Scroll_03", "INV_Misc_Map08" } },   -- 4624629 picked in game with /aa whatis
 	subzone = { label = L["Place"], icon = { "INV_Misc_Map02" } },
-	instance = { label = L["Dungeon"], icon = { "INV_Misc_Key_14", "INV_Misc_Key_03", "INV_Misc_Key_10" } },
+	instance = { label = L["Dungeon"], icon = { 655958, "INV_Misc_Key_14", "INV_Misc_Key_03" } },   -- 655958 picked in game with /aa whatis
 	level = { label = L["Level"], icon = { "Spell_Holy_SurgeOfLight", "Spell_Holy_HolyBolt", "Spell_ChargePositive" } },
 	character = { label = L["Character"], icon = { "INV_Misc_GroupNeedMore", "Achievement_Character_Human_Male", "INV_Misc_Head_Human_01" } },
-	item = { label = L["Item"], icon = { "INV_Chest_Chain_05", "INV_Misc_Bag_08" } },
+	item = { label = L["Item"], icon = { 515958, "INV_Chest_Chain_05", "INV_Misc_Bag_08" } },   -- 515958 picked in game with /aa whatis
 	merchant = { label = L["Merchant"], icon = { "INV_Misc_Coin_02", "INV_Misc_Coin_01" } },
-	creature = { label = L["Creature"], icon = { "INV_Misc_Head_Dragon_01", "Ability_Hunter_Pet_Wolf", "INV_Misc_MonsterClaw_04" } },
-	quest = { label = L["Quest"], icon = { "INV_Misc_Note_01", "INV_Letter_15", "INV_Scroll_03" } },
+	creature = { label = L["Creature"], icon = { 656556, "INV_Misc_Head_Dragon_01", "Ability_Hunter_Pet_Wolf" } },   -- 656556 picked in game with /aa whatis
+	quest = { label = L["Quest"], icon = { 979575, "INV_Misc_Note_01", "INV_Letter_15" } },   -- 979575 picked in game with /aa whatis
 	npc = { label = L["Quest giver"], icon = { "INV_Misc_Head_Human_01", "Achievement_Character_Human_Male" } },
 	object = { label = L["Quest object"], icon = { "INV_Misc_Note_02", "INV_Scroll_03" } },
 	trainer = { label = L["Trainer"], icon = { "INV_Misc_Book_08", "INV_Scroll_04" } },
 	spell = { label = L["Spell or recipe"], icon = { "INV_Scroll_04", "INV_Misc_Book_08" } },
-	townsfolk = { label = L["Townsfolk"], icon = { "INV_Misc_Spyglass_03", "INV_Misc_Head_Human_01" } },
+	townsfolk = { label = L["People"], icon = { 8197123, "INV_Misc_Spyglass_03", "INV_Misc_Head_Human_01" } },   -- 8197123 picked in game with /aa whatis
 	mailbox = { label = L["Mailbox"], icon = { "INV_Letter_15" } },
 	flight = { label = L["Flight path"], icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" } },
-	node = { label = L["Gathering"], icon = { "Trade_Herbalism", "INV_Misc_Herb_07", "Trade_Mining" } },
+	node = { label = L["Gathering"], icon = { 237271, "Trade_Herbalism", "INV_Misc_Herb_07" } },   -- 237271 picked in game with /aa whatis
 	fishing = { label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" } },
 	milestone = { label = L["Milestone"], icon = { "INV_Misc_Ribbon_01", "Spell_Holy_ChampionsBond", "INV_Misc_Note_06" } },
 }
@@ -124,7 +204,59 @@ end
 
 -- the game's own minimal scroll bar (the Map & Quest Log's): a thin track with end caps, a thin
 -- thumb and small arrows, drawn over the old template's bar
+-- Mouse-wheel scrolling: the scroll template jumps half of what's visible per notch, which flies
+-- past whole sections on tall pages. Every Almanac scroll area moves a fixed step instead
+-- (scroll.wheelStep: lists 3 rows, pages 40 px), times the Scroll speed setting, gliding there
+-- over a moment when smooth scrolling is on. Shift + wheel keeps the old half-page jump.
+local smoothing, wheelDriver = {}, nil
+local function WheelSettings()
+	local w = ns.db and ns.db.settings and ns.db.settings.window
+	return ((w and w.scroll) or 100) / 100, not (w and w.smooth == false)
+end
+local function StepSmooth(self, elapsed)
+	for scroll, target in pairs(smoothing) do
+		local range = scroll:GetVerticalScrollRange() or 0
+		if target > range then target = range smoothing[scroll] = range end
+		local cur = scroll:GetVerticalScroll() or 0
+		local d = target - cur
+		if math.abs(d) < 0.5 or not scroll:IsVisible() then
+			scroll:SetVerticalScroll(target)
+			smoothing[scroll] = nil
+		else
+			scroll:SetVerticalScroll(cur + d * math.min(1, elapsed * 16))
+		end
+	end
+	if not next(smoothing) then self:Hide() end
+end
+function W.WheelScroll(scroll, step)
+	if step then scroll.wheelStep = step end
+	if scroll.almanacWheel then return end
+	scroll.almanacWheel = true
+	scroll.wheelStep = scroll.wheelStep or 40
+	if scroll.EnableMouseWheel then scroll:EnableMouseWheel(true) end
+	scroll:SetScript("OnMouseWheel", function(self, delta)
+		local range = self:GetVerticalScrollRange() or 0
+		if range <= 0 then return end
+		local speed, smooth = WheelSettings()
+		local amount = IsShiftKeyDown() and (self:GetHeight() or 0) / 2 or self.wheelStep * speed
+		local from = smoothing[self] or self:GetVerticalScroll() or 0
+		local to = math.max(0, math.min(range, from - delta * amount))
+		if smooth then
+			smoothing[self] = to
+			if not wheelDriver then
+				wheelDriver = CreateFrame("Frame")
+				wheelDriver:SetScript("OnUpdate", StepSmooth)
+			end
+			wheelDriver:Show()
+		else
+			smoothing[self] = nil
+			self:SetVerticalScroll(to)
+		end
+	end)
+end
+
 function W.SkinScroll(scroll)
+	W.WheelScroll(scroll)
 	local bar = type(scroll.ScrollBar) == "table" and scroll.ScrollBar or nil
 	if not bar or bar.almanacSkin then return end
 	if not (C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("minimal-scrollbar-track-top")) then return end
@@ -182,6 +314,10 @@ function W.FitScrollBar(scroll, contentHeight)
 end
 
 -- a recessed panel (the dark marble inset of the character and quest windows)
+-- Dark panels: the game's inset frame, filled with the profession window's recipe list background
+-- (the dark leather behind the recipe list; the auction house's list background where it's
+-- missing). Panels with a painting (W.Art) show it on top of this.
+W.LIST_BG = { "Professions-background-summarylist", "auctionhouse-background-summarylist" }
 function W.Inset(parent)
 	local f = CreateFrame("Frame", nil, parent)
 	local ok, inset = pcall(CreateFrame, "Frame", nil, f, "InsetFrameTemplate")
@@ -194,6 +330,11 @@ function W.Inset(parent)
 		bg:SetAllPoints()
 		bg:SetColorTexture(0, 0, 0, 0.45)
 	end
+	local host = f.inset or f
+	local list = host:CreateTexture(nil, "BACKGROUND", nil, 2)
+	list:SetPoint("TOPLEFT", 3, -3)
+	list:SetPoint("BOTTOMRIGHT", -3, 3)
+	if TryAtlas(list, unpack(W.LIST_BG)) then f.listBg = list else list:Hide() end
 	return f
 end
 
@@ -342,75 +483,160 @@ W.WHITE, W.CIRCLE = WHITE, CIRCLE
 W.GOLD = { 1, 0.82, 0.25 }
 W.SELECTED = { 0.45, 0.33, 0.12, 0.5 }
 
-local function DefaultRow(parent, height, round)
+-- An atlas stretched sideways without stretching its ends: cut into left / middle / right from the
+-- atlas's own coordinates (cap = source pixels kept at each end). Returns a frame, or nil when the
+-- client lacks the atlas. Used for the quest log / Skills window heading boxes.
+function W.Slice3(parent, atlas, cap, layer)
+	if not (C_Texture and C_Texture.GetAtlasInfo) then return nil end
+	local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
+	if not ok or not info then return nil end
+	local file = info.file or info.filename
+	local l, r, t, b = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
+	cap = cap or 12
+	local capU = (r - l) * (cap / (info.width or 64))
+	local f = CreateFrame("Frame", nil, parent)
+	local function Piece(u0, u1)
+		local tex = f:CreateTexture(nil, layer or "BACKGROUND")
+		tex:SetTexture(file)
+		tex:SetTexCoord(u0, u1, t, b)
+		return tex
+	end
+	local left, right, mid = Piece(l, l + capU), Piece(r - capU, r), Piece(l + capU, r - capU)
+	f:SetScript("OnSizeChanged", function(self, _, h)
+		local w = math.floor(cap * (h or 0) / (info.height or 28) + 0.5)
+		left:SetWidth(w) right:SetWidth(w)
+	end)
+	left:SetPoint("TOPLEFT") left:SetPoint("BOTTOMLEFT") left:SetWidth(cap)
+	right:SetPoint("TOPRIGHT") right:SetPoint("BOTTOMRIGHT") right:SetWidth(cap)
+	mid:SetPoint("TOPLEFT", left, "TOPRIGHT") mid:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
+	return f
+end
+
+-- List rows as in the profession window's recipe list: grey glow under the mouse
+-- (Professions_Recipe_Hover, captured with /aa whatis), the gold bar on the selected entry
+-- (Professions_Recipe_Active). The flat fills stay where the client lacks the art.
+function W.RowHover(tex)
+	if TryAtlas(tex, "Professions_Recipe_Hover") then tex:SetVertexColor(1, 1, 1, 1) return true end
+	tex:SetColorTexture(1, 1, 1, 0.05)
+	return false
+end
+function W.RowSelected(tex)
+	if TryAtlas(tex, "Professions_Recipe_Active", "Professions_Recipe_Selected") then tex:SetVertexColor(1, 1, 1, 1) return true end
+	tex:SetColorTexture(unpack(W.SELECTED))
+	return false
+end
+
+-- style "log": the Map & Quest Log's look (the Quests page's rows, shared): headings in the gold-edged
+-- box (common-button-list-collapseExpand, 3-sliced) with light text and a gold - / +, entries in the
+-- quest titles' font, the log's yellow glow (QuestLog-quest-glow-yellow) under the mouse and on the
+-- selected entry. The box is its own layer and the words / icons sit on a layer above it.
+local function LogGlow(row, layer, alpha)
+	local g = row:CreateTexture(nil, layer, nil, 1)
+	g:SetPoint("TOPLEFT", 20, 0)
+	g:SetPoint("BOTTOMRIGHT", -24, 0)
+	if not TryAtlas(g, "QuestLog-quest-glow-yellow") then g:SetColorTexture(1, 0.82, 0.2, 0.12) end
+	g:SetAlpha(alpha)
+	return g
+end
+
+local function DefaultRow(parent, height, round, style)
 	local row = CreateFrame("Button", nil, parent)
 	row:SetHeight(height)
 	row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	local hover = row:CreateTexture(nil, "HIGHLIGHT")
-	hover:SetAllPoints()
-	hover:SetColorTexture(1, 1, 1, 0.05)
+	local log = style == "log"
+	local hover, sel
+	if log then
+		hover = LogGlow(row, "HIGHLIGHT", 0.6)
+		sel = LogGlow(row, "BACKGROUND", 1)
+	else
+		hover = row:CreateTexture(nil, "HIGHLIGHT")
+		hover:SetAllPoints()
+		W.RowHover(hover)
+		sel = row:CreateTexture(nil, "BACKGROUND")
+		sel:SetPoint("TOPLEFT", 0, -1)
+		sel:SetPoint("BOTTOMRIGHT", 0, 1)
+		W.RowSelected(sel)
+	end
 	row.hover = { hover }
-	local sel = row:CreateTexture(nil, "BACKGROUND")
-	sel:SetPoint("TOPLEFT", 0, -1)
-	sel:SetPoint("BOTTOMRIGHT", 0, 1)
-	sel:SetColorTexture(unpack(W.SELECTED))
+	-- log style: the heading box, and a layer above it for everything drawn on the row
+	local layer = row
+	if log then
+		row.bar = W.Slice3(row, "common-button-list-collapseExpand", 14)
+		if not row.bar then
+			row.bar = CreateFrame("Frame", nil, row)
+			local t = row.bar:CreateTexture(nil, "BACKGROUND")
+			t:SetAllPoints()
+			t:SetColorTexture(0.2, 0.14, 0.06, 0.9)
+		end
+		row.bar:SetPoint("TOPLEFT", 2, -1)
+		row.bar:SetPoint("BOTTOMRIGHT", -2, 1)
+		row.bar:SetFrameLevel(row:GetFrameLevel() + 1)
+		row.bar:Hide()
+		layer = CreateFrame("Frame", nil, row)
+		layer:SetAllPoints()
+		layer:SetFrameLevel(row:GetFrameLevel() + 2)
+	end
 	row.sel = { sel }
 	row.selected = { SetShown = function(_, on) sel:SetShown(on and true or false) end, Hide = function() sel:Hide() end }
 	sel:Hide()
-	row.icon = row:CreateTexture(nil, "ARTWORK")
+	row.icon = layer:CreateTexture(nil, "ARTWORK")
 	local size = height - (round and 6 or 8)
 	row.icon:SetSize(size, size)
 	row.icon:SetPoint("LEFT", 4, 0)
 	row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	-- the frame round the icon follows the icon wherever a page moves it
 	if round then
-		row.ring = row:CreateTexture(nil, "BORDER")
+		row.ring = layer:CreateTexture(nil, "BORDER")
 		row.ring:SetTexture(CIRCLE)
 		row.ring:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -2, 2)
 		row.ring:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 2, -2)
 		row.ring:SetVertexColor(0.62, 0.5, 0.24)
-		local mask = row:CreateMaskTexture()
+		local mask = layer:CreateMaskTexture()
 		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		mask:SetAllPoints(row.icon)
 		if row.icon.AddMaskTexture then row.icon:AddMaskTexture(mask) end
 	else
-		row.ring = row:CreateTexture(nil, "BORDER")
+		row.ring = layer:CreateTexture(nil, "BORDER")
 		row.ring:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -1, 1)
 		row.ring:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 1, -1)
 		row.ring:SetColorTexture(0.32, 0.26, 0.15, 1)
 	end
 	function row:SetRing(r, g, b) if round then self.ring:SetVertexColor(r, g, b) end end
-	row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	row.text = layer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	row.text:SetPoint("LEFT", row.icon, "RIGHT", 7, 0)
 	row.text:SetJustifyH("LEFT")
 	row.text:SetWordWrap(false)
-	row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	row.right = layer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	row.right:SetPoint("RIGHT", -6, 0)
 	row.right:SetJustifyH("RIGHT")
 	row.text:SetPoint("RIGHT", row.right, "LEFT", -6, 0)
 	-- headings: the list's own - / +, greyed to sit with the grey capitals
-	row.state = row:CreateTexture(nil, "ARTWORK")
+	row.state = layer:CreateTexture(nil, "ARTWORK")
 	row.state:SetPoint("RIGHT", -8, 0)
 	local nativeState = TryAtlas(row.state, "common-button-list-minus")
 	local plusBar
 	if not nativeState then
 		row.state:SetSize(9, 2)
 		row.state:SetColorTexture(1, 1, 1, 1)
-		plusBar = row:CreateTexture(nil, "ARTWORK")
+		plusBar = layer:CreateTexture(nil, "ARTWORK")
 		plusBar:SetSize(2, 9)
 		plusBar:SetPoint("CENTER", row.state, "CENTER")
 		plusBar:SetColorTexture(1, 1, 1, 1)
 		plusBar:SetVertexColor(0.6, 0.6, 0.6)
 	end
 	row.state:SetVertexColor(0.6, 0.6, 0.6)
-	if row.state.SetDesaturated then row.state:SetDesaturated(true) end
+	if row.state.SetDesaturated then row.state:SetDesaturated(not log) end
+	if log then row.state:SetVertexColor(1, 1, 1) row.state:SetPoint("RIGHT", -10, 0) end
 	function row:SetHeader(on, collapsed)
 		self.isHeader = on
+		hover:SetShown(not on)   -- headings have their own look; no row glow on them
 		self.state:SetShown(on)
+		if self.bar then self.bar:SetShown(on) end
 		if on and nativeState then
-			if collapsed then TryAtlas(self.state, "common-button-list-plus") self.state:SetSize(10, 10)
-			else TryAtlas(self.state, "common-button-list-minus") self.state:SetSize(10, 3) end
-			self.state:SetVertexColor(0.6, 0.6, 0.6)
+			local big = log and 12 or 10
+			if collapsed then TryAtlas(self.state, "common-button-list-plus") self.state:SetSize(big, big)
+			else TryAtlas(self.state, "common-button-list-minus") self.state:SetSize(big, 3) end
+			if log then self.state:SetVertexColor(1, 1, 1) else self.state:SetVertexColor(0.6, 0.6, 0.6) end
 		end
 		if plusBar then plusBar:SetShown(on and collapsed and true or false) end
 		self.right:ClearAllPoints()
@@ -430,6 +656,16 @@ local function DefaultRow(parent, height, round)
 		self.ring:Hide()
 		local text = self.text:GetText() or ""
 		text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+		if log then
+			-- the quest log's headings: light, a size up from the entries, as written
+			self.text:SetFontObject(Font("GameFontHighlightMedium", "GameFontNormalMed1", "GameFontHighlight"))
+			self.text:SetTextColor(0.86, 0.84, 0.78)
+			self.text:ClearAllPoints()
+			self.text:SetPoint("LEFT", 10, 0)
+			self.text:SetPoint("RIGHT", self.right, "LEFT", -6, 0)
+			self.text:SetText(text)
+			return
+		end
 		self.text:SetFontObject(GameFontDisableSmall)
 		self.text:SetTextColor(0.62, 0.62, 0.62)
 		self.text:ClearAllPoints()
@@ -452,7 +688,7 @@ local function DefaultRow(parent, height, round)
 		self.text:SetShown(not on)
 		self.right:SetShown(not on)
 		hover:SetShown(not on)
-		if on then self:SetHeader(false) self.selected:Hide() end
+		if on then self:SetHeader(false) self.selected:Hide() if self.bar then self.bar:Hide() end end
 		self:EnableMouse(not on)
 	end
 	row:SetHeader(false)
@@ -468,6 +704,7 @@ function W.List(parent, opts)
 	local rh = opts.rowHeight or 22
 	local scroll = Try("ScrollFrame", nil, holder, "UIPanelScrollFrameTemplate")
 	W.SkinScroll(scroll)
+	W.WheelScroll(scroll, rh * 3) -- three rows a notch
 	scroll:SetPoint("TOPLEFT", 4, -4)
 	scroll:SetPoint("BOTTOMRIGHT", -24, 4)
 	local child = CreateFrame("Frame", nil, scroll)
@@ -551,13 +788,15 @@ function W.List(parent, opts)
 			local row = rows[i]
 			if i <= visible and data[index] then
 				if not row then
-					row = (opts.build and opts.build(child, rh)) or DefaultRow(child, rh, opts.round)
+					row = (opts.build and opts.build(child, rh)) or DefaultRow(child, rh, opts.round, opts.style)
 					row:SetScript("OnClick", function(self, mouse)
 						if self.item == nil then return end
 						-- headings fold; they're never "selected" (that would drop the record being read)
 						if mouse == "LeftButton" and self.item.header == nil then holder:Select(self.item) end
 						if opts.onClick then opts.onClick(self.item, self.index, mouse) end
 					end)
+					-- lists of items: the magnifier while Ctrl is held, as on item slots
+					if opts.itemOf then W.ItemCursor(row, function(r) return r.item and opts.itemOf(r.item) end) end
 					rows[i] = row
 				end
 				row:ClearAllPoints()
@@ -589,7 +828,7 @@ function W.List(parent, opts)
 	function holder:SetData(items)
 		data = {}
 		for i, it in ipairs(items or {}) do
-			if i > 1 and (it.header ~= nil or it.kind == "zone" or it.kind == "header") then data[#data + 1] = { spacer = true } end
+			if opts.spacers ~= false and opts.style ~= "log" and i > 1 and (it.header ~= nil or it.kind == "zone" or it.kind == "header") then data[#data + 1] = { spacer = true } end
 			data[#data + 1] = it
 		end
 		local maxScroll = math.max(#data * rh - (scroll:GetHeight() or 0), 0)
@@ -646,7 +885,7 @@ end
 -- row, with the game's own tooltip on hover (shift-click links an item in chat).
 -- pane:SetBlocks({
 --   { "title", "Thistlefur Shaman" }, { "banner", "General" }, { "stat", "Level", "23-24" },
---   { "bar", "Studied", 7, 10, "7 / 10 kills" }, { "body", text }, { "small", text }, { "gap", 8 },
+--   { "bar", "Studied", 7, 10, "7 / 10 kills" }, { "skillbar", nil, 7, 10, "7 / 10" } (the blue skills bar), { "body", text }, { "small", text }, { "gap", 8 },
 --   { "slots", { { item = 2592, note = "3 / 4 (75%)" }, { spell = 11986, note = "seen" }, { icon = 132000, name = "...", note = "..." } } },
 -- }, emptyText)
 ---------------------------------------------------------------------------
@@ -857,6 +1096,37 @@ function W.Portrait(parent, size)
 	return p
 end
 
+-- The target frame's dragon round a round portrait, by creature class: gold for elites and bosses,
+-- silver for rares, silver-winged for rare elites (the classic target frame sheets). The dragon is
+-- cut from the 256 x 128 sheet at x 146..256, y 0..100; its portrait hole is 64 px across, centred
+-- 36 px from the cut's left and 44 px from its top, so it wraps the right side of the portrait.
+-- Returns true when a dragon shows. anchor = the round portrait region, diameter = its size.
+local DRAGON = {
+	elite = "Interface\\TargetingFrame\\UI-TargetingFrame-Elite",
+	worldboss = "Interface\\TargetingFrame\\UI-TargetingFrame-Elite",
+	boss = "Interface\\TargetingFrame\\UI-TargetingFrame-Elite",
+	rare = "Interface\\TargetingFrame\\UI-TargetingFrame-Rare",
+	rareelite = "Interface\\TargetingFrame\\UI-TargetingFrame-Rare-Elite",
+}
+W.DRAGON = DRAGON
+function W.DragonFor(rec)
+	if not rec then return nil end
+	if rec.boss then return "boss" end
+	return DRAGON[rec.class or ""] and rec.class or nil
+end
+function W.SetDragon(tex, kind, anchor, diameter)
+	local file = kind and DRAGON[kind]
+	if not file then tex:Hide() return false end
+	local k = diameter / 64
+	tex:SetTexture(file)
+	tex:SetTexCoord(146 / 256, 1, 0, 100 / 128)
+	tex:SetSize(110 * k, 100 * k)
+	tex:ClearAllPoints()
+	tex:SetPoint("TOPLEFT", anchor, "CENTER", -36 * k, 44 * k)
+	tex:Show()
+	return true
+end
+
 -- a skill-window bar: dark track, coloured fill, thin frame, text on top
 -- The profession window's skill bar: Profession-ProgressBar-BG behind, the profession's animated
 -- fill art (one frame of its flip-book sheet, cut to the filled part), a flare at the edge, the
@@ -1003,6 +1273,50 @@ function W.Bar(parent, flavor)
 	return f
 end
 
+-- the character sheet's skill bar: a blue fill in the skills tab's thin metal border, the count
+-- in the middle. Same calls as W.Bar (Set, SetFlavor (nothing to do), .bar, .label).
+function W.SkillBar(parent)
+	local f = CreateFrame("Frame", nil, parent)
+	f:SetHeight(20)
+	f.label = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.label:SetPoint("LEFT", 0, 0)
+	local bar = CreateFrame("StatusBar", nil, f)
+	bar:SetPoint("LEFT", 6, 0)
+	bar:SetPoint("RIGHT", -6, 0)
+	bar:SetHeight(15)
+	bar:SetStatusBarTexture("Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar")
+	bar:SetStatusBarColor(0.25, 0.25, 0.75)
+	bar:SetMinMaxValues(0, 1)
+	f.bar = bar
+	bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+	bar.bg:SetAllPoints()
+	bar.bg:SetColorTexture(0, 0, 0, 0.55)
+	-- the border (281 x 32 round a 270 x 15 bar, 5 out on the left), its ends kept by slices
+	local border = CreateFrame("Frame", nil, bar)
+	border:SetFrameLevel(bar:GetFrameLevel() + 2)
+	border:SetPoint("LEFT", bar, "LEFT", -5, 0)
+	border:SetPoint("RIGHT", bar, "RIGHT", 6, 0)
+	border:SetHeight(32)
+	bar.border = border:CreateTexture(nil, "OVERLAY")
+	bar.border:SetAllPoints()
+	bar.border:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-Skills-BarBorder")
+	if bar.border.SetTextureSliceMargins then
+		pcall(bar.border.SetTextureSliceMargins, bar.border, 14, 8, 14, 8)
+		if bar.border.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(bar.border.SetTextureSliceMode, bar.border, Enum.UITextureSliceMode.Stretched) end
+	end
+	bar.text = border:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
+	function f:SetFlavor() end
+	function f:Set(label, cur, max, text)
+		self.label:SetText(label or "")
+		max = math.max(max or 1, 1)
+		bar:SetMinMaxValues(0, max)
+		bar:SetValue(math.max(0, math.min(cur or 0, max)))
+		bar.text:SetText(text or ((cur or 0) .. " / " .. max))
+	end
+	return f
+end
+
 -- a reward-style slot: icon in a quick-slot frame, name plate beside it
 local function Slot(parent)
 	local f = CreateFrame("Button", nil, parent)
@@ -1128,13 +1442,11 @@ local function Slot(parent)
 	f:SetScript("OnLeave", function(self) self.cardHover:Hide() GameTooltip_Hide() end)
 	f:SetScript("OnClick", function(self)
 		local e = self.entry
+		-- Ctrl-click: dressing room, Shift-click: chat link; before the slot's own click
+		if e and e.item and W.ItemModifiedClick(e.item) then return end
 		if e and e.onClick then return e.onClick(e) end
-		if e and e.item and IsModifiedClick and IsModifiedClick("CHATLINK") and ChatEdit_InsertLink then
-			local getInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-			local _, link = getInfo(e.item)
-			if link then ChatEdit_InsertLink(link) end
-		end
 	end)
+	W.ItemCursor(f, function(self) return self.entry and self.entry.item end)
 	return f
 end
 
@@ -1300,13 +1612,14 @@ function W.Detail(parent, top, style)
 	local root = CreateFrame("Frame", nil, scroll)
 	root:SetSize(1, 1)
 	scroll:SetScrollChild(root)
+	holder.scroll = scroll   -- pages that move the body (Characters) re-anchor it
 	local child = root
 	if paperPage then
 		child = CreateFrame("Frame", nil, root)
 		child:SetPoint("TOPLEFT", inner, -inner)
 		child:SetSize(1, 1)
 	end
-	local pools = { text = {}, banner = {}, ornate = {}, stat = {}, bar = {}, slot = {} }
+	local pools = { text = {}, banner = {}, ornate = {}, stat = {}, bar = {}, skillbar = {}, slot = {} }
 	local used = {}
 
 	-- the dark reward band of the quest log, drawn behind every block after { "band" }
@@ -1321,6 +1634,13 @@ function W.Detail(parent, top, style)
 	local nativeHead = TryAtlas(bandHead, "QuestLog-reward-header-top")
 	local bandFoot = root:CreateTexture(nil, "BORDER", nil, 1)
 	local nativeFoot = TryAtlas(bandFoot, "QuestLog-reward-bottom")
+	-- { "dark" } on a parchment page: the Almanac's dark panel (the recipe list's background)
+	-- from there down to the reward band, edge to edge, with a bronze rule on top
+	local darkBg = root:CreateTexture(nil, "BACKGROUND", nil, -6)
+	if not TryAtlas(darkBg, unpack(W.LIST_BG)) then darkBg:SetColorTexture(0.06, 0.05, 0.04, 0.97) end
+	local darkEdge = root:CreateTexture(nil, "BORDER")
+	darkEdge:SetHeight(2)
+	darkEdge:SetColorTexture(0.55, 0.42, 0.2, 0.9)
 	local bandEdge = root:CreateTexture(nil, "BORDER")
 	bandEdge:SetHeight(2)
 	bandEdge:SetColorTexture(0.55, 0.42, 0.2, 0.9)
@@ -1328,7 +1648,7 @@ function W.Detail(parent, top, style)
 	local headLabel = child:CreateFontString(nil, "OVERLAY")
 	headLabel:SetFontObject(W.Font("QuestFont_Huge", "QuestTitleFont", "GameFontNormalLarge"))
 	headLabel:SetTextColor(0.9, 0.79, 0.67)
-	for _, t in ipairs({ band, bandHead, bandFoot, bandEdge, headLabel }) do t:Hide() end
+	for _, t in ipairs({ band, bandHead, bandFoot, bandEdge, headLabel, darkBg, darkEdge }) do t:Hide() end
 
 	local function Take(kind, make)
 		used[kind] = (used[kind] or 0) + 1
@@ -1381,7 +1701,7 @@ function W.Detail(parent, top, style)
 		local stripe = 0
 		headLabel:Hide()
 		local placed = {}
-		local bandTop
+		local bandTop, darkTop
 		for _, block in ipairs(blocks or {}) do
 			local kind = block[1]
 			local paper = mode == "parchment"
@@ -1402,6 +1722,14 @@ function W.Detail(parent, top, style)
 					y = y + h + 10
 				else
 					fr:Hide()
+				end
+			elseif kind == "dark" then
+				if style == "parchment" and not darkTop and not bandTop then
+					y = y + 10
+					darkTop = y
+					y = y + 12
+					mode = "dark"
+					stripe = 0
 				end
 			elseif kind == "band" then
 				if style == "parchment" and not bandTop then
@@ -1489,17 +1817,29 @@ function W.Detail(parent, top, style)
 				b:SetFlavor(block[6])
 				b:Set(block[2], block[3], block[4], block[5])
 				y = y + 28
+			elseif kind == "skillbar" then
+				-- the character sheet's blue skill bar (as on a creature's page)
+				local b = Take("skillbar", function() return W.SkillBar(child) end)
+				b:ClearAllPoints()
+				b:SetPoint("TOPLEFT", child, "TOPLEFT", 8, -y - 6)
+				b:SetPoint("RIGHT", child, "RIGHT", -8, 0)
+				b:Set(block[2], block[3], block[4], block[5])
+				y = y + 34
 			elseif kind == "slots" then
 				local list = block[2] or {}
+				-- quest pages use the quest log's reward boxes everywhere (its size: about 170 wide,
+				-- 34 a row); other dark pages keep their wider item cards
+				local box = style == "parchment" or mode ~= "dark"
 				local colW = math.floor((width - 8) / 2)
-				local rowH = mode == "dark" and 44 or 36
+				if box and style == "parchment" then colW = math.min(colW, 170) end
+				local rowH = box and (style == "parchment" and 34 or 36) or 44
 				for n, e in ipairs(list) do
 					local s = Take("slot", function() return Slot(child) end)
 					local col, row = (n - 1) % 2, math.floor((n - 1) / 2)
 					s:ClearAllPoints()
 					s:SetPoint("TOPLEFT", child, "TOPLEFT", 4 + col * (colW + 4), -y - row * rowH)
 					s:SetWidth(colW)
-					s:SetLook(mode == "dark" and "fade" or "box")
+					s:SetLook(box and "box" or "fade")
 					FillSlot(s, e)
 				end
 				y = y + math.ceil(#list / 2) * rowH + 4
@@ -1525,6 +1865,23 @@ function W.Detail(parent, top, style)
 		end
 		for fr in pairs(lastPlaced) do if not placed[fr] then fr:Hide() end end
 		lastPlaced = placed
+		if darkTop then
+			local top0 = darkTop + inner
+			local bottom = bandTop and (bandTop + inner) or math.max(y + 12 + 2 * inner, (scroll:GetHeight() or 0))
+			darkBg:ClearAllPoints()
+			darkBg:SetPoint("TOPLEFT", root, "TOPLEFT", 0, -top0)
+			darkBg:SetPoint("TOPRIGHT", root, "TOPRIGHT", 0, -top0)
+			darkBg:SetHeight(math.max(1, bottom - top0))
+			darkBg:Show()
+			darkEdge:ClearAllPoints()
+			darkEdge:SetPoint("BOTTOMLEFT", darkBg, "TOPLEFT")
+			darkEdge:SetPoint("BOTTOMRIGHT", darkBg, "TOPRIGHT")
+			darkEdge:Show()
+			if not bandTop then y = y + 12 end
+		else
+			darkBg:Hide()
+			darkEdge:Hide()
+		end
 		if bandTop then
 			y = y + 12
 			-- the band runs edge to edge and to the bottom of the page even when the page is short
@@ -1638,6 +1995,15 @@ function W.Menu(anchor, items)
 			row.icon:SetSize(18, 18)
 			row.icon:SetPoint("LEFT", 2, 0)
 			row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			-- (round icons: masked to a circle in a coloured ring, as the tier badges)
+			row.ring = row:CreateTexture(nil, "BACKGROUND")
+			row.ring:SetTexture(CIRCLE)
+			row.ring:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -2, 2)
+			row.ring:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 2, -2)
+			row.ring:Hide()
+			row.mask = row:CreateMaskTexture()
+			row.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+			row.mask:SetAllPoints(row.icon)
 			row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
 			row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
@@ -1645,6 +2011,12 @@ function W.Menu(anchor, items)
 		end
 		if item.icon then W.SetIcon(row.icon, item.icon) end
 		row.icon:SetShown(item.icon ~= nil)
+		-- item.ring = { r, g, b }: the icon round in a ring of that colour
+		local round = item.icon ~= nil and item.ring ~= nil
+		if round and not row.masked then row.icon:AddMaskTexture(row.mask) row.masked = true
+		elseif not round and row.masked then row.icon:RemoveMaskTexture(row.mask) row.masked = false end
+		row.ring:SetShown(round)
+		if round then row.ring:SetVertexColor(item.ring[1], item.ring[2], item.ring[3]) end
 		row.text:SetFontObject(item.title and GameFontNormal or GameFontHighlight)
 		row.text:SetText(item.text)
 		if item.selected then row.text:SetTextColor(1, 0.82, 0) elseif not item.title then row.text:SetTextColor(1, 1, 1) end

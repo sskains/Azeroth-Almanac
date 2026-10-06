@@ -17,7 +17,7 @@ local MAX_GAP = 6 * 3600           -- scans further apart than this aren't compa
 local MIN_GAP = 60
 local MIN_WATCHED = 3600           -- need an hour of watched time before giving a number
 local PREFIX = "AzAlmAH"
-local SEND_INTERVAL = 0.3
+local SEND_INTERVAL = 1.1 -- (the game lets a prefix send about one message a second; faster ones are dropped)
 local MAX_MESSAGE = 240
 -- Least time an auction still had, by the game's time-left bucket (short, medium, long, very long).
 local MIN_REMAINING = { 0, 30 * 60, 2 * 3600, 12 * 3600 }

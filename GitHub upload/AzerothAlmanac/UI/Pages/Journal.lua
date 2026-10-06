@@ -7,7 +7,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "journal", title = L["Journal"], icon = "INV_Misc_Book_09", order = 1 }
+local page = { key = "journal", title = L["Journal"], icon = { 133742, "INV_Misc_Book_09" }, order = 1 }
 local list, detail, search, countText, charButton, kindButton, zoneButton
 local filter = ""
 local charFilter, kindFilter, zoneFilter -- nil = all
@@ -47,7 +47,7 @@ local function Subject(e, rec)
 		local tier = rec and B and B:Tier(rec)
 		return { name = rec and rec.name or e.s, icon = W.FindIcon(W.TYPE_ICON[rec and rec.type or ""] or W.KIND.creature.icon),
 			note = tier and (B:TierMarkup(tier, 12) .. " " .. B.TIERS[tier]) or L["Creature"],
-			tip = L["Click to open in the Bestiary."], onClick = GoTo("bestiary", "ShowCreature", id) }
+			tip = L["Click to open in Creatures."], onClick = GoTo("bestiary", "ShowCreature", id) }
 	elseif k == "merchant" then
 		return { name = rec and rec.name or e.s, icon = W.KindIcon("merchant"), note = rec and rec.title or L["Merchant"],
 			tip = L["Click to open in Merchants."], onClick = GoTo("merchants", "ShowMerchant", id) }
@@ -71,10 +71,10 @@ local function Subject(e, rec)
 		return { spell = id, note = L["Spell or recipe"], extra = L["Click to open in Trainers."], onClick = GoTo("trainers", "ShowSpell", id) }
 	elseif k == "townsfolk" or k == "npc" then
 		return { name = rec and rec.name or e.s, icon = W.KindIcon(k), note = rec and rec.title or W.KIND[k].label,
-			tip = L["Click to open in Townsfolk."], onClick = GoTo("townsfolk", "ShowPerson", id) }
+			tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowPerson", id) }
 	elseif k == "flight" then
 		return { name = rec and rec.name or e.s, icon = W.KindIcon("flight"), note = L["Flight path"],
-			tip = L["Click to open in Townsfolk."], onClick = GoTo("townsfolk", "ShowNode", id) }
+			tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowNode", id) }
 	elseif k == "milestone" then
 		local def = ns.Milestones and ns.Milestones.byId[id]
 		return { name = def and def.title or e.s, icon = W.FindIcon(def and def.icon or W.KIND.milestone.icon), note = L["Milestone"],
@@ -230,7 +230,7 @@ end
 local CATALOGUES = {
 	{ "zone", L["Zones"], "places" }, { "subzone", L["Places"], "places" }, { "instance", L["Dungeons and raids"], "dungeons" },
 	{ "creature", L["Creatures"], "bestiary" }, { "item", L["Items"], "items" }, { "quest", L["Quests"], "quests" },
-	{ "merchant", L["Merchants"], "merchants" }, { "trainer", L["Trainers"], "trainers" }, { "townsfolk", L["Townsfolk"], "townsfolk" },
+	{ "merchant", L["Merchants"], "merchants" }, { "trainer", L["Trainers"], "trainers" }, { "townsfolk", L["People"], "townsfolk" },
 	{ "flight", L["Flight paths"], "townsfolk" }, { "node", L["Gathering nodes"], "gathering" }, { "fishing", L["Fishing waters"], "gathering" },
 }
 
@@ -267,10 +267,10 @@ local function Overview()
 	local B = ns.Bestiary
 	local research = {}
 	if B and (s.studied or 0) > 0 then
-		research[#research + 1] = { name = L["Creatures studied"], icon = B:TierIcon(3), note = tostring(s.studied - (s.mastered or 0)), onClick = GoTo("bestiary", "Refresh") }
+		research[#research + 1] = { name = L["Creatures hunted"], icon = B:TierIcon(3), note = tostring(s.studied - (s.mastered or 0)), onClick = GoTo("bestiary", "Refresh") }
 	end
 	if B and (s.mastered or 0) > 0 then
-		research[#research + 1] = { name = L["Creatures mastered"], icon = B:TierIcon(4), note = tostring(s.mastered), onClick = GoTo("bestiary", "Refresh") }
+		research[#research + 1] = { name = L["Master Hunter creatures"], icon = B:TierIcon(4), note = tostring(s.mastered), onClick = GoTo("bestiary", "Refresh") }
 	end
 	if (s.kills or 0) > 0 then research[#research + 1] = { name = L["Creatures defeated"], icon = W.FindIcon({ "Ability_DualWield", "INV_Sword_04" }), note = tostring(s.kills) } end
 	if (s.quest or 0) > 0 then research[#research + 1] = { name = L["Quests completed"], icon = W.KindIcon("quest"), note = tostring(s.quest), onClick = GoTo("quests", "Refresh") } end
@@ -302,7 +302,7 @@ local function Overview()
 			onClick = function() page:ShowMilestones() end }
 		b[#b + 1] = { "slots", ms }
 	else
-		b[#b + 1] = { "small", L["Milestones come from your own discoveries: your first elite, a hundred creatures, ten mastered..."] }
+		b[#b + 1] = { "small", L["Milestones come from your own discoveries: your first elite, a hundred creatures, ten at Master Hunter..."] }
 	end
 
 	-- recent discoveries
@@ -419,6 +419,7 @@ function page:Build(parent, header)
 			row.text:SetText(e.s or "?")
 			row.right:SetText(ns.CharName(e.c) .. "  |cff999999" .. date("%H:%M", e.t or 0) .. "|r")
 		end,
+		itemOf = function(e) return e.k == "item" and e.i or nil end,
 		restore = function(e) if not e.header then viewing = "entry" detail:SetBlocks(Describe(e)) end end,
 		onClick = function(e)
 			if e.header then
@@ -426,6 +427,7 @@ function page:Build(parent, header)
 				page:Refresh()
 				return
 			end
+			if e.k == "item" and W.ItemModifiedClick(e.i) then return end
 			viewing = "entry"
 			detail:SetBlocks(Describe(e))
 		end,

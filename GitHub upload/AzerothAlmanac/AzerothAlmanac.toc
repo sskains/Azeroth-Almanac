@@ -2,9 +2,9 @@
 ## Title: Azeroth Almanac
 ## Notes: An adventurer's journal for WoW Forever: everything you discover, across all your characters. /aa
 ## Author: skain
-## Version: 0.17.0
+## Version: 0.49.0
 ## SavedVariables: AzerothAlmanacDB
-## IconTexture: Interface\Icons\INV_Misc_Book_09
+## IconTexture: 133742
 
 Locale.lua
 Core.lua
@@ -40,6 +40,9 @@ QoL\NodeHighlight.lua
 QoL\Travel.lua
 QoL\GemMatchLogic.lua
 QoL\GemMatch.lua
+QoL\MurlocTacToe.lua
+QoL\WildGambitLogic.lua
+QoL\WildGambit.lua
 QoL\FlightCrew.lua
 QoL\WingsWhispers.lua
 QoL\InventoryWindow.lua
@@ -50,6 +53,10 @@ QoL\PartyPlates.lua
 QoL\ThreatMonitor.lua
 QoL\FollowButton.lua
 QoL\SpellRanker.lua
+QoL\TalentData.lua
+QoL\TalentText.lua
+QoL\TalentPlannerLogic.lua
+QoL\TalentPlanner.lua
 QoL\HealAssist.lua
 UI\Widgets.lua
 UI\Map.lua
@@ -59,8 +66,11 @@ Modules\Flights.lua
 Modules\Gathering.lua
 Modules\Milestones.lua
 Modules\NodePins.lua
+Modules\MapTest.lua
+Modules\Peers.lua
 UI\TownsfolkPin.xml
 UI\Toast.lua
+UI\UpdateQuest.lua
 UI\Window.lua
 UI\Pages\Journal.lua
 UI\Pages\Bestiary.lua
