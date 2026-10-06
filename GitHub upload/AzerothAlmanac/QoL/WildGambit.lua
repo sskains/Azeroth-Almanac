@@ -2678,6 +2678,7 @@ local function Build()
 		c.pickLevel = pickPanel:GetFrameLevel() + 5 + row * 10 + (col % 2) * 3 + col
 		c:SetFrameLevel(c.pickLevel)
 		c:SetScript("OnClick", function(self)
+			if frame.shuffling then return end
 			if frame.fate then WG:Fate(false) end -- (a card picked after all: the cards turn back up)
 			frame.chosen = (frame.chosen == self.card) and nil or self.card
 			-- it slips into stealth: the rogue's Stealth sound as it's chosen
@@ -2686,7 +2687,7 @@ local function Build()
 			if self:IsMouseOver() then Zoom(self) end -- (the close look follows the card's new size)
 		end)
 		c:SetScript("OnEnter", function(self)
-			if frame.fate then return end
+			if frame.fate or frame.shuffling then return end
 			self:SetFrameLevel(pickPanel:GetFrameLevel() + 40)
 			self.select:Show()
 			Zoom(self)
@@ -2723,6 +2724,7 @@ local function Build()
 		if not (ns.SetClassIcon and ns.SetClassIcon(b.icon, class)) then b.icon:SetTexture(ICONS .. "INV_Misc_QuestionMark") end
 		b.class = class
 		b:SetScript("OnClick", function(self)
+			if frame.fate then WG:Fate(false) end -- (a class picked after all: you choose again)
 			db.class = self.class
 			WG:PaintClassPicker()
 			PaintPlayer(frame.players.me, UnitName("player"), "player", self.class, ClassColor(self.class))
@@ -2758,16 +2760,68 @@ local function Build()
 	frame.spellPreview:SetScript("OnLeave", GameTooltip_Hide)
 	spellLabel:SetPoint("BOTTOM", frame.spellPreview, "TOP", 0, 6)
 	spellLabel:SetText("Your spell")
-	-- let fate decide: a small link under the cards
-	frame.fateLink = CreateFrame("Button", nil, prep)
-	frame.fateLink:SetSize(200, 18)
-	frame.fateLink:SetPoint("TOP", prep, "TOP", -40, -520)
-	frame.fateLink:SetFrameLevel(prep:GetFrameLevel() + 40)
-	frame.fateLink.text = frame.fateLink:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	frame.fateLink.text:SetPoint("CENTER")
-	frame.fateLink:SetScript("OnClick", function() WG:Fate(not frame.fate) end)
-	frame.fateLink:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 1, 1) end)
-	frame.fateLink:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 0.82, 0) end)
+	-- let fate decide (your card and your class): a die between Back and Begin, glowing on hover
+	-- and burning bright while fate has the choice
+	local fate = CreateFrame("Button", nil, prep)
+	fate:SetSize(230, 52)
+	fate:SetPoint("BOTTOM", prep, "BOTTOM", -20, 14)
+	fate:SetFrameLevel(prep:GetFrameLevel() + 40)
+	fate.glow = fate:CreateTexture(nil, "BACKGROUND")
+	fate.glow:SetSize(110, 110)
+	fate.glow:SetTexture(GLOW_TEX)
+	fate.glow:SetBlendMode("ADD")
+	fate.glow:SetVertexColor(1, 0.75, 0.3)
+	fate.die = fate:CreateTexture(nil, "ARTWORK")
+	fate.die:SetSize(42, 42)
+	fate.die:SetPoint("LEFT", 6, 0)
+	fate.die:SetTexture(ICONS .. "INV_Misc_Dice_01")
+	fate.die:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	local dmask = fate:CreateMaskTexture()
+	dmask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	dmask:SetAllPoints(fate.die)
+	fate.die:AddMaskTexture(dmask)
+	fate.ring = fate:CreateTexture(nil, "OVERLAY")
+	fate.ring:SetPoint("TOPLEFT", fate.die, "TOPLEFT", -8, 8)
+	fate.ring:SetPoint("BOTTOMRIGHT", fate.die, "BOTTOMRIGHT", 8, -8)
+	fate.ring:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Class")
+	fate.ring:SetVertexColor(1, 0.82, 0.4)
+	fate.glow:SetPoint("CENTER", fate.die, "CENTER")
+	fate.text = fate:CreateFontString(nil, "OVERLAY")
+	fate.text:SetFont(TITLE_FONT, 19, "")
+	fate.text:SetShadowOffset(1, -1)
+	fate.text:SetPoint("LEFT", fate.die, "RIGHT", 12, 1)
+	fate.sub = fate:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	fate.sub:SetPoint("TOPLEFT", fate.text, "BOTTOMLEFT", 0, -1)
+	fate:SetScript("OnClick", function() WG:Fate(not frame.fate) end)
+	fate:SetScript("OnEnter", function(self) self.hover = true end)
+	fate:SetScript("OnLeave", function(self) self.hover = false end)
+	-- (focus: brighter and a touch bigger on hover; a slow strong pulse while fate decides)
+	fate:SetScript("OnUpdate", function(self, el)
+		local t = GetTime()
+		local target
+		if frame.fate then target = 0.75 + 0.25 * math.sin(t * 4)
+		elseif self.hover then target = 0.85
+		else target = 0.25 + 0.08 * math.sin(t * 1.5) end
+		self.g = (self.g or 0.25) + (target - (self.g or 0.25)) * math.min(1, el * 10)
+		self.glow:SetAlpha(self.g)
+		local size = (frame.fate or self.hover) and 46 or 42
+		self.die:SetSize(size, size)
+		self.die:SetRotation(frame.fate and math.sin(t * 6) * 0.15 or 0)
+	end)
+	frame.fateLink = fate
+	-- Shuffle: above the first card, where the deck lies on the felt
+	local shuffle = WoodButton(A.Widgets.Button(prep, "Shuffle", 110, function() WG:Shuffle() end))
+	shuffle.dx, shuffle.dy = -300, -190 -- (the deck the cards fly to and from, from the table's top)
+	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
+	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
+	shuffle:HookScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:AddLine("Shuffle", 1, 0.82, 0)
+		GameTooltip:AddLine("Deal a fresh set of cards. You and your companions always come back.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	shuffle:HookScript("OnLeave", GameTooltip_Hide)
+	frame.shuffleButton = shuffle
 	-- Back (to choosing an opponent) and Begin / Ready
 	frame.backButton = WoodButton(A.Widgets.Button(prep, "Back", 100, function() WG:Back() end))
 	frame.backButton:SetPoint("BOTTOMLEFT", 46, 18)
@@ -3001,6 +3055,7 @@ local function Build()
 			if sl.target:IsShown() then sl.target:SetAlpha(0.35 + 0.3 * (0.5 + 0.5 * math.sin(clock * 4))) end
 		end
 		if self.pick:IsShown() then
+			WG:StepShuffle(elapsed)
 			for _, c in ipairs(self.pickCards) do CardBling(c, elapsed, clock) end
 			-- candlelight: a few sines out of step, so the flicker never quite repeats
 			local f = 0.5 + 0.22 * math.sin(clock * 7.3) + 0.16 * math.sin(clock * 13.1 + 1.7) + 0.12 * math.sin(clock * 2.1)
@@ -3523,6 +3578,7 @@ local function EndGame(forfeit)
 	if game.over then return end
 	game.over = true
 	frame.leave:Hide()
+	if frame.waitNote then frame.waitNote:Hide() end
 	-- a chosen card never played turns over at the end
 	for _, e in ipairs(game.hands.bot) do
 		if e.frame.hidden then e.frame.hidden = nil e.frame.flipSounded = false e.frame.flipAt = GetTime() + 0.3 end
@@ -3961,6 +4017,9 @@ end
 function WG:Fate(on)
 	frame.fate = on and true or false
 	if on then frame.chosen = nil end
+	-- the die rolls; the class picker greys out (fate picks the class too)
+	if on and db and db.sound ~= false then PlaySoundFile(({ 840222, 840224, 840226 })[math.random(3)], "SFX") end
+	self:PaintClassPicker()
 	Zoom(nil)
 	local now = GetTime()
 	for k, f in ipairs(frame.pickCards) do
@@ -4000,8 +4059,9 @@ function WG:PaintPick()
 			f:FitModel()
 		end
 	end
-	frame.fateLink.text:SetText(frame.fate and "Choose my card after all" or "...or let fate decide")
-	frame.fateLink.text:SetTextColor(1, 0.82, 0)
+	frame.fateLink.text:SetText(frame.fate and "Fate decides!" or "Let fate decide")
+	frame.fateLink.text:SetTextColor(1, frame.fate and 0.9 or 0.82, frame.fate and 0.5 or 0)
+	frame.fateLink.sub:SetText(frame.fate and "your card and class. Click to choose again." or "a random card and class")
 	local picked = frame.chosen ~= nil or frame.fate
 	local net = WG.net
 	local hint, canGo, label
@@ -4044,11 +4104,18 @@ function WG:Back()
 	self:ShowLobby()
 end
 
+-- the class for this round: yours, or one at random when fate decides
+function WG:RoundClass()
+	if frame and frame.fate then return CLASSES[math.random(#CLASSES)] end
+	return db.class or select(2, UnitClass("player"))
+end
+
 function WG:PaintClassPicker()
 	local chosen = db.class or select(2, UnitClass("player"))
+	frame.spellPreview:SetAlpha(frame.fate and 0.35 or 1)
 	for _, b in ipairs(frame.classButtons) do
 		local c = ClassColor(b.class)
-		local on = b.class == chosen
+		local on = b.class == chosen and not frame.fate
 		b.ring:SetVertexColor(on and c[1] or 0.55, on and c[2] or 0.5, on and c[3] or 0.45)
 		b.icon:SetDesaturated(not on)
 		b.icon:SetAlpha(on and 1 or 0.7)
@@ -4061,6 +4128,8 @@ end
 -- the window between games: the felt, its logo and candle, and nothing of a game
 local function ClearTable()
 	Zoom(nil)
+	frame.shuffling = nil
+	if frame.waitNote then frame.waitNote:Hide() end
 	frame.over:Hide()
 	for _, c in ipairs(frame.cards) do c:Hide() end
 	for _, sc in pairs(frame.spellCards or {}) do sc:Hide() sc.fadeT = nil end
@@ -4174,16 +4243,7 @@ function WG:ShowPick()
 	local cards = self:Collection()
 	frame.collection = cards
 	frame.fate = false
-	-- the ten on the table: you, your favourites, your companions, then your strongest
-	local hero = self:HeroCard()
-	local shown, seen = { hero }, {}
-	local function Add(c)
-		local key = (c.pet and "pet:" or "") .. tostring(c.npc) .. ":" .. (c.name or "")
-		if #shown < 10 and not seen[key] then seen[key] = true shown[#shown + 1] = c end
-	end
-	for _, c in ipairs(cards) do if c.fav then Add(c) end end
-	for _, c in ipairs(cards) do if c.pet then Add(c) end end
-	for _, c in ipairs(cards) do Add(c) end
+	local shown, hero = self:PickSet(cards, false)
 	for i, f in ipairs(frame.pickCards) do
 		local c = shown[i]
 		if c then
@@ -4216,6 +4276,129 @@ function WG:ShowPick()
 	frame.pick:Show()
 	frame:Show()
 	self:PaintPick()
+end
+
+-- the ten on the pick table: you and your companions always; then your favourites and your
+-- strongest, or (`random`, Shuffle) any of the rest, favourites a little likelier
+function WG:PickSet(cards, random)
+	local hero = self:HeroCard()
+	local shown, seen = { hero }, {}
+	local function Add(c)
+		local key = (c.pet and "pet:" or "") .. tostring(c.npc) .. ":" .. (c.name or "")
+		if #shown < 10 and not seen[key] then seen[key] = true shown[#shown + 1] = c end
+	end
+	for _, c in ipairs(cards) do if c.pet then Add(c) end end
+	if random then
+		local pool = {}
+		for _, c in ipairs(cards) do
+			if not c.pet and not c.hero then
+				for _ = 1, (c.fav and WL.FAV_WEIGHT or 1) do pool[#pool + 1] = c end
+			end
+		end
+		for _ = 1, 400 do
+			if #shown >= 10 or #pool == 0 then break end
+			Add(pool[math.random(#pool)])
+		end
+	end
+	for _, c in ipairs(cards) do if c.fav then Add(c) end end
+	for _, c in ipairs(cards) do Add(c) end
+	return shown, hero
+end
+
+-- Shuffle: the cards on the table are swept into the deck and dealt again (you and your
+-- companions come back; the rest are new). The card you'd picked stays picked if it comes back.
+WG.SHUFFLE = { gather = 0.32, deal = 0.26, gap = 0.07 } -- (seconds: swept up, each card's flight, between cards)
+function WG:Shuffle()
+	if not (frame and frame.prep:IsShown() and frame:IsShown()) or frame.shuffling then return end
+	local cards = frame.collection or self:Collection()
+	frame.collection = cards
+	local shown = self:PickSet(cards, true)
+	local chosen = frame.chosen
+	if frame.fate then self:Fate(false) end
+	Zoom(nil)
+	frame.shuffling = { t = 0, shown = shown, chosen = chosen, dealt = {} }
+	frame.chosen = nil
+	if db.sound ~= false then
+		PlaySoundFile(567562, "SFX") -- (the cards picked up)
+		for k, id in ipairs({ 567472, 567502, 567457, 567472 }) do -- (riffled)
+			C_Timer.After(0.12 + k * 0.07, function() PlaySoundFile(id, "SFX") end)
+		end
+	end
+	for _, f in ipairs(frame.pickCards) do
+		f.from = { f.px, f.py }
+		f.select:Hide()
+	end
+end
+
+-- one step of a shuffle (from the window's OnUpdate)
+function WG:StepShuffle(elapsed)
+	local sh = frame and frame.shuffling
+	if not sh then return end
+	local SHUFFLE_GATHER, SHUFFLE_DEAL, SHUFFLE_GAP = WG.SHUFFLE.gather, WG.SHUFFLE.deal, WG.SHUFFLE.gap
+	sh.t = sh.t + elapsed
+	local deckX, deckY = frame.shuffleButton.dx, frame.shuffleButton.dy
+	local function Place(f, x, y, sc)
+		f:SetScale(sc)
+		f:ClearAllPoints()
+		f:SetPoint("CENTER", frame.pick, "TOP", x / sc, y / sc)
+	end
+	local ease = function(p) return 1 - (1 - p) * (1 - p) end
+	if sh.t < SHUFFLE_GATHER then
+		-- swept into the deck, turning over
+		local p = ease(sh.t / SHUFFLE_GATHER)
+		for _, f in ipairs(frame.pickCards) do
+			if f:IsShown() and f.from then
+				if not f.backFrame:IsShown() then f:FaceDown(true) end
+				Place(f, f.from[1] + (deckX - f.from[1]) * p, f.from[2] + (deckY - f.from[2]) * p, 0.92 - 0.42 * p)
+			end
+		end
+		return
+	end
+	if not sh.swapped then
+		-- the new cards, still face down in the deck
+		sh.swapped = true
+		for i, f in ipairs(frame.pickCards) do
+			local c = sh.shown[i]
+			if c then
+				SetCard(f, c)
+				SetOwner(f, ClassColor(select(2, UnitClass("player"))), false)
+				f:FaceDown(true)
+				f.flipAt = nil
+				Place(f, deckX, deckY, 0.5)
+				f:Show()
+			else
+				f:Hide()
+			end
+		end
+	end
+	-- dealt out one by one, each turning over as it lands
+	local done = true
+	for i, f in ipairs(frame.pickCards) do
+		if f:IsShown() then
+			local start = SHUFFLE_GATHER + 0.1 + (i - 1) * SHUFFLE_GAP
+			local p = math.max(0, math.min(1, (sh.t - start) / SHUFFLE_DEAL))
+			if p < 1 then done = false end
+			local e = ease(p)
+			Place(f, deckX + (f.px - deckX) * e, deckY + (f.py - deckY) * e - 18 * math.sin(math.pi * p), 0.5 + 0.42 * e)
+			if p >= 1 and not sh.dealt[i] then
+				sh.dealt[i] = true
+				f.flipSounded = true
+				f.flipAt = GetTime()
+				if db.sound ~= false and i % 2 == 1 then PlaySoundFile(567556, "SFX") end -- (laid down)
+			end
+		end
+	end
+	if done and sh.t > SHUFFLE_GATHER + 0.1 + 10 * SHUFFLE_GAP + SHUFFLE_DEAL + 0.35 then
+		frame.shuffling = nil
+		-- the card you'd picked, if it came back (you are always back)
+		if sh.chosen then
+			for _, f in ipairs(frame.pickCards) do
+				if f:IsShown() and f.card and (f.card == sh.chosen or (sh.chosen.hero and f.card.hero)
+					or (f.card.npc == sh.chosen.npc and f.card.name == sh.chosen.name)) then frame.chosen = f.card end
+			end
+		end
+		self:PaintPick()
+	end
 end
 
 -- sets the table for a game: both hands, classes, colours, who goes first
@@ -4316,7 +4499,7 @@ function WG:Start(pick)
 	-- held back for a removed card's owner (the Wild Gambler draws from your collection too)
 	local myReserves = WL.Reserves(cards, mine, rng)
 	local theirReserves = WL.Reserves(wild, theirs, rng)
-	local myClass = db.class or select(2, UnitClass("player"))
+	local myClass = self:RoundClass() -- (fate may pick it)
 	local botClass
 	repeat botClass = CLASSES[rng(#CLASSES)] until botClass ~= myClass
 	-- the opponent: the creature you chose, else one nearby, else the best your Almanac knows
@@ -4477,7 +4660,7 @@ function WG:SendSetup()
 	local cards = frame.collection or self:Collection()
 	frame.collection = cards
 	net.myBest = WL.Best(cards)
-	net.myClass = db.class or select(2, UnitClass("player"))
+	net.myClass = self:RoundClass() -- (fate may pick it)
 	net.myNonce = math.random(1, 1000000000)
 	net.myPick = frame.chosen
 	local _, raceFile = UnitRace("player")
@@ -4769,9 +4952,11 @@ local function OnMessage(text, sender)
 			if kind == "P" then
 				-- they're in combat (1) or out of it (0): the game waits for them
 				game.pause = game.pause or {}
+				local was = game.pause.opp
 				game.pause.opp = f[4] == "1" or nil
 				Refresh()
 				WG:PaintDock()
+				if (game.pause.opp and true or false) ~= (was and true or false) then WG:OppCombat(game.pause.opp) end
 				return
 			end
 			local seq = tonumber(f[4])
@@ -5239,6 +5424,51 @@ function WG:Expand()
 	if self.dock then self.dock:Hide() end
 	self.dockedByCombat = nil
 	if frame then frame:Show() Refresh() end
+end
+
+-- the opponent went into combat (on) or came out: a note over the board offers to tuck the table
+-- away; when they're back, the table comes back (if it was tucked away for them) with a ready-check
+-- chime and a line in chat
+function WG:OppCombat(on)
+	if not frame then return end
+	local w = frame.waitNote
+	if not w then
+		w = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+		w:SetSize(360, 96)
+		w:SetPoint("CENTER", frame.board, "CENTER", 0, 0)
+		w:SetFrameLevel(frame:GetFrameLevel() + 150)
+		w:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+		w:SetBackdropColor(0.07, 0.055, 0.035, 0.95)
+		w:SetBackdropBorderColor(0.85, 0.68, 0.3)
+		w:EnableMouse(true)
+		w.text = w:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		w.text:SetPoint("TOP", 0, -14)
+		w.text:SetWidth(330)
+		local tuck = WoodButton(A.Widgets.Button(w, "Tuck it away", 130, function()
+			w:Hide()
+			local mode = db.combatDock or "top"
+			WG:Collapse(mode == "off" and "float" or mode)
+			WG.dockedForOpp = true
+		end))
+		tuck:SetPoint("BOTTOMRIGHT", w, "BOTTOM", -6, 12)
+		local stay = WoodButton(A.Widgets.Button(w, "Wait here", 110, function() w:Hide() end))
+		stay:SetPoint("BOTTOMLEFT", w, "BOTTOM", 6, 12)
+		frame.waitNote = w
+	end
+	local who = (game and game.botName) or "Your opponent"
+	if on then
+		w.text:SetText(("|cffffd100%s|r is in combat.\nThe game waits for them; you'll be told when they're back."):format(who))
+		w:SetShown(frame:IsShown())
+	else
+		w:Hide()
+		if self.dockedForOpp then
+			self.dockedForOpp = nil
+			if not (game and game.pause and game.pause.me) then self:Expand() end
+		end
+		if db.sound ~= false then PlaySoundFile(567409, "Master") end -- (ReadyCheck)
+		Tell(("%s is out of combat: your game is back on."):format(who))
+	end
 end
 
 -- combat starts or ends (PLAYER_REGEN_DISABLED / ENABLED)
