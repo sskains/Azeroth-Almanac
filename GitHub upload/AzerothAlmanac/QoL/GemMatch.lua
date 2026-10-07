@@ -855,6 +855,8 @@ function UpdatePanel()
 	frame.best:SetText(("Your best: |cffffffff%s|r"):format(Number(db.best[db.mode] or 0)))
 	for mode, b in pairs(frame.modeButtons) do
 		b.glow:SetAlpha(mode == db.mode and 0.7 or 0)
+		b.dim = mode ~= db.mode
+		b:SetAlpha(b.dim and 0.6 or 1)
 	end
 	frame.soundButton:SetText(db.sound and "Sound: on" or "Sound: off")
 	frame.pauseButton:SetText(game.state == "paused" and "Resume" or "Pause")
@@ -1118,13 +1120,31 @@ local function Build()
 	-- (the field inside the frame starts 58 px in; the content sits in from there)
 	local PAD, FIELD_W = 62, PANEL_W - 124
 
+	-- the two game modes as one switch: the halves touch, the one that is on is bright and glowing, the other
+	-- dim until the mouse is over it, and each says in its tooltip what the mode is
 	frame.modeButtons = {}
-	local x = PAD
+	local MODE_TIP = {
+		timed = "Score as much as you can in two minutes.",
+		moves = "Score as much as you can in 30 moves. No clock.",
+	}
+	local x, half = PAD, FIELD_W / 2
 	for _, mode in ipairs({ "timed", "moves" }) do
-		local b = FlatButton(side, MODES[mode].label, (FIELD_W - 8) / 2, function() NewGame(mode) end)
-		b:SetPoint("TOPLEFT", x, -62)
+		local b = FlatButton(side, MODES[mode].label, half + 2, function() NewGame(mode) end)
+		b:SetPoint("TOPLEFT", x - 1, -62)
+		b:HookScript("OnEnter", function(self)
+			self:SetAlpha(1)
+			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+			GameTooltip:AddLine(MODES[mode].label, 1, 0.82, 0)
+			GameTooltip:AddLine(MODE_TIP[mode], 1, 1, 1, true)
+			GameTooltip:AddLine(db.mode == mode and "The mode you are playing." or "Click to switch and start a new game.", 0.6, 0.6, 0.6, true)
+			GameTooltip:Show()
+		end)
+		b:HookScript("OnLeave", function(self)
+			self:SetAlpha(self.dim and 0.6 or 1)
+			GameTooltip_Hide()
+		end)
 		frame.modeButtons[mode] = b
-		x = x + (FIELD_W - 8) / 2 + 8
+		x = x + half
 	end
 
 	-- the score on a carved plaque
