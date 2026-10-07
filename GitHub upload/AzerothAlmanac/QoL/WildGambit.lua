@@ -2671,7 +2671,7 @@ local function Build()
 		c.tilt:SetVertexColor(0, 0, 0)
 		c.tilt:SetAlpha(0.75)
 		c.tilt:SetRotation(math.rad(TILTS[i]))
-		local x = (col - 2) * 96 + (row == 1 and 32 or -16) + j[1] - 40 -- (room on the right for your spell)
+		local x = (col - 2) * 96 + (row == 1 and 32 or -16) + j[1] - 8 -- (the two rows together centred on the board; your spell sits below-right)
 		local y = -(row == 0 and 282 or 408) + j[2]
 		c.px, c.py = x, y
 		c:SetPoint("CENTER", pickPanel, "TOP", x / PSCALE, y / PSCALE)
