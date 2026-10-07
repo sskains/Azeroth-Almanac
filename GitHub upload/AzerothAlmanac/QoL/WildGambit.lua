@@ -253,6 +253,54 @@ local function Habitat(name, family, map)
 end
 WG.Habitat = Habitat
 
+-- Wild Gambit headings (the pick screen's "Choose a card" / "Choose your class"): the carved-wood
+-- screens' Morpheus lettering in gold with a deep shadow, flanked by a thin gold rule and a small
+-- gold diamond on each side. `o:Layout()` puts the ornaments at the text's current width.
+function WG.Ornament(fs, size, ruleLen)
+	fs:SetFont("Fonts\\MORPHEUS.TTF", size, "")
+	fs:SetTextColor(1, 0.82, 0.4)
+	fs:SetShadowColor(0, 0, 0, 0.95)
+	fs:SetShadowOffset(1.5, -1.5)
+	local parent = fs:GetParent()
+	local o = { fs = fs, size = size, ruleLen = ruleLen }
+	for _, side in ipairs({ "l", "r" }) do
+		local d = parent:CreateTexture(nil, "OVERLAY")
+		d:SetColorTexture(1, 0.82, 0.4, 0.95)
+		d:SetSize(6, 6)
+		d:SetRotation(math.rad(45))
+		local rule = parent:CreateTexture(nil, "OVERLAY")
+		rule:SetColorTexture(1, 0.82, 0.4, 0.5)
+		rule:SetSize(ruleLen, 1.5)
+		o["d" .. side], o["rule" .. side] = d, rule
+	end
+	function o:Layout(show)
+		local on = show ~= false and fs:IsShown()
+		for _, t in ipairs({ self.dl, self.dr, self.rulel, self.ruler }) do t:SetShown(on) end
+		if not on then return end
+		local w = fs:GetStringWidth()
+		self.dl:ClearAllPoints()
+		self.dl:SetPoint("CENTER", fs, "CENTER", -(w / 2 + 12), 0)
+		self.dr:ClearAllPoints()
+		self.dr:SetPoint("CENTER", fs, "CENTER", w / 2 + 12, 0)
+		self.rulel:ClearAllPoints()
+		self.rulel:SetPoint("RIGHT", self.dl, "LEFT", -3, 0)
+		self.ruler:ClearAllPoints()
+		self.ruler:SetPoint("LEFT", self.dr, "RIGHT", 3, 0)
+	end
+	return o
+end
+
+-- the hint line's text: a short one is the heading (big, with ornaments); the longer messages of an
+-- online match are plain gold sentences
+function WG:SetHint(text)
+	local fs = frame.pickHint
+	local plain = (text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+	local heading = #plain <= 24
+	fs:SetFont("Fonts\\MORPHEUS.TTF", heading and 24 or 15, "")
+	fs:SetText(text)
+	frame.hintOrn:Layout(heading)
+end
+
 local function CardOf(npc, rec)
 	local B = A.Bestiary
 	local level = (rec.hi and rec.hi ~= 0 and rec.hi) or rec.lo or 1
@@ -2650,6 +2698,7 @@ local function Build()
 	frame.pickHint = pickPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	frame.pickHint:SetPoint("TOP", logo, "BOTTOM", 0, -2)
 	frame.pickHint:SetWidth(480)
+	frame.hintOrn = WG.Ornament(frame.pickHint, 24, 70) -- ("Choose a card": gold lettering with a rule and diamond each side)
 	-- step 2, preparing: the cards, the class and its spell, Back and Begin (all on `prep`); step 1,
 	-- choosing an opponent, is the lobby (built below, over the same felt)
 	local prep = CreateFrame("Frame", nil, pickPanel)
@@ -2705,14 +2754,17 @@ local function Build()
 		frame.pickCards[i] = c
 	end
 	-- play as: your own class or any other (its ability is yours for the round)
+	-- (the nine class rings centred on the board, with the heading centred above them)
 	local playAs = prep:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	playAs:SetPoint("BOTTOMLEFT", pickPanel, "BOTTOMLEFT", 160, 90) -- (clear of the coins and the cards above)
-	playAs:SetText("Play as")
+	playAs:SetPoint("BOTTOM", pickPanel, "BOTTOM", 0, 122)
+	playAs:SetText("Choose your class")
+	frame.classOrn = WG.Ornament(playAs, 18, 46)
+	frame.classOrn:Layout()
 	frame.classButtons = {}
 	for i, class in ipairs(CLASSES) do
 		local b = CreateFrame("Button", nil, prep)
 		b:SetSize(32, 32)
-		b:SetPoint("LEFT", playAs, "RIGHT", 14 + (i - 1) * 42, 0)
+		b:SetPoint("BOTTOM", pickPanel, "BOTTOM", (i - (#CLASSES + 1) / 2) * 42, 80)
 		b:SetFrameLevel(pickPanel:GetFrameLevel() + 5)
 		b.ring = b:CreateTexture(nil, "BACKGROUND")
 		-- a carved silver ring (custom art), tinted the class colour when picked
@@ -2819,7 +2871,7 @@ local function Build()
 	-- pulses while the cards are being shuffled and dealt)
 	local shuffle = CreateFrame("Button", nil, prep)
 	shuffle:SetSize(96, 96)
-	shuffle.dx, shuffle.dy = -272, -392 -- (bottom left, in the free felt beside the lower row;the deck the cards fly to and from, from the table's top)
+	shuffle.dx, shuffle.dy = -249, -498 -- (bottom left, above Back and lined up with it; the deck the cards fly to and from, from the table's top)
 	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
 	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
 	shuffle.glow = shuffle:CreateTexture(nil, "BACKGROUND")
@@ -2883,8 +2935,9 @@ local function Build()
 	end)
 	frame.shuffleButton = shuffle
 	-- Back (to choosing an opponent) and Begin / Ready
-	frame.backButton = WoodButton(A.Widgets.Button(prep, "Back", 100, function() WG:Back() end))
-	frame.backButton:SetPoint("BOTTOMLEFT", 46, 18)
+	-- (Back under the dealer button, the same width, so the two line up)
+	frame.backButton = WoodButton(A.Widgets.Button(prep, "Back", 128, function() WG:Back() end))
+	frame.backButton:SetPoint("BOTTOM", pickPanel, "BOTTOM", shuffle.dx, 18)
 	frame.beginButton = WoodButton(A.Widgets.Button(prep, "Begin", 140, function() WG:BeginClicked() end))
 	frame.beginButton:SetPoint("BOTTOMRIGHT", -30, 22)
 	frame.beginButton:SetFrameLevel(prep:GetFrameLevel() + 50)
@@ -4129,7 +4182,7 @@ function WG:PaintPick()
 		local who = Short(net.opp)
 		label = "Ready"
 		if net.state == "inviting" then
-			hint = ("Waiting for %s to answer... Pick your card and class meanwhile."):format(who)
+			hint = ("Waiting for %s to answer... Choose your card and class meanwhile."):format(who)
 			canGo = false
 		elseif net.state == "ready" then
 			hint = ("You're ready. Waiting for %s..."):format(who)
@@ -4138,15 +4191,15 @@ function WG:PaintPick()
 			local lead = net.auto and ("Matched with |cffffd100%s|r!"):format(who)
 				or net.challenger and ("%s accepted!"):format(who)
 				or ("|cffffd100%s|r challenged you."):format(who)
-			hint = lead .. (net.oppBest and (" |cff9be36b%s is ready.|r"):format(who) or "") .. " Pick your card and class, then Ready."
+			hint = lead .. (net.oppBest and (" |cff9be36b%s is ready.|r"):format(who) or "") .. " Choose your card and class, then Ready."
 			canGo = picked
 		end
 	else
 		label = "Begin"
-		hint = frame.fate and "Fate will choose your card. Pick your class, then Begin." or "Pick your card and class."
+		hint = frame.fate and "Fate will choose your card. Choose your class, then Begin." or "Choose a card"
 		canGo = picked
 	end
-	frame.pickHint:SetText(hint)
+	WG:SetHint(hint)
 	frame.beginButton:SetText(label)
 	frame.beginButton:SetEnabled(canGo and true or false)
 	frame.beginButton:SetAlpha(canGo and 1 or 0.55)
@@ -4262,7 +4315,7 @@ function WG:ShowLobby()
 	if frame.coach then frame.coach:Hide() frame.coach.hl:Hide() end
 	PaintPlayer(frame.players.bot, "|cff999999Who will you play?|r", nil, nil, nil)
 	self.lobbyOpponent = OfferedOpponent()
-	frame.pickHint:SetText("Who will you play?")
+	WG:SetHint("Who will you play?")
 	frame.prep:Hide()
 	frame.lobby:Show()
 	frame.pick:Show()
