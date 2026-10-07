@@ -2814,7 +2814,7 @@ local function Build()
 	-- pulses while the cards are being shuffled and dealt)
 	local shuffle = CreateFrame("Button", nil, prep)
 	shuffle:SetSize(96, 96)
-	shuffle.dx, shuffle.dy = -205, -163 -- (the deck the cards fly to and from, from the table's top)
+	shuffle.dx, shuffle.dy = -272, -392 -- (bottom left, in the free felt beside the lower row;the deck the cards fly to and from, from the table's top)
 	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
 	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
 	shuffle.glow = shuffle:CreateTexture(nil, "BACKGROUND")
@@ -2828,17 +2828,20 @@ local function Build()
 	shuffle.art:SetSize(96, 96)
 	shuffle.art:SetPoint("CENTER")
 	shuffle.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Dealer_Shuffle")
-	-- the caption on a dark plaque across the ring's lower edge
+	-- the caption on a small carved wooden plank (like the Back and Begin buttons) hung across
+	-- the ring's lower edge; its gold lettering brightens on hover and turns to "Dealing..." while
+	-- the cards are on the move
 	shuffle.plaque = shuffle:CreateTexture(nil, "OVERLAY", nil, 1)
-	shuffle.plaque:SetColorTexture(0.05, 0.03, 0.02, 0.85)
-	shuffle.plaque:SetSize(112, 19)
-	shuffle.plaque:SetPoint("BOTTOM", shuffle, "BOTTOM", 0, -4)
+	shuffle.plaque:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Button_Wood")
+	shuffle.plaque:SetSize(128, 30)
+	shuffle.plaque:SetPoint("TOP", shuffle, "BOTTOM", 0, 10)
 	shuffle.text = shuffle:CreateFontString(nil, "OVERLAY", nil, 2)
 	shuffle.text:SetFont(TITLE_FONT, 13, "")
 	shuffle.text:SetShadowOffset(1, -1)
+	shuffle.text:SetShadowColor(0, 0, 0, 0.9)
 	shuffle.text:SetTextColor(1, 0.82, 0.4)
 	shuffle.text:SetText("Deal a new hand")
-	shuffle.text:SetPoint("CENTER", shuffle.plaque, "CENTER", 0, 0)
+	shuffle.text:SetPoint("CENTER", shuffle.plaque, "CENTER", 0, 1)
 	shuffle:SetScript("OnClick", function() WG:Shuffle() end)
 	shuffle:SetScript("OnMouseDown", function(self) self.down = true end)
 	shuffle:SetScript("OnMouseUp", function(self) self.down = false end)
@@ -2865,6 +2868,13 @@ local function Build()
 		local size = self.down and 90 or ((frame.shuffling or self.hover) and 100 or 96)
 		self.art:SetSize(size, size)
 		self.art:SetRotation(frame.shuffling and math.sin(t * 14) * 0.06 or 0)
+		-- (the caption: brighter gold with the mouse over it, "Dealing..." while the cards move)
+		local dealing = frame.shuffling and true or false
+		if dealing ~= self.dealing then
+			self.dealing = dealing
+			self.text:SetText(dealing and "Dealing..." or "Deal a new hand")
+		end
+		if self.hover or dealing then self.text:SetTextColor(1, 0.95, 0.7) else self.text:SetTextColor(1, 0.82, 0.4) end
 	end)
 	frame.shuffleButton = shuffle
 	-- Back (to choosing an opponent) and Begin / Ready

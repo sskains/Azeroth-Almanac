@@ -80,7 +80,7 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
   - Sightings depend on soft-interact targeting, which the gathering highlight turns on.
   - Skill is not recorded when the Professions heading is folded.
 
-- **Wild Gambit shuffle button (goblin dealer, `Dealer_Shuffle.tga`; needs a full game restart):** on the pick screen: position beside the card-back stack, the pick cards now closer together (top-left corner less busy, the spell card on the right still clear), the "Deal a new hand" plaque fits the ring and doesn't cover the first card, ring edge is clean (no dark fringe), hover glow, press dip, rock and pulse while dealing, tooltip.
+- **Wild Gambit shuffle button (goblin dealer, `Dealer_Shuffle.tga`; needs a full game restart):** on the pick screen: position bottom left beside the lower row (clear of the first card, the coins and the felt's edge), the wooden caption plank fits and reads well, "Dealing..." while shuffling, the pick cards now closer together (top-left corner less busy, the spell card on the right still clear), the "Deal a new hand" plaque fits the ring and doesn't cover the first card, ring edge is clean (no dark fringe), hover glow, press dip, rock and pulse while dealing, tooltip.
 - **Wild Gambit (0.46-0.49), from the latest screenshots:**
   - Header nameplates came out short and the score coin didn't show (0.48.0): make the plates taller, let the name run to the vs, score on the coin.
   - Holiday boards (0.49.0): the slots sit inside each board's stone frame (inner edges measured from the art).
