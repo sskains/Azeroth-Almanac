@@ -31,11 +31,22 @@ local function MenuItems()
 	return {
 		{ title = true, icon = ns.ICON, text = L["Azeroth Almanac"] },
 		{ icon = 133742, text = L["Journal"], run = function() ns.UI:Open("journal") end },
-		{ icon = W.KIND.zone.icon, text = L["Places"], run = function() ns.UI:Open("places") end },
-		{ icon = W.KIND.character.icon, text = L["Characters"], run = function() ns.UI:Open("characters") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Places", text = L["Places"], run = function() ns.UI:Open("places") end },
+		{ icon = W.KIND.character.icon, portraitUnit = "player", text = L["Characters"], run = function() ns.UI:Open("characters") end },
+		-- (every page, 0.64.0)
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Creatures", text = L["Creatures"], run = function() ns.UI:Open("bestiary") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Items", text = L["Items"], run = function() ns.UI:Open("items") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Quests", text = L["Quests"], run = function() ns.UI:Open("quests") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Gathering", text = L["Gathering"], run = function() ns.UI:Open("gathering") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Dungeons", text = L["Dungeons"], run = function() ns.UI:Open("dungeons") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", text = L["People"], run = function() ns.UI:Open("townsfolk") end },
+		{ icon = { "INV_Misc_Book_08", "INV_Scroll_04" }, text = L["Spells & Recipes"], run = function() ns.UI:Open("trainers") end },
+		-- the mini games under their own plate, Z to A
+		{ section = true, text = L["Mini Games"] },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit", text = L["Wild Gambit"], run = function() ns.QoL.WildGambit:Toggle() end },
+		{ icon = { "inv_chihuahuadogpet_costume_murlockgreen", "INV_Misc_Fish_02" }, text = L["Murloc Tac Toe"], run = function() ns.QoL.MurlocTacToe:Toggle() end },
 		{ icon = "INV_Misc_Gem_Ruby_02", text = L["Gem Match"], run = function() ns.QoL.GemMatch:Toggle() end },
-		{ icon = "INV_Misc_Fish_02", text = L["Murloc Tac Toe"], run = function() ns.QoL.MurlocTacToe:Toggle() end },
-		{ icon = "INV_10_Inscription_DarkmoonCards_Wild_Earth", text = L["Wild Gambit"], run = function() ns.QoL.WildGambit:Toggle() end },
+		{ divider = true, text = "" },
 		{ icon = "INV_Misc_Gear_01", text = L["Settings"], run = function() ns.Settings:Open() end },
 		{ icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up", text = L["Hide this button"], run = function()
 			MB:SetShown(false)

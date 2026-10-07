@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.53.1** · 2026-10-07 · WoW Forever beta (interface 16001)
+**Version 0.65.0** · 2026-10-07 · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
@@ -39,7 +39,6 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
 |---|---|
 | 0 | Combat log test |
 | 2 / 2c | Discovery recorder and unlock rules (partly covered by the Bestiary's tiers) |
-| 2b | Combat Journal companion (proposed) |
 | 14 | Lore and books (the Lore tab returns with it) |
 | 15 | Rares: sightings, respawn windows, alerts |
 | 16 | Factions and standing history |
@@ -99,6 +98,12 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
   - Stealth look: smoke layers rise, badge at the frame's left edge; the zoomed hidden card keeps it.
   - "Blocked from an action" popup (SpellStopCasting on Escape / logout): fixed in 0.49.1 (StaticPopupDialogs was being reassigned). Confirm it no longer appears; db.diag keeps the latest 30 blocks.
 - **Open:** Tutor portrait art (a dice icon now); Logo_MurlocTacToe / Logo_GemMatch art for the flight prompt; Dark Portal board with new art.
+
+## Review fixes (0.62.0 - 0.64.1, 2026-10-07) 🧪
+
+A review of everything since the dungeon module, built in three parts: 0.62.0 must-fixes and player-match safety (pick cap, paced messages, resends, heartbeats, cancelled games, guards against abandoning a game); 0.63.0 character-only gaps, settings-profile whitelist, Healer Assist fixes, slash help; 0.64.0 speed-ups, dead code and old data removed, polish; 0.64.1 friendly NPCs' interact nameplates hidden when friendly nameplates are off. Details in `CHANGELOG.md`; checks in `docs/TEST_CHECKLIST.md`.
+
+Decided 2026-10-07: the Combat Journal companion is dropped; chat item links don't count as discovered; rares use the boss tier counts.
 
 ## Housekeeping
 

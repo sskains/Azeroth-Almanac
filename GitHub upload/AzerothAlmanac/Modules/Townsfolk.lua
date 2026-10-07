@@ -344,9 +344,9 @@ end
 -- townsfolk. npc -> { name, title, w, at = { map, x, y } }
 function TF:Met()
 	local out = {}
-	for npc, rec in pairs(ns.Store:All("townsfolk")) do out[npc] = rec end
+	for npc, rec in pairs(ns.Store:Shown("townsfolk")) do out[npc] = rec end
 	for _, kind in ipairs({ "merchant", "trainer", "npc" }) do
-		for id, rec in pairs(ns.Store:All(kind)) do
+		for id, rec in pairs(ns.Store:Shown(kind)) do
 			if type(id) == "number" and not out[id] and self:Get(id) then
 				out[id] = { name = rec.name, title = rec.title, w = rec.w,
 					at = rec.map and rec.x and { map = rec.map, x = rec.x, y = rec.y } or nil }
@@ -383,7 +383,7 @@ function TF:Points(uiMap)
 		end
 	end
 	if S().groups.mailbox then
-		for _, rec in pairs(ns.Store:All("mailbox")) do
+		for _, rec in pairs(ns.Store:Shown("mailbox")) do
 			local sp = rec.db and Mailboxes()[rec.db]
 			local x, y
 			if sp and rect then x, y = OnMap(rect, sp)

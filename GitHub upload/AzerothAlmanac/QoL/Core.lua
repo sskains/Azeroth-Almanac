@@ -32,17 +32,18 @@ ns.defaults = {
 	nodeHighlight = {
 		enabled = true,
 		types = { herb = true, ore = true, chest = true, quest = true, other = false },
+		-- herbs green (#00FF00), ore white (#FFFFFF), chests red (#FF0030), quest objects gold (#FFD130)
 		colors = {
-			herb = { 1, 0.82, 0.2 }, ore = { 1, 0.82, 0.2 }, chest = { 1, 0.82, 0.2 },
-			other = { 1, 0.82, 0.2 }, quest = { 0.35, 0.8, 1 },
+			herb = { 0, 1, 0 }, ore = { 1, 1, 1 }, chest = { 1, 0, 0.188 },
+			other = { 1, 0.82, 0.2 }, quest = { 1, 0.82, 0.188 },
 		},
-		size = 48, sound = true, soundIndex = 1, gameIcon = true, showName = true,
-		style = "pulse", look = "both", range = 15, customNames = {},
+		size = 32, sound = true, soundIndex = 1, gameIcon = false, showName = false, arc = 2,
+		style = "pulse", look = "both", range = 15, customNames = {}, npcPlates = false,
 	},
 	auction = { autoScan = true, tooltip = true, vendor = true, age = true, average = true, stackOnShift = true, realms = {} },
 	disenchant = { tooltip = true, bestHint = true, learn = true, learned = {} },
 	travel = {
-		bar = true, barStyle = "minimap", barLocked = false, mapTimes = true, dockPanel = true, share = true,
+		bar = true, barStyle = "minimap", barLocked = false, mapTimes = true, dockPanel = true, share = true, panelAlpha = 0.8,
 		flights = {}, schedules = {}, docks = {}, speed = { yards = 0, seconds = 0 },
 	},
 	auctionVolume = { share = true, tooltip = true, realms = {} },
@@ -52,7 +53,7 @@ ns.defaults = {
 	},
 	follow = { enabled = true, size = 22, x = -2, y = 2, icon = "Ability_Rogue_Sprint" },
 	healAssist = {
-		enabled = true, mode = "frames", side = "below", iconSize = 24, perRow = 6, maxRows = 5,
+		enabled = true, mode = "frames", side = "below", iconSize = 24, perRow = 6, maxRows = 5, panelAlpha = 0.8,
 		locked = false, solo = false, includeSelf = true, pets = false, petCare = true, predict = true,
 		combatOnly = false, showWhenHurt = true, linger = true, lingerSeconds = 5, aggroMarkers = true,
 		aggroGlow = true, aggroBadge = true, buffs = false, tankFirst = true, critical = 25,
@@ -77,7 +78,7 @@ ns.defaults = {
 	},
 	threat = {
 		enabled = true, solo = true, meter = true, rows = 6, locked = false, warn = true, warnAt = 70,
-		aggroAt = 100, sound = true, flash = true, plates = true, tankMode = "auto",
+		aggroAt = 100, sound = true, flash = true, plates = true, tankMode = "auto", panelAlpha = 0.8,
 	},
 	unitFrames = { classBadge = true, classColor = true, xpNeeded = true, xpAlways = true },
 	spellRanker = { autoCheck = true, checkOnOpen = true, autoReplace = true, ignore = {} },
@@ -111,6 +112,27 @@ ns.Readable = A.Readable
 ns.MoneyText = A.MoneyText
 
 function ns.Print(msg) A.Print(msg) end
+
+-- The floating helpers' look (Healer Assist, Threat Monitor, the flight bar): a see-through dark
+-- mesh (custom art, Media\Panel_Mesh) inside the game's thin gold toast border. f:SetPanelAlpha(a)
+-- sets how see-through: the mesh takes a, the border a little more so the edge always reads.
+ns.PANEL_BACKDROP = {
+	bgFile = "Interface\\AddOns\\AzerothAlmanac\\Media\\Panel_Mesh", tile = true, tileSize = 32,
+	edgeFile = "Interface\\FriendsFrame\\UI-Toast-Border", edgeSize = 12,
+	insets = { left = 4, right = 4, top = 4, bottom = 4 },
+}
+function ns.StylePanel(f, alpha)
+	if not f.SetBackdrop then return f end
+	f:SetBackdrop(ns.PANEL_BACKDROP)
+	function f:SetPanelAlpha(a)
+		a = math.max(0, math.min(1, a or 0.8))
+		self.panelAlpha = a
+		self:SetBackdropColor(1, 1, 1, a)
+		self:SetBackdropBorderColor(0.86, 0.72, 0.42, math.min(1, a + 0.25))
+	end
+	f:SetPanelAlpha(alpha)
+	return f
+end
 
 function ns.IsAddOnLoaded(name)
 	if C_AddOns and C_AddOns.IsAddOnLoaded then return C_AddOns.IsAddOnLoaded(name) end
@@ -198,9 +220,12 @@ local GetItemName = function(id)
 end
 
 -- the item an objective names: an item a quest in the log asks for, or one the Almanac has seen
-local itemByName = {}
+-- (a name found nowhere is remembered too, for a minute, so nameplate updates don't walk every
+-- item the Almanac knows each time, 0.62.0)
+local itemByName, itemMiss = {}, {}
 local function ItemIDByName(name)
 	if itemByName[name] then return itemByName[name] end
+	if itemMiss[name] and GetTime() - itemMiss[name] < 60 then return nil end
 	if C_QuestLog and C_QuestLog.GetNumQuestLogEntries and A.QuestDB then
 		for i = 1, C_QuestLog.GetNumQuestLogEntries() do
 			local info = C_QuestLog.GetInfo(i)
@@ -213,6 +238,7 @@ local function ItemIDByName(name)
 	for id, rec in pairs(A.db and A.db.found and A.db.found.item or {}) do
 		if rec.name == name then itemByName[name] = id return id end
 	end
+	itemMiss[name] = GetTime()
 end
 
 local function ZoneNames(rec)
@@ -224,8 +250,17 @@ local function ZoneNames(rec)
 	return out
 end
 
+-- (each answer kept for 30 seconds: the Quest Targeter asks several times a second)
+local dropCache = {}
 ns.Drops = setmetatable({}, { __index = function(_, name)
 	if type(name) ~= "string" or not A.db then return nil end
+	local hit = dropCache[name]
+	if hit and GetTime() - hit.t < 30 then return hit.list end
+	local list = ns.DropsFor(name)
+	dropCache[name] = { t = GetTime(), list = list }
+	return list
+end })
+function ns.DropsFor(name)
 	local id = ItemIDByName(name)
 	local src = id and A.ItemDB and A.ItemDB:Get(id)
 	if not src then return nil end
@@ -239,7 +274,7 @@ ns.Drops = setmetatable({}, { __index = function(_, name)
 		end
 	end
 	return #list > 0 and list or nil
-end })
+end
 
 ---------------------------------------------------------------------------
 -- Starting up: saved settings, then each module (an Almanac module runs this)

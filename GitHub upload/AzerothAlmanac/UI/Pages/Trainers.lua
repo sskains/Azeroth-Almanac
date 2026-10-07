@@ -7,7 +7,9 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "trainers", title = L["Trainers"], icon = { "INV_Misc_Book_08", "INV_Scroll_04", "Trade_Engraving" }, order = 9 }
+-- (0.55.0) The trainers themselves are on the People page; this is the spells and recipes they
+-- teach, by class and profession.
+local page = { key = "trainers", title = L["Spells & Recipes"], icon = { "INV_Misc_Book_08", "INV_Scroll_04", "Trade_Engraving" }, order = 9 }
 local list, detail, countText, filterButton, nameText, subText, iconTex
 local filter, statusFilter = "", nil
 local shown -- { kind = "spell", id } or { kind = "group", group }
@@ -78,7 +80,7 @@ local function DescribeSpell(id, rec)
 
 	-- every rank of it that trainers have shown you, with what each one does
 	local ranks = {}
-	for oid, o in pairs(ns.Store:All("spell")) do
+	for oid, o in pairs(ns.Store:Shown("spell")) do
 		if o.name == rec.name and o.group == rec.group then ranks[#ranks + 1] = { id = oid, rec = o } end
 	end
 	if #ranks > 1 then
@@ -138,12 +140,12 @@ local function DescribeSpell(id, rec)
 				end
 				if #need > 0 then text = (L["Needs %s"]):format(table.concat(need, ", ")) end
 			end
-			rows[#rows + 1] = { "stat", ns.CharName(key), COLOR[st] .. text .. "|r" }
+			rows[#rows + 1] = { sortKey = ns.CharName(key, true), "stat", ns.CharName(key), COLOR[st] .. text .. "|r" }
 		end
 	end
 	if #rows > 0 then
 		b[#b + 1] = { "banner", L["Your characters"] }
-		table.sort(rows, function(x, y) return x[2] < y[2] end)
+		table.sort(rows, function(x, y) return x.sortKey < y.sortKey end) -- (by name, not by colour code)
 		for _, r in ipairs(rows) do b[#b + 1] = r end
 	end
 	return b
@@ -185,7 +187,7 @@ local function DescribeGroup(group)
 	end
 
 	local trainers = {}
-	for npc, t in pairs(ns.Store:All("trainer")) do
+	for npc, t in pairs(ns.Store:Shown("trainer")) do
 		if t.group == group then trainers[#trainers + 1] = TrainerSlot(npc, t) end
 	end
 	table.sort(trainers, function(x, y) return x.name < y.name end)
@@ -269,7 +271,7 @@ end
 local function Collect()
 	local groups, total, n = {}, 0, 0
 	local me = ns.CharKey()
-	for id, rec in pairs(ns.Store:All("spell")) do
+	for id, rec in pairs(ns.Store:Shown("spell")) do
 		total = total + 1
 		local g = rec.group or "other:?"
 		groups[g] = groups[g] or {}
@@ -280,7 +282,7 @@ local function Collect()
 			n = n + 1
 		end
 	end
-	for _, t in pairs(ns.Store:All("trainer")) do if t.group then groups[t.group] = groups[t.group] or {} end end
+	for _, t in pairs(ns.Store:Shown("trainer")) do if t.group then groups[t.group] = groups[t.group] or {} end end
 	local order = {}
 	for g in pairs(groups) do order[#order + 1] = g end
 	table.sort(order, function(a, b) return GroupOrder(a) < GroupOrder(b) end)

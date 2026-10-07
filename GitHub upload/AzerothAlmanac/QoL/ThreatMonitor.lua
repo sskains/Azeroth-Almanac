@@ -152,10 +152,8 @@ end
 local function BuildMeter()
 	meter = CreateFrame("Frame", "AzerothAlmanacThreatMeter", UIParent, "BackdropTemplate")
 	meter:SetSize(METER_W, 60)
-	meter:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-		tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-	meter:SetBackdropColor(0.04, 0.04, 0.06, 0.88)
-	meter:SetBackdropBorderColor(0.75, 0.62, 0.35, 1)
+	-- the see-through dark mesh in a thin gold border, as Healer Assist (Settings: Window opacity)
+	ns.StylePanel(meter, db.panelAlpha or 0.8)
 	meter:SetFrameStrata("MEDIUM")
 	meter:SetClampedToScreen(true)
 	meter:SetMovable(true)
@@ -205,7 +203,7 @@ local function DrawMeter(title, rows)
 	for _, r in ipairs(rows) do if r.me then myPct = r.pct end end
 	for i = n + 1, #meter.rows do meter.rows[i]:Hide() end
 	if myPct then
-		local c = myPct >= (db.aggroAt or 100) and RED or myPct >= (db.warnAt or 70) and YELLOW or { 1, 1, 1 }
+		local c = myPct >= math.min(100, db.aggroAt or 100) and RED or myPct >= (db.warnAt or 70) and YELLOW or { 1, 1, 1 }
 		meter.mine:SetText(("%d%%"):format(math.floor(myPct + 0.5)))
 		meter.mine:SetTextColor(c[1], c[2], c[3])
 	else
@@ -279,7 +277,7 @@ local function CheckWarnings(mob, rows, mobName)
 		return
 	end
 	if tank and not tank.me then s.otherTanked = true end
-	local warnAt, aggroAt = db.warnAt or 70, db.aggroAt or 100
+	local warnAt, aggroAt = db.warnAt or 70, math.min(100, db.aggroAt or 100) -- (the game's percent stops at 100)
 	if (me.tanking and s.otherTanked) or (not me.tanking and me.pct >= aggroAt) then
 		if not s.aggro then
 			s.aggro = true
@@ -424,6 +422,7 @@ function TM:OnLogin()
 end
 
 function TM:Refresh()
+	if meter and meter.SetPanelAlpha then meter:SetPanelAlpha(db.panelAlpha or 0.8) end
 	if not db.enabled then
 		StopTicker()
 		if meter then meter:Hide() end

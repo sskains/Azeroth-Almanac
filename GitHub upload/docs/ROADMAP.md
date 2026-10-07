@@ -40,13 +40,17 @@ Rules:
 | `feature` · `bug` · `testing` · `art` · `decision` · `chore` | Kind of work |
 | `parked` | Agreed for later |
 
-## Now
+## Now (updated 2026-10-07, version 0.64.1)
 
-- **In-game test pass**: work through `docs/TEST_CHECKLIST.md`, Wild Gambit first (the tester build 0.52.1 is out).
+- **In-game test pass of 0.62.0 - 0.64.1** (`docs/TEST_CHECKLIST.md`, top batches first): the review fixes are built but untested. Highest risk: Wild Gambit player matches (protocol 11, the pick cap, cancelled-game banner, timeouts), Wild Gambit looking the same after the old game-art board / card ornaments were removed (0.64.0), settings profiles (whitelist, 0.63.0), Healer Assist in combat, NPC interact nameplates hidden (0.64.1).
+- **GitHub sync**: Shannon's 0.53 - 0.64.1 work is in Claude's working copy and the AddOns folder; it goes to `D:\GitHub\Azeroth-Almanac` when the Asia merge is started in GitHub Desktop. Delete there: `docs/TASKS.md`, `Media/Board_DarkPortal.tga`, `UI/Pages/Placeholders.lua`.
+- **Create the GitHub issues** from `docs/ISSUES_TO_CREATE.md` (if not done yet), then delete that file.
 - **Wild Gambit polish** from test results (owner: Shannon).
 
 ## Next
 
+- **People page redesign** (added 2026-10-07): the detail panel and its sub-panel show what this person can teach or sell you; facts about the person move to the name plate panel or a tab of their own.
+- **Spells & Recipes becomes Professions** (added 2026-10-07): a tree of every recipe you've come across, by profession and specialisation, showing which you've learned and which you've found but not yet got.
 - Dark Portal board, returning with new art.
 - Remaining art: Tutor portrait; Murloc Tac Toe and Gem Match logos for the flight prompt.
 - Probe leftovers: level-up, death and the damage meter's Deaths view, a real interrupt, the active world event.
@@ -54,7 +58,7 @@ Rules:
 
 ## Later
 
-Lore and books · Rares · Factions · Places and services · Character stories · More on items · World events · Data plumbing (Forever cache overlay, saved-data caps and migrations, localization) · Combat Journal companion (needs a decision on how it's delivered).
+Lore and books · Rares · Factions · Places and services · Character stories · More on items · World events · Data plumbing (Forever cache overlay, saved-data caps and migrations, localization).
 
 ## Parked
 

@@ -90,7 +90,7 @@ docs/DESIGN.md section 14: library of books, letters, plaques and scrolls read; 
 ### 10. Rares
 **Labels:** `almanac` `feature`
 ```
-docs/DESIGN.md section 15: sightings of rares and rare elites, learned respawn windows, optional alert when a known rare is on a nameplate. Decide the research tier counts (suggestion: the boss counts).
+docs/DESIGN.md section 15: sightings of rares and rare elites, learned respawn windows, optional alert when a known rare is on a nameplate. Research tiers: the boss counts (decided).
 ```
 
 ### 11. Factions
@@ -133,30 +133,22 @@ docs/DESIGN.md section 21. Split into separate issues when picked up:
 - localization through the string table
 ```
 
-### 17. Combat Journal companion
-**Labels:** `data` `feature` `decision`
-```
-docs/DESIGN.md section 2b: a small program reads the text combat log and writes a data file the addon loads. Decide first: is it worth building, and how it's delivered and run (script, .exe or tray app; on demand or watching the folder).
-```
-
-### 18. Rivals: PvP encounters
-**Labels:** `almanac` `feature` `parked`
-```
-docs/DESIGN.md section 31, parked. Build order starts with a probe (31a). Open: the final name, and whether Forever has the honor system and battlegrounds at launch.
-```
-
 ---
 
 ## Decisions and housekeeping
 
-### 19. Open design questions
-**Labels:** `decision`
+### 21. People page: show what they teach or sell you
+**Labels:** `almanac` `feature`
 ```
-From docs/DESIGN.md "Open questions":
-- Items: does hovering a link someone posts in chat count as discovered?
-- Rares: research tier counts.
-- Companion app: build it, and how it runs (see the companion issue).
-Record each answer in docs/DESIGN.md, then close this.
+Redesign the People page's detail panel and its sub-panel around what this person can do for you: what they can teach you (spells, recipes) and what they sell. The facts about the person (title, where, standing, visits, first met ...) move to the name plate panel, or to a tab of their own.
+Decide first: name plate panel or a separate tab.
+```
+
+### 22. Spells & Recipes becomes Professions
+**Labels:** `almanac` `feature`
+```
+Rename the Spells & Recipes page to Professions and turn it into a tree list: each profession, and its specialisations underneath, with every recipe the player has come across. Each recipe shows whether this character has learned it or has only found it (seen at a trainer, on a merchant, as an item) and not yet got it. Keep the natural-discovery rule: only recipes you've encountered are listed, never the full list.
+Open: where class spells go (they're on this page today), and whether "learned" is per character (it should follow "Almanac shows").
 ```
 
 ### 20. Remove dev/AlmanacProbe

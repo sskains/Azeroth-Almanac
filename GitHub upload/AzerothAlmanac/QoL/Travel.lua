@@ -233,7 +233,13 @@ local function BuildBar()
 	bar:SetClampedToScreen(true)
 	local bg = bar:CreateTexture(nil, "BACKGROUND")
 	bg:SetAllPoints()
-	bg:SetColorTexture(0, 0, 0, 0.6)
+	bg:SetColorTexture(0, 0, 0, 0.45)
+	-- the bar sits in the helpers' see-through mesh box with its thin gold border
+	bar.box = CreateFrame("Frame", nil, bar, "BackdropTemplate")
+	bar.box:SetPoint("TOPLEFT", -6, 6)
+	bar.box:SetPoint("BOTTOMRIGHT", 6, -6)
+	bar.box:SetFrameLevel(math.max(0, bar:GetFrameLevel() - 1))
+	ns.StylePanel(bar.box, db.panelAlpha or 0.8)
 	bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	bar.text:SetPoint("CENTER")
 	bar:EnableMouse(true)
@@ -248,6 +254,10 @@ local function BuildBar()
 	end)
 	bar:Hide()
 	PlaceBar()
+end
+
+function TR:ApplyLook()
+	if bar and bar.box and bar.box.SetPanelAlpha then bar.box:SetPanelAlpha(db.panelAlpha or 0.8) end
 end
 
 local function UpdateBar()

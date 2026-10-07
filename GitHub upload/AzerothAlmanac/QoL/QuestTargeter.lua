@@ -36,6 +36,7 @@ local extraMarkLines = {} -- /tm lines for other nearby quest mobs, rebuilt out 
 local clearMarkLines = {} -- /tm ... 0 lines for the clear-markers hotkey
 local NearestPlate        -- defined with the nameplate scan below
 local OnlyTaken           -- likewise
+local takenPlates = {}    -- name -> how many visible ones are someone else's (see Taken)
 
 -- Targeting looks all around you: out of combat the macro first targets the closest matching
 -- nameplate (nameplates exist behind and beside you too). Nameplate tokens can point at other
@@ -92,9 +93,13 @@ local function MacroFor(targets, kind)
 	-- change then, and the mob in front of you is usually your own).
 	local combatOnly = not plate and OnlyTaken(targets)
 	local head, tail = { "/cleartarget" }, {}
+	-- someone else's are in sight too: out of combat, only the nameplate line picks (the name lines
+	-- would grab the closest by name, theirs included)
+	local anyTaken = false
+	for _, name in ipairs(targets) do if takenPlates[name] then anyTaken = true end end
 	if plate then
 		head[#head + 1] = ("/target [nocombat,@%s,harm,nodead] %s"):format(plate, plate)
-		head[#head + 1] = "/targetexact [noexists] " .. targets[1]
+		head[#head + 1] = (anyTaken and "/targetexact [noexists,combat] " or "/targetexact [noexists] ") .. targets[1]
 	elseif combatOnly then
 		head[#head + 1] = "/targetexact [combat] " .. targets[1]
 	else
@@ -342,19 +347,38 @@ end
 -- Someone else's mob: tapped by a player outside your group, or already hurt and fighting a
 -- player (or their pet) who isn't you or in your group. Those aren't worth running to.
 -- Anything the game keeps secret counts as "not taken", so a mob is never skipped on a guess.
+-- (0.55.0) Creature health is secret on this client for anything but your target, so "already
+-- hurt" can't be read: a mob in combat with someone who isn't you, your pet or your group counts
+-- as taken whatever its health, and so does a tapped one, or one marked as another's kill.
+local function Mine(foe)
+	for _, mine in ipairs({ "player", "pet" }) do
+		if Readable(UnitIsUnit(foe, mine)) == true then return true end
+	end
+	-- (your group and their pets: a hunter's pet fighting it doesn't make it someone else's)
+	local inParty = UnitPlayerOrPetInParty or UnitInParty
+	local inRaid = UnitPlayerOrPetInRaid or UnitInRaid
+	return Readable(inParty(foe)) == true or Readable(inRaid(foe)) and true or false
+end
 local function Taken(unit)
 	local ok, taken = pcall(function()
 		if UnitIsTapDenied and Readable(UnitIsTapDenied(unit)) == true then return true end
-		if Readable(UnitAffectingCombat(unit)) ~= true then return false end
-		local health, max = Readable(UnitHealth(unit)), Readable(UnitHealthMax(unit))
-		if type(health) ~= "number" or type(max) ~= "number" or health >= max then return false end
-		local foe = unit .. "target"
-		if not Readable(UnitExists(foe)) then return false end
-		for _, mine in ipairs({ "player", "pet" }) do
-			if Readable(UnitIsUnit(foe, mine)) == true then return false end
+		-- (a mob you or your group already tagged is yours, fight or not)
+		if UnitIsTapped and UnitIsTappedByPlayer and Readable(UnitIsTapped(unit)) == true
+			and Readable(UnitIsTappedByPlayer(unit)) == false and Readable(UnitIsTappedByAllThreatList and UnitIsTappedByAllThreatList(unit)) ~= true then
+			return true
 		end
-		if Readable(UnitInParty(foe)) == true or Readable(UnitInRaid(foe)) then return false end
-		return Readable(UnitPlayerControlled(foe)) == true
+		if Readable(UnitAffectingCombat(unit)) ~= true then return false end
+		-- in a fight: whose? your threat on it says it's (also) yours
+		if UnitThreatSituation then
+			local t = Readable(UnitThreatSituation("player", unit))
+			if type(t) == "number" then return false end
+		end
+		local foe = unit .. "target"
+		if Readable(UnitExists(foe)) == true then
+			if Mine(foe) then return false end
+			return true -- fighting a player, their pet, or a guard: not yours to tag
+		end
+		return false -- (fighting, but whom can't be read: never skipped on a guess)
 	end)
 	return ok and taken == true
 end
@@ -461,7 +485,6 @@ end
 -- Living units by name that have a nameplate (anywhere around you, not just in front),
 -- with the closest one kept: name -> { unit, closeness }. Friendly ones are for turn-ins.
 local nearestPlate = {}
-local takenPlates = {} -- name -> how many visible ones are someone else's (see Taken)
 
 local function CountNearby()
 	wipe(counts)
@@ -515,8 +538,11 @@ function OnlyTaken(names)
 end
 
 local function CountFor(targets)
-	local n = 0
-	for _, mob in ipairs(targets) do n = n + (counts[mob] or 0) end
+	local n, seen = 0, {}
+	-- (a name listed twice - an alias that matches the name itself - counts once)
+	for _, mob in ipairs(targets) do
+		if not seen[mob] then seen[mob] = true n = n + (counts[mob] or 0) end
+	end
 	return n
 end
 
@@ -640,6 +666,7 @@ local function ApplySelection()
 end
 
 local function UpdateCounts()
+	if not db.enabled then return end -- (off: no nameplate scan at all, 0.62.0)
 	CountNearby()
 	for _, b in ipairs(buttons) do
 		if b.key then

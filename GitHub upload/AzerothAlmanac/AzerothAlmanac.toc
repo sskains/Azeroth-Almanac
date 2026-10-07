@@ -2,13 +2,14 @@
 ## Title: Azeroth Almanac
 ## Notes: An adventurer's journal for WoW Forever: everything you discover, across all your characters. /aa
 ## Author: skain
-## Version: 0.53.1
+## Version: 0.65.0
 ## SavedVariables: AzerothAlmanacDB
 ## IconTexture: 133742
 
 Locale.lua
 Core.lua
 Modules\Store.lua
+Modules\Profiles.lua
 Modules\Characters.lua
 Modules\Places.lua
 Modules\Bestiary.lua

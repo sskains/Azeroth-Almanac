@@ -182,7 +182,8 @@ function NH:ForgetUserCVars()
 	self:Apply()
 end
 
--- Where the game looks for the object you face (SoftTargetInteractArc). nil = leave the game's own.
+-- Where the game looks for the object you face (SoftTargetInteractArc). -1 (or nil) = the game's own.
+NH.ARC_GAME = -1
 NH.arcs = {
 	{ value = 0, label = "Straight ahead (only what you're looking at)" },
 	{ value = 1, label = "In front of me (a wide arc)" },
@@ -254,7 +255,9 @@ function NH:Apply()
 		Set("SoftTargetNameplateSize", "20")
 	end
 	Set("SoftTargetInteractRange", tostring(db.range))
-	if db.arc then
+	-- (-1: the game's own, kept as a value so a settings profile carries the choice; nil, as
+	-- before 0.63.0, means the same)
+	if db.arc and db.arc >= 0 then
 		Set("SoftTargetInteractArc", tostring(db.arc))
 	elseif db.savedCVars.SoftTargetInteractArc then
 		Set("SoftTargetInteractArc", db.savedCVars.SoftTargetInteractArc)
@@ -480,6 +483,21 @@ local function SetPlateLook(plate, showName, showIcon)
 	renamedPlates[plate] = #hidden > 0 and hidden or nil
 end
 
+-- (0.64.1) The interact nameplate the highlight needs is the game's soft-interact plate, and the
+-- game gives one to a friendly NPC you face as well (name and health bar), even with friendly
+-- nameplates off. Unless you've asked for them (db.npcPlates) or friendly nameplates are on
+-- anyway, an NPC's interact plate is made invisible; a gathering node's is never touched.
+local function HideNpcPlate(plate)
+	-- (friendly nameplates on - and, where the client has the setting, friendly NPCs' too - the
+	-- plate is one you'd see anyway)
+	local npcs = GetCVar("nameplateShowFriendlyNPCs")
+	if db.npcPlates or (GetCVar("nameplateShowFriends") == "1" and npcs ~= "0") then return end
+	local unitFrame = plate and plate.UnitFrame
+	if not unitFrame then return end
+	unitFrame:SetAlpha(0)
+	renamedPlates[plate] = { unitFrame }
+end
+
 local function Update()
 	if not db.enabled then
 		for plate in pairs(renamedPlates) do RestorePlate(plate) end
@@ -496,6 +514,7 @@ local function Update()
 		SetPlateLook(plate, db.showName, db.gameIcon)
 	elseif plate then
 		RestorePlate(plate)
+		HideNpcPlate(plate)
 	end
 
 	local kind
@@ -562,6 +581,23 @@ function NH:OnInitialize(saved)
 	if not db.soundsV2 then
 		db.soundIndex = math.max(1, (db.soundIndex or 1) - 1)
 		db.soundsV2 = true
+	end
+	-- 0.55.0: the new defaults applied once to existing settings too (size 32, reach 15, all around,
+	-- every kind on in its own colour, the chime, the game's icon and name off)
+	-- 0.57.0: the new colours, once
+	if not db.colorsV4 then
+		db.colorsV4 = true
+		db.colors.herb, db.colors.ore = { 0, 1, 0 }, { 1, 1, 1 }
+		db.colors.chest, db.colors.quest = { 1, 0, 0.188 }, { 1, 0.82, 0.188 }
+	end
+	if not db.defaultsV3 then
+		db.defaultsV3 = true
+		db.size, db.range, db.arc = 32, 15, 2
+		db.types.herb, db.types.ore, db.types.chest, db.types.quest = true, true, true, true
+		db.colors.herb, db.colors.ore = { 0, 1, 0 }, { 1, 1, 1 }
+		db.colors.chest, db.colors.quest = { 1, 0, 0.188 }, { 1, 0.82, 0.188 }
+		db.sound, db.soundIndex = true, 1
+		db.gameIcon, db.showName = false, false
 	end
 	-- The old /aa probe test mode saved settings under probeSaved; put those back first.
 	if saved.probeSaved then

@@ -8,9 +8,10 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "quests", title = L["Quests"], icon = { 979575, "INV_Misc_Note_01", "INV_Letter_15" }, order = 5 }
+local page = { key = "quests", title = L["Quests"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Quests", order = 5 }
 local list, detail, countText, filterButton
-local filter, statusFilter = "", nil
+local filter, statusFilter = "", "a" -- (opens on the quests in your log)
+local actions -- the in-the-log buttons over the page: Show in quest log, Share
 local shown
 local collapsed = {}
 
@@ -171,7 +172,7 @@ local function ZoneByName(name)
 	if not name or name == "" then return nil end
 	local want = name:lower()
 	local best
-	for map, z in pairs(ns.Store:All("zone")) do
+	for map, z in pairs(ns.Store:Shown("zone")) do
 		if z.name and z.name:lower() == want then
 			-- prefer a zone map over a city or sub-map of the same name: the bigger map ID is usually the zone
 			if not best or (z.kind == "zone" and best.kind ~= "zone") then best = { map = map, kind = z.kind } end
@@ -426,8 +427,81 @@ local function Describe(qid, rec)
 	return b
 end
 
+-- the quest's place in your quest log (nil when it isn't there)
+local function LogIndex(qid)
+	if not qid then return nil end
+	if C_QuestLog and C_QuestLog.GetLogIndexForQuestID then
+		local ok, i = pcall(C_QuestLog.GetLogIndexForQuestID, qid)
+		if ok and type(i) == "number" and i > 0 then return i end
+	end
+	if GetQuestLogIndexByID then
+		local ok, i = pcall(GetQuestLogIndexByID, qid)
+		if ok and type(i) == "number" and i > 0 then return i end
+	end
+end
+
+local function Select(qid, i)
+	if C_QuestLog and C_QuestLog.SetSelectedQuest then pcall(C_QuestLog.SetSelectedQuest, qid)
+	elseif SelectQuestLogEntry then pcall(SelectQuestLogEntry, i) end
+end
+
+-- the game's own quest log, open at this quest
+local function OpenInLog(qid)
+	local i = LogIndex(qid)
+	if not i then return end
+	if QuestMapFrame_OpenToQuestDetails then
+		if pcall(QuestMapFrame_OpenToQuestDetails, qid) then return end
+	end
+	if QuestLogFrame then
+		if not QuestLogFrame:IsShown() then ShowUIPanel(QuestLogFrame) end
+		if QuestLog_SetSelection then pcall(QuestLog_SetSelection, i) else Select(qid, i) end
+		if QuestLog_Update then pcall(QuestLog_Update) end
+	elseif ToggleQuestLog then
+		Select(qid, i)
+		pcall(ToggleQuestLog)
+	end
+end
+
+local function Pushable(qid)
+	local i = LogIndex(qid)
+	if not i then return false end
+	if C_QuestLog and C_QuestLog.IsPushableQuest then
+		local ok, v = pcall(C_QuestLog.IsPushableQuest, qid)
+		if ok then return v and true or false end
+	end
+	if GetQuestLogPushable then
+		local old = GetQuestLogSelection and GetQuestLogSelection()
+		Select(qid, i)
+		local ok, v = pcall(GetQuestLogPushable)
+		if old and SelectQuestLogEntry then pcall(SelectQuestLogEntry, old) end
+		return ok and v and true or false
+	end
+	return false
+end
+
+-- share it with your group, as the quest log's Share button does
+local function Share(qid)
+	local i = LogIndex(qid)
+	if not (i and QuestLogPushQuest) then return end
+	Select(qid, i)
+	pcall(QuestLogPushQuest)
+end
+
+local function PaintActions(qid)
+	if not actions then return end
+	local inLog = LogIndex(qid) ~= nil
+	actions:SetShown(inLog)
+	if not inLog then return end
+	actions.qid = qid
+	local grouped = (IsInGroup and IsInGroup()) or (GetNumGroupMembers and GetNumGroupMembers() > 0)
+	local can = grouped and Pushable(qid)
+	actions.share:SetEnabled(can and true or false)
+	actions.share.why = not grouped and L["Join a group to share it."] or (not can and L["This quest can't be shared."]) or nil
+end
+
 local function Show(qid)
 	shown = qid
+	PaintActions(qid)
 	local rec = qid and ns.Store:Get("quest", qid)
 	if not rec then
 		detail:SetBlocks(nil, L["Select a quest."])
@@ -470,7 +544,7 @@ end
 
 local function Collect()
 	local byHead, total, n = {}, 0, 0
-	for qid, rec in pairs(ns.Store:All("quest")) do
+	for qid, rec in pairs(ns.Store:Shown("quest")) do
 		total = total + 1
 		if Matches(qid, rec) then
 			local h = Q():Heading(qid, rec)
@@ -696,6 +770,40 @@ function page:Build(parent, header)
 	detail = W.Detail(parent, nil, "parchment")
 	detail:SetPoint("TOPLEFT", left, "TOPRIGHT", 6, 0)
 	detail:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -20, 0) -- the scroll bar sits beside the parchment
+	-- for a quest in your log: the yellow ! opens it in the game's quest log; Share offers it to
+	-- your group (top right of the parchment)
+	actions = CreateFrame("Frame", nil, detail)
+	actions:SetSize(120, 30)
+	actions:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -10, -8)
+	actions:SetFrameLevel(detail:GetFrameLevel() + 40)
+	local open = CreateFrame("Button", nil, actions)
+	open:SetSize(28, 28)
+	open:SetPoint("RIGHT", 0, 0)
+	open.icon = open:CreateTexture(nil, "ARTWORK")
+	open.icon:SetAllPoints()
+	open.icon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+	open:SetHighlightTexture("Interface\\GossipFrame\\AvailableQuestIcon", "ADD")
+	open:SetScript("OnClick", function() OpenInLog(actions.qid) end)
+	open:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		GameTooltip:AddLine(L["Show in quest log"], 1, 0.82, 0)
+		GameTooltip:Show()
+	end)
+	open:SetScript("OnLeave", GameTooltip_Hide)
+	actions.share = W.Button(actions, L["Share"], 74, function() Share(actions.qid) end)
+	actions.share:SetPoint("RIGHT", open, "LEFT", -6, 0)
+	actions.share:HookScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		GameTooltip:AddLine(L["Share this quest"], 1, 0.82, 0)
+		GameTooltip:AddLine(self.why or L["Offer it to your group."], 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	actions.share:HookScript("OnLeave", GameTooltip_Hide)
+	-- (the button lights up when you join or leave a group, and as quests come and go)
+	actions:RegisterEvent("GROUP_ROSTER_UPDATE")
+	actions:RegisterEvent("QUEST_LOG_UPDATE")
+	actions:SetScript("OnEvent", function() if shown and detail:IsVisible() then PaintActions(shown) end end)
+	actions:Hide()
 	Show(nil)
 end
 

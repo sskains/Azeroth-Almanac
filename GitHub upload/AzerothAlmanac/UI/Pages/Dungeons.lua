@@ -6,7 +6,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "dungeons", title = L["Dungeons"], icon = W.KIND.instance.icon, order = 7.5 }
+local page = { key = "dungeons", title = L["Dungeons"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Dungeons", order = 7.5 }
 local list, detail, countText, nameText, subText
 local filter = ""
 local shown
@@ -123,13 +123,13 @@ local function Describe(id, rec)
 		if r then
 			local kills = 0
 			for _, n in pairs(r.kills or {}) do kills = kills + n end
-			rows[#rows + 1] = { "stat", ns.CharName(key), (L["%s, %s, %s inside, last %s"]):format(ns.N(r.n or 0, "visit", "visits"),
+			rows[#rows + 1] = { sortKey = ns.CharName(key, true), "stat", ns.CharName(key), (L["%s, %s, %s inside, last %s"]):format(ns.N(r.n or 0, "visit", "visits"),
 				ns.N(kills, "boss kill", "boss kills"), Duration(r.time or 0), ns.DateText(r.last)) }
 		end
 	end
 	if #rows > 0 then
 		b[#b + 1] = { "banner", L["Your characters"] }
-		table.sort(rows, function(x, y) return x[2] < y[2] end)
+		table.sort(rows, function(x, y) return x.sortKey < y.sortKey end) -- (by name, not by colour code)
 		for _, r in ipairs(rows) do b[#b + 1] = r end
 	end
 	return b
@@ -155,7 +155,7 @@ end
 
 local function Collect()
 	local groups, total = { party = {}, raid = {} }, 0
-	for id, rec in pairs(ns.Store:All("instance")) do
+	for id, rec in pairs(ns.Store:Shown("instance")) do
 		total = total + 1
 		if filter == "" or (rec.name or ""):lower():find(filter, 1, true) then
 			local lo, _, _, raid = DG():Info(id, rec)

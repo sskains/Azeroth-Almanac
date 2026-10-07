@@ -12,7 +12,7 @@ local _, ns = ...
 local L = ns.L
 local Store = ns:NewModule("Store")
 
-local VERSION = 4
+local VERSION = 5
 
 local MIGRATIONS = {
 	-- 2: Mastered now takes 15 kills of a normal creature (was 10); a setting left at the old
@@ -34,6 +34,14 @@ local MIGRATIONS = {
 	[4] = function(db)
 		if db.settings then db.settings.tiers = nil end
 	end,
+	-- 5 (0.64.0): data nothing reads any more: each character's "firsts" lists, the zones' and
+	-- places' old exploration fields, an art recording session
+	[5] = function(db)
+		for _, c in pairs(db.chars or {}) do if type(c) == "table" then c.firsts = nil end end
+		for _, rec in pairs(db.found and db.found.zone or {}) do if type(rec) == "table" then rec.explored = nil end end
+		for _, rec in pairs(db.found and db.found.subzone or {}) do if type(rec) == "table" then rec.area = nil end end
+		db.artlog = nil
+	end,
 }
 
 local function ApplyDefaults(target, defaults)
@@ -46,6 +54,8 @@ local function ApplyDefaults(target, defaults)
 		end
 	end
 end
+
+Store.ApplyDefaults = ApplyDefaults -- (Profiles: choices a profile didn't have go back to their defaults)
 
 local function Fresh()
 	return { version = VERSION, created = time(), settings = {}, chars = {}, found = {}, journal = {} }
@@ -77,6 +87,8 @@ function Store:Reset()
 	local fresh = Fresh()
 	fresh.settings = settings
 	fresh.qol = qol -- the helpers' settings and data (prices, bags, flight times) aren't records
+	-- (nor are the settings profiles, who uses which, or the blocked-action log, 0.62.0)
+	fresh.profiles, fresh.profileOf, fresh.diag = ns.db.profiles, ns.db.profileOf, ns.db.diag
 	AzerothAlmanacDB = fresh
 	ns.db = fresh
 	ns:Fire("RESET")
@@ -95,6 +107,31 @@ end
 function Store:All(kind)
 	ns.db.found[kind] = ns.db.found[kind] or {}
 	return ns.db.found[kind]
+end
+
+-- What the Almanac shows (Settings > General > Almanac shows): the whole account's discoveries, or
+-- only what the character you're playing has met. Every record keeps who met it (rec.c), so the
+-- choice only filters what's shown; recording is the same either way.
+-- ns.ScopeChar(): this character's key in character mode, else nil.
+function ns.ScopeChar()
+	local s = ns.db and ns.db.settings
+	if s and s.scope == "character" then return ns.CharKey() end
+end
+local shownCache = {}
+ns:On("CHANGED", function(kind) if kind then shownCache[kind] = nil else wipe(shownCache) end end)
+ns:On("RESET", function() wipe(shownCache) end)
+function Store:ClearShown() wipe(shownCache) end
+function Store:Shown(kind)
+	local me = ns.ScopeChar()
+	if not me then return self:All(kind) end
+	local cached = shownCache[kind]
+	if cached and cached.me == me then return cached.list end
+	local list = {}
+	for id, rec in pairs(self:All(kind)) do
+		if type(rec) == "table" and ((rec.c and rec.c[me]) or rec.b == me) then list[id] = rec end
+	end
+	shownCache[kind] = { me = me, list = list }
+	return list
 end
 
 function Store:Count(kind)
@@ -127,25 +164,20 @@ function Store:Discover(kind, id, fields, journalText, where, quiet)
 	end
 	-- which characters have met it (small set of keys)
 	rec.c = rec.c or {}
-	if not rec.c[char] then
-		rec.c[char] = now
-		self:CharSeen(kind, id)
-	end
+	local newForMe = not rec.c[char] and (isNew or rec.b ~= char)
+	if not rec.c[char] then rec.c[char] = now end
 	if isNew then
 		if not quiet then self:AddJournal(kind, id, journalText or tostring(id), where) end
 		ns:Fire("DISCOVERY", kind, id, rec, journalText, quiet)
+	elseif newForMe and ns.ScopeChar() then
+		-- (0.63.0) a character-only Almanac: new to this character is a discovery here, with its
+		-- alert and journal line, even when another character found it first
+		if not quiet then self:AddJournal(kind, id, journalText or tostring(id), where) end
+		shownCache[kind] = nil
+		ns:Fire("DISCOVERY", kind, id, rec, journalText, quiet, true)
 	end
 	ns:Fire("CHANGED", kind, id)
 	return rec, isNew
-end
-
--- the playing character's own "first time here" list, for character stories
-function Store:CharSeen(kind, id)
-	local c = ns.db.chars[ns.CharKey()]
-	if not c then return end
-	c.firsts = c.firsts or {}
-	c.firsts[kind] = c.firsts[kind] or {}
-	if not c.firsts[kind][id] then c.firsts[kind][id] = time() end
 end
 
 ---------------------------------------------------------------------------
@@ -157,7 +189,8 @@ function Store:AddJournal(kind, id, text, where)
 	where = where or ns.Where()
 	j[#j + 1] = { t = time(), k = kind, i = id, c = ns.CharKey(), s = text, m = where.map, x = where.x, y = where.y }
 	local max = ns.db.settings.journalMax or 5000
-	if #j > max then
+	-- (trimmed in chunks of 250: shifting the whole journal for every entry past the cap was slow, 0.64.0)
+	if #j > max + 250 then
 		local drop = #j - max
 		for i = 1, #j - drop do j[i] = j[i + drop] end
 		for i = #j - drop + 1, #j do j[i] = nil end
@@ -193,7 +226,26 @@ function Store:PrintStats()
 	for _ in pairs(ns.db.chars) do chars = chars + 1 end
 	ns.Print((L["%d characters. Discoveries: %s. Journal: %d entries. Saved data about %d KB."])
 		:format(chars, #parts > 0 and table.concat(parts, ", ") or L["none yet"], #ns.db.journal, self:SizeKB()))
+	-- blocked actions this version (a summary, one line per function: how often, the latest time)
+	local by, order = {}, {}
 	for _, d in ipairs(ns.db.diag or {}) do
-		ns.Print(("blocked: %s (%s) while %s, %s"):format(d.func or "?", d.event or "?", d.doing or "?", ns.DateTimeText(d.t)))
+		local k = d.func or "?"
+		if not by[k] then by[k] = { n = 0 } order[#order + 1] = k end
+		by[k].n = by[k].n + 1
+		by[k].last, by[k].doing = d.t, d.doing
 	end
+	if #order == 0 then
+		ns.Print(L["No blocked actions recorded in this version."])
+	else
+		for _, k in ipairs(order) do
+			local b = by[k]
+			ns.Print((L["Blocked by the game: %s, %d times (last %s, while %s)."]):format(k, b.n, ns.DateTimeText(b.last), b.doing or "?"))
+		end
+	end
+end
+
+function Store:ClearBlocked()
+	ns.db.diag = {}
+	ns.blockedSaid = {}
+	ns.Print(L["Blocked-action log cleared."])
 end

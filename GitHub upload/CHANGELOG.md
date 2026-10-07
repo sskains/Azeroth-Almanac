@@ -4,6 +4,128 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## 0.65.0
+
+Asia's `gem-match-wood-board` branch merged into main (with everything up to 0.64.2).
+
+- **Gem Match, a painted wooden board** (Asia): a carved-oak board with the gems in its sockets (`GemMatch_Board.tga`), a carved side panel with a score plaque, rope divider and gem pouch, a "Well played!" game-over panel with a ribbon and spilling gems, flying gem shards when gems clear, a louder hint (only from the Hint button), a gold glow on the picked gem, and a "Choose your game" mode switch. Best scores now come from your guild, group and online friends. The window is 918 x 620. New textures: full game restart.
+- **Shared window pieces** (Asia): the wooden buttons, their gold lettering, the gold elite corner frame and the gold headings moved from `WildGambit.lua` into `QoL/WindowUtil.lua`, so Gem Match and Wild Gambit share them (Wild Gambit looks the same).
+- `tools/art_convert.py` gains `board` and `cut` modes. Details: `docs/DESIGN.md` section 70; checks: `STATUS.md` (Gem Match items).
+
+## 0.64.2
+
+- Minimap button menu: the mini games sit under their own "Mini Games" plate (a dark band between gold rules), Z to A: Wild Gambit, Murloc Tac Toe, Gem Match; a thin gold rule closes the section before Settings. Menus can now have section plates (`section = true`) and thin dividers (`divider = true`).
+
+## 0.64.1
+
+- **Friendly NPCs no longer get a nameplate and health bar when friendly nameplates are off.** The cause: the gathering highlight turns on the game's interact nameplates (it needs them for nodes), and the game gives the NPC you face one too. That NPC plate is now made invisible unless your friendly nameplates are on; a gathering node's plate is untouched. Settings > Gathering > Game display: "Nameplates on friendly NPCs I face" brings them back if you liked them.
+
+## 0.64.0
+
+The last part of the review: speed, clearing out what's no longer used, and polish.
+
+- **Faster:** minimap gathering pins only look at the continent you're on; an open Almanac page refreshes only when something it shows changes; milestones are counted in one pass over each kind; the journal is trimmed in chunks past its cap instead of on every entry; "x of y areas" answers are kept for 30 seconds (dropped when you explore somewhere); Healer Assist in a raid works every other tick.
+- **Removed:** the game-art Wild Gambit board, card ornaments and talent-painting card backgrounds (the painted ones replaced them long ago); the board "eyes" and "crest" support; the Grounding Totem code (no class has it); the old spell buttons by the portraits; unused helpers (`WL.Synced`, the old card tooltip, a duplicate chat helper, a never-read tutorial flag); the old Merchants page (merchants live in People); `UI/Pages/Placeholders.lua`; `/aa setkills` and the art recording session (`/aa artlog`). Saved data drops what nothing reads any more (each character's "firsts" lists, two old exploration fields, an art recording), and a merchant's price history keeps only changes from the last 30 days for items still on sale.
+- **Developer commands** (`/aa maptest`, `art`, `toast`, `atlascheck`, `whatis`, `cards`) answer only with `/aa debug` on.
+- **Polish:** a Wild Gambit card with no kills shows no skull and 0; closing the Wild Gambit window mid-game (Escape, the close button) keeps the game in the bar, one click back; the pick note no longer lingers on the lobby; trainers in Places and the journal open their People page; the minimap button's menu lists every page; a zone or place counts a visit when you arrive, not at every subzone and indoor change; "Your characters" lists sort by name (not by class colour); Reset window positions also puts back the alerts and the gathering button; stale comments brought up to date.
+
+## 0.63.0
+
+The second part of the review fixes: the character-only Almanac, settings profiles, Healer Assist and smaller polish.
+
+- **"This character only" fills its gaps:** something new to the character you're playing now gets its alert and journal line even when another character found it first; milestones are counted per character as well (a "Milestone reached (this character)" alert, and the journal's milestone list is that character's own); gathering totals, kill-based tiers and boss kills in milestones follow the character; gathering pins on the maps, people on the world map, mailboxes and "sold by" lists show only what this character has found; zone links skip zones this character hasn't been to.
+- **Settings profiles hold choices only:** what's saved is the list of settings the defaults (and the Settings window) define, never what a helper has learned or one-off upgrade flags. Switching profile replaces every choice it covers (one the profile lacks goes back to its default). Copy from... and Delete keep where your windows are. A character new to the Almanac opens every window in its default spot instead of where the last character left it. The character key is the same from the first moment of loading (the realm name read the normalised way).
+- **Healer Assist:** the screen-edge alert now works in combat while the game hides health (a red edge per member under attack below the danger level, following the game's health curve; no sound in that case, as the number can't be read); the red throb on buttons uses your Danger level setting instead of a fixed 30%; out-of-range or out-of-mana buttons grey out in combat too; a newly learned rank updates the existing buttons; a pet no longer pushes a more urgent member off the panel, and the line joining a pet only links it to its own master; combat starting mid-drag drops the panel where it is; the opacity setting changes only the opacity (no full re-layout).
+- **Threat monitor:** "Pulling aggro at %" goes up to 100 (the game's figure never passes 100, so higher settings never warned); saved values above 100 count as 100.
+- **Gathering highlight:** "The game's own" search direction is kept as a real choice (it survives profiles and reloads).
+- **Quest Targeter:** mobs your group members' pets are fighting count as yours.
+- **Hollow minimap rings:** a game not restarted since the ring art was added shows the pin see-through instead of nothing.
+- **Exploration:** "x of y areas" finds zones whose achievement wasn't loaded yet the first time it looked (it checks again, at most once a minute).
+- **Slash commands:** `/aa help`; `/aa gathering` (also herbs, ore, fishing) opens Gathering; `/aa people check` works again; `/aa tf` opens the people-on-the-map settings; an unknown command says so before the list; the list matches today's pages.
+
+## 0.62.0
+
+Fixes from the review of everything since the dungeon module, and player-match safety. **Protocol 11**: both players need 0.62.0.
+
+- **Wild Gambit, the pick cap:** your picked card still plays at full strength, unless the two hands would end more than 3 spikes apart even with every other card at its lowest. Then it drops a tier at a time (never below its floor), only as far as needed, and you're told: a line in chat, a note on the table, and the red down arrow on the card. The pick note says it may be downgraded. In matched-collection tests this happens in about 1 game in 400.
+- **Player matches hold up when messages go missing:** every whisper goes out through one paced queue (retried when the game turns it away); a setup with cards missing after 15 seconds is sent again and asked for again, and called off after 40; a "still here" every 15 seconds during a game, a note after a minute of silence (End, not counted / Keep waiting), and the game is called off after five minutes. A move this screen can't play now cancels the game instead of leaving it stuck.
+- **Cancelled games** show a "Cancelled · Not counted" banner (out of step, a card the other Almanac couldn't accept, an opponent who stopped answering).
+- **Games end even when the window is hidden:** the result counts the moment the last card is placed; tucked away, docked or closed with Escape, the game still finishes.
+- **No more abandoned games:** starting something else during a practice game (Play Wild Gambit on a unit, `/aa gambit new`, the lobby, the tutorial, a challenge) asks to forfeit it first; during a player match you're asked to finish or Leave. Accepting a challenge mid-practice says it forfeits the practice game. The tutorial is set aside quietly.
+- **Tutorial:** the coach waits while the window is tucked away and carries on when it's back; after the tutorial, "Play for real" starts a game against a creature (it could re-challenge your last player).
+- Started in combat: the game is paused from the first move (and the other player told). Combat flickering on and off sends one pause message, a second later.
+- Received hands are checked against the table's spike budget; skull cards (level unknown) are no longer refused.
+- Freezing Trap: only your own traps rule a square out (the other player's hidden traps no longer show by being untargetable).
+- Another version challenging you gets a reply naming your version, and you see theirs; only the player you challenged can call off your challenge. Matchmaking across realms compares full names, so exactly one of two lookers sends the challenge.
+- **Almanac:** resetting the Almanac keeps settings profiles and the blocked-action log; a merchant's stock refreshing while you shop (a purchase, a buyback) no longer counts as another visit or finds every item again; map pins left over from a longer list no longer come back with Places' pin toggle.
+- **Quest Targeter:** no nameplate scan while it's off; an item name found nowhere and each drop list are remembered for a short while (fewer full searches several times a second); a target listed twice counts once.
+
+## 0.61.1
+
+- Places map: hovering a place that has no outline (pinned places) shows its pin on the map the same way: temporarily, with the selected place's own pin stepping aside, and put back on leaving.
+
+## 0.61.0
+
+- **Wild Gambit: your picked card always plays at full strength.** Hands are still built to the shared spike budget, but the pick is never capped or lowered (not when building the hand, not when the two hands are evened out); the other four cards fill what's left and, when needed, drop below their usual floor tier (an elite may play at Sighted). Both players' picks are protected; the practice gambler's Easy setting may still weaken its own. Weakened supporting cards show a small red down arrow on their tier badge; a note under the pick heading says the card plays at full strength. **Protocol 10** (the lowered mark travels with each card): both players need 0.61.0. Tested: 400 random hands with a legendary pick never lowered it; with matched budgets 99% of hand pairs end within 1 spike.
+- **Places map:** the place outline is 25% stronger (wider gold rim, brighter glow). Hovering a place in the list outlines it on the map shown; moving off puts back the selected place's outline (or none for a zone).
+
+## 0.60.1
+
+- Toasts 20% larger (331 x 115, icon 62): longer titles and names fit before shortening.
+- Wild Gambit kill strip about 15% smaller (skull 7.5, number 7.3).
+
+## 0.60.0
+
+- **Toasts** carry the Almanac's mark: its icon (a quarter of the big icon's size) and "Almanac" in red, on a small dark tag at the top right.
+- **Wild Gambit kill count, a trophy on every card:** the raid skull and the kills (account or character, as "Almanac shows" is set; companions their kills together; never the hero or a sheep) on the strip between the art and the name panel, placed per tier from each frame's measured strip; 1.2k / 15k for big numbers. Shown on both sides in player matches: **protocol 9**, both players need 0.60.0.
+
+## 0.59.0
+
+- **Settings profiles** (Settings > General > Settings profile, new `Modules/Profiles.lua`): every character uses Shared unless you pick This character or a named profile (New profile..., Copy from..., Delete this profile). A profile holds every choice of the Almanac and the helpers (on / off, colours, sizes, opacity); recorded data, prices, flight times, bags, Wild Gambit records and the "Almanac shows" choice are never in it. Each character now keeps its own window and button positions. Your current settings became the Shared profile. Switching reloads the interface.
+
+## 0.58.0
+
+- **Account or character Almanac** (Settings > General > Almanac shows): *My whole account* (as before) or *This character only*: every page, count, the journal, creature tiers and gathering ranks show only what the character you're playing has found, killed and gathered, and Wild Gambit plays that character's own cards. The window title names the character. Recording is unchanged; each creature and node now also keeps per-character kills / gathers (from this version on: earlier kills count for the account only). Prices, flight times and other characters' bags stay account-wide.
+- **Minimap gathering pins** about 40% smaller (default 7, existing sizes scaled once; the size setting now goes down to 4).
+
+## 0.57.0
+
+- **Places:** zones are indented under their continent (places further in). Each zone shows how much of it this character has explored, from WoW Forever's exploration achievements: "7/12" on its row, an Exploration section with the areas still to find, and a "Fully explored" alert and journal line when the last one is found (the one exception to ground rule 9).
+- **Creature abilities** show what one use does, from the spell's own tooltip ("15 - 25 per hit", "45 over 15 sec", or both); melee per hit from the Classic records once fought. The per-fight total moved to the tooltip.
+- **Minimap button menu:** Places uses the new Places art, Characters your own portrait, Murloc Tac Toe the murloc-costume chihuahua, Wild Gambit a square cut of its logo (`Media/Icon_WildGambit.tga`).
+- **Gathering highlight colours** (applied once): herbs #00FF00, ore #FFFFFF, chests #FF0030, quests #FFD130.
+- **Minimap gathering pins:** while your Find Herbs / Find Minerals / Find Treasure is on, pins of that kind become hollow rings (`Media/Ring_Hollow.tga`), so the game's own dot for a live node shows inside.
+
+## 0.56.0
+
+- **Healer Assist:** "Show the icons" offers Beside the portraits (below / right) or The Healer Assist window. The window has a see-through dark mesh background (`Media/Panel_Mesh.tga`) in a thin gold border, with a Window opacity setting. Buttons not needed are fainter; a recommended spell is fully visible with a yellow throb, which turns red when the member is under 30% health (also in combat, where health is hidden, through the health curves). Pets sit indented under their master's row, joined by a thin line.
+- **Threat Monitor and the flight bar** use the same mesh box and border, each with its own opacity setting.
+- **People** now holds merchants too: a merchant's page shows your standing and their full stock with prices. The Merchants tab is gone (links and `/aa merchants` open People). The Trainers tab is renamed **Spells & Recipes**; the trainers themselves are on People.
+- **Places:** zones are grouped under their continent (each folds); places sit under their zone. A place's page shows its zone map with the place outlined in gold (its own uncovered-area shape, a gold rim and a soft glow), or a pin where you first entered it when the game has no shape for it.
+
+## 0.55.0
+
+- **New menu icons** (`Media/Tab_*.tga`, painted): Characters, Creatures, Items, Quests, Gathering, Places, Dungeons, People. Characters shows the journal icon instead of your portrait.
+- **Creatures page:** your Wild Gambit card grows 30% while the mouse is over it (no tooltip any more). Alliance and Horde creatures wear their faction crest at the bottom right of their portrait, on their list row, and on their Wild Gambit card (recorded from the next time you see them). Tier badge rings are half as thick.
+- **Quests:** the page opens on "In your quest log". A quest in your log gets a yellow ! (Show in quest log, opens the game's quest log at it) and a Share button (offers it to your group; greyed when solo or not shareable).
+- **Records:** "Print what's recorded" now summarises blocked actions (one line per function, how often, the latest) and only for the current version; older reports are cleared at login. New "Clear blocked log" button.
+- **Quest Targeter:** creature health is secret on this client, so "already hurt" never worked: a mob fighting someone outside your group now counts as taken whatever its health, as does one tagged by another player; with taken mobs in sight, out of combat only the nearest untaken nameplate is targeted (no fallback to the closest by name).
+- **Gathering highlight defaults** (applied once to existing settings): sparkle 32, reach 15, all around me, all kinds on (herbs #00A025, ore #3F837E, chests #FFD133, quests white), chime, the game's interact icon and object name off. Search direction is a full-width dropdown.
+
+## 0.54.0
+
+Asia's branch `wg-shuffle-dealer-button` merged into `main`.
+
+- **Wild Gambit pick screen, Asia's rework:**
+  - The Shuffle button is the goblin dealer in his carved ring (`Media/Dealer_Shuffle.tga`), captioned "Deal a new hand" ("Dealing..." while the cards move), over Begin; he says one of three lines each deal, never the same twice running.
+  - Begin is larger, with a breathing glow, a sweeping light streak and gold sparkles; the Back arrow is painted (`Media/Back_Arrow.tga`), larger and ringless.
+  - The hand trays are a wooden coin tray (`Media/Tray_Coins.tga`); "Choose a card" / "Choose your class" headings with gold rules and diamonds; the Your spell card enlarges on hover; the corner icon in a gold dragon ring.
+  - Aquatic creatures (School of Fish, Saltspittle murlocs) on the underwater scene.
+  - `tools/art_convert.py` additions for the new art.
+  - Full notes: Wild Gambit pick screen: the Shuffle button is now the goblin dealer in his carved ring (`Media/Dealer_Shuffle.tga`, 256 px, round, source `docs/art_source/Dealer_Shuffle.png`) with its "Deal a new hand" caption on a small carved wooden plank (`Button_Wood`, like Back / Begin) across its lower edge; the lettering brightens on hover and reads "Dealing..." while the cards move. It sits bottom left, over the board's painted coin pile (the deck the cards fly to and from, `shuffle.dx/dy` = -265, -498), same `WG:Shuffle()`; Back is now the plank's width (128) and sits directly under it, centred on the same line. Pick screen headings: "Pick your card and class." is now "Choose a card" and "Play as" is "Choose your class", centred above the nine class rings (the ring row is centred on the board); both in gold Morpheus lettering with a deep shadow and a thin gold rule and diamond each side (`WG.Ornament`). Back and Begin use the dealer caption's lettering (13 pt gold Morpheus with a shadow; dimmer gold when Begin is disabled): `WG.WoodLettering`. The "Your spell" card on the pick screen enlarges on hover like the pick cards (`WG:PickSpellZoom`: a copy at the pick zoom, 1.7x, grows where it lies, kept inside the window, the original fades under it; the full rules stay in the tooltip beside it). Round 3: Begin also gets a streak of light that sweeps across it every 2.6 s and a few small gold sparkles that kindle round the plank, drift up and fade (both only while it can be pressed; a gold border was tried and dropped as too hard-edged); the spell card 20 px to the right of where Round 2 left it (further in from the felt's left edge); the Back arrow lost its gold ring and socket and is bigger (56 px, 62 on hover). Round 2 of the pick-screen layout: the spell card 12 px further left; Begin is bigger (172 x 32, 18 pt lettering) with a gold glow that breathes while it can be pressed, the dealer button still centred over it (`WG.BEGIN_W`); the Back arrow is now the painted red arrow (`Media/Back_Arrow.tga`, source `docs/art_source/Back_Arrow.png`, from a baked checkerboard: new `arrow` mode in `tools/art_convert.py`); the boxes that hold each player's hand are the new wooden coin tray (`Media/Tray_Coins.tga`, source `docs/art_source/Hand_Tray.png`: the landscape tray turned a quarter turn, the coin-pile ends kept and only the middle stretched into a 128 x 512 texture, new `tray` mode in `art_convert.py`; slice margins 40 / 81; the older oak tray `Tray_Hand.tga` stays in Media and the swap is one line, `Frame.trays` in `Build`). The board's own slots keep the stone `Slot_Board`. New textures need a full game restart. Pick-screen layout swap: the "Your spell" card (and its label, under it) moves to the bottom left, mirroring Begin; the dealer button moves to the bottom right over Begin on Begin's centre line (computed from the panel size: `shuffle.dx/dy`); Back is no longer a wooden button but a red arrow in a gold ring in the board's top left corner (the game's `common-icon-backarrow` atlas where it exists, else the spellbook's page arrow, desaturated and tinted red; glow, press and tooltip); the last card on the table lies up and in a little (`SCATTER[10]`), and the spell close look is kept on the felt on the left as well as the right. The "Your spell" label sits under the card (the lower row of cards overlapped it above) in 14 pt gold Morpheus. The "Your spell" card is a little smaller (0.9) and moved in from the board's carved edge so it lies wholly on the felt, and its close look is kept on the felt too. "Let fate decide" is centred on the board (the die and its words centred as a group, `WG:LayoutFate`, also when the words change). The window's corner icon is bigger (74 px) in the gold elite frame (the boss portrait's gold dragon ring, `UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold`) over a dark socket that covers the template's small portrait (`WG.AddEmblem`). The dealer talks: each click on his button plays one of three goblin lines (`WG.DEALER_LINES` = file IDs 550816 / 550811 / 550810, GoblinMaleZanyNPCPissed01 / 03 / 04), chosen at random, never the same one twice running, on the Dialog channel, off with the Wild Gambit sound setting. Longer online-match messages stay plain 15 pt gold sentences ("Pick" became "Choose" in them too). The pick-screen cards sit closer together (column step 106 → 96, rows 272/404 → 282/408) to free the top-left corner, and the whole set of cards is centred on the board (shifted 32 px right; was 40 px left of centre to leave room for the spell card). The Wild Gambit logo on the pick and lobby screens is bigger (310 → 370 px wide) and sits higher (62 → 36 px from the top); the hint line under it follows. Glows on hover, dips on press, glows, pulses and rocks while the cards are shuffled and dealt. Card scenes: "School of Fish" (a Critter with no family) showed the meadow because the habitat rules had no fish words; `HABITAT_WORDS` Underwater now also matches fish (whole word, so "Fisherman" stays on land), "school of", jellyfish, starfish, piranha, squid, octopus, frenzy, thresher, manta, whale, dolphin, and the murloc tribes (Saltspittle, Bluegill, Greymist, Coastrunner, Puddlejumper). That also fixes Saltspittle Puddlejumper / Warrior / Oracle (no scene) and Muckdweller (Swamp). Checked against every creature in the saved Almanac and a list of land lookalikes. New `round` mode in `tools/art_convert.py` (round medallion on a flat dark background: outside the ring transparent, squared). New texture: needs a full game restart.
+- **Merged with 0.52's shuffle:** the dealer's voice line now plays on every shuffle, including the opening deal when the pick screen opens, and the riffle sounds play during the riffle animation instead of all at once at the start.
+- Housekeeping: `docs/TASKS.md` (replaced by `docs/DESIGN.md`) and the unused `Board_DarkPortal.tga` removed.
+
 ## 0.53.1
 
 - Wild Gambit: a card in a new hand could still wear the last game's Divine Shield bubble (or another spell's mark): card frames are reused, and now start each game clean.

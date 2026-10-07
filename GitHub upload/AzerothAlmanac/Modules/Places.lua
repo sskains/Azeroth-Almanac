@@ -34,14 +34,6 @@ local function ExploredCount(map)
 	if ok and type(tex) == "table" and not ns.IsSecret(tex) then return #tex end
 end
 
-local function AreaAt(map)
-	if not (C_MapExplorationInfo and C_MapExplorationInfo.GetExploredAreaIDsAtPosition and C_Map.GetPlayerMapPosition) then return nil end
-	local ok, pos = pcall(C_Map.GetPlayerMapPosition, map, "player")
-	if not ok or not pos then return nil end
-	local okA, areas = pcall(C_MapExplorationInfo.GetExploredAreaIDsAtPosition, map, pos)
-	if okA and type(areas) == "table" and not ns.IsSecret(areas) then return ns.Readable(areas[1]) end
-end
-
 function Places:Check()
 	if not ns.db then return end
 	ns.doing = "recording a place"
@@ -64,12 +56,19 @@ function Places:Check()
 	if info and info.mapType and info.mapType <= 2 then return end
 	local zoneName = (info and info.name) or where.zone
 	local continent = Continent(map)
-	local zrec = ns.Store:Discover("zone", map, { name = zoneName, continent = continent, parent = info and info.parentMapID },
-		continent and (L["%s, %s"]):format(zoneName or "?", continent) or zoneName, where)
+	-- (a visit counts when you arrive, not at every subzone and indoor change inside the zone,
+	-- 0.64.0; the same for a subzone)
+	local zrec
+	if Places.lastMap ~= map or not ns.Store:Get("zone", map) then
+		zrec = ns.Store:Discover("zone", map, { name = zoneName, continent = continent, parent = info and info.parentMapID },
+			continent and (L["%s, %s"]):format(zoneName or "?", continent) or zoneName, where)
+	else
+		zrec = ns.Store:Get("zone", map)
+	end
+	Places.lastMap = map
 	if zrec then
 		local explored = ExploredCount(map)
 		if explored then
-			zrec.explored = math.max(zrec.explored or 0, explored)
 			local c = ns.db.chars[ns.CharKey()]
 			if c then
 				c.mapAreas = c.mapAreas or {}
@@ -82,9 +81,14 @@ function Places:Check()
 	if sub and sub ~= "" and sub ~= zoneName then
 		local id = map .. ":" .. sub
 		local existing = ns.Store:Get("subzone", id)
-		local fields = { name = sub, map = map, zone = zoneName, area = AreaAt(map) }
-		if not existing then fields.x, fields.y = where.x, where.y end
-		ns.Store:Discover("subzone", id, fields, (L["%s, %s"]):format(sub, zoneName or "?"), where)
+		if Places.lastSub ~= id or not existing then
+			local fields = { name = sub, map = map, zone = zoneName }
+			if not existing then fields.x, fields.y = where.x, where.y end
+			ns.Store:Discover("subzone", id, fields, (L["%s, %s"]):format(sub, zoneName or "?"), where)
+		end
+		Places.lastSub = id
+	else
+		Places.lastSub = nil
 	end
 end
 
@@ -130,6 +134,7 @@ end
 local EXPLORED_XP, EXPLORED
 
 function Places:Explored(name, xp)
+	if self.ForgetExploration then self:ForgetExploration() end
 	local where = ns.Where()
 	if not where.map then return end
 	local info = MapInfo(where.map)
@@ -152,6 +157,8 @@ function Places:Explored(name, xp)
 	c.explored = c.explored or {}
 	if not c.explored[id] then c.explored[id] = { t = time(), xp = xp } end
 	ns:Fire("CHANGED", "subzone", id)
+	-- (the achievement updates a moment after the message)
+	C_Timer.After(2, function() pcall(Places.CheckZoneExplored, Places, zoneName, where.map) end)
 end
 
 ns:RegisterEvent("CHAT_MSG_SYSTEM", function(_, msg)
@@ -169,6 +176,82 @@ ns:RegisterEvent("CHAT_MSG_SYSTEM", function(_, msg)
 	end
 end)
 
+---------------------------------------------------------------------------
+-- How much of a zone is explored (0.57.0): WoW Forever's legacy exploration achievements
+-- ("Explore Elwynn Forest") list every area of a zone as criteria, so the total is the game's
+-- own, for the character you're playing. The one place the Almanac shows "x of y" (ground rule 9's
+-- exception: the game already shows it). nil where the client has no such achievement.
+---------------------------------------------------------------------------
+
+local exploreIndex, exploreBuiltAt -- zone name (lower case) -> achievement id
+local function BuildExploreIndex()
+	exploreIndex, exploreBuiltAt = {}, GetTime()
+	if not (GetCategoryList and GetCategoryNumAchievements and GetAchievementInfo) then return end
+	local ok, cats = pcall(GetCategoryList)
+	if not ok or type(cats) ~= "table" then return end
+	local prefix = (ns.L["Explore %s"]):gsub("%%s", "(.+)")
+	for _, cat in ipairs(cats) do
+		local okN, n = pcall(GetCategoryNumAchievements, cat, true)
+		for i = 1, (okN and tonumber(n) or 0) do
+			local okA, id, name = pcall(GetAchievementInfo, cat, i)
+			if okA and id and type(name) == "string" then
+				local zone = name:match("^" .. prefix .. "$")
+				if zone then exploreIndex[zone:lower()] = id end
+			end
+		end
+	end
+end
+
+-- total areas, how many this character has explored, and the areas { { name, done } }
+-- (answers kept for 30 seconds, and dropped when you explore somewhere: the pages ask for every
+-- zone they draw, 0.64.0)
+local exploreCache = {}
+function Places:ForgetExploration() wipe(exploreCache) end
+function Places:Exploration(zoneName)
+	if not zoneName then return nil end
+	local hit = exploreCache[zoneName]
+	if hit and GetTime() - hit.t < 30 then return hit.total, hit.done, hit.areas end
+	local total, done, areas = self:ReadExploration(zoneName)
+	exploreCache[zoneName] = { t = GetTime(), total = total, done = done, areas = areas }
+	return total, done, areas
+end
+function Places:ReadExploration(zoneName)
+	if not exploreIndex then BuildExploreIndex() end
+	local id = exploreIndex[zoneName:lower()]
+	-- (read too early - the achievements not loaded yet - the index comes out short: a zone it
+	-- doesn't know builds it again, once a minute at most, 0.63.0)
+	if not id and GetTime() - (exploreBuiltAt or 0) > 60 then
+		BuildExploreIndex()
+		id = exploreIndex[zoneName:lower()]
+	end
+	if not (id and GetAchievementNumCriteria and GetAchievementCriteriaInfo) then return nil end
+	local ok, n = pcall(GetAchievementNumCriteria, id)
+	if not ok or type(n) ~= "number" or n < 1 then return nil end
+	local done, areas = 0, {}
+	for i = 1, n do
+		local okC, name, _, completed = pcall(GetAchievementCriteriaInfo, id, i)
+		if okC and name then
+			areas[#areas + 1] = { name = name, done = completed and true or false }
+			if completed then done = done + 1 end
+		end
+	end
+	if #areas == 0 then return nil end
+	return #areas, done, areas
+end
+
+-- the whole zone explored: a milestone-like alert and a journal line, once per zone per character
+function Places:CheckZoneExplored(zoneName, map)
+	local total, done = self:Exploration(zoneName)
+	if not (total and done >= total) then return end
+	local c = ns.db.chars[ns.CharKey()]
+	if not c then return end
+	c.zoneDone = c.zoneDone or {}
+	if c.zoneDone[zoneName] then return end
+	c.zoneDone[zoneName] = time()
+	ns:Fire("TOAST", "milestone", L["Fully explored"], zoneName, ns.Widgets and ns.Widgets.KindIcon and ns.Widgets.KindIcon("zone") or nil, 4)
+	ns.Store:AddJournal("zone", map, (L["%s fully explored (%d areas)."]):format(zoneName, total), ns.Where())
+end
+
 -- has this character explored a place (or the whole zone: "zone:<map>")? returns the record
 function Places:ExploredBy(key, id)
 	local c = ns.db.chars[key]
@@ -178,7 +261,7 @@ end
 -- what's been found in a zone, from every catalogue
 function Places:InZone(map, zoneName)
 	local out = { creatures = {}, merchants = {}, quests = {}, givers = {}, lo = nil, hi = nil }
-	for npc, rec in pairs(ns.Store:All("creature")) do
+	for npc, rec in pairs(ns.Store:Shown("creature")) do
 		if rec.z and rec.z[map] then
 			out.creatures[#out.creatures + 1] = { npc = npc, rec = rec }
 			if rec.lo and rec.lo > 0 then out.lo = math.min(out.lo or rec.lo, rec.lo) end
@@ -189,23 +272,23 @@ function Places:InZone(map, zoneName)
 		if (a.rec.lo or 0) ~= (b.rec.lo or 0) then return (a.rec.lo or 0) < (b.rec.lo or 0) end
 		return (a.rec.name or "") < (b.rec.name or "")
 	end)
-	for npc, rec in pairs(ns.Store:All("merchant")) do
+	for npc, rec in pairs(ns.Store:Shown("merchant")) do
 		if rec.map == map then out.merchants[#out.merchants + 1] = { npc = npc, rec = rec } end
 	end
 	table.sort(out.merchants, function(a, b) return (a.rec.name or "") < (b.rec.name or "") end)
 	out.trainers = {}
-	for npc, rec in pairs(ns.Store:All("trainer")) do
+	for npc, rec in pairs(ns.Store:Shown("trainer")) do
 		if rec.map == map then out.trainers[#out.trainers + 1] = { npc = npc, rec = rec } end
 	end
 	table.sort(out.trainers, function(a, b) return (a.rec.name or "") < (b.rec.name or "") end)
-	for qid, rec in pairs(ns.Store:All("quest")) do
+	for qid, rec in pairs(ns.Store:Shown("quest")) do
 		if (rec.gpos and rec.gpos.map == map) or (zoneName and ns.Quests:Heading(qid, rec) == zoneName) then
 			out.quests[#out.quests + 1] = { qid = qid, rec = rec }
 		end
 	end
 	table.sort(out.quests, function(a, b) return (a.rec.name or "") < (b.rec.name or "") end)
 	for _, kind in ipairs({ "npc", "object" }) do
-		for id, rec in pairs(ns.Store:All(kind)) do
+		for id, rec in pairs(ns.Store:Shown(kind)) do
 			if rec.map == map then out.givers[#out.givers + 1] = { id = id, kind = kind, rec = rec } end
 		end
 	end
@@ -217,12 +300,12 @@ end
 function Places:Tree()
 	local zones = {}
 	local byMap = {}
-	for id, rec in pairs(ns.Store:All("zone")) do
+	for id, rec in pairs(ns.Store:Shown("zone")) do
 		local z = { id = id, rec = rec, subs = {} }
 		zones[#zones + 1] = z
 		byMap[id] = z
 	end
-	for id, rec in pairs(ns.Store:All("subzone")) do
+	for id, rec in pairs(ns.Store:Shown("subzone")) do
 		local z = byMap[rec.map]
 		if z then z.subs[#z.subs + 1] = { id = id, rec = rec } end
 	end

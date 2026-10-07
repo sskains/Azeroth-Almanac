@@ -174,8 +174,9 @@ function WL.MinTier(info)
 	return 1
 end
 
-function WL.Card(info, tier)
-	tier = math.max(WL.MinTier(info), math.min(6, tier or 1))
+-- noFloor: a supporting card evening out a hand may play below its usual floor (0.61.0)
+function WL.Card(info, tier, noFloor)
+	tier = math.max(noFloor and 1 or WL.MinTier(info), math.min(6, tier or 1))
 	local total = WL.Total(info.level, tier)
 	return {
 		npc = info.npc, name = info.name, level = info.level, tier = tier, total = total,
@@ -229,20 +230,16 @@ function WL.Best(cards, n)
 	return sum
 end
 
--- a card played a tier or more lower so it fits (like level sync)
-function WL.Synced(card, maxTotal)
-	local c = card
-	while c.total > maxTotal and c.tier > WL.MinTier(card.info) do c = WL.Card(card.info, c.tier - 1) end
-	return c
-end
-
 -- five cards: the picked one plus four drawn at random, as close to `budget` spikes as the
 -- collection allows (never over by more than 1)
 -- a card one tier lower that keeps its shape: the spikes the tier took away come off its biggest
 -- sides (the first of equal sides first). Needs only what travels with a card, so both players'
 -- screens lower a card the same way. nil when it's already at its lowest tier.
-function WL.Lower(card)
-	local floor = WL.MinTier(card.info or { class = card.class })
+-- ignoreFloor: down to tier 1 (supporting cards only; a picked card isn't lowered unless forced)
+-- force: the pick cap (WL.Equalize) and the practice gambler's difficulty may lower a pick
+function WL.Lower(card, ignoreFloor, force)
+	if card.picked and not force then return nil end
+	local floor = ignoreFloor and 1 or WL.MinTier(card.info or { class = card.class })
 	if card.tier <= floor then return nil end
 	local tier = card.tier - 1
 	local total = WL.Total(card.level, tier)
@@ -258,6 +255,7 @@ function WL.Lower(card)
 	local c = {}
 	for key, v in pairs(card) do c[key] = v end
 	c.tier, c.s, c.total = tier, s, s[1] + s[2] + s[3] + s[4]
+	c.lowered = true
 	return c
 end
 
@@ -268,6 +266,10 @@ local function HandTotal(hand)
 end
 WL.HandTotal = HandTotal
 
+-- the pick cap (0.62.0): a picked card plays at full strength unless the two hands would still end
+-- more than this many spikes apart; then it drops a tier at a time, only as far as needed
+WL.PICK_GAP = 3
+
 -- evens two hands out: while one has more than 1 spike over the other, its strongest card that can
 -- still drop a tier (the first of equals, by place in the hand) plays a tier lower. Hands change in
 -- place; the same on both screens whichever hand is passed first.
@@ -277,15 +279,23 @@ function WL.Equalize(a, b)
 		if math.abs(ta - tb) <= 1 then break end
 		local hand = ta > tb and a or b
 		-- the strongest card that can drop a tier; a player's picked card only when no other can
+		-- (0.61.0: a picked card is never lowered; when every other card is at its floor, they go
+		-- below it instead)
+		-- (0.62.0: the pick cap. Still more than WL.PICK_GAP spikes apart with every supporting
+		-- card at tier 1: the picked card drops a tier, within its floor, and is marked downgraded)
 		local best, bi
-		for pass = 1, 2 do
+		for pass = 1, 3 do
+			if pass == 3 and math.abs(ta - tb) <= WL.PICK_GAP then break end
 			for i, c in ipairs(hand) do
-				local lower = (pass == 2 or not c.picked) and WL.Lower(c)
+				local lower
+				if pass == 3 then lower = c.picked and WL.Lower(c, false, true) or nil
+				else lower = WL.Lower(c, pass == 2) end
 				if lower and (not best or c.total > hand[bi].total) then best, bi = lower, i end
 			end
 			if best then break end
 		end
 		if not best then break end
+		if best.picked then best.downgraded = true end
 		-- don't overshoot: a drop that would leave this hand further under than it was over
 		local gap = math.abs(ta - tb)
 		local after = math.abs((ta > tb and ta or tb) - hand[bi].total + best.total - (ta > tb and tb or ta))
@@ -317,7 +327,8 @@ function WL.Hand(cards, pick, budget, rng, weighted)
 		for k = #others, 1, -1 do if not used[k] then return k end end
 	end
 	local need = WL.HAND - 1
-	local first = pick and WL.Synced(pick, math.max(1, budget - need)) or nil
+	-- the card you picked plays exactly as you picked it (0.61.0); the rest fill what's left
+	local first = pick
 	local target = budget - (first and first.total or 0)
 	local slots = first and need or WL.HAND
 	-- try many random draws, keep the closest to the target (the lower side preferred)
@@ -329,7 +340,7 @@ function WL.Hand(cards, pick, budget, rng, weighted)
 			used[k] = true
 			idx[#idx + 1] = k
 			sum = sum + others[k].total
-			low = low + WL.Total(others[k].level, WL.MinTier(others[k].info))
+			low = low + WL.Total(others[k].level, first and 1 or WL.MinTier(others[k].info))
 		end
 		-- on target is best; over but able to sync down to it (no elite stuck above it) next;
 		-- a draw that can't come down far enough (elites and bosses at their floor) last
@@ -347,7 +358,7 @@ function WL.Hand(cards, pick, budget, rng, weighted)
 		local order = {}
 		for k = 1, #others do order[k] = k end
 		for k = #order, 2, -1 do local j = rng(k) order[k], order[j] = order[j], order[k] end
-		local function Low(k) return WL.Total(others[k].level, WL.MinTier(others[k].info)) end
+		local function Low(k) return WL.Total(others[k].level, first and 1 or WL.MinTier(others[k].info)) end
 		local rank = {}
 		for pos, k in ipairs(order) do rank[k] = pos end
 		table.sort(order, function(x, y)
@@ -376,13 +387,18 @@ function WL.Hand(cards, pick, budget, rng, weighted)
 		table.sort(hand, ByTotal)
 		-- the strongest card that can still drop a tier (not below its floor); your picked card
 		-- only when no other card can
-		local k
+		-- the strongest supporting card that can still drop a tier: within its floor first, then
+		-- below it (a hand with a pick); the picked card never
+		local k, noFloor
 		for i, c in ipairs(hand) do if not c.picked and c.tier > WL.MinTier(c.info) then k = i break end end
-		if not k then for i, c in ipairs(hand) do if c.tier > WL.MinTier(c.info) then k = i break end end end
+		if not k and first then
+			for i, c in ipairs(hand) do if not c.picked and c.tier > 1 then k, noFloor = i, true break end end
+		end
 		if not k then break end
 		local c = hand[k]
-		local lower = WL.Card(c.info, c.tier - 1)
-		lower.picked = c.picked
+		local lower = WL.Card(c.info, c.tier - 1, noFloor)
+		for key, v in pairs(c) do if lower[key] == nil then lower[key] = v end end -- (kills, faction, fav ...)
+		lower.lowered = true
 		total = total - c.total + lower.total
 		hand[k] = lower
 	end
@@ -408,11 +424,10 @@ function WL.Neighbours(cell)
 	return list
 end
 
--- is the card at `cell` safe from the other player? Divine Shield (for good) or Grounding Totem
--- (through the other player's next turn)
+-- is the card at `cell` safe from the other player? (Divine Shield)
 function WL.Safe(board, cell)
 	local slot = board[cell]
-	return slot and (slot.shield or (board.grounded ~= nil and board.grounded == slot.owner)) and true or false
+	return slot and slot.shield and true or false
 end
 
 -- captures from one card at `cell` (its owner's colour), and onward from each card it takes when
@@ -481,7 +496,7 @@ end
 local function Copy(board)
 	local b = {}
 	for i = 1, 9 do if board[i] then b[i] = { card = board[i].card, owner = board[i].owner, shield = board[i].shield, frozen = board[i].frozen } end end
-	b.grounded, b.ankh = board.grounded, board.ankh
+	b.ankh = board.ankh
 	if board.traps then
 		b.traps = {}
 		for k, v in pairs(board.traps) do b.traps[k] = v end
@@ -539,7 +554,7 @@ end
 --   removal:    Banish, Polymorph, Execute (the owner is dealt a new card from their reserves)
 --   protection: Divine Shield, Barkskin, Reincarnation
 --   swap:       Mind Control, Pick Pocket, Freezing Trap
--- Shielded and grounded cards can't be removed, swapped or taken.
+-- Shielded cards can't be removed, swapped or taken.
 ---------------------------------------------------------------------------
 
 -- kind: "remove" / "protect" / "swap" (the target glow: red, gold, purple)
@@ -608,7 +623,8 @@ function WL.CanTarget(board, ability, cell, me, stage)
 	local t = ability.target
 	local slot = board[cell]
 	if t == "none" then return false end
-	if t == "empty" then return not slot and not (board.traps and board.traps[cell]) end
+	-- (only your own traps rule a square out: the other player's are hidden from you)
+	if t == "empty" then return not slot and not (board.traps and board.traps[cell] == me) end
 	if not slot or slot.frozen then return false end -- (a frozen card can't be touched)
 	if t == "pocket" then
 		if stage == 2 then return Open(board, cell, me) end
@@ -634,14 +650,9 @@ function WL.Usable(board, ability, me)
 	return false
 end
 
--- the start of `side`'s turn: their Grounding Totem (cast last turn) has done its work
-function WL.TurnStart(board, side)
-	if board.grounded == side then board.grounded = nil end
-end
-
 -- uses `ability` for `me` on `cell` (and `cell2`, Pick Pocket's card of theirs). Changes the board;
 -- returns { captured = { ... }, changed = { cells whose card changed },
---           removed = { cell, owner, card, from }, swapped = { cell, cell2 }, grounded = true }
+--           removed = { cell, owner, card, from }, swapped = { cell, cell2 } }
 function WL.Use(board, ability, cell, me, cell2)
 	local key = ability.key
 	local out = { captured = {}, changed = {} }
@@ -657,10 +668,7 @@ function WL.Use(board, ability, cell, me, cell2)
 		out.saved = victim
 		return out
 	end
-	if key == "grounding" then
-		board.grounded = me
-		out.grounded = true
-	elseif key == "trap" then
+	if key == "trap" then
 		board.traps = board.traps or {}
 		board.traps[cell] = me
 	elseif key == "shield" then

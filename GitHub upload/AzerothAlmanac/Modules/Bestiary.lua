@@ -91,7 +91,7 @@ B.TIER_HINTS = {
 function B:FullTier(rec)
 	local tier, need = self:Tier(rec)
 	if tier < 4 then return tier, need end
-	local k = rec.kills or 0
+	local k = B:KillCount(rec)
 	local _, _, _, revered, exalted = self:Thresholds(rec)
 	if k >= exalted then return 6, nil end
 	if k >= revered then return 5, exalted - k end
@@ -253,9 +253,17 @@ function B:IsObject(rec)
 	return false
 end
 
+-- the kills that count: the account's, or (character-only Almanac) this character's own
+function B:KillCount(rec)
+	if not rec then return 0 end
+	local me = ns.ScopeChar()
+	if me then return rec.kc and rec.kc[me] or 0 end
+	return rec.kills or 0
+end
+
 function B:Tier(rec)
 	local t = self:Kills(rec)
-	local k = rec.kills or 0
+	local k = B:KillCount(rec)
 	if k >= t.mastered then return 4, nil end
 	if k >= t.studied then return 3, t.mastered - k end
 	if k >= 1 then return 2, t.studied - k end
@@ -270,8 +278,9 @@ local function TierCheck(npc, rec, before)
 	end
 	-- the kill milestones past Mastered (Epic and Legendary toasts)
 	local _, _, _, revered, exalted = B:Thresholds(rec)
-	if after == 4 and (rec.kills == revered or rec.kills == exalted) then
-		local t = rec.kills == exalted and 6 or 5
+	local k = B:KillCount(rec)
+	if after == 4 and (k == revered or k == exalted) then
+		local t = k == exalted and 6 or 5
 		ns:Fire("TOAST", "tier", B.TIERS[t], rec.name or "?", B:TierIcon(t), t == 6 and 5 or 4)
 	end
 end
@@ -320,8 +329,16 @@ function B:Seen(unit, isBoss)
 	local now = time()
 	local again = seenAt[guid] and now - seenAt[guid] < SEEN_AGAIN
 	local rec = ns.Store:Get("creature", npc)
+	-- Alliance or Horde creatures (guards, faction NPCs) carry their side's crest
+	local function Faction(r)
+		if r and not r.faction then
+			local fg = R(UnitFactionGroup(unit))
+			if fg == "Alliance" or fg == "Horde" then r.faction = fg end
+		end
+	end
 	if again and rec then
 		if not rec.display then pcall(B.FaceFromUnit, B, unit, npc) end
+		Faction(rec)
 		return npc, guid
 	end
 	seenAt[guid] = now
@@ -339,6 +356,7 @@ function B:Seen(unit, isBoss)
 	}, name, where)
 	if not rec then return end
 	if byName and name then byName[name] = npc end
+	Faction(rec)
 	if not rec.display then pcall(B.FaceFromUnit, B, unit, npc) end
 	if type(level) == "number" then
 		rec.lo = rec.lo and math.min(rec.lo, level) or level
@@ -402,6 +420,10 @@ local function CountKill(guid, npc)
 	if not rec then return end
 	local before = B:Tier(rec)
 	rec.kills = (rec.kills or 0) + 1
+	-- (each character's own kills too, for the character-only Almanac)
+	local me = ns.CharKey()
+	rec.kc = rec.kc or {}
+	rec.kc[me] = (rec.kc[me] or 0) + 1
 	local where = ns.Where()
 	B:AddSpot(rec, "kz", where)
 	if where.map and where.x then rec.lastKill = { map = where.map, x = where.x, y = where.y, t = time() } end
@@ -611,6 +633,8 @@ local function OnLoot()
 			elseif gathering then
 				skinned[guid] = GetTime()
 				rec.gathered = (rec.gathered or 0) + 1
+				rec.gc = rec.gc or {}
+				rec.gc[ns.CharKey()] = (rec.gc[ns.CharKey()] or 0) + 1
 				rec.gather = rec.gather or {}
 				for item in pairs(c.items) do rec.gather[item] = (rec.gather[item] or 0) + 1 end
 			elseif not looted[guid] then
@@ -731,7 +755,7 @@ local function TooltipLine(tooltip)
 	end
 	local tier, need = B:Tier(rec)
 	local text = ("|cff66ccff%s|r %s %s"):format(L["Almanac:"], B:TierMarkup(tier, 16), B:TierText(tier))
-	if (rec.kills or 0) > 0 then text = text .. " - " .. ns.N(rec.kills, "kill", "kills") end
+	if B:KillCount(rec) > 0 then text = text .. " - " .. ns.N(B:KillCount(rec), "kill", "kills") end
 	if need then text = text .. " |cff999999" .. (L["(%d to %s)"]):format(need, B.TIERS[tier + 1]) .. "|r " .. B:TierMarkup(tier + 1, 12) end
 	tooltip:AddLine(text, 1, 1, 1)
 	-- Studied and up: its abilities, each with its icon (melee left out)

@@ -6,13 +6,13 @@
 --   header: search across every character's items, account gold.
 --   plate:  portrait (live model for you), name, class line, gold, rest, last location (click: map),
 --           hearthstone, data freshness, XP and rested XP bar.
---   tabs:   Story (levels, firsts), Gear, Bags, Bank, Auctions, Professions, each with a game icon.
+--   tabs:   Story (levels, first visits), Gear, Bags, Bank, Auctions, Professions, each with a game icon.
 
 local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "characters", title = L["Characters"], icon = W.KIND.character.icon, order = 2, portraitUnit = "player" }   -- the tab shows you
+local page = { key = "characters", title = L["Characters"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Characters", order = 2 }   -- (the painted journal icon)
 local list, detail, plate, invScroll, invContent, tabRow, searchBox, goldText, summaryText, root
 local tabs = {}
 local state = { tab = "story", search = "", showHidden = false }

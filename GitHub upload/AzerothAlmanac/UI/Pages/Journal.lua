@@ -50,7 +50,7 @@ local function Subject(e, rec)
 			tip = L["Click to open in Creatures."], onClick = GoTo("bestiary", "ShowCreature", id) }
 	elseif k == "merchant" then
 		return { name = rec and rec.name or e.s, icon = W.KindIcon("merchant"), note = rec and rec.title or L["Merchant"],
-			tip = L["Click to open in Merchants."], onClick = GoTo("merchants", "ShowMerchant", id) }
+			tip = L["Click to open in People."], onClick = GoTo("merchants", "ShowMerchant", id) }
 	elseif k == "quest" then
 		return { name = rec and rec.name or e.s, icon = W.KindIcon("quest"), note = L["Quest"],
 			tip = L["Click to open in Quests."], onClick = GoTo("quests", "ShowQuest", id) }
@@ -66,9 +66,9 @@ local function Subject(e, rec)
 			tip = L["Click to open in Dungeons."], onClick = GoTo("dungeons", "ShowDungeon", id) }
 	elseif k == "trainer" then
 		return { name = rec and rec.name or e.s, icon = W.KindIcon("trainer"), note = rec and rec.title or L["Trainer"],
-			tip = L["Click to open in Trainers."], onClick = rec and rec.group and GoTo("trainers", "ShowGroup", rec.group) or GoTo("trainers", "Refresh") }
+			tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowPerson", id) }
 	elseif k == "spell" then
-		return { spell = id, note = L["Spell or recipe"], extra = L["Click to open in Trainers."], onClick = GoTo("trainers", "ShowSpell", id) }
+		return { spell = id, note = L["Spell or recipe"], extra = L["Click to open in Spells & Recipes."], onClick = GoTo("trainers", "ShowSpell", id) }
 	elseif k == "townsfolk" or k == "npc" then
 		return { name = rec and rec.name or e.s, icon = W.KindIcon(k), note = rec and rec.title or W.KIND[k].label,
 			tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowPerson", id) }
@@ -145,9 +145,10 @@ local function Collect()
 	local out = {}
 	local j = ns.db.journal
 	local n, day, h = 0, nil, nil
+	local cf = ns.ScopeChar() or charFilter -- (character-only Almanac: this character's journal)
 	for i = #j, 1, -1 do
 		local e = j[i]
-		if (not charFilter or e.c == charFilter) and (not kindFilter or e.k == kindFilter) and (not zoneFilter or e.m == zoneFilter)
+		if (not cf or e.c == cf) and (not kindFilter or e.k == kindFilter) and (not zoneFilter or e.m == zoneFilter)
 			and (filter == "" or (e.s and e.s:lower():find(filter, 1, true))) then
 			local d = DayKey(e.t or 0)
 			if d ~= day then
@@ -230,13 +231,13 @@ end
 local CATALOGUES = {
 	{ "zone", L["Zones"], "places" }, { "subzone", L["Places"], "places" }, { "instance", L["Dungeons and raids"], "dungeons" },
 	{ "creature", L["Creatures"], "bestiary" }, { "item", L["Items"], "items" }, { "quest", L["Quests"], "quests" },
-	{ "merchant", L["Merchants"], "merchants" }, { "trainer", L["Trainers"], "trainers" }, { "townsfolk", L["People"], "townsfolk" },
+	{ "merchant", L["Merchants"], "townsfolk" }, { "trainer", L["Trainers"], "townsfolk" }, { "townsfolk", L["People"], "townsfolk" },
 	{ "flight", L["Flight paths"], "townsfolk" }, { "node", L["Gathering nodes"], "gathering" }, { "fishing", L["Fishing waters"], "gathering" },
 }
 
 local function Overview()
 	local b = {}
-	local char = charFilter
+	local char = ns.ScopeChar() or charFilter
 	b[#b + 1] = { "title", char and (L["%s's journal"]):format(ns.CharName(char, true)) or L["The Adventurer's Journal"] }
 	b[#b + 1] = { "small", char and L["What this character has discovered. Pick All characters for the whole account."]
 		or L["Everything your characters have discovered, together."] }
@@ -245,7 +246,7 @@ local function Overview()
 	local slots = {}
 	for _, c in ipairs(CATALOGUES) do
 		local n, new = 0, 0
-		for _, rec in pairs(ns.Store:All(c[1])) do
+		for _, rec in pairs(ns.Store:Shown(c[1])) do
 			local at = char and (rec.c and rec.c[char]) or (not char and rec.f)
 			if at then
 				n = n + 1
@@ -325,7 +326,7 @@ local function Overview()
 	if not char then
 		local firsts = {}
 		for _, c in ipairs(CATALOGUES) do
-			for _, rec in pairs(ns.Store:All(c[1])) do
+			for _, rec in pairs(ns.Store:Shown(c[1])) do
 				if rec.b then firsts[rec.b] = (firsts[rec.b] or 0) + 1 end
 			end
 		end

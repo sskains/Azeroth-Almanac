@@ -36,31 +36,47 @@ local ICON = {
 	boss = { "INV_Misc_Bone_HumanSkull_01", "Ability_Warrior_Rampage" },
 }
 
--- counts the milestones read: account-wide, or one character's (records they have met)
+-- counts the milestones read: account-wide, or one character's (records they have met). One pass
+-- over each kind (0.64.0: was a pass per count)
 function M:Stats(char)
 	local s = {}
-	local function Count(kind, test)
+	local function Mine(rec) return not char or (rec.c and rec.c[char]) end
+	for _, kind in ipairs({ "zone", "subzone", "instance", "merchant", "trainer", "townsfolk", "flight", "node", "fishing" }) do
 		local n = 0
-		for _, rec in pairs(ns.Store:All(kind)) do
-			if (not char or (rec.c and rec.c[char])) and (not test or test(rec)) then n = n + 1 end
-		end
-		return n
+		for _, rec in pairs(ns.Store:All(kind)) do if Mine(rec) then n = n + 1 end end
+		s[kind] = n
 	end
-	for _, kind in ipairs({ "creature", "zone", "subzone", "instance", "item", "merchant", "trainer", "townsfolk", "flight", "node", "fishing" }) do
-		s[kind] = Count(kind)
-	end
+	-- creatures: how many, their tiers, the elites, rares and bosses, the kills, all at once
+	-- (a tier from the account's kills, or that character's own: never from whichever the Almanac
+	-- happens to be showing)
 	local B = ns.Bestiary
-	s.mastered = B and Count("creature", function(r) return B:Tier(r) >= 4 end) or 0
-	s.studied = B and Count("creature", function(r) return B:Tier(r) >= 3 end) or 0
-	s.elite = Count("creature", function(r) return r.class == "elite" or r.class == "rareelite" or r.class == "worldboss" end)
-	s.rarecreature = Count("creature", function(r) return r.class == "rare" or r.class == "rareelite" end)
-	s.boss = Count("creature", function(r) return (r.boss or r.class == "worldboss") and (r.kills or 0) > 0 end)
-	s.rare = Count("item", function(r) return (r.q or 0) >= 3 end)
-	s.epic = Count("item", function(r) return (r.q or 0) >= 4 end)
-	s.kills = 0
-	for _, rec in pairs(ns.Store:All("creature")) do
-		if not char or (rec.c and rec.c[char]) then s.kills = s.kills + (rec.kills or 0) end
+	local c = { creature = 0, mastered = 0, studied = 0, elite = 0, rarecreature = 0, boss = 0, kills = 0 }
+	for _, r in pairs(ns.Store:All("creature")) do
+		if Mine(r) then
+			local k
+			if char then k = r.kc and r.kc[char] or 0 else k = r.kills or 0 end
+			c.creature = c.creature + 1
+			c.kills = c.kills + k
+			if B and B.Kills then
+				local t = B:Kills(r)
+				if k >= t.mastered then c.mastered = c.mastered + 1 end
+				if k >= t.studied then c.studied = c.studied + 1 end
+			end
+			if r.class == "elite" or r.class == "rareelite" or r.class == "worldboss" then c.elite = c.elite + 1 end
+			if r.class == "rare" or r.class == "rareelite" then c.rarecreature = c.rarecreature + 1 end
+			if (r.boss or r.class == "worldboss") and k > 0 then c.boss = c.boss + 1 end
+		end
 	end
+	for k, v in pairs(c) do s[k] = v end
+	local items, rare, epic = 0, 0, 0
+	for _, r in pairs(ns.Store:All("item")) do
+		if Mine(r) then
+			items = items + 1
+			if (r.q or 0) >= 3 then rare = rare + 1 end
+			if (r.q or 0) >= 4 then epic = epic + 1 end
+		end
+	end
+	s.item, s.rare, s.epic = items, rare, epic
 	-- quests done: by any character, or by this one
 	local done = {}
 	for key, c in pairs(ns.db.chars or {}) do
@@ -70,7 +86,7 @@ function M:Stats(char)
 	end
 	s.quest = 0
 	for _ in pairs(done) do s.quest = s.quest + 1 end
-	local t = ns.Gathering and ns.Gathering:Totals() or {}
+	local t = ns.Gathering and ns.Gathering:Totals(char) or {}
 	s.herb, s.ore, s.fish, s.skin = t.herb or 0, t.ore or 0, t.fish or 0, t.skin or 0
 	s.chars = 0
 	for _ in pairs(ns.db.chars or {}) do s.chars = s.chars + 1 end
@@ -140,22 +156,34 @@ function M:Earned(id)
 	return ns.db and ns.db.milestones and ns.db.milestones[id]
 end
 
+-- the account's milestones, and (0.63.0) each character's own: in a character-only Almanac, a
+-- character reaching one is told so even when the account reached it long ago
 function M:Check()
 	if not ns.db then return end
 	ns.db.milestones = ns.db.milestones or {}
-	local got = ns.db.milestones
-	local first = not ns.db.milestonesInit
-	local s = self:Stats()
 	local where = ns.Where()
-	for _, def in ipairs(self.list) do
-		if not got[def.id] and (s[def.stat] or 0) >= def.need then
-			got[def.id] = { t = time(), c = ns.CharKey(), quiet = first or nil }
-			if not first then
-				ns.Store:AddJournal("milestone", def.id, def.title, where)
-				ns:Fire("TOAST", "milestone", L["Milestone reached"], def.title, ns.Widgets and ns.Widgets.FindIcon(def.icon) or nil, def.tier)
+	local told = {}
+	local function Pass(got, s, first, mine)
+		for _, def in ipairs(self.list) do
+			if not got[def.id] and (s[def.stat] or 0) >= def.need then
+				got[def.id] = { t = time(), c = ns.CharKey(), quiet = first or nil }
+				if not first and not told[def.id] then
+					told[def.id] = true
+					ns.Store:AddJournal("milestone", def.id, def.title, where)
+					ns:Fire("TOAST", "milestone", mine and L["Milestone reached (this character)"] or L["Milestone reached"], def.title,
+						ns.Widgets and ns.Widgets.FindIcon(def.icon) or nil, def.tier)
+				end
 			end
 		end
 	end
+	local me = ns.ScopeChar()
+	local c = me and ns.db.chars and ns.db.chars[me]
+	if c then
+		c.milestones = c.milestones or {}
+		Pass(c.milestones, self:Stats(me), not c.milestonesInit, true)
+		c.milestonesInit = true
+	end
+	Pass(ns.db.milestones, self:Stats(), not ns.db.milestonesInit, false)
 	ns.db.milestonesInit = true
 end
 
@@ -178,9 +206,11 @@ ns:RegisterEvent("PLAYER_ENTERING_WORLD", Later)
 -- earned milestones, newest first: { { def, t, c, quiet } }; char: only those that character earned
 function M:EarnedList(char)
 	local out = {}
-	for id, e in pairs(ns.db and ns.db.milestones or {}) do
+	-- (a character's own list once it has one; before that, the account's that it earned)
+	local own = char and ns.db and ns.db.chars and ns.db.chars[char] and ns.db.chars[char].milestones
+	for id, e in pairs(own or (ns.db and ns.db.milestones) or {}) do
 		local def = self.byId[id]
-		if def and (not char or e.c == char) then out[#out + 1] = { def = def, t = e.t, c = e.c, quiet = e.quiet } end
+		if def and (own or not char or e.c == char) then out[#out + 1] = { def = def, t = e.t, c = char or e.c, quiet = e.quiet } end
 	end
 	table.sort(out, function(a, b)
 		if a.t ~= b.t then return a.t > b.t end

@@ -12,7 +12,10 @@ local Window = ns:NewModule("Window")
 local WIDTH, HEIGHT = 880, 680   -- tall enough for the Characters page's gear and professions without scrolling
 local frame, pages, order, current = nil, {}, {}, nil
 
-function UI:GetPage(key) return pages[key] end
+-- pages merged into another keep their key as an alias (Merchants lives in People now)
+local aliases = {}
+function UI:RegisterAlias(key, to) aliases[key] = to end
+function UI:GetPage(key) return pages[aliases[key] or key] end
 
 function UI:RegisterPage(def)
 	pages[def.key] = def
@@ -97,7 +100,7 @@ end
 
 function UI:ShowPage(key)
 	ns.doing = "showing the " .. tostring(key) .. " page"
-	local def = pages[key] or order[1]
+	local def = pages[aliases[key] or key] or order[1]
 	if not def then return end
 	-- leaving a page for another: remember where you were on it
 	if current and current ~= def and not UI.restoring then
@@ -123,7 +126,9 @@ function UI:ShowPage(key)
 	def.header:Show()
 	current = def
 	ns.db.settings.window.tab = def.key
-	SetTitle(L["Azeroth Almanac"] .. " - " .. def.title)
+	-- (character-only Almanac: whose it is, in the title)
+	local me = ns.ScopeChar and ns.ScopeChar()
+	SetTitle(L["Azeroth Almanac"] .. " - " .. def.title .. (me and ("  |cffbfbfbf(" .. ns.CharName(me) .. ")|r") or ""))
 	SetPortrait(W.FindIcon(def.icon or ns.ICON), def)
 	for i, d in ipairs(order) do if d == def then SelectTab(i) end end
 	UpdateBack()
@@ -321,13 +326,31 @@ ns:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
 end)
 
 -- keep the open page current as discoveries come in (at most twice a second)
-local pending = false
-ns:On("CHANGED", function()
-	if not (frame and frame:IsShown() and current) or pending then return end
+-- (0.64.0) only when what changed is something the page shows: PAGE_KINDS lists what each page
+-- reads; a page not listed refreshes on every change, and a change of no kind refreshes any page
+local PAGE_KINDS = {
+	bestiary = { creature = true, zone = true, item = true },
+	items = { item = true, merchant = true, quest = true, spell = true, creature = true },
+	quests = { quest = true, zone = true, item = true, creature = true },
+	gathering = { node = true, fishing = true, creature = true, item = true, zone = true },
+	dungeons = { instance = true, creature = true, item = true },
+	townsfolk = { townsfolk = true, merchant = true, trainer = true, npc = true, flight = true, mailbox = true, zone = true },
+	trainers = { spell = true, trainer = true },
+}
+local pending, changedKinds, changedAll = false, {}, false
+ns:On("CHANGED", function(kind)
+	if not (frame and frame:IsShown() and current) then return end
+	if kind then changedKinds[kind] = true else changedAll = true end
+	if pending then return end
 	pending = true
 	C_Timer.After(0.5, function()
 		pending = false
-		if frame:IsShown() and current and current.Refresh then
+		local want = PAGE_KINDS[current and current.key or ""]
+		local hit = changedAll or not want
+		if not hit then for k in pairs(changedKinds) do if want[k] then hit = true break end end end
+		wipe(changedKinds)
+		changedAll = false
+		if hit and frame:IsShown() and current and current.Refresh then
 			UI.refreshing = true
 			pcall(current.Refresh, current)
 			UI.refreshing = false

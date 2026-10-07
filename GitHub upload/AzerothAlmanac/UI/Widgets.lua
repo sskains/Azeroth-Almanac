@@ -654,6 +654,9 @@ local function DefaultRow(parent, height, round, style)
 		end
 		self.icon:Hide()
 		self.ring:Hide()
+		-- (row.indent: a heading nested under another, e.g. a zone under its continent)
+		local ind = self.indent or 0
+		if self.bar then self.bar:SetPoint("TOPLEFT", 2 + ind, -1) end
 		local text = self.text:GetText() or ""
 		text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 		if log then
@@ -661,7 +664,7 @@ local function DefaultRow(parent, height, round, style)
 			self.text:SetFontObject(Font("GameFontHighlightMedium", "GameFontNormalMed1", "GameFontHighlight"))
 			self.text:SetTextColor(0.86, 0.84, 0.78)
 			self.text:ClearAllPoints()
-			self.text:SetPoint("LEFT", 10, 0)
+			self.text:SetPoint("LEFT", 10 + ind, 0)
 			self.text:SetPoint("RIGHT", self.right, "LEFT", -6, 0)
 			self.text:SetText(text)
 			return
@@ -669,11 +672,13 @@ local function DefaultRow(parent, height, round, style)
 		self.text:SetFontObject(GameFontDisableSmall)
 		self.text:SetTextColor(0.62, 0.62, 0.62)
 		self.text:ClearAllPoints()
-		self.text:SetPoint("LEFT", 6, 0)
+		self.text:SetPoint("LEFT", 6 + ind, 0)
 		self.text:SetPoint("RIGHT", self.right, "LEFT", -6, 0)
 		self.text:SetText(text:upper())
 	end
 	function row:UnstyleHeader()
+		self.indent = 0
+		if self.bar then self.bar:SetPoint("TOPLEFT", 2, -1) end
 		self.icon:Show()
 		self.text:SetFontObject(GameFontNormal)
 		self.text:ClearAllPoints()
@@ -795,6 +800,9 @@ function W.List(parent, opts)
 						if mouse == "LeftButton" and self.item.header == nil then holder:Select(self.item) end
 						if opts.onClick then opts.onClick(self.item, self.index, mouse) end
 					end)
+					-- (opts.onHover(item) / opts.onLeave(item): a page can preview what's under the mouse)
+					if opts.onHover then row:HookScript("OnEnter", function(self) if self.item then opts.onHover(self.item) end end) end
+					if opts.onLeave then row:HookScript("OnLeave", function(self) opts.onLeave(self.item) end) end
 					-- lists of items: the magnifier while Ctrl is held, as on item slots
 					if opts.itemOf then W.ItemCursor(row, function(r) return r.item and opts.itemOf(r.item) end) end
 					rows[i] = row
@@ -1093,7 +1101,28 @@ function W.Portrait(parent, size)
 	mask:SetAllPoints(p.art)
 	if p.art.AddMaskTexture then p.art:AddMaskTexture(mask) end
 	function p:SetRing(r, g, b) self.ring:SetVertexColor(r, g, b) end
+	-- a thinner ring (the tier badges): half the coloured edge, the art a little larger
+	function p:SetThin()
+		self.inner:SetPoint("TOPLEFT", 1, -1)
+		self.inner:SetPoint("BOTTOMRIGHT", -1, 1)
+		self.art:SetPoint("TOPLEFT", 2, -2)
+		self.art:SetPoint("BOTTOMRIGHT", -2, 2)
+		return self
+	end
 	return p
+end
+
+-- the Alliance / Horde crest for a texture (the friends list's round faction icons); hides it for
+-- anything else. faction = "Alliance" | "Horde" (UnitFactionGroup)
+function W.SetFactionBadge(tex, faction)
+	if faction == "Alliance" or faction == "Horde" then
+		tex:SetTexture("Interface\\FriendsFrame\\PlusManz-" .. faction)
+		tex:SetTexCoord(0, 1, 0, 1)
+		tex:Show()
+		return true
+	end
+	tex:Hide()
+	return false
 end
 
 -- The target frame's dragon round a round portrait, by creature class: gold for elites and bosses,
@@ -2007,9 +2036,43 @@ function W.Menu(anchor, items)
 			row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
 			row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+			-- (a section's plate: a dark band between two gold rules, the title centred on it)
+			row.plate = row:CreateTexture(nil, "BACKGROUND")
+			row.plate:SetPoint("TOPLEFT", 0, -3)
+			row.plate:SetPoint("BOTTOMRIGHT", 0, 3)
+			row.plate:SetColorTexture(0, 0, 0, 0.55)
+			row.ruleTop = row:CreateTexture(nil, "ARTWORK")
+			row.ruleTop:SetPoint("TOPLEFT", row.plate, "TOPLEFT")
+			row.ruleTop:SetPoint("TOPRIGHT", row.plate, "TOPRIGHT")
+			row.ruleTop:SetHeight(1)
+			row.ruleTop:SetColorTexture(1, 0.82, 0, 0.55)
+			row.ruleBottom = row:CreateTexture(nil, "ARTWORK")
+			row.ruleBottom:SetPoint("BOTTOMLEFT", row.plate, "BOTTOMLEFT")
+			row.ruleBottom:SetPoint("BOTTOMRIGHT", row.plate, "BOTTOMRIGHT")
+			row.ruleBottom:SetHeight(1)
+			row.ruleBottom:SetColorTexture(1, 0.82, 0, 0.55)
 			menu.rows[i] = row
 		end
+		-- item.section = true: a divider with the section's name on a plate (not clickable);
+		-- item.divider = true: just a thin gold rule, ending a section
+		local section = item.section and true or false
+		row:SetHeight(item.divider and 9 or 22)
+		row.plate:SetShown(section)
+		row.ruleTop:SetShown(section or item.divider or false)
+		row.ruleBottom:SetShown(section)
+		row.ruleTop:ClearAllPoints()
+		if item.divider then
+			row.ruleTop:SetPoint("LEFT", row, "LEFT", 4, 0)
+			row.ruleTop:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+		else
+			row.ruleTop:SetPoint("TOPLEFT", row.plate, "TOPLEFT")
+			row.ruleTop:SetPoint("TOPRIGHT", row.plate, "TOPRIGHT")
+		end
+		row.text:ClearAllPoints()
+		if section then row.text:SetPoint("CENTER", 0, 0) else row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0) end
 		if item.icon then W.SetIcon(row.icon, item.icon) end
+		-- (item.portraitUnit: that unit's own portrait, e.g. you for Characters)
+		if item.portraitUnit and SetPortraitTexture then pcall(SetPortraitTexture, row.icon, item.portraitUnit) end
 		row.icon:SetShown(item.icon ~= nil)
 		-- item.ring = { r, g, b }: the icon round in a ring of that colour
 		local round = item.icon ~= nil and item.ring ~= nil
@@ -2017,9 +2080,9 @@ function W.Menu(anchor, items)
 		elseif not round and row.masked then row.icon:RemoveMaskTexture(row.mask) row.masked = false end
 		row.ring:SetShown(round)
 		if round then row.ring:SetVertexColor(item.ring[1], item.ring[2], item.ring[3]) end
-		row.text:SetFontObject(item.title and GameFontNormal or GameFontHighlight)
+		row.text:SetFontObject((item.title or section) and GameFontNormal or GameFontHighlight)
 		row.text:SetText(item.text)
-		if item.selected then row.text:SetTextColor(1, 0.82, 0) elseif not item.title then row.text:SetTextColor(1, 1, 1) end
+		if item.selected then row.text:SetTextColor(1, 0.82, 0) elseif not (item.title or section) then row.text:SetTextColor(1, 1, 1) end
 		row:SetScript("OnClick", item.run and function()
 			menu:Hide()
 			catcher:Hide()
@@ -2034,15 +2097,18 @@ function W.Menu(anchor, items)
 	end
 	local x = 8
 	for col = 1, columns do colX[col] = x x = x + colWidth[col] + 4 end
-	for i in ipairs(items) do
+	local tallest, y, lastCol = 0, 8, 1
+	for i, item in ipairs(items) do
 		local row = menu.rows[i]
 		local col = math.floor((i - 1) / perCol) + 1
-		local y = 8 + ((i - 1) % perCol) * 22
+		if col ~= lastCol then y, lastCol = 8, col end
 		row:ClearAllPoints()
 		row:SetPoint("TOPLEFT", colX[col], -y)
 		row:SetWidth(colWidth[col])
+		y = y + (item.divider and 9 or 22)
+		tallest = math.max(tallest, y)
 	end
-	menu:SetSize(x + 4, 8 + math.min(#items, perCol) * 22 + 8)
+	menu:SetSize(x + 4, tallest + 8)
 	menu:ClearAllPoints()
 	menu:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 4, -2)
 	catcher:Show()

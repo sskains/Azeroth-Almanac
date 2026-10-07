@@ -8,7 +8,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "townsfolk", title = L["People"], icon = W.KIND.townsfolk.icon, order = 8 }
+local page = { key = "townsfolk", title = L["People"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", order = 8 }
 local list, detail, countText, kindButton, portrait, nameText, titleText, placeText, mapButton, pinButton
 local filter, kindFilter = "", nil
 local shown -- { npc = id } or { node = name }
@@ -77,10 +77,10 @@ local function People()
 		p.zone = p.zone or rec.zone
 		p.sub = p.sub or (rec.sub ~= "" and rec.sub or nil)
 	end
-	for npc, rec in pairs(ns.Store:All("townsfolk")) do Add("townsfolk", npc, rec) end
-	for npc, rec in pairs(ns.Store:All("merchant")) do Add("merchant", npc, rec) end
-	for npc, rec in pairs(ns.Store:All("trainer")) do Add("trainer", npc, rec) end
-	for npc, rec in pairs(ns.Store:All("npc")) do
+	for npc, rec in pairs(ns.Store:Shown("townsfolk")) do Add("townsfolk", npc, rec) end
+	for npc, rec in pairs(ns.Store:Shown("merchant")) do Add("merchant", npc, rec) end
+	for npc, rec in pairs(ns.Store:Shown("trainer")) do Add("trainer", npc, rec) end
+	for npc, rec in pairs(ns.Store:Shown("npc")) do
 		if rec.gives or rec.takes or out[npc] then Add("npc", npc, rec) end
 	end
 	for npc, p in pairs(out) do
@@ -160,20 +160,15 @@ local function DescribePerson(p)
 	-- what they do for you: their stock, their training, their flight point
 	local links = {}
 	local m = p.recs.merchant
-	if m then
-		links[#links + 1] = { name = L["Their stock"], icon = W.FindIcon(W.KIND.merchant.icon),
-			note = (L["%d items, checked %s"]):format(#(m.stock or {}), ns.AgoText(m.checked)),
-			tip = L["Click to open in Merchants."], onClick = GoTo("merchants", "ShowMerchant", p.npc) }
-	end
 	local t = p.recs.trainer
 	if t then
 		links[#links + 1] = { name = L["What they teach"], icon = W.FindIcon(W.KIND.trainer.icon),
 			note = (L["%d spells and recipes"]):format(#(t.teaches or {})),
-			tip = L["Click to open in Trainers."], onClick = t.group and GoTo("trainers", "ShowGroup", t.group) or GoTo("trainers", "Refresh") }
+			tip = L["Click to open in Spells & Recipes."], onClick = t.group and GoTo("trainers", "ShowGroup", t.group) or GoTo("trainers", "Refresh") }
 	end
 	local node = p.recs.townsfolk and p.recs.townsfolk.node
 	if not node then
-		for name, rec in pairs(ns.Store:All("flight")) do if rec.master == p.npc then node = name break end end
+		for name, rec in pairs(ns.Store:Shown("flight")) do if rec.master == p.npc then node = name break end end
 	end
 	if node then
 		links[#links + 1] = { name = node, icon = W.FindIcon(FLIGHT_ICON), note = L["Flight path"],
@@ -198,6 +193,14 @@ local function DescribePerson(p)
 			for _, qid in ipairs(ids) do slots[#slots + 1] = QuestSlot(qid) end
 			b[#b + 1] = { "banner", (role[2] .. " (%d)"):format(#ids) }
 			b[#b + 1] = { "slots", slots }
+		end
+	end
+	-- a merchant's stock, right here (Merchants is part of People)
+	if m and ns.MerchantBlocks then
+		local stock = ns.MerchantBlocks(p.npc)
+		if stock and #stock > 0 then
+			b[#b + 1] = { "banner", L["As a merchant"] }
+			for _, block in ipairs(stock) do b[#b + 1] = block end
 		end
 	end
 	if not p.x then b[#b + 1] = { "small", L["Talk to them to record exactly where they stand."] } end
@@ -366,7 +369,7 @@ local function Collect()
 	-- flight paths, by zone
 	if kindFilter == nil or kindFilter == "flight" then
 		local nodes = {}
-		for name, rec in pairs(ns.Store:All("flight")) do
+		for name, rec in pairs(ns.Store:Shown("flight")) do
 			total = total + 1
 			local hay = (name .. " " .. (rec.zone or "")):lower()
 			if filter == "" or hay:find(filter, 1, true) then nodes[#nodes + 1] = { node = name, rec = rec } end
@@ -558,6 +561,9 @@ function page:ShowNode(name)
 	collapsed.flight = nil
 	self:Refresh()
 end
+
+-- (the old Merchants page's way in: a merchant opens on their People page)
+function page:ShowMerchant(npc) self:ShowPerson(npc) end
 
 ns:On("RESET", function() shown = nil if list then list:Select(nil) Show(nil) end end)
 

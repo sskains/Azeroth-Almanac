@@ -7,7 +7,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "gathering", title = L["Gathering"], icon = { 237271, "Trade_Herbalism", "INV_Misc_Herb_07" }, order = 6 }
+local page = { key = "gathering", title = L["Gathering"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Gathering", order = 6 }
 local list, detail, countText, kindButton, portrait, nameText, kindText, placeText, mapButton
 local filter, kindFilter = "", nil
 local shown -- { node = name } | { fish = map } | { skin = itemID }
@@ -57,7 +57,7 @@ end
 -- (built from each creature's own skinning record: gathered = skins, gather[item] = skins that gave it)
 local function SkinItems()
 	local out = {}
-	for npc, rec in pairs(ns.Store:All("creature")) do
+	for npc, rec in pairs(ns.Store:Shown("creature")) do
 		for item, n in pairs(rec.gather or {}) do
 			local e = out[item]
 			if not e then e = { item = item, n = 0, sources = {} } out[item] = e end
@@ -136,7 +136,7 @@ local function Describe(rec, isFish)
 	local tier, need = G:Tier(rec)
 	b[#b + 1] = { "banner", L["General"] }
 	b[#b + 1] = { "stat", L["Kind"], k.label }
-	b[#b + 1] = { "stat", isFish and L["Catches"] or L["Gathered"], (rec.gathered or 0) > 0 and ns.Times(rec.gathered) or L["not yet"] }
+	b[#b + 1] = { "stat", isFish and L["Catches"] or L["Gathered"], (G:Count(rec)) > 0 and ns.Times(G:Count(rec)) or L["not yet"] }
 	if (rec.sighted or 0) > 0 then b[#b + 1] = { "stat", L["Sighted"], ns.Times(rec.sighted) } end
 	if rec.skill then
 		local s = rec.skill[1] == rec.skill[2] and tostring(rec.skill[1]) or (rec.skill[1] .. " - " .. rec.skill[2])
@@ -148,7 +148,7 @@ local function Describe(rec, isFish)
 
 	-- the ranks (the character sheet's blue skill bar, like a creature's): Journeyman reveals
 	-- everything it can hold, Expert how likely each is; past Master the count keeps rolling
-	local n = rec.gathered or 0
+	local n = G:Count(rec)
 	local nextAt = G.AT[tier + 1]
 	if nextAt then
 		b[#b + 1] = { "skillbar", nil, n, nextAt, (L["%d / %d"]):format(n, nextAt) .. "  ·  " .. (L["%d to %s"]):format(nextAt - n, G.TIERS[tier + 1]) }
@@ -345,11 +345,11 @@ local function Collect()
 			if type(v) == "string" and v:lower():find(filter, 1, true) then return true end
 		end
 	end
-	for name, rec in pairs(ns.Store:All("node")) do
+	for name, rec in pairs(ns.Store:Shown("node")) do
 		local quest = rec.kind ~= "herb" and rec.kind ~= "ore" and ns.Gathering.OnlyQuestItems(rec.items)
 		if not quest and Hit(name) then table.insert(groups[rec.kind or "chest"] or groups.chest, { node = name, rec = rec, label = name }) end
 	end
-	for map, rec in pairs(ns.Store:All("fishing")) do
+	for map, rec in pairs(ns.Store:Shown("fishing")) do
 		local label = rec.zone or ZoneName(map) or "?"
 		if Hit(label) then table.insert(groups.fish, { fish = map, rec = rec, label = label }) end
 	end
@@ -438,7 +438,7 @@ function page:Build(parent, header)
 				local icon = top and ItemIcon(top)
 				if icon then row.icon:SetTexture(icon) else W.SetIcon(row.icon, ns.Gathering.KIND[r.fish and "fish" or (r.rec.kind or "chest")].icon) end
 				local tier = ns.Gathering:Tier(r.rec)
-				local count = (r.rec.gathered or 0) > 0 and ns.Times(r.rec.gathered) or L["sighted"]
+				local count = ns.Gathering:Count(r.rec) > 0 and ns.Times(ns.Gathering:Count(r.rec)) or L["sighted"]
 				row.right:SetText((tier > 1 and (ns.Gathering:TierMarkup(tier, 14, r.fish and "fish" or r.rec.kind) .. " ") or "") .. "|cff999999" .. count .. "|r")
 			end
 		end,

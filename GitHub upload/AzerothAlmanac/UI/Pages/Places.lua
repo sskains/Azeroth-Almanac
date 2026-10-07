@@ -5,7 +5,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "places", title = L["Places"], icon = W.KIND.zone.icon, order = 7 }
+local page = { key = "places", title = L["Places"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Places", order = 7 }
 local list, detail, countText, nameText
 local filter = ""
 local searchBox
@@ -51,7 +51,7 @@ local function MerchantSlots(list)
 	local s = {}
 	for _, m in ipairs(list) do
 		s[#s + 1] = { name = m.rec.name or "?", icon = W.FindIcon(W.KIND.merchant.icon), note = m.rec.title or m.rec.sub,
-			tip = L["Click to open in Merchants."], onClick = GoTo("merchants", "ShowMerchant", m.npc) }
+			tip = L["Click to open in People."], onClick = GoTo("merchants", "ShowMerchant", m.npc) }
 	end
 	return s
 end
@@ -82,7 +82,7 @@ local function Pins(map, found)
 	for _, t in ipairs(found.trainers or {}) do
 		if t.rec.x then
 			pins[#pins + 1] = { x = t.rec.x, y = t.rec.y, icon = "Interface\\GossipFrame\\TrainerGossipIcon", size = 16,
-				name = t.rec.name, sub = t.rec.title, onClick = function() local p = ns.UI:GetPage("trainers") if p and t.rec.group then p:ShowGroup(t.rec.group) end end }
+				name = t.rec.name, sub = t.rec.title, onClick = GoTo("townsfolk", "ShowPerson", t.npc) }
 		end
 	end
 	for _, g in ipairs(found.givers) do
@@ -167,6 +167,16 @@ local function DescribeZone(z)
 	b[#b + 1] = { "stat", L["Visits"], tostring(rec.n or 1) }
 	b[#b + 1] = { "stat", L["Last visit"], ns.AgoText(rec.l) }
 
+	-- how much of it this character has explored (the game's own exploration list)
+	local total, done, areas = ns.Places:Exploration(rec.name)
+	if total then
+		b[#b + 1] = { "banner", (L["Exploration (%d of %d)"]):format(done, total) }
+		b[#b + 1] = { "stat", L["Explored"], (done >= total and "|cff40ff40" or "|cffffd100") .. (L["%d of %d areas"]):format(done, total) .. "|r" }
+		local left = {}
+		for _, a in ipairs(areas) do if not a.done then left[#left + 1] = a.name end end
+		if #left > 0 then b[#b + 1] = { "small", L["Still to find: "] .. table.concat(left, ", ") } end
+	end
+
 	b[#b + 1] = { "banner", (L["Places found here (%d)"]):format(#z.subs) }
 	if #z.subs == 0 then
 		b[#b + 1] = { "small", L["None yet."] }
@@ -191,7 +201,7 @@ local function DescribeZone(z)
 		local s = {}
 		for _, t in ipairs(found.trainers) do
 			s[#s + 1] = { name = t.rec.name or "?", icon = W.FindIcon(W.KIND.trainer.icon), note = t.rec.title or t.rec.sub,
-				tip = L["Click to set a waypoint here."], onClick = t.rec.x and function() W.Waypoint(t.rec.map, t.rec.x, t.rec.y, t.rec.name) end or nil }
+				tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowPerson", t.npc) }
 		end
 		b[#b + 1] = { "banner", (L["Trainers (%d)"]):format(#found.trainers) }
 		b[#b + 1] = { "slots", s }
@@ -215,12 +225,12 @@ local function DescribeZone(z)
 			if areas then parts[#parts + 1] = (L["%d map areas uncovered"]):format(areas) end
 			if n > 0 then parts[#parts + 1] = (L["%s explored"]):format(ns.N(n, "place", "places")) .. (xp > 0 and (" (" .. (L["%d experience"]):format(xp) .. ")") or "") end
 			if #parts == 0 then parts[1] = L["visited"] end
-			rows[#rows + 1] = { "stat", ns.CharName(key), table.concat(parts, ", ") }
+			rows[#rows + 1] = { "stat", ns.CharName(key), table.concat(parts, ", "), sortKey = ns.CharName(key, true) }
 		end
 	end
 	if #rows > 0 then
 		b[#b + 1] = { "banner", L["Your characters"] }
-		table.sort(rows, function(x, y) return x[2] < y[2] end)
+		table.sort(rows, function(x, y) return x.sortKey < y.sortKey end) -- (by name, not by colour code)
 		for _, r in ipairs(rows) do b[#b + 1] = r end
 	end
 	return b
@@ -228,7 +238,29 @@ end
 
 local function DescribeSub(sz)
 	local rec = sz.rec
-	local b = { { "banner", L["General"] } }
+	local b = {}
+	-- the zone's map with this place outlined (its uncovered area), else a pin where you first entered it
+	if rec.map and zoneMap then
+		b[#b + 1] = { "frame", zoneMap, function(width)
+			local h = zoneMap:Draw(rec.map, width)
+			if h > 0 then
+				local outlined = rec.x and zoneMap:SetHighlight(rec.x, rec.y)
+				local pins = {}
+				if rec.x and not outlined then
+					pins[1] = { x = rec.x, y = rec.y, icon = W.KindIcon("subzone"), size = 24, round = true, top = true, place = true,
+						name = rec.name, sub = L["First entered here."] }
+				end
+				local here = ns.Where()
+				if here.map == rec.map and here.x then
+					pins[#pins + 1] = { x = here.x, y = here.y, icon = "Interface\\WorldMap\\WorldMapArrow", size = 24, top = true,
+						facing = GetPlayerFacing and ns.Readable(GetPlayerFacing()), name = UnitName("player"), sub = L["You are here."] }
+				end
+				zoneMap:SetPins(pins)
+			end
+			return h
+		end }
+	end
+	b[#b + 1] = { "banner", L["General"] }
 	b[#b + 1] = { "stat", L["Zone"], rec.zone or "?" }
 	b[#b + 1] = { "stat", L["First discovered"], ns.CharName(rec.b) .. ", " .. ns.DateText(rec.f) }
 	local who = Who(rec)
@@ -248,10 +280,10 @@ local function DescribeSub(sz)
 	end
 
 	local merchants, quests = {}, {}
-	for npc, m in pairs(ns.Store:All("merchant")) do
+	for npc, m in pairs(ns.Store:Shown("merchant")) do
 		if m.map == rec.map and m.sub == rec.name then merchants[#merchants + 1] = { npc = npc, rec = m } end
 	end
-	for qid, q in pairs(ns.Store:All("quest")) do
+	for qid, q in pairs(ns.Store:Shown("quest")) do
 		if q.gpos and q.gpos.map == rec.map and q.gpos.sub == rec.name then quests[#quests + 1] = { qid = qid, rec = q } end
 	end
 	table.sort(merchants, function(x, y) return (x.rec.name or "") < (y.rec.name or "") end)
@@ -284,20 +316,31 @@ end
 
 local function Collect()
 	local rows, zones, places, dungeons = {}, 0, 0, 0
+	-- continents, each with its zones, each with its places (the tree is sorted by continent)
+	local lastCont, contRow
 	for _, z in ipairs(ns.Places:Tree()) do
 		zones = zones + 1
 		places = places + #z.subs
 		local subs = {}
 		for _, s in ipairs(z.subs) do if Matches(s.rec) then subs[#subs + 1] = s end end
 		if Matches(z.rec) or #subs > 0 then
-			rows[#rows + 1] = { kind = "zone", z = z, id = z.id } -- (id: so Back finds this row again)
-			if not collapsed[z.id] then
-				for _, s in ipairs(subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id } end
+			local cont = z.rec.continent or L["Elsewhere"]
+			if cont ~= lastCont then
+				lastCont = cont
+				contRow = { kind = "continent", text = cont, key = "c:" .. cont, count = 0 }
+				rows[#rows + 1] = contRow
+			end
+			contRow.count = contRow.count + 1
+			if not collapsed[contRow.key] then
+				rows[#rows + 1] = { kind = "zone", z = z, id = z.id } -- (id: so Back finds this row again)
+				if not collapsed[z.id] then
+					for _, s in ipairs(subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id } end
+				end
 			end
 		end
 	end
 	local inst = {}
-	for id, rec in pairs(ns.Store:All("instance")) do
+	for id, rec in pairs(ns.Store:Shown("instance")) do
 		dungeons = dungeons + 1
 		if Matches(rec) then inst[#inst + 1] = { id = id, rec = rec } end
 	end
@@ -341,26 +384,34 @@ function page:Build(parent, header)
 	left:SetPoint("BOTTOMLEFT", 0, 0)
 	left:SetWidth(330)
 	list = W.List(left, {
-		collapse = { state = collapsed, key = function(r) return r.kind == "zone" and r.z and r.z.id end, refresh = function() page:Refresh() end },
+		collapse = { state = collapsed, key = function(r) return (r.kind == "zone" and r.z and r.z.id) or (r.kind == "continent" and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
 		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No places yet. Every zone and place you enter is recorded here."],
 		update = function(row, r)
-			row:SetHeader(r.kind == "zone" or r.kind == "header", r.kind == "zone" and collapsed[r.z.id])
+			row:SetHeader(r.kind == "zone" or r.kind == "header" or r.kind == "continent", (r.kind == "zone" and collapsed[r.z.id]) or (r.kind == "continent" and collapsed[r.key]))
 			row.icon:ClearAllPoints()
-			if r.kind == "subzone" then
-				row.icon:SetPoint("LEFT", 22, 0)
+			if r.kind == "continent" then
+				row.icon:SetPoint("LEFT", 4, 0)
+				row.icon:SetTexture(W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }))
+				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
+				row.text:SetText("|cffffd100" .. r.text .. "|r")
+				row.right:SetText("|cff999999" .. r.count .. "|r")
+			elseif r.kind == "subzone" then
+				row.icon:SetPoint("LEFT", 46, 0)
 				row.icon:SetTexture(W.KindIcon("subzone"))
 				row.text:SetFontObject(GameFontHighlight)
 				row.text:SetText(r.s.rec.name)
 				row.right:SetText("")
 			elseif r.kind == "zone" then
-				row.icon:SetPoint("LEFT", 4, 0)
+				row.indent = 22 -- (under its continent)
+				row.icon:SetPoint("LEFT", 20, 0)
 				row.icon:SetTexture(W.KindIcon("zone"))
-				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
+				row.text:SetFontObject(GameFontNormal)
 				row.text:SetText(r.z.rec.name)
-				row.right:SetText("|cff999999" .. #r.z.subs .. "|r")
+				local total, done = ns.Places:Exploration(r.z.rec.name)
+				row.right:SetText(total and ((done >= total and "|cff40ff40" or "|cff999999") .. done .. "/" .. total .. "|r") or ("|cff999999" .. #r.z.subs .. "|r"))
 			elseif r.kind == "instance" then
 				row.icon:SetPoint("LEFT", 4, 0)
 				row.icon:SetTexture(W.KindIcon("instance"))
@@ -376,11 +427,42 @@ function page:Build(parent, header)
 			end
 		end,
 		restore = function(r) ShowRow(r) end,
+		-- hovering a place outlines it on the map shown (when it's in that zone); leaving puts back
+		-- the selected place's outline (or none for a zone)
+		onHover = function(r)
+			if r.kind ~= "subzone" or not (zoneMap and zoneMap:IsVisible() and zoneMap.map == r.s.rec.map) then return end
+			if not r.s.rec.x then return end
+			-- its outline, or (no shape for it) a pin where it was first entered; the selected
+			-- place's own pin steps aside meanwhile
+			zoneMap:ShowPlacePins(false)
+			zoneMap:ClearPreviewPin()
+			if not zoneMap:SetHighlight(r.s.rec.x, r.s.rec.y) then
+				zoneMap:SetPreviewPin(r.s.rec.x, r.s.rec.y, W.KindIcon("subzone"), r.s.rec.name)
+			end
+			zoneMap.previewing = true
+		end,
+		onLeave = function()
+			if not (zoneMap and zoneMap.previewing) then return end
+			zoneMap.previewing = nil
+			zoneMap:ClearPreviewPin()
+			zoneMap:ShowPlacePins(true)
+			local sel = list:Selected()
+			if sel and sel.kind == "subzone" and sel.s.rec.x and zoneMap.map == sel.s.rec.map then
+				zoneMap:SetHighlight(sel.s.rec.x, sel.s.rec.y)
+			else
+				zoneMap:ClearHighlight()
+			end
+		end,
 		onClick = function(r, _, mouse)
 			if mouse and mouse ~= "LeftButton" then return end
 			-- the first click on a zone opened with something marked shows it plainly; after that it folds
 			local hadFocus = focus or focusMerchant or focusPin
 			focus, focusMerchant, focusPin = nil, nil, nil
+			if r.kind == "continent" then
+				collapsed[r.key] = not collapsed[r.key]
+				page:Refresh()
+				return
+			end
 			if r.kind == "zone" and detail.shownZone == r.z.id and not hadFocus then
 				collapsed[r.z.id] = not collapsed[r.z.id]
 				page:Refresh()
@@ -428,11 +510,15 @@ end
 -- creature / merchant: marked with their spots or face. pin: anything else, { x, y (percent), name,
 -- sub, face (display id), icon, onClick }
 function page:ShowZone(map, creature, merchant, pin)
-	if not ns.Store:Get("zone", map) then return false end
+	-- (only a zone the page lists: in a character-only Almanac, one this character hasn't found
+	-- isn't there, and the link falls back to its caller's own way, 0.63.0)
+	if not ns.Store:Shown("zone")[map] then return false end
 	focus, focusMerchant = creature, merchant
 	focusPin = pin and { map = map, x = pin.x, y = pin.y, name = pin.name, sub = pin.sub, face = pin.face, icon = pin.icon, onClick = pin.onClick, spots = pin.spots } or nil
 	ns.UI:Open("places")
 	collapsed[map] = nil
+	local zrec = ns.Store:Get("zone", map)
+	collapsed["c:" .. ((zrec and zrec.continent) or L["Elsewhere"])] = nil
 	-- a search that hides the zone would leave the page empty
 	if filter ~= "" then
 		filter = ""

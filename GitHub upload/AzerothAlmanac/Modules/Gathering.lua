@@ -118,6 +118,8 @@ G.OnlyQuestItems = OnlyQuestItems
 
 local function Fill(rec, items, where)
 	rec.gathered = (rec.gathered or 0) + 1
+	rec.gc = rec.gc or {}
+	rec.gc[ns.CharKey()] = (rec.gc[ns.CharKey()] or 0) + 1
 	rec.items = rec.items or {}
 	rec.qty = rec.qty or {}
 	for item, q in pairs(items) do
@@ -132,8 +134,16 @@ local function Fill(rec, items, where)
 end
 
 -- the tier a node or fishing spot has reached (1 Sighted .. 6 Master), and how many more to the next
+-- times gathered that count: the account's, or (character-only Almanac) this character's own
+function G:Count(rec)
+	if not rec then return 0 end
+	local me = ns.ScopeChar()
+	if me then return rec.gc and rec.gc[me] or 0 end
+	return rec.gathered or 0
+end
+
 function G:Tier(rec)
-	local n = rec and rec.gathered or 0
+	local n = G:Count(rec)
 	for t = #self.AT, 2, -1 do
 		if n >= self.AT[t] then return t, self.AT[t + 1] and (self.AT[t + 1] - n) or nil end
 	end
@@ -364,10 +374,12 @@ ns:RegisterEvent("PLAYER_ENTERING_WORLD", function()
 end)
 
 -- totals for milestones and the overview: gathers by kind, fish caught, creatures skinned
-function G:Totals()
+-- times gathered by kind: the account's, or one character's own (`char`)
+function G:Totals(char)
+	local function N(rec) if char then return rec.gc and rec.gc[char] or 0 end return rec.gathered or 0 end
 	local t = { herb = 0, ore = 0, chest = 0, fish = 0, skin = 0 }
-	for _, rec in pairs(ns.Store:All("node")) do t[rec.kind or "chest"] = (t[rec.kind or "chest"] or 0) + (rec.gathered or 0) end
-	for _, rec in pairs(ns.Store:All("fishing")) do t.fish = t.fish + (rec.gathered or 0) end
-	for _, rec in pairs(ns.Store:All("creature")) do t.skin = t.skin + (rec.gathered or 0) end
+	for _, rec in pairs(ns.Store:All("node")) do t[rec.kind or "chest"] = (t[rec.kind or "chest"] or 0) + N(rec) end
+	for _, rec in pairs(ns.Store:All("fishing")) do t.fish = t.fish + N(rec) end
+	for _, rec in pairs(ns.Store:All("creature")) do t.skin = t.skin + N(rec) end
 	return t
 end

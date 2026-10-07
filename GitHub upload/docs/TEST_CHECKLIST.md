@@ -6,6 +6,129 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## 0.65.0 (full game restart: new Gem Match textures)
+
+- [ ] Gem Match: the painted board, side panel, game-over panel, hint, shards and group/friend scores (the full list is under "Gem Match" in `STATUS.md`, "Needs checking in game first").
+- [ ] Wild Gambit's buttons, headings and corner icon look exactly as before (their code now lives in `WindowUtil.lua`).
+
+## 0.64.2 (/reload)
+
+- [ ] Minimap button right-click: "Mini Games" plate, then Wild Gambit, Murloc Tac Toe, Gem Match, a thin rule, Settings. The plate isn't clickable; other dropdown menus look as before.
+
+## 0.64.1 (/reload)
+
+- [ ] Friendly nameplates off in the game's options: walk up to a vendor or quest giver: no name or health bar over them. The gathering highlight still sparkles on herbs and ore.
+- [ ] Friendly nameplates on: NPC plates as normal. The new checkbox (Gathering > Game display) shows them even with friendly nameplates off.
+
+## 0.64.0 batch (/reload)
+
+- [ ] Wild Gambit looks the same as before: board, card frames, scenes, the ankh by the portrait after Reincarnation.
+- [ ] A card of a creature you haven't killed: no skull strip.
+- [ ] Press Escape mid-game: the Wild Gambit bar appears; clicking it brings the game back.
+- [ ] Lobby after a game: no "Your card plays at full strength..." line.
+- [ ] Minimap button right-click: every page listed, each opens.
+- [ ] Places: a trainer opens their People page. Zone "visits" count arrivals only.
+- [ ] Settings > General > Reset window positions also moves the alerts and the gathering button back.
+- [ ] `/aa whatis` without debug says it's a developer command; after `/aa debug` it works.
+- [ ] Minimap gathering pins still show and follow you; Healer Assist in a raid still keeps up.
+
+## 0.63.0 batch (/reload)
+
+- [ ] "This character only": on an alt, meet a creature your main already knows: alert and journal line for the alt. Gathering pins and people on the map show only the alt's finds.
+- [ ] Milestones on an alt in "This character only": the journal's list is the alt's; reaching one says "(this character)".
+- [ ] Settings profiles: switch profile, check a few choices changed and Wild Gambit's tutorial isn't offered again; Copy from... keeps the Healer Assist window where it was.
+- [ ] A brand-new character: Almanac and helper windows open in their default spots.
+- [ ] Healer Assist in a group fight: with "Flash the screen edges red" on, the edges glow when someone under attack drops below the danger level; buttons out of range grey out in combat; the red throb starts at your Danger level.
+- [ ] Healer Assist panel with pets on and few rows: the most urgent people stay; a pet's line only joins its own master.
+- [ ] Threat: "Pulling aggro at %" stops at 100 and warns.
+- [ ] Gathering > Search direction "The game's own": still selected after /reload.
+- [ ] `/aa help`, `/aa gathering`, `/aa people check` (talking to an NPC), `/aa foo` (says unknown, then the list).
+
+## 0.62.0 batch (/reload)
+
+- [ ] Pick note reads "...unless the hands would end too uneven: then it may be downgraded."
+- [ ] Practice: start a game, then `/aa gambit new` (or Play Wild Gambit on a creature): the forfeit question appears; Yes goes to the lobby with no result banner left over; No keeps the game.
+- [ ] Tutorial: tuck the window away (combat or "-") mid-script, bring it back: the coach carries on. Skip still works. After finishing, the button reads "Play for real" and opens the pick screen against a creature.
+- [ ] Play the last card and press Escape at once: the game still ends and counts (record in the lobby).
+- [ ] Player match (both 0.62.0): plays through as before; no chat spam; a pick downgraded on one screen shows the same on the other.
+- [ ] Player match: one player goes offline mid-game: after a minute the other sees the "Nothing from ..." note; End shows "Cancelled · Not counted"; the record doesn't change.
+- [ ] Challenge a player on 0.61.x: you're told their version; they're told yours.
+- [ ] Start a practice game in combat: it's paused until combat ends.
+- [ ] Merchant: buy something with the window open: the merchant's "seen" count doesn't go up per purchase.
+- [ ] Settings > reset the Almanac: your settings profile is still selected after the reload.
+- [ ] Quest Targeter off: no change in frame rate with many nameplates (and counts still right when on).
+
+## 0.61.0 batch (/reload)
+
+- [ ] Pick a Legendary with many spikes: in the match it keeps its tier and spikes; weakened supporting cards show the red down arrow.
+- [ ] Pick note under "Choose a card" once a card is picked (not with Let fate decide).
+- [ ] Player match (both 0.61.0): both picks at full strength; the arrows match on both screens.
+- [ ] Places: outline stronger; hovering places in the list outlines each on the map, leaving restores the selected one.
+
+## 0.60.0 batch (/reload)
+
+- [ ] Toasts: "Almanac" in red with the small icon at the top right, readable over the rim, not covering the title.
+- [ ] Kill strip on all six tiers (Poor .. Legendary): skull + number centred on the strip between art and panel; a Sighted card shows 0; big numbers as 1.2k.
+- [ ] Readable on hand cards, board, pick table, the close look and the Creatures page card; hidden on the hero, a sheep and face-down cards.
+- [ ] Player match (both on 0.60.0): the opponent's cards show their kill counts.
+
+## 0.59.0 batch (/reload)
+
+- [ ] Settings > General > Settings profile shows Shared; picking This character asks, reloads, and keeps the same settings (a copy).
+- [ ] Change something (e.g. Healer Assist off) on one character; log another character on Shared: it's unchanged there.
+- [ ] Window positions (Almanac, settings, Healer Assist, threat meter, flight bar, minimap button) are per character.
+- [ ] New profile..., Copy from..., Delete this profile work; deleting returns to Shared.
+- [ ] Nothing recorded (creatures, prices, flight times, bags) changes when switching.
+
+## 0.58.0 batch (/reload is enough)
+
+- [ ] Settings > General > Almanac shows: switching to This character only filters Creatures, Items, Quests, Places, People, Gathering, Journal; the title shows the character; switching back restores everything.
+- [ ] Character mode: creature tiers and kills count only this character's kills since 0.58.0; Wild Gambit pick table and cards follow.
+- [ ] Minimap gathering pins smaller; the size stepper goes to 4.
+
+## 0.57.0 batch — full game restart (new textures)
+
+- [ ] Places: zones indented under continents, places further in.
+- [ ] Zone rows show "done/total"; zone page Exploration section lists areas still to find (needs the client's exploration achievements; if they're missing, rows show the place count as before).
+- [ ] "Fully explored" alert when the last area of a zone is found.
+- [ ] Creature abilities: "x - y per hit" / "n over t sec" from tooltips; melee per hit after a kill; per-fight total in the tooltip.
+- [ ] Minimap button menu icons: Places art, your portrait, murloc chihuahua, Wild Gambit cards.
+- [ ] Highlight colours: herbs green, ore white, chests red, quests gold.
+- [ ] With Find Herbs on, herb pins on the minimap are hollow rings and the game's dot shows inside; turning tracking off restores them (within a second).
+
+## 0.56.0 batch — full game restart (new mesh texture)
+
+- [ ] Healer Assist window: mesh background and gold border; Window opacity changes it; "Beside the portraits" still places buttons by the party frames.
+- [ ] Buttons: faint when not needed, full + yellow throb when recommended, red throb under 30% (test with /aa heal test, and in combat).
+- [ ] Pets indented under their master in the window, with the joining line.
+- [ ] Threat meter and flight bar in the mesh box; their opacity settings work.
+- [ ] People: a merchant shows "As a merchant" with standing and stock; no Merchants tab; links from Items / Places / Journal open People; Spells & Recipes tab name.
+- [ ] Places: continents fold; zones and places nested; a place's page shows the zone map with the place outlined in gold (e.g. Mirror Lake in Elwynn), else a pin.
+
+## 0.55.0 batch — full game restart (new icon textures)
+
+- [ ] Side tabs show the eight painted icons, crisp at tab size; Characters no longer shows your portrait.
+- [ ] Creatures page: card grows 30% on hover (over the page, not clipped), shrinks back; no tooltip; drag to turn still works.
+- [ ] Faction crest on a guard / faction NPC (portrait bottom right, list row, card art) after seeing it again.
+- [ ] Tier rings thinner (list rows, detail badge, filter button, Progression page).
+- [ ] Quests opens on "In your quest log"; ! opens the game's quest log at the quest; Share works in a group, greyed solo.
+- [ ] Settings > Records > Print: summary lines only; Clear blocked log works.
+- [ ] Quest Targeter skips mobs fighting other players and tagged mobs; still targets your own in combat.
+- [ ] Gathering settings show the new defaults; direction dropdown reads whole.
+
+## Pick screen rework (0.54.0, Asia's branch) — needs a full game restart (new textures)
+
+- [ ] Goblin dealer button: bottom right over Begin, clear of the last card; hover glow, press dip, rocking and pulse while dealing; "Deal a new hand" / "Dealing..." caption plank fits.
+- [ ] Dealer voice lines (550816 / 550811 / 550810): right lines, audible against the card sounds, never the same twice running, silent with sound off. They now also play on the opening deal: check that isn't too much.
+- [ ] The opening shuffle (riffle animation) runs at the dealer's new spot: the two halves split and merge inside the felt, cards deal out cleanly.
+- [ ] Begin: size, lettering, breathing glow, light streak inside the plank, sparkles not too busy.
+- [ ] Back arrow: painted, ringless, larger; hover and press; goes back to the opponent screen.
+- [ ] Coin tray under each hand: ends not distorted, cards sit inside it.
+- [ ] "Choose a card" / "Choose your class" headings: lettering, rules and diamonds; class heading centred over the rings; long online messages still fit.
+- [ ] Your spell card: sits on the felt, enlarges on hover, tooltip beside it.
+- [ ] Corner icon in the gold dragon ring: centred, nothing cut off.
+- [ ] Aquatic creatures (murlocs, School of Fish, sharks, turtles) on the underwater scene.
+
 ## Progression page (0.53.0) ✅ confirmed in game 0.53.1
 
 - [x] `/aa settings progression` opens the page (sidebar: Progression); `/aa settings tiers` still works.
@@ -81,11 +204,6 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 ## 2. Discovery recorder
 
 - [ ] Events to verify on this client: `COMBAT_LOG_EVENT_UNFILTERED`, `UNIT_SPELLCAST_*`, `NAME_PLATE_UNIT_ADDED`, `PLAYER_TARGET_CHANGED`, `UPDATE_MOUSEOVER_UNIT`, `LOOT_READY`/`LOOT_OPENED`, `CHAT_MSG_LOOT`, `BAG_UPDATE_DELAYED`, `QUEST_DETAIL`/`QUEST_ACCEPTED`/`QUEST_TURNED_IN`, `GOSSIP_SHOW`, `MERCHANT_SHOW`/`MERCHANT_UPDATE`, `TRAINER_SHOW`/`TRAINER_UPDATE`, `TRADE_SKILL_SHOW`, `TAXIMAP_OPENED`, `ZONE_CHANGED*`, `ENCOUNTER_START`/`ENCOUNTER_END`, `PLAYER_ENTERING_WORLD`. Read every value through `ns.Readable`.
-
-## 2b. Combat Journal companion (proposed 2026-10-03)
-
-- [ ] Addon side: `LoggingCombat(true)` to switch logging on at login (check it's allowed on this client) and a reminder to turn on Advanced Combat Logging.
-- [ ] Confirm `/reload` re-reads a changed Lua file listed in the TOC on this client.
 
 ## 4. Items (phase 4 built 2026-10-04, version 0.4.0)
 

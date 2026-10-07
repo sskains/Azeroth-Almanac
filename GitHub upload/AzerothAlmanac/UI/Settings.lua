@@ -342,8 +342,67 @@ end
 
 local function Opt() return ns.db.settings end
 
+-- settings profiles (Modules\Profiles.lua): the popups to switch, name, copy and delete
+StaticPopupDialogs["AZEROTHALMANAC_PROFILE_USE"] = {
+	text = L["Switch this character to the \"%s\" settings? The interface reloads."], button1 = ACCEPT or "Accept", button2 = CANCEL or "Cancel",
+	OnAccept = function(_, data) ns.Profiles:Use(data) end, timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+StaticPopupDialogs["AZEROTHALMANAC_PROFILE_NEW"] = {
+	text = L["Name the new settings profile (a copy of the settings you have now):"], button1 = ACCEPT or "Accept", button2 = CANCEL or "Cancel",
+	hasEditBox = true, maxLetters = 24,
+	OnAccept = function(self)
+		local box = self.editBox or self.EditBox
+		if not ns.Profiles:New(box and box:GetText()) then ns.Print(L["That name can't be used (empty, taken, or with a dash)."]) end
+	end,
+	EditBoxOnEnterPressed = function(self) local d = self:GetParent() if d.button1 then d.button1:Click() end end,
+	timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+StaticPopupDialogs["AZEROTHALMANAC_PROFILE_COPY"] = {
+	text = L["Replace the settings in \"%s\" with a copy of \"%s\"? The interface reloads."], button1 = ACCEPT or "Accept", button2 = CANCEL or "Cancel",
+	OnAccept = function(_, data) ns.Profiles:CopyFrom(data) end, timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+StaticPopupDialogs["AZEROTHALMANAC_PROFILE_DELETE"] = {
+	text = L["Delete the \"%s\" settings profile? Characters using it go back to Shared. The interface reloads."], button1 = YES or "Yes", button2 = NO or "No",
+	OnAccept = function() ns.Profiles:DeleteCurrent() end, timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
 local function BuildGeneral(P)
+	local PR = ns.Profiles
+	if PR and PR.current then
+		P:Section(L["Settings profile"], L["Every character uses a profile of settings: Shared unless you pick another. A profile holds your choices (on / off, colours, sizes, opacity) for the Almanac and every helper. What the Almanac has recorded, prices, flight times and bags are never part of a profile, and each character keeps its own window positions. Switching reloads the interface."])
+		local list = PR:List()
+		local cur = PR.current
+		local found = false
+		for _, e in ipairs(list) do if e.key == cur then found = true end end
+		if not found then list[#list + 1] = { key = cur, name = PR:Label(cur) } end
+		local idx = 1
+		for i, e in ipairs(list) do if e.key == cur then idx = i end end
+		P:Picker(L["This character uses"], list, function() return idx end, function(i)
+			local key = list[i].key
+			if key == cur then idx = i return end
+			StaticPopup_Show("AZEROTHALMANAC_PROFILE_USE", list[i].name, nil, key)
+		end)
+		local buttons = { { L["New profile..."], 130, function() StaticPopup_Show("AZEROTHALMANAC_PROFILE_NEW") end } }
+		buttons[#buttons + 1] = { L["Copy from..."], 120, function(self)
+			local items = { { title = true, text = L["Copy settings from"] } }
+			for _, e in ipairs(PR:Others()) do
+				items[#items + 1] = { text = e.name, run = function() StaticPopup_Show("AZEROTHALMANAC_PROFILE_COPY", PR:Label(cur), e.name, e.key) end }
+			end
+			if #items > 1 then W.Menu(self, items) end
+		end }
+		if cur ~= "Shared" then
+			buttons[#buttons + 1] = { L["Delete this profile"], 150, function() StaticPopup_Show("AZEROTHALMANAC_PROFILE_DELETE", PR:Label(cur)) end }
+		end
+		P:Buttons(buttons)
+	end
 	P:Section(L["The Almanac"])
+	local scopes = { { name = L["My whole account"], key = "account" }, { name = L["This character only"], key = "character" } }
+	P:Picker(L["Almanac shows"], scopes, function() return Opt().scope == "character" and 2 or 1 end, function(i)
+		Opt().scope = scopes[i].key
+		ns.Store:ClearShown()
+		ns:Fire("CHANGED")
+		if ns.UI and ns.UI.IsShown and ns.UI:IsShown() then ns.UI:Open(ns.UI:Current()) end
+	end, nil, nil, L["Account: everything any of your characters has found, with creature tiers from everyone's kills. This character only: just what the character you're playing has found and killed (its Wild Gambit cards too). Recording is the same either way; switch back any time. Prices, flight times and other characters' bags stay account-wide."])
 	P:Check(L["Minimap button"], L["Left-click opens the Almanac, right-click a menu. Drag it around the minimap."],
 		function() return Opt().minimap.show end, function(v) ns.MinimapButton:SetShown(v) end)
 	P:Check(L["Almanac line on creature tooltips"], L["What you know of a creature: how often it was met and killed, and its research tier."],
@@ -356,7 +415,12 @@ local function BuildGeneral(P)
 		function() return Opt().window.smooth ~= false end, function(v) Opt().window.smooth = v end)
 	P:Buttons({
 		{ L["Open the Almanac"], 160, function() ns.UI:Open() end },
-		{ L["Reset window positions"], 190, function() ns.UI:ResetPosition() ns.MinimapButton:ResetPosition() S:ResetPosition() end },
+		{ L["Reset window positions"], 190, function()
+			ns.UI:ResetPosition() ns.MinimapButton:ResetPosition() S:ResetPosition()
+			-- (the alerts and the gathering button too, 0.64.0)
+			if ns.Toast and ns.Toast.ResetPosition then ns.Toast:ResetPosition() end
+			if ns.NodePins and ns.NodePins.ResetMiniButton then ns.NodePins:ResetMiniButton() ns.NodePins:Refresh() end
+		end },
 	})
 
 	P:Section(L["Almanac players"], L["Other players running Azeroth Almanac (your guild, group, online friends, and players you target or mouse over) are found with hidden addon messages, so features like Murloc Tac Toe know who can play. Nothing goes to a public channel."])
@@ -440,6 +504,7 @@ local function BuildTiers(P)
 	end
 	local function Badge(parent, size, icon, tier)
 		local b = W.Portrait(parent, size)
+		if b.SetThin then b:SetThin() end
 		if icon then b.art:SetTexture(icon) b.art:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 		b:SetRing(unpack(Color(tier)))
 		return b
@@ -658,7 +723,7 @@ local function BuildTiers(P)
 			hero:SetWidth(w)
 			local function Count()
 				local ct, gt, masters = { 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0 }, 0
-				for _, rec in pairs(ns.Store:All("creature") or {}) do
+				for _, rec in pairs(ns.Store:Shown("creature") or {}) do
 					if type(rec) == "table" and rec.name and not (B.IsObject and B:IsObject(rec)) then
 						local t = B:FullTier(rec)
 						if t then ct[t] = ct[t] + 1 if t >= 4 then masters = masters + 1 end end
@@ -666,7 +731,7 @@ local function BuildTiers(P)
 				end
 				if G then
 					for _, kind in ipairs({ "node", "fishing" }) do
-						for _, rec in pairs(ns.Store:All(kind) or {}) do
+						for _, rec in pairs(ns.Store:Shown(kind) or {}) do
 							if type(rec) == "table" then local t = G:Tier(rec) gt[t] = gt[t] + 1 end
 						end
 					end
@@ -703,6 +768,7 @@ local function BuildRecords(P)
 	end, nil, 1)
 	P:Buttons({
 		{ L["Print what's recorded"], 180, function() ns.Store:PrintStats() end },
+		{ L["Clear blocked log"], 150, function() ns.Store:ClearBlocked() end },
 		{ L["Erase all records..."], 170, function() StaticPopup_Show("AZEROTHALMANAC_RESET") end },
 	})
 	P:Text(L["Erasing keeps your settings, and the helpers' own data (prices, characters' bags, flight times)."], "GameFontDisableSmall")
@@ -764,12 +830,28 @@ local function BuildNodes(P)
 	P:Stepper(L["Sparkle size"], 24, 96, 8, function() return db.size end, function(v) db.size = v NH:Refresh() end, 1)
 	P:Stepper(L["Reach (yards)"], 5, 15, 1, function() return db.range end, function(v) db.range = v NH:Apply() end, 1)
 	if NH.arcs then
-		local list = { { name = L["The game's own"], value = nil } }
+		-- a dropdown the full width of the page, so the longer choices read whole
+		local list = { { name = L["The game's own"], value = NH.ARC_GAME } }
 		for _, arc in ipairs(NH.arcs) do list[#list + 1] = { name = arc.label, value = arc.value } end
-		P:Picker(L["Search direction"], list, function()
-			for i, a in ipairs(list) do if a.value == db.arc then return i end end
-			return 1
-		end, function(i) db.arc = list[i].value NH:Apply() end, nil, 1)
+		local function Current()
+			for _, a in ipairs(list) do if a.value == (db.arc or NH.ARC_GAME) then return a.name end end
+			return list[1].name
+		end
+		P:Custom(30, function(f, w)
+			local label = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			label:SetPoint("LEFT", 18, 0)
+			label:SetText(L["Search direction"])
+			local dd
+			dd = W.Dropdown(f, Current(), w - 170, function(self)
+				local items = {}
+				for _, a in ipairs(list) do
+					items[#items + 1] = { text = a.name, run = function() db.arc = a.value NH:Apply() dd:SetText(Current()) end }
+				end
+				W.Menu(self, items)
+			end)
+			dd:SetPoint("LEFT", f, "LEFT", 160, 0)
+			tinsert(refreshers, function() dd:SetText(Current()) end)
+		end)
 	end
 	P:Text(function()
 		local n = NH:UserCVarCount()
@@ -829,11 +911,13 @@ local function BuildNodes(P)
 	P:Check(L["Chests and objects"], nil, function() return m.chest end, function(v) m.chest = v R() end, 1)
 	P:Check(L["Spots where they were only sighted"], nil, function() return m.sighted end, function(v) m.sighted = v R() end, 1)
 	P:Stepper(L["World map pin size"], 10, 24, 2, function() return m.size end, function(v) m.size = v R() end, 1)
-	P:Stepper(L["Minimap pin size"], 8, 20, 2, function() return m.mmSize end, function(v) m.mmSize = v R() end, 1)
+	P:Stepper(L["Minimap pin size"], 4, 20, 1, function() return m.mmSize end, function(v) m.mmSize = v R() end, 1)
 
 	P:Section(L["Game display"])
 	P:Check(L["The game's interact icon (pickaxe, cog ...)"], nil, function() return db.gameIcon end, function(v) db.gameIcon = v NH:Refresh() end)
 	P:Check(L["The object's name above it"], nil, function() return db.showName end, function(v) db.showName = v NH:Refresh() end)
+	P:Check(L["Nameplates on friendly NPCs I face"], L["The highlight turns on the game's interact nameplates, which also gives a friendly NPC you face a name and health bar. Off: those follow your game setting for friendly nameplates."],
+		function() return db.npcPlates end, function(v) db.npcPlates = v NH:Refresh() end)
 	P:Text(L["Node not recognized? Face it and type /aa node herb (or ore, chest; other = never highlight it). Quest objects come from the Almanac's quest records for the quests in your log."], "GameFontDisableSmall")
 end
 
@@ -953,6 +1037,8 @@ local function BuildFlights(P)
 	P:Picker(L["Where"], styles, function() return db.barStyle == "free" and 2 or 1 end,
 		function(i) db.barStyle = styles[i].key TR:Refresh() end, nil, 1, L["A bar you place can be dragged while flying."])
 	P:Check(L["Lock the bar"], nil, function() return db.barLocked end, function(v) db.barLocked = v end, 1)
+	P:Stepper(L["Box opacity (%)"], 10, 100, 10, function() return math.floor((db.panelAlpha or 0.8) * 100 + 0.5) end,
+		function(v) db.panelAlpha = v / 100 if TR.ApplyLook then TR:ApplyLook() end end, 1)
 	P:Buttons({ { L["Reset bar position"], 150, function() TR:ResetBarPosition() end } }, 1)
 	P:Section(L["Flight map"])
 	P:Check(L["Flight times in flight map tooltips"], L["Exact once you've flown a route; before that an estimate marked with ~."],
@@ -1096,9 +1182,12 @@ local function BuildThreat(P)
 	P:Check(L["Threat meter"], L["Everyone on your target's threat list, the tank first. Shows in combat."], function() return db.meter end, Set("meter"))
 	P:Stepper(L["Bars"], 3, 10, 1, function() return db.rows end, function(v) db.rows = v end, 1)
 	P:Check(L["Lock it in place"], nil, function() return db.locked end, Set("locked"), 1)
+	P:Stepper(L["Window opacity (%)"], 10, 100, 10, function() return math.floor((db.panelAlpha or 0.8) * 100 + 0.5) end,
+		function(v) db.panelAlpha = v / 100 TM:Refresh() end, 1)
 	P:Check(L["Warn me"], L["Not the tank: a warning as your threat climbs, then \"Pulling aggro!\". Tank: a warning when a mob turns away from you."], function() return db.warn end, Set("warn"))
 	P:Stepper(L["First warning at %"], 50, 95, 5, function() return db.warnAt end, function(v) db.warnAt = v end, 1)
-	P:Stepper(L["Pulling aggro at %"], 80, 130, 5, function() return db.aggroAt end, function(v) db.aggroAt = v end, 1)
+	-- (the game's threat percent reaches 100 when you'd pull, melee or ranged: never past it)
+	P:Stepper(L["Pulling aggro at %"], 70, 100, 5, function() return math.min(100, db.aggroAt or 100) end, function(v) db.aggroAt = v end, 1)
 	P:Check(L["Sounds"], nil, function() return db.sound end, Set("sound"), 1)
 	P:Check(L["Red screen edge on aggro"], nil, function() return db.flash end, Set("flash"), 1)
 	P:Check(L["Threat edges on enemy nameplates"], nil, function() return db.plates end, Set("plates"))
@@ -1186,8 +1275,8 @@ local function BuildHealer(P)
 	P:Check(L["Skull badge with the number of enemies"], nil, function() return db.aggroBadge end, function(v) db.aggroBadge = v end, 1)
 
 	P:Section(L["Where the icons show"], L["Icons can't be moved or shown in combat, so the layout is set up out of combat. In combat the icons only change brightness and flash."])
-	local modes = { { name = L["Below each frame"], mode = "frames", side = "below" }, { name = L["Right of each frame"], mode = "frames", side = "right" },
-		{ name = L["A queue panel"], mode = "panel" } }
+	local modes = { { name = L["Beside the portraits: below"], mode = "frames", side = "below" }, { name = L["Beside the portraits: right"], mode = "frames", side = "right" },
+		{ name = L["The Healer Assist window"], mode = "panel" } }
 	P:Picker(L["Show the icons"], modes, function()
 		if db.mode == "panel" then return 3 end
 		return db.side == "right" and 2 or 1
@@ -1198,6 +1287,8 @@ local function BuildHealer(P)
 	end)
 	P:Stepper(L["Members listed in the panel"], 1, 10, 1, function() return db.maxRows end, function(v) db.maxRows = v Apply() end, 1)
 	P:Check(L["Lock the panel"], nil, function() return db.locked end, function(v) db.locked = v Apply() end, 1)
+	P:Stepper(L["Window opacity (%)"], 10, 100, 10, function() return math.floor((db.panelAlpha or 0.8) * 100 + 0.5) end,
+		function(v) HA:SetPanelAlpha(v / 100) end, 1, L["How see-through the window's dark background and border are."])
 	P:Stepper(L["Icon size"], 16, 40, 2, function() return db.iconSize end, function(v) db.iconSize = v Apply() end)
 	P:Stepper(L["Icons per line"], 3, 12, 1, function() return db.perRow end, function(v) db.perRow = v Apply() end)
 

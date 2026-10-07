@@ -9,7 +9,7 @@ local W = ns.Widgets
 local B = ns.Bestiary
 
 -- the page's own icon (picked by name): the legendary beast upgrade stone, else the creature icon
-local page = { key = "bestiary", title = L["Creatures"], icon = { "Icon_UpgradeStone_Beast_Legendary", unpack(W.KIND.creature.icon) }, order = 3 }
+local page = { key = "bestiary", title = L["Creatures"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Creatures", order = 3 }
 local list, detail, countText, filterButton, model, nameText, subText, tierBar, firstText, badge, killPin, face, gambitCard
 local favButton -- (Wild Gambit's favourite star)
 local FAV_TEXTURE = "Interface\\AddOns\\AzerothAlmanac\\Media\\Badge_Favorite" -- (a ruby heart in gold)
@@ -76,6 +76,28 @@ local function SpellDescription(id)
 	end
 end
 
+-- what one use of an ability does, read from its own tooltip: "15 - 25 per hit", "120 over 18 sec",
+-- or both ("10 - 20 per hit, then 30 over 9 sec"). nil when the tooltip has no damage numbers.
+local function DamageNote(id)
+	if id == 6603 or not (C_Spell and C_Spell.GetSpellDescription) then return nil end
+	local ok, text = pcall(C_Spell.GetSpellDescription, id)
+	if not (ok and type(text) == "string" and text ~= "") then return nil end
+	text = text:gsub(",", "")
+	local parts = {}
+	local lo, hi = text:match("(%d+) to (%d+)")
+	local overN, overS = text:match("(%d+)[%a ]-damage over (%d+) sec")
+	if not overN then overN, overS = text:match("(%d+)[%a ]- over (%d+) sec") end
+	if lo and hi and not (overN and text:find(lo .. " to " .. hi .. "[%a ]-over")) then
+		parts[#parts + 1] = (lo == hi and lo or (lo .. " - " .. hi)) .. " " .. L["per hit"]
+	elseif not overN then
+		local one = text:match("(%d+)[%a ]-damage")
+		if one then parts[#parts + 1] = one .. " " .. L["per hit"] end
+	end
+	if overN then parts[#parts + 1] = (L["%s over %s sec"]):format(overN, overS) end
+	if #parts == 0 then return nil end
+	return table.concat(parts, ", " .. L["then"] .. " ")
+end
+
 local waitingItems = false
 local function ItemText(id)
 	local getInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
@@ -117,7 +139,7 @@ local function Describe(npc, rec)
 	b[#b + 1] = { "stat", L["Level"], LevelText(rec) }
 	b[#b + 1] = { "stat", L["Rarity"], Rarity(rec) }
 	b[#b + 1] = { "stat", L["Type"], (rec.type or "?") .. (rec.family and (" (" .. rec.family .. ")") or "") }
-	b[#b + 1] = { "stat", L["Kills"], tostring(rec.kills or 0) }
+	b[#b + 1] = { "stat", L["Kills"], tostring(B:KillCount(rec)) }
 	local who = {}
 	for key in pairs(rec.c or {}) do if key ~= rec.b then who[#who + 1] = ns.CharName(key) end end
 	table.sort(who)
@@ -153,7 +175,13 @@ local function Describe(npc, rec)
 	for _, e in ipairs(list) do
 		local a = rec.ab and rec.ab[e.id]
 		local note
-		if a then
+		local perHit = DamageNote(e.id)
+		if e.id == 6603 and c and c.dmg and tier >= 2 then
+			perHit = (L["about %d per hit"]):format(c.dmg)
+		end
+		if perHit then
+			note = perHit
+		elseif a then
 			note = (L["about %d per fight"]):format(math.floor(a.t / a.f + 0.5))
 		elseif rec.db and rec.db[e.id] then
 			note = (L["left on you %s"]):format(ns.Times(rec.db[e.id]))
@@ -165,7 +193,7 @@ local function Describe(npc, rec)
 			note = L["seen"]
 		end
 		local extra = {}
-		if a then extra[#extra + 1] = (L["Hit you in %s, up to %d in one fight."]):format(ns.N(a.f, "fight", "fights"), a.hi) end
+		if a then extra[#extra + 1] = (L["Hit you in %s: about %d per fight, up to %d in one."]):format(ns.N(a.f, "fight", "fights"), math.floor(a.t / a.f + 0.5), a.hi) end
 		if rec.db and rec.db[e.id] then extra[#extra + 1] = (L["Its effect stayed on you %s."]):format(ns.Times(rec.db[e.id])) end
 		slots[#slots + 1] = { spell = e.id, note = NOTE .. note .. "|r", extra = #extra > 0 and table.concat(extra, " ") or nil }
 	end
@@ -266,7 +294,7 @@ local function Describe(npc, rec)
 			local ok, info = pcall(C_Map.GetMapInfo, map)
 			name = ok and info and info.name
 		end
-		zones[#zones + 1] = { name = name or ("map " .. map), n = n, map = map, known = z ~= nil }
+		zones[#zones + 1] = { name = name or ("map " .. map), n = n, map = map, known = ns.Store:Shown("zone")[map] ~= nil }
 	end
 	table.sort(zones, function(x, y) return x.n > y.n end)
 	local zs = {}
@@ -361,6 +389,7 @@ local function Show(npc, keepModel)
 		elseif kind then face:SetRing(0.78, 0.78, 0.95)
 		else face:SetRing(0.62, 0.5, 0.24) end
 		W.SetDragon(face.dragon, kind, face, face:GetWidth())
+		W.SetFactionBadge(face.faction, rec.faction)
 		face:Show()
 	end
 	subText:SetText((L["Level %s %s %s"]):format(LevelText(rec), Rarity(rec), rec.family or rec.type or ""))
@@ -369,7 +398,7 @@ local function Show(npc, keepModel)
 	tierBar:Show()
 	-- the skills bar towards the next tier (Fought, Studied, Mastered, Revered at 50, Exalted at
 	-- 200); past 200 it stays full and the kills keep counting
-	local kills = rec.kills or 0
+	local kills = B:KillCount(rec)
 	local t1, t3, t4, t5, t6 = B:Thresholds(rec)
 	local at = { t1, t3, t4, t5, t6 } -- the kills for tiers 2 .. 6
 	-- the next tier with more kills to go (bosses and rares go Fought and Studied at one kill)
@@ -471,7 +500,7 @@ end
 local function Collect()
 	local rows, total = {}, 0
 	for t = 1, 6 do tierCounts[t] = 0 end
-	for npc, rec in pairs(ns.Store:All("creature")) do
+	for npc, rec in pairs(ns.Store:Shown("creature")) do
 		if not B:IsObject(rec) then
 			total = total + 1
 			if Matches(rec) then
@@ -506,7 +535,7 @@ local function FilterMenu(anchor)
 	Add(L["Rare"], { "rarity", "rare", L["Rare"] })
 	Add(L["Boss"], { "rarity", "boss", L["Boss"] })
 	local types = {}
-	for _, rec in pairs(ns.Store:All("creature")) do if rec.type then types[rec.type] = true end end
+	for _, rec in pairs(ns.Store:Shown("creature")) do if rec.type then types[rec.type] = true end end
 	local sorted = {}
 	for t in pairs(types) do sorted[#sorted + 1] = t end
 	table.sort(sorted)
@@ -540,7 +569,7 @@ local function ZoneMenu(anchor)
 	Add(L["All zones"], nil)
 	Add(L["This zone"], "here")
 	local seen, zones = {}, {}
-	for _, rec in pairs(ns.Store:All("creature")) do
+	for _, rec in pairs(ns.Store:Shown("creature")) do
 		for map in pairs(rec.z or {}) do
 			if not seen[map] then
 				seen[map] = true
@@ -572,7 +601,7 @@ function page:Build(parent, header)
 	-- its icon and how many creatures are at it
 	tierButton = W.Dropdown(header, TierLabel(), 212, function(self) TierMenu(self) end) -- (room for "Legendary Hunter" on one line)
 	tierButton:SetPoint("LEFT", zoneButton, "RIGHT", 6, 0)
-	tierButton.badge = W.Portrait(tierButton, 18)
+	tierButton.badge = W.Portrait(tierButton, 18):SetThin()
 	tierButton.badge:SetPoint("LEFT", 8, 0)
 	tierButton.badge:EnableMouse(false)
 	tierButton:SetText(TierLabel())
@@ -601,6 +630,13 @@ function page:Build(parent, header)
 				row.dragon = row.icon:GetParent():CreateTexture(nil, "OVERLAY", nil, 3)
 			end
 			local dragon = W.SetDragon(row.dragon, W.DragonFor(r.rec), row.icon, row.icon:GetWidth())
+			-- Alliance or Horde: the faction crest at the face's bottom right
+			if type(row.faction) ~= "table" then
+				row.faction = row.icon:GetParent():CreateTexture(nil, "OVERLAY", nil, 5)
+				row.faction:SetSize(12, 12)
+				row.faction:SetPoint("CENTER", row.icon, "BOTTOMRIGHT", -1, 2)
+			end
+			W.SetFactionBadge(row.faction, r.rec.faction)
 			if row.hasDragon ~= dragon then
 				row.hasDragon = dragon
 				row.text:SetPoint("LEFT", row.icon, "RIGHT", dragon and 15 or 7, 0)
@@ -608,7 +644,7 @@ function page:Build(parent, header)
 			local tier = B:FullTier(r.rec) -- (Revered and Exalted too)
 			-- the tier as a small badge at the right end (the creature's face once Fought)
 			if type(row.tierTex) ~= "table" then
-				row.tierTex = W.Portrait(row, 21) -- (round in a ring of the tier's colour, as the detail badge)
+				row.tierTex = W.Portrait(row, 21):SetThin() -- (round in a ring of the tier's colour, as the detail badge)
 				row.tierTex:SetPoint("RIGHT", -5, 0)
 				row.tierTex:EnableMouse(false)
 			end
@@ -727,6 +763,10 @@ function page:Build(parent, header)
 	face = W.Portrait(detail.top, FACE)
 	face:SetPoint("CENTER", box, "TOPRIGHT", 14 + FACE / 2, -6 - FACE / 2)
 	face.dragon = face:CreateTexture(nil, "OVERLAY", nil, 3)
+	face.faction = face:CreateTexture(nil, "OVERLAY", nil, 6)
+	face.faction:SetSize(20, 20)
+	face.faction:SetPoint("CENTER", face, "BOTTOMRIGHT", -3, 4)
+	face.faction:Hide()
 	nameText = detail.top:CreateFontString(nil, "OVERLAY")
 	W.HeroFont(nameText, 26)
 	nameText:SetPoint("TOPLEFT", box, "TOPRIGHT", NAME_X, -6)
@@ -843,7 +883,7 @@ function page:Build(parent, header)
 	-- the research tier as a large badge: its icon in a ring of the tier's colour (a glow when
 	-- Mastered); hover for the tier's name and what it reveals
 	local BADGE = 48
-	badge = W.Portrait(detail.top, BADGE)
+	badge = W.Portrait(detail.top, BADGE):SetThin()
 	badge:SetPoint("TOPRIGHT", detail.top, "TOPRIGHT", -10, -8)
 	-- Master Hunter and up: a soft glow in the tier's colour that breathes, behind a quieter ring
 	badge.glow = badge:CreateTexture(nil, "BACKGROUND", nil, -1)
@@ -930,7 +970,7 @@ end
 -- /aa bestiary <name>: open the page on a creature
 function page:Find(text)
 	text = (text or ""):lower()
-	for npc, rec in pairs(ns.Store:All("creature")) do
+	for npc, rec in pairs(ns.Store:Shown("creature")) do
 		if (rec.name or ""):lower() == text then return npc end
 	end
 end

@@ -113,7 +113,9 @@ local function HealthDead(bar, dead)
 		if dead then bar:SetStatusBarColor(0.45, 0.45, 0.45) else bar:SetStatusBarColor(unpack(HEALTH_COLOR)) end
 	end
 end
-local DIM, OFF, ABSENT = 0.32, 0.55, 0.12
+local DIM, OFF, ABSENT = 0.22, 0.55, 0.12 -- (not needed: faint, so a recommendation stands out)
+local DANGER_PCT = 0.3 -- under this the recommendation throbs red (the default; Settings: Danger level)
+local function DangerPct() return ((db and db.danger) or 30) / 100 end
 local HIGHLIGHT_ATLAS = "UI-HUD-ActionBar-IconFrame-Mouseover"
 local SOUND_ALERT = 8959
 
@@ -866,10 +868,13 @@ end
 -- Icons
 ---------------------------------------------------------------------------
 
-local function SetFlash(b, on)
-	if b.flashing == on then return end
-	b.flashing = on
+-- the recommendation's throb: gold, or red when they're under 30% health
+local function SetFlash(b, on, red)
+	red = (on and red) and true or false
+	if b.flashing == on and b.flashRed == red then return end
+	b.flashing, b.flashRed = on, red
 	if on then
+		if red then b.glow:SetVertexColor(1, 0.15, 0.1) else b.glow:SetVertexColor(unpack(b.glowColor)) end
 		b.glow:Show()
 		b.pulse:Play()
 	else
@@ -966,16 +971,29 @@ local function MakeButton(e, m)
 	b.glow:SetBlendMode("ADD")
 	if HasAtlas(HIGHLIGHT_ATLAS) then
 		b.glow:SetAtlas(HIGHLIGHT_ATLAS)
+		b.glowColor = { 1, 0.86, 0.45 }
 		b.glow:SetVertexColor(1, 0.86, 0.45)
 		b.glow:SetPoint("TOPLEFT", -size * 0.04, size * 0.04)
 		b.glow:SetPoint("BOTTOMRIGHT", size * 0.04, -size * 0.04)
 	else
 		b.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		b.glowColor = { 1, 0.82, 0 }
 		b.glow:SetVertexColor(1, 0.82, 0)
 		b.glow:SetPoint("CENTER")
 		b.glow:SetSize(size * 1.8, size * 1.8)
 	end
 	b.glow:Hide()
+	-- the red throb while the game hides their health (its alpha follows a health curve: < 30%)
+	b.redHolder = CreateFrame("Frame", nil, b)
+	b.redHolder:SetAllPoints()
+	b.redHolder:SetFrameLevel(b:GetFrameLevel() + 4)
+	b.redHolder:EnableMouse(false)
+	b.redGlow = b.redHolder:CreateTexture(nil, "OVERLAY")
+	b.redGlow:SetBlendMode("ADD")
+	b.redGlow:SetAllPoints(b.glow)
+	if HasAtlas(HIGHLIGHT_ATLAS) then b.redGlow:SetAtlas(HIGHLIGHT_ATLAS) else b.redGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border") end
+	b.redGlow:SetVertexColor(1, 0.15, 0.1)
+	b.redHolder:SetAlpha(0)
 	b.pulse = b:CreateAnimationGroup()
 	b.pulse:SetLooping("REPEAT")
 	local up = b.pulse:CreateAnimation("Alpha")
@@ -990,6 +1008,11 @@ local function MakeButton(e, m)
 	down:SetToAlpha(0.15)
 	down:SetDuration(0.45)
 	down:SetOrder(2)
+	-- (the red layer throbs in step)
+	local rup = b.pulse:CreateAnimation("Alpha")
+	rup:SetTarget(b.redGlow) rup:SetFromAlpha(0.15) rup:SetToAlpha(0.95) rup:SetDuration(0.45) rup:SetOrder(1)
+	local rdown = b.pulse:CreateAnimation("Alpha")
+	rdown:SetTarget(b.redGlow) rdown:SetFromAlpha(0.95) rdown:SetToAlpha(0.15) rdown:SetDuration(0.45) rdown:SetOrder(2)
 
 	b:SetScript("OnEnter", ButtonTip)
 	b:SetScript("OnLeave", function(self)
@@ -1019,9 +1042,15 @@ local function EnsureButtons(e)
 		if petOnly then wanted = e.token == "pet"
 		else wanted = not (e.pet and (kind == "res" or kind == "buff")) end
 		if wanted then
-			if not e.buttons[name] then
+			local b = e.buttons[name]
+			if not b then
 				e.buttons[name] = MakeButton(e, m)
 				changed = true
+			elseif b.m ~= m then
+				-- (spells read again: a new rank, a new cost; the button follows, 0.63.0)
+				b.m, b.spellID = m, m.id
+				b.icon:SetTexture(m.icon)
+				b:SetAttribute("spell1", m.spell.name)
 			end
 			order[#order + 1] = name
 		end
@@ -1274,14 +1303,8 @@ local function BuildPanel()
 	panel:RegisterForDrag("LeftButton")
 	panel:SetSize(200, 40)
 	-- the game's own tooltip / dialog look
-	panel:SetBackdrop({
-		bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-		tile = true, tileSize = 16, edgeSize = 14,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 },
-	})
-	panel:SetBackdropColor(1, 1, 1, 0.92)
-	panel:SetBackdropBorderColor(0.75, 0.75, 0.75, 1)
+	-- the see-through dark mesh in a thin gold border (Settings: Panel opacity)
+	ns.StylePanel(panel, db.panelAlpha or 0.8)
 	panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	panel.title:SetPoint("TOPLEFT", 10, -7)
 	panel.title:SetText("Heal assist")
@@ -1295,9 +1318,11 @@ local function BuildPanel()
 	panel.rule:SetPoint("TOPRIGHT", -8, -HEADER_H + 2)
 	panel.labels, panel.bars, panel.rowBg = {}, {}, {}
 	panel:SetScript("OnDragStart", function(self)
-		if not db.locked and not InCombatLockdown() then self:StartMoving() end
+		if not db.locked and not InCombatLockdown() then self.moving = true self:StartMoving() end
 	end)
 	panel:SetScript("OnDragStop", function(self)
+		if not self.moving then return end
+		self.moving = nil
 		self:StopMovingOrSizing()
 		local point, _, relPoint, x, y = self:GetPoint()
 		db.pos = { point, relPoint, x, y }
@@ -1347,8 +1372,36 @@ local function Strip(e, anchorFrame, side, x, y)
 	end
 end
 
+-- whose pet a pet token is ("partypet2" -> "party2", "pet" -> "player")
+local function OwnerOf(token)
+	if token == "pet" then return "player" end
+	return (token:gsub("pet(%d+)$", "%1"))
+end
+
+-- each pet straight under its master's row (masters keep their urgency order); a pet whose
+-- master has no row goes last
+local function PetsUnderMasters(list)
+	local pets, out, placed = {}, {}, {}
+	for _, e in ipairs(list) do if e.pet then pets[OwnerOf(e.token)] = e end end
+	for _, e in ipairs(list) do
+		if not e.pet then
+			out[#out + 1] = e
+			local p = pets[e.token]
+			if p then out[#out + 1] = p placed[p] = true end
+		end
+	end
+	for _, e in ipairs(list) do if e.pet and not placed[e] then out[#out + 1] = e end end
+	return out
+end
+
+local PET_INDENT = 14
 local function LayoutPanel(list)
 	BuildPanel()
+	-- (the rows are the most urgent members, pets included; only then is each pet moved under its
+	-- master, so a pet never pushes a more urgent member off the panel, 0.63.0)
+	local top = {}
+	for k = 1, math.min(#list, db.maxRows) do top[k] = list[k] end
+	list = PetsUnderMasters(top)
 	local size, per = db.iconSize, math.max(1, db.perRow)
 	panel:ClearAllPoints()
 	local p = db.pos
@@ -1433,9 +1486,20 @@ local function LayoutPanel(list)
 			panel.bars[k] = bar
 			panel.labels[k] = bar.label
 		end
+		-- (a pet sits indented under its master, a thin line joining them)
+		local indent = e.pet and PET_INDENT or 0
 		bar:ClearAllPoints()
-		bar:SetPoint("TOPLEFT", panel, "TOPLEFT", 9, -(y + NAME_H + math.floor((rowH - NAME_H - BAR_H) / 2)))
-		bar:SetSize(LABEL_W - 12, BAR_H)
+		bar:SetPoint("TOPLEFT", panel, "TOPLEFT", 9 + indent, -(y + NAME_H + math.floor((rowH - NAME_H - BAR_H) / 2)))
+		bar:SetSize(LABEL_W - 12 - indent, BAR_H)
+		bar.label:SetWidth(LABEL_W - 14 - indent)
+		if not bar.petLink then
+			bar.petLink = bar:CreateTexture(nil, "BACKGROUND")
+			bar.petLink:SetColorTexture(0.86, 0.72, 0.42, 0.45)
+		end
+		bar.petLink:ClearAllPoints()
+		bar.petLink:SetPoint("TOPRIGHT", bar, "LEFT", -3, NAME_H + 6)
+		bar.petLink:SetSize(2, NAME_H + 6 + BAR_H / 2)
+		bar.petLink:SetShown(e.pet and k > 1 and list[k - 1].token == OwnerOf(e.token) or false)
 		bar:Show()
 
 		Strip(e, panel, "inside", LABEL_W, -y)
@@ -1542,7 +1606,8 @@ end
 
 -- The curves for one member's current situation, rebuilt only when it changes.
 local function CurvesFor(e, h)
-	local parts = { h.max, tostring(h.aggro), h.crit, db.cover, DIM }
+	local danger = DangerPct()
+	local parts = { h.max, tostring(h.aggro), h.crit, db.cover, DIM, danger }
 	for _, c in ipairs(h.heals) do parts[#parts + 1] = c.m.spell.name .. c.amount end
 	local allBuffed = #h.hots > 0
 	for _, c in ipairs(h.hots) do
@@ -1574,16 +1639,16 @@ local function CurvesFor(e, h)
 		return sorted[#sorted]
 	end
 
-	local xs = { 0, crit, crit + 0.001, 0.5, 0.5001, 0.95, 0.97, 1 }
+	local xs = { 0, crit, crit + 0.001, danger - 0.001, danger, 0.5, 0.5001, 0.95, 0.97, 1 }
 	for _, x in ipairs(edges) do xs[#xs + 1] = x end
 
-	local curves = { flash = {} }
+	local curves = { flash = {}, flashFn = {} }
 	curves.alpha = BuildCurve(function(p) return p < 0.97 and 1 or DIM end, xs)
 	curves.alphaSoft = BuildCurve(function(p) return p < 0.97 and 1 or 0 end, xs)   -- "only while hurt"
 	if not curves.alpha or not curves.alphaSoft then return nil end
 	for _, c in ipairs(sorted) do
 		local name = c.m.spell.name
-		curves.flash[name] = BuildCurve(function(p)
+		curves.flashFn[name] = function(p)
 			if h.aggro then
 				if p <= crit then return (fastest and fastest.m.spell.name == name) and 1 or 0 end
 				if p < 0.97 then return efficient(p).m.spell.name == name and 1 or 0 end
@@ -1593,19 +1658,29 @@ local function CurvesFor(e, h)
 				return (allBuffed and p <= 0.5 and efficient(p).m.spell.name == name) and 1 or 0
 			end
 			return (p < 0.97 and efficient(p).m.spell.name == name) and 1 or 0
-		end, xs)
+		end
+		curves.flash[name] = BuildCurve(curves.flashFn[name], xs)
 	end
 	for _, c in ipairs(h.hots) do
 		local name = c.m.spell.name
 		local on = h.buffs[name]
 		local petOnly = c.m.spell.petOnly   -- your pet's Mend Pet flashes under attack too
-		curves.flash[name] = BuildCurve(function(p)
+		curves.flashFn[name] = function(p)
 			return ((petOnly or not h.aggro) and not on and p < 0.95) and 1 or 0
-		end, xs)
+		end
+		curves.flash[name] = BuildCurve(curves.flashFn[name], xs)
 	end
 	for _, curve in pairs(curves.flash) do
 		if not curve then return nil end
 	end
+	-- each flash split in two: gold at the danger level and over, red under it
+	curves.gold, curves.red = {}, {}
+	for name, fn in pairs(curves.flashFn or {}) do
+		curves.gold[name] = BuildCurve(function(p) return p >= danger and fn(p) or 0 end, xs)
+		curves.red[name] = BuildCurve(function(p) return p < danger and fn(p) or 0 end, xs)
+	end
+	-- the screen-edge alert while the game hides their health: on under the danger level
+	curves.danger = BuildCurve(function(p) return p < danger and 1 or 0 end, { 0, danger - 0.001, danger, 1 })
 
 	-- expected overheal / shortfall of each heal at every health level: amount - (1 - p) * max
 	curves.over, curves.under, curves.overA, curves.underA = {}, {}, {}, {}
@@ -1650,7 +1725,13 @@ local function ApplyCurves(e, res, b, name)
 	local alphaCurve = SoftHidden() and curves.alphaSoft or curves.alpha
 	local ok = pcall(function()
 		b:SetAlpha(UnitHealthPercent(token, false, alphaCurve))
-		if flashCurve then b.glowHolder:SetAlpha(UnitHealthPercent(token, false, flashCurve)) end
+		local gold, red = curves.gold[name], curves.red[name]
+		if gold and red then
+			b.glowHolder:SetAlpha(UnitHealthPercent(token, false, gold))
+			b.redHolder:SetAlpha(UnitHealthPercent(token, false, red))
+		elseif flashCurve then
+			b.glowHolder:SetAlpha(UnitHealthPercent(token, false, flashCurve))
+		end
 	end)
 	if not ok then HA.curvesOK = false return false end
 	b.shownAlpha = nil
@@ -1691,7 +1772,7 @@ local function ApplyVisuals(e, now)
 					b.shownAlpha = 0
 					b:SetAlpha(0)
 					SetFlash(b, false)
-					if b.curveDriven then b.curveDriven = false b.glowHolder:SetAlpha(1) end
+					if b.curveDriven then b.curveDriven = false b.glowHolder:SetAlpha(1) b.redHolder:SetAlpha(0) end
 					if b.textDriven then b.textDriven = false b.overFS:SetAlpha(0) b.underFS:SetAlpha(0) end
 				end
 				b.tip = nil
@@ -1705,10 +1786,16 @@ local function ApplyVisuals(e, now)
 				b.overFS:SetAlpha(0)
 				b.underFS:SetAlpha(0)
 			end
+			if driven then
+				-- (the curves set the brightness; out of range or short of mana still greys it out)
+				local desat = not InRange(name, e.token) or b.m.cost > (R(UnitPower("player", 0)) or math.huge)
+				if b.shownDesat ~= desat then b.shownDesat = desat b.icon:SetDesaturated(desat) end
+			end
 			if not driven then
 				if b.curveDriven then
 					b.curveDriven = false
 					b.glowHolder:SetAlpha(1)
+					b.redHolder:SetAlpha(0)
 					b.shownAlpha = nil
 				end
 				local alpha = DIM
@@ -1723,7 +1810,7 @@ local function ApplyVisuals(e, now)
 				end
 				if b.shownAlpha ~= alpha then b.shownAlpha = alpha b:SetAlpha(alpha) end
 				if b.shownDesat ~= desat then b.shownDesat = desat b.icon:SetDesaturated(desat) end
-				SetFlash(b, (res.flash[name] and not res.absent) and true or false)
+				SetFlash(b, (res.flash[name] and not res.absent) and true or false, res.pct and res.pct < DangerPct())
 			end
 			if not textDriven then
 				local amount = rel and res.amounts[name]
@@ -1900,7 +1987,33 @@ local function UpdateLabels()
 	end
 end
 
+-- the screen edges while the game hides health: one red layer per member under attack, its
+-- alpha following their health curve (on under the danger level), the whole lot throbbing. The
+-- addon never learns the number, so there's no sound in that case.
+local function DangerEdge(e)
+	local res = e.res
+	local tex = HA.edges and HA.edges[e.token]
+	local want = res and res.hidden and res.aggro and not e.pet and not res.dead and db.alertFlash and CurvesAvailable()
+	if not want then
+		if tex and tex.on then tex.on = false tex:SetAlpha(0) end
+		return
+	end
+	local curves = CurvesFor(e, res.hidden)
+	if not (curves and curves.danger) then return end
+	if not tex then
+		HA.edges = HA.edges or {}
+		tex = HA.edgeFrame:CreateTexture(nil, "BACKGROUND")
+		tex:SetAllPoints()
+		tex:SetTexture("Interface\\FullScreenTextures\\LowHealth")
+		tex:SetBlendMode("ADD")
+		HA.edges[e.token] = tex
+	end
+	if pcall(function() tex:SetAlpha(UnitHealthPercent(e.token, false, curves.danger)) end) then tex.on = true
+	else tex:SetAlpha(0) tex.on = false end
+end
+
 local function Alert(e, now)
+	if HA.edgeFrame then DangerEdge(e) end
 	local res = e.res
 	if not res or e.pet or not res.pct or res.dead or not res.aggro then
 		alerted[e.token] = nil
@@ -1934,6 +2047,9 @@ local function Tick()
 		return
 	end
 	if shownState ~= true then shownState = true needLayout = true end
+	-- (a raid: every other tick, so 40 members cost no more than a group of 20, 0.64.0)
+	HA.tickN = (HA.tickN or 0) + 1
+	if #roster > 10 and HA.tickN % 2 == 1 and not needLayout then return end
 
 	if now - lastThreat >= 0.4 then ScanThreat(now) end
 	local hurt, hiddenAny = false, false
@@ -1984,6 +2100,7 @@ local function Tick()
 		end
 	end
 	UpdateLabels()
+	if HA.edgeFrame then HA.edgeFrame:SetAlpha(0.35 + 0.3 * math.sin(now * 6)) end
 
 	-- "Only in combat": the holder (all the icons) is hidden out of combat, once any "keep showing"
 	-- time is up, and shown again by its secure snippet when combat starts. The panel goes
@@ -2009,8 +2126,7 @@ local function Tick()
 		if panel.chromeShown ~= chrome then
 			panel.chromeShown = chrome
 			local a = chrome and 1 or 0
-			panel:SetBackdropColor(1, 1, 1, 0.92 * a)
-			panel:SetBackdropBorderColor(0.75, 0.75, 0.75, a)
+			panel:SetPanelAlpha((db.panelAlpha or 0.8) * a)
 			panel.title:SetAlpha(a)
 			panel.rule:SetAlpha(a)
 			panel.hint:SetAlpha(a)
@@ -2044,13 +2160,18 @@ local function RefreshRoster()
 		entries[token].auraDirty = true
 	end
 	for token, e in pairs(entries) do
-		if not set[token] then e.res = nil end
+		if not set[token] then
+			e.res = nil
+			local edge = HA.edges and HA.edges[token]
+			if edge then edge.on = false edge:SetAlpha(0) end
+		end
 	end
 	needLayout = true
 end
 
 function HA:Apply()
 	if not db then return end
+	if panel and panel.SetPanelAlpha then panel.chromeShown = nil panel:SetPanelAlpha(db.panelAlpha or 0.8) end
 	ResolveSpells()
 	RefreshRoster()
 	shownState = nil
@@ -2059,6 +2180,12 @@ function HA:Apply()
 		for _, e in pairs(entries) do EnsureButtons(e) end
 		Layout()
 	end
+end
+
+-- the window's opacity alone (Settings), without reading spells and laying everything out again
+function HA:SetPanelAlpha(a)
+	db.panelAlpha = a
+	if panel and panel.SetPanelAlpha then panel.chromeShown = nil panel:SetPanelAlpha(a) end
 end
 
 function HA:ResetPosition()
@@ -2138,6 +2265,11 @@ function HA:OnLogin()
 	tex:SetBlendMode("ADD")
 	flashFrame:EnableMouse(false)
 	flashFrame:Hide()
+	-- (the curve-driven edges: always shown, each layer at 0 until its curve turns it on)
+	HA.edgeFrame = CreateFrame("Frame", nil, UIParent)
+	HA.edgeFrame:SetAllPoints()
+	HA.edgeFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+	HA.edgeFrame:EnableMouse(false)
 
 	local ev = CreateFrame("Frame")
 	for _, e in ipairs({
@@ -2148,7 +2280,13 @@ function HA:OnLogin()
 	}) do
 		pcall(ev.RegisterEvent, ev, e)
 	end
+	pcall(ev.RegisterEvent, ev, "PLAYER_REGEN_DISABLED")
 	ev:SetScript("OnEvent", function(_, event, unit, target, _, spellID)
+		if event == "PLAYER_REGEN_DISABLED" then
+			-- (a drag still going as combat starts: dropped where it is)
+			if panel and panel.moving then panel:GetScript("OnDragStop")(panel) end
+			return
+		end
 		if event == "UNIT_AURA" then
 			local entry = entries[unit]
 			if entry then entry.auraDirty = true end

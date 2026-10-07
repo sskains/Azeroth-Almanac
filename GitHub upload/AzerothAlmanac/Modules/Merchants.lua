@@ -55,7 +55,9 @@ local function ReadItem(i)
 	return e
 end
 
-function M:Read()
+-- `stockOnly`: the window changed while open (MERCHANT_UPDATE, a purchase or a buyback): the stock
+-- is read again, but it isn't another visit (0.62.0: no new sighting, no items found again)
+function M:Read(stockOnly)
 	local guid = R(UnitGUID("npc"))
 	local npc = ns.NpcFromGuid(guid)
 	if not npc then return end
@@ -66,9 +68,15 @@ function M:Read()
 		local e = ReadItem(i)
 		if e then stock[#stock + 1] = e end
 	end
+	local existing = ns.Store:Get("merchant", npc)
+	if stockOnly and existing then
+		existing.stock = stock
+		existing.checked = time()
+		ns:Fire("CHANGED", "merchant", npc)
+		return
+	end
 	local where = ns.Where()
 	local name = R(UnitName("npc"))
-	local existing = ns.Store:Get("merchant", npc)
 	local fields = {
 		name = name, title = Title("npc"), reaction = R(UnitReaction("npc", "player")),
 		zone = where.zone, sub = where.sub, map = where.map,
@@ -88,29 +96,39 @@ function M:Read()
 	end
 	rec.stock = stock
 	rec.checked = time()
+	-- (only price changes worth showing are kept: items still on sale, changed in the last 30 days, 0.64.0)
+	local onSale = {}
+	for _, e in ipairs(stock) do onSale[e.id] = true end
+	for id, w in pairs(rec.was) do
+		if not onSale[id] or type(w) ~= "table" or (w[2] or 0) < time() - 30 * 86400 then rec.was[id] = nil end
+	end
+	if not next(rec.was) then rec.was = nil end
 	for _, e in ipairs(stock) do ns.Items:Found(e.id, "merchant", "merchant", npc, true, where) end
 	ns:Fire("CHANGED", "merchant", npc)
 end
 
 -- the merchant window fills its pages a moment after it opens, and updates as you buy
-local pending = false
-local function Soon()
-	if pending or not ns.db then return end
+local pending, visit = false, false
+local function Soon(event)
+	if not ns.db then return end
+	if event == "MERCHANT_SHOW" then visit = true end
+	if pending then return end
 	pending = true
 	C_Timer.After(0.6, function()
 		pending = false
 		ns.doing = "reading a merchant"
-		M:Read()
+		M:Read(not visit)
+		visit = false
 		ns.doing = "idle"
 	end)
 end
-ns:RegisterEvent("MERCHANT_SHOW", Soon)
-ns:RegisterEvent("MERCHANT_UPDATE", Soon)
+ns:RegisterEvent("MERCHANT_SHOW", function() Soon("MERCHANT_SHOW") end)
+ns:RegisterEvent("MERCHANT_UPDATE", function() Soon("MERCHANT_UPDATE") end)
 
 -- merchants that have this item on sale: { { npc, rec, entry }, ... }
 function M:Selling(itemID)
 	local out = {}
-	for npc, rec in pairs(ns.Store:All("merchant")) do
+	for npc, rec in pairs(ns.Store:Shown("merchant")) do
 		for _, e in ipairs(rec.stock or {}) do
 			if e.id == itemID then out[#out + 1] = { npc = npc, rec = rec, e = e } break end
 		end

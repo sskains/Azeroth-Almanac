@@ -55,7 +55,7 @@ function NP:Points(uiMap)
 	if not (ns.db and uiMap) then return out end
 	local s = S()
 	local B = ns.Bestiary
-	for name, rec in pairs(ns.Store:All("node")) do
+	for name, rec in pairs(ns.Store:Shown("node")) do
 		local kind = rec.kind or "chest"
 		if s[kind] ~= false and B then
 			local got = B:Spots(rec, "spots", uiMap)
@@ -264,7 +264,7 @@ local function Collect()
 	mmPoints = {}
 	if not ns.db then return end
 	local s = S()
-	for name, rec in pairs(ns.Store:All("node")) do
+	for name, rec in pairs(ns.Store:Shown("node")) do
 		local kind = rec.kind or "chest"
 		if s[kind] ~= false then
 			local fields = { { "spots", false } }
@@ -282,13 +282,79 @@ local function Collect()
 							end
 						end
 						if inst and not dup then
-							mmPoints[#mmPoints + 1] = { inst = inst, n = wn, w = ww, name = name, rec = rec, sighted = f[2],
+							-- (kept by continent: the minimap only ever looks at the one you're on, 0.64.0)
+							local list = mmPoints[inst]
+							if not list then list = {} mmPoints[inst] = list end
+							list[#list + 1] = { inst = inst, n = wn, w = ww, name = name, rec = rec, sighted = f[2],
 								map = map, x = tonumber(x), y = tonumber(y) }
 						end
 					end
 				end
 			end
 		end
+	end
+end
+
+-- Your own Find Herbs / Find Minerals / Find Treasure is on: the game shows live nodes of that kind
+-- as dots on the minimap, which addons can't read. Our pins of that kind turn into hollow rings
+-- there, so a live node's dot shows inside the ring.
+local TRACK_SPELL = { herb = 2383, ore = 2580, chest = 2481 }
+local TRACK_TEX = { herb = 133939, ore = 136025, chest = 135725 }
+local tracking, trackingAt = {}, 0
+local function Tracking()
+	local now = GetTime()
+	if now - trackingAt < 1 then return tracking end
+	trackingAt = now
+	wipe(tracking)
+	if C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo then
+		local okN, n = pcall(C_Minimap.GetNumTrackingTypes)
+		for i = 1, (okN and tonumber(n) or 0) do
+			local ok, info = pcall(C_Minimap.GetTrackingInfo, i)
+			if ok and type(info) == "table" and info.active then
+				for kind, id in pairs(TRACK_SPELL) do
+					if info.spellID == id or info.texture == TRACK_TEX[kind] then tracking[kind] = true end
+				end
+			elseif ok and type(info) ~= "table" then
+				local _, tex, active, _, _, spellID = C_Minimap.GetTrackingInfo(i)
+				if active then
+					for kind, id in pairs(TRACK_SPELL) do
+						if spellID == id or tex == TRACK_TEX[kind] then tracking[kind] = true end
+					end
+				end
+			end
+		end
+	elseif GetTrackingTexture then
+		local ok, tex = pcall(GetTrackingTexture)
+		for kind, t in pairs(TRACK_TEX) do if ok and tex == t then tracking[kind] = true end end
+	end
+	return tracking
+end
+
+local function SetHollow(pin, on, size)
+	if not pin.hollow then
+		pin.hollow = pin:CreateTexture(nil, "OVERLAY")
+		pin.hollow:SetPoint("CENTER")
+		-- (a game that hasn't been restarted since the ring was added can't load it: the pin then
+		-- stays as it is, see-through, rather than vanishing, 0.63.0)
+		pin.hollowOK = pin.hollow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Hollow") ~= false
+	end
+	if pin.isHollow == on and pin.hollowSize == size then return end
+	pin.isHollow, pin.hollowSize = on, size
+	if not pin.hollowOK then
+		pin.hollow:Hide()
+		pin.icon:SetShown(true)
+		pin.rim:SetShown(true)
+		pin.icon:SetAlpha(on and 0.35 or 1)
+		pin.rim:SetAlpha(on and 0.35 or 1)
+		return
+	end
+	pin.hollow:SetShown(on)
+	pin.icon:SetShown(not on)
+	pin.rim:SetShown(not on)
+	if on then
+		local c = RIM[pin.point and pin.point.rec.kind or "chest"] or RIM.chest
+		pin.hollow:SetVertexColor(c[1], c[2], c[3], 0.95)
+		pin.hollow:SetSize(size * 1.5, size * 1.5)
 	end
 end
 
@@ -323,9 +389,9 @@ local function UpdateMinimap()
 			local rotate = GetCVar and GetCVar("rotateMinimap") == "1"
 			local facing = rotate and R(GetPlayerFacing and GetPlayerFacing()) or 0
 			local sinF, cosF = math.sin(facing or 0), math.cos(facing or 0)
-			local size = s.mmSize or 12
-			for _, p in ipairs(mmPoints) do
-				if p.inst == inst then
+			local size = s.mmSize or 7
+			for _, p in ipairs(mmPoints[inst] or {}) do
+				do
 					-- east (+x) and north (+y) offsets on screen
 					local dx = (west - p.w) * scaleX
 					local dy = (p.n - north) * scaleY
@@ -338,7 +404,9 @@ local function UpdateMinimap()
 						if pin.point ~= p or pin.size ~= size then
 							pin.point, pin.size = p, size
 							Dress(pin, p, size * (p.sighted and 0.85 or 1))
+							pin.isHollow = nil
 						end
+						SetHollow(pin, Tracking()[p.rec.kind or "chest"] and true or false, size)
 						pin:ClearAllPoints()
 						pin:SetPoint("CENTER", Minimap, "CENTER", dx, dy)
 						pin:Show()
@@ -503,6 +571,12 @@ function NP:Refresh()
 end
 
 function NP:OnLogin()
+	-- 0.57.1: minimap pins about 40% smaller (once, for settings saved before)
+	local st = S()
+	if not st.mmSmaller then
+		st.mmSmaller = true
+		if (st.mmSize or 12) >= 8 then st.mmSize = math.max(4, math.floor((st.mmSize or 12) * 0.6 + 0.5)) end
+	end
 	pcall(self.SetupWorldMap, self)
 	local ok, b = pcall(CreateMiniButton)
 	if ok then self.miniButton = b else ns.Print("gathering minimap button failed: " .. tostring(b)) end

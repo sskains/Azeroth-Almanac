@@ -8,7 +8,7 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "0.53.1"
+ns.VERSION = "0.65.0"
 ns.ICON = 133742   -- the Almanac's icon (picked with /aa whatis; was INV_Misc_Book_09)
 
 BINDING_HEADER_AZEROTHALMANAC = "Azeroth Almanac"
@@ -24,7 +24,7 @@ ns.defaults = {
 	toasts = { enabled = true, sound = true, minTier = 1, soundTier = 2, zone = true, subzone = true, instance = true, level = true, creature = true, tier = true, merchant = true, item = true, quest = true, trainer = true, flight = true, node = true, fishing = true, milestone = true },
 	bestiary = { tooltip = true },
 	peers = { share = true, tooltip = true, nudge = true, accepted = nil },
-	nodes = { map = true, minimap = true, herb = true, ore = true, chest = true, sighted = true, size = 14, mmSize = 12, mmButton = true },
+	nodes = { map = true, minimap = true, herb = true, ore = true, chest = true, sighted = true, size = 14, mmSize = 7, mmButton = true },
 	townsfolk = { enabled = true, mapHidden = false, factionOnly = true, myClassOnly = true, continent = false, rims = false, size = 16, groups = {} },
 	journalMax = 5000,
 	debug = false,
@@ -134,7 +134,9 @@ end
 -- "Name-Realm" for the character you're playing
 function ns.CharKey()
 	local name, realm = UnitFullName("player")
-	realm = realm or GetRealmName() or "?"
+	-- (early on - the saved data loading - the realm may not be filled in yet: the normalised
+	-- name is what UnitFullName gives later, so the key is the same from the first moment)
+	if not realm or realm == "" then realm = (GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName() or "?" end
 	return (name or "?") .. "-" .. realm:gsub("%s", "")
 end
 
@@ -253,7 +255,7 @@ local function Blocked(event, addon, func)
 	local list = ns.db.diag
 	-- the latest 30 (the oldest drop off, so a fresh block is always there to read)
 	while #list >= 30 do table.remove(list, 1) end
-	list[#list + 1] = { t = time(), event = event, func = tostring(func), doing = ns.doing, combat = InCombatLockdown and InCombatLockdown() or nil }
+	list[#list + 1] = { t = time(), event = event, func = tostring(func), doing = ns.doing, combat = InCombatLockdown and InCombatLockdown() or nil, v = ns.VERSION }
 	-- said once per function per session (the map can trigger the same block many times a fight)
 	ns.blockedSaid = ns.blockedSaid or {}
 	if ns.blockedSaid[tostring(func)] then return end
@@ -264,6 +266,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 	if event == "ADDON_LOADED" then
 		if ... == ADDON_NAME then
 			ns.Store:Load()
+			-- this character's settings profile over the live settings, before any module starts
+			if ns.Profiles then
+				local ok, err = pcall(ns.Profiles.Load, ns.Profiles)
+				if not ok then ns.Print("settings profile: " .. tostring(err)) end
+			end
 			for _, module in ipairs(ns.modules) do
 				if module.OnInitialize then
 					local ok, err = pcall(module.OnInitialize, module, ns.db)
@@ -272,6 +279,13 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 			end
 		end
 	elseif event == "PLAYER_LOGIN" then
+		-- blocked-action reports from older versions are history (their causes were fixed since):
+		-- keep only this version's
+		if ns.db and type(ns.db.diag) == "table" then
+			local keep = {}
+			for _, d in ipairs(ns.db.diag) do if d.v == ns.VERSION then keep[#keep + 1] = d end end
+			ns.db.diag = keep
+		end
 		for _, module in ipairs(ns.modules) do
 			if module.OnLogin then
 				local ok, err = pcall(module.OnLogin, module)
@@ -296,11 +310,13 @@ local PAGE_ALIASES = {
 	bestiary = "bestiary", beasts = "bestiary", creatures = "bestiary",
 	items = "items", item = "items",
 	quests = "quests", quest = "quests",
-	merchants = "merchants", merchant = "merchants", vendors = "merchants",
+	merchants = "townsfolk", merchant = "townsfolk", vendors = "townsfolk",
+	people = "townsfolk", townsfolk = "townsfolk", npcs = "townsfolk",
 	places = "places", zones = "places", place = "places",
 	dungeons = "dungeons", dungeon = "dungeons", raids = "dungeons", raid = "dungeons", instances = "dungeons",
 	characters = "characters", chars = "characters", alts = "characters",
-	trainers = "trainers", trainer = "trainers", spells = "trainers", recipes = "trainers",
+	trainers = "townsfolk", trainer = "townsfolk", spells = "trainers", recipes = "trainers",
+	gathering = "gathering", gather = "gathering", herbs = "gathering", ore = "gathering", fishing = "gathering",
 }
 
 -- (Never assign the game's own globals, not even "X = X or {}": that taints them and the game then
@@ -313,14 +329,26 @@ StaticPopupDialogs.AZEROTHALMANAC_RESET = {
 	timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
 }
 
+local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, whatis = true, cards = true }
+
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
 SlashCmdList.AZEROTHALMANAC = function(msg)
 	local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
 	cmd = (cmd or ""):lower()
 	ns.doing = "running /aa " .. cmd
+	-- (the tools for working on the addon answer only with /aa debug on, 0.64.0)
+	if DEV_COMMANDS[cmd] and not ns.db.settings.debug then
+		ns.Print(L["that's a developer command: /aa debug turns them on."])
+		return
+	end
 	if cmd == "" then
 		ns.UI:Toggle()
+	elseif (cmd == "people" or cmd == "townsfolk" or cmd == "tf") and rest:lower() == "check" then
+		-- (before the page names: "people" opens the page, "people check" tests the map position)
+		ns.Townsfolk:Check()
+	elseif cmd == "help" or cmd == "?" then
+		ns.Help()
 	elseif PAGE_ALIASES[cmd] == "bestiary" and rest ~= "" then
 		local page = ns.UI:GetPage("bestiary")
 		local npc = page and page:Find(rest)
@@ -329,8 +357,8 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.UI:Open(PAGE_ALIASES[cmd])
 	elseif cmd == "options" or cmd == "settings" or cmd == "config" or cmd == "set" then
 		ns.Settings:Open(rest)
-	elseif cmd == "townsfolk" or cmd == "tf" or cmd == "people" then
-		if rest == "check" then ns.Townsfolk:Check() else ns.Settings:Open("townsfolk") end
+	elseif cmd == "tf" then
+		ns.Settings:Open("townsfolk")
 	elseif cmd == "scan" then
 		ns.QoL.AuctionPrices:StartScan()
 	elseif cmd == "inv" or cmd == "inventory" or cmd == "bags" then
@@ -387,52 +415,41 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.ArtScan:Scan()
 	elseif cmd == "toast" then
 		if ns.Toast then ns.Toast:Test() end
-	elseif cmd == "setkills" then
-		-- testing: /aa setkills <count> <creature name>  (every creature of that name)
-		local n, name = (rest or ""):match("^(%d+)%s+(.+)$")
-		if not n then ns.Print("/aa setkills <count> <creature name>") return end
-		n, name = tonumber(n), strtrim(name):lower()
-		local hits = 0
-		for npc, rec in pairs(ns.Store:All("creature")) do
-			if type(rec) == "table" and rec.name and rec.name:lower() == name then
-				rec.kills = n
-				hits = hits + 1
-				ns:Fire("CHANGED", "creature", npc)
-			end
-		end
-		ns.Print(hits > 0 and ("%s: kills set to %d (%d found)."):format(name, n, hits) or ("No creature named %s in your Almanac."):format(name))
 	elseif cmd == "atlascheck" then
 		ns.ArtScan:AtlasCheck()
 	elseif cmd == "whatis" then
 		ns.ArtScan:WhatIs(rest)
 	elseif cmd == "cards" then
 		ns.ArtScan:Cards()
-	elseif cmd == "artlog" then
-		if rest == "start" or rest == "on" then ns.ArtScan:StartLog()
-		elseif rest == "stop" or rest == "off" then ns.ArtScan:StopLog()
-		else ns.ArtScan:LogStatus() end
 	elseif cmd == "reset" then
 		StaticPopup_Show("AZEROTHALMANAC_RESET")
 	else
-		ns.Print(L["commands:"])
-		ns.Print("/aa - " .. L["open or close the Almanac"])
-		ns.Print("/aa journal | places | characters | creatures | items | quests | merchants | trainers | dungeons - " .. L["open a page"])
-		ns.Print("/aa creatures <name> - " .. L["open Creatures on a creature (/aa bestiary works too)"])
-		ns.Print("/aa settings [page] - " .. L["the settings window"])
-		ns.Print("/aa people [check] - " .. L["people on the world map (check: test the map position of the NPC you're talking to)"])
-		ns.Print("/aa scan - " .. L["full auction house scan (auction house open)"])
-		ns.Print("/aa inv - " .. L["Characters page on the Bags tab: every character's bags, bank and gear"])
-		ns.Print("/aa version [quest] - " .. L["which version of Azeroth Almanac is loaded (quest: preview the update quest)"])
-		ns.Print("/aa games - " .. L["Gem Match"])
-		ns.Print("/aa gambit [Name|leave] - " .. L["Wild Gambit, the creature card game (practice, or challenge another Almanac player)"])
-		ns.Print("/aa mtt [name|target|practice|leave|ping name|debug] - " .. L["Murloc Tac Toe: challenge another Azeroth Almanac player, or practise against a gnoll"])
-		ns.Print("/aa heal [test|debug|on|off] - " .. L["Healer Assist"])
-		ns.Print("/aa node herb|ore|chest|other|reset - " .. L["classify the node you're facing"])
-		ns.Print("/qt - " .. L["quest tracker target buttons (/qt help)"])
-		ns.Print("/aa stats - " .. L["what has been recorded, and how big the saved data is"])
-		ns.Print("/aa talents - " .. L["Talent Planner (the Planner tab on your Talents window)"])
-		ns.Print("/aa minimap - " .. L["show or hide the minimap button"])
-		ns.Print("/aa nodes [button] - " .. L["show or hide gathering nodes on the minimap (button: put the minimap button back)"])
-		ns.Print("/aa reset - " .. L["erase all records (asks first)"])
+		if cmd ~= "" then ns.Print((L["no command \"%s\"."]):format(cmd)) end
+		ns.Help()
 	end
+end
+
+-- /aa help (and any command it doesn't know)
+function ns.Help()
+	ns.Print(L["commands:"])
+	ns.Print("/aa - " .. L["open or close the Almanac"])
+	ns.Print("/aa journal | characters | creatures | items | quests | gathering | places | dungeons | people | spells - " .. L["open a page"])
+	ns.Print("/aa creatures <name> - " .. L["open Creatures on a creature (/aa bestiary works too)"])
+	ns.Print("/aa settings [page] - " .. L["the settings window"])
+	ns.Print("/aa people check - " .. L["test the map position of the NPC you're talking to"])
+	ns.Print("/aa tf - " .. L["settings for people on the world map"])
+	ns.Print("/aa scan - " .. L["full auction house scan (auction house open)"])
+	ns.Print("/aa inv - " .. L["Characters page on the Bags tab: every character's bags, bank and gear"])
+	ns.Print("/aa version [quest] - " .. L["which version of Azeroth Almanac is loaded (quest: preview the update quest)"])
+	ns.Print("/aa games - " .. L["Gem Match"])
+	ns.Print("/aa gambit [Name|new|tutorial|leave] - " .. L["Wild Gambit, the creature card game (practice, or challenge another Almanac player)"])
+	ns.Print("/aa mtt [name|target|practice|leave|ping name|debug] - " .. L["Murloc Tac Toe: challenge another Azeroth Almanac player, or practise against a gnoll"])
+	ns.Print("/aa heal [test|debug|on|off] - " .. L["Healer Assist"])
+	ns.Print("/aa node herb|ore|chest|other|reset - " .. L["classify the node you're facing"])
+	ns.Print("/qt - " .. L["quest tracker target buttons (/qt help)"])
+	ns.Print("/aa stats - " .. L["what has been recorded, and how big the saved data is"])
+	ns.Print("/aa talents - " .. L["Talent Planner (the Planner tab on your Talents window)"])
+	ns.Print("/aa minimap - " .. L["show or hide the minimap button"])
+	ns.Print("/aa nodes [button] - " .. L["show or hide gathering nodes on the minimap (button: put the minimap button back)"])
+	ns.Print("/aa reset - " .. L["erase all records (asks first)"])
 end

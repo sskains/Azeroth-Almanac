@@ -90,7 +90,7 @@ end
 
 local function Build()
 	frame = W.Try("Frame", "AzerothAlmanacToast", UIParent, "BackdropTemplate")
-	frame:SetSize(276, 96)
+	frame:SetSize(331, 115) -- (20% larger than the game's loot toast: more room for names)
 	frame:SetFrameStrata("DIALOG")
 	frame:SetClampedToScreen(true)
 	frame:EnableMouse(true)
@@ -116,8 +116,8 @@ local function Build()
 	frame.bg = bg
 	-- the item slot on the left: icon in a coloured border
 	frame.icon = frame:CreateTexture(nil, "ARTWORK")
-	frame.icon:SetSize(52, 52)
-	frame.icon:SetPoint("LEFT", 26, 0)
+	frame.icon:SetSize(62, 62)
+	frame.icon:SetPoint("LEFT", 31, 0)
 	frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	frame.iconBorder = frame:CreateTexture(nil, "OVERLAY")
 	frame.iconBorder:SetPoint("TOPLEFT", frame.icon, "TOPLEFT", -4, 4)
@@ -129,17 +129,38 @@ local function Build()
 	frame.title:SetWordWrap(false)
 	-- the small detail top right, where the loot toast shows its coins
 	frame.sub = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	frame.sub:SetPoint("TOPRIGHT", -22, -22)
+	frame.sub:SetPoint("TOPRIGHT", -26, -27)
 	frame.sub:SetJustifyH("RIGHT")
 	frame.sub:SetWordWrap(false)
 	frame.sub:SetTextColor(1, 0.82, 0)
 	-- the name, large, in the lower band
 	frame.text = frame:CreateFontString(nil, "OVERLAY")
 	frame.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontHighlightLarge"))
-	frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 12, -12)
-	frame.text:SetPoint("RIGHT", -22, -12)
+	frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 12, -14)
+	frame.text:SetPoint("RIGHT", -26, -14)
 	frame.text:SetJustifyH("LEFT")
 	frame.text:SetWordWrap(false)
+	-- the Almanac's own mark, top right on the frame's edge: its icon (a quarter of the big icon's
+	-- size) and "Almanac" in red beside it, on a small dark tag so it reads over the rim
+	frame.badge = CreateFrame("Frame", nil, frame)
+	frame.badge:SetFrameLevel(frame:GetFrameLevel() + 6)
+	frame.badge:SetSize(70, 16)
+	frame.badge:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -24, -5)
+	frame.badge.bg = frame.badge:CreateTexture(nil, "BACKGROUND")
+	frame.badge.bg:SetPoint("TOPLEFT", -3, 1)
+	frame.badge.bg:SetPoint("BOTTOMRIGHT", 3, -1)
+	frame.badge.bg:SetColorTexture(0, 0, 0, 0.55)
+	frame.badge.icon = frame.badge:CreateTexture(nil, "ARTWORK")
+	frame.badge.icon:SetSize(13, 13)
+	frame.badge.icon:SetPoint("RIGHT", frame.badge, "RIGHT", 0, 0)
+	frame.badge.icon:SetTexture(W.FindIcon(ns.ICON))
+	frame.badge.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	frame.badge.text = frame.badge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	frame.badge.text:SetPoint("RIGHT", frame.badge.icon, "LEFT", -3, 0)
+	frame.badge.text:SetText(L["Almanac"])
+	frame.badge.text:SetTextColor(1, 0.22, 0.18)
+	frame.badge.text:SetShadowOffset(1, -1)
+	frame.badge:SetWidth(13 + 3 + math.ceil(tonumber(frame.badge.text:GetStringWidth()) or 44))
 	-- a soft gold flash as it arrives
 	frame.flash = frame:CreateTexture(nil, "OVERLAY", nil, 2)
 	frame.flash:SetAllPoints()
@@ -198,7 +219,7 @@ function Toast:ResetPosition()
 end
 
 -- the room for text between the icon and the frame's right edge
-local AVAIL = 276 - (26 + 52 + 12) - 22
+local AVAIL = 331 - (31 + 62 + 12) - 26
 
 -- the first font that keeps a single line within width; false if none does
 function Fit(fs, width, fonts)
@@ -237,11 +258,11 @@ local function Play(item)
 	frame.sub:SetText(item.sub or "")
 	local hasSub = (item.sub or "") ~= ""
 	local subW = hasSub and (tonumber(frame.sub:GetStringWidth()) or 0) or 0
-	if subW > 70 then subW = 70 end
+	if subW > 96 then subW = 96 end
 	frame.sub:SetWidth(hasSub and subW + 2 or 1)
 	frame.title:ClearAllPoints()
 	frame.title:SetPoint("TOPLEFT", frame.icon, "TOPRIGHT", 12, 2)
-	frame.title:SetPoint("RIGHT", frame, "RIGHT", -22 - (hasSub and subW + 8 or 0), 0)
+	frame.title:SetPoint("RIGHT", frame, "RIGHT", -26 - (hasSub and subW + 8 or 0), 0)
 	frame.title:SetText(item.title or "")
 	Fit(frame.title, AVAIL - (hasSub and subW + 8 or 0), { "GameFontNormal", "GameFontNormalSmall" })
 	frame.text:SetText(item.text or "")

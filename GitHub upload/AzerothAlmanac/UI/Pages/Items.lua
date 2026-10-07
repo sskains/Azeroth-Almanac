@@ -9,7 +9,7 @@ local L = ns.L
 local W = ns.Widgets
 local IDB = ns.ItemDB
 
-local page = { key = "items", title = L["Items"], icon = { 515958, "INV_Chest_Chain_05", "INV_Misc_Bag_08" }, order = 4 }
+local page = { key = "items", title = L["Items"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Items", order = 4 }
 local list, detail, countText, qualityButton, iconButton, nameText, typeText, firstText
 local filter, qualityFilter, ownedOnly = "", nil, false
 local shown
@@ -144,7 +144,7 @@ local function Describe(id, rec)
 			local price = ns.CostText(sl.e.price, sl.e.cost)
 			local place = sl.rec.sub and sl.rec.sub ~= "" and sl.rec.sub or sl.rec.zone or "?"
 			ms[#ms + 1] = { name = sl.rec.name or "?", icon = W.FindIcon(W.KIND.merchant.icon), note = price .. "  " .. NOTE .. place .. "|r",
-				tip = ((sl.e.avail or -1) >= 0 and (L["Limited: %d left when checked."]):format(sl.e.avail) .. "\n" or "") .. L["Click to open in Merchants."],
+				tip = ((sl.e.avail or -1) >= 0 and (L["Limited: %d left when checked."]):format(sl.e.avail) .. "\n" or "") .. L["Click to open in People."],
 				onClick = function() local p = ns.UI:GetPage("merchants") if p then p:ShowMerchant(sl.npc) end end }
 		end
 		if #ms > 0 then b[#b + 1] = { "slots", ms } end
@@ -174,7 +174,7 @@ local function Describe(id, rec)
 		end
 	end
 	local needed, seenQ = {}, {}
-	for qid, q in pairs(ns.Store:All("quest")) do
+	for qid, q in pairs(ns.Store:Shown("quest")) do
 		for _, r in ipairs(q.req or {}) do
 			if r[1] == id and not seenQ[qid] then seenQ[qid] = true needed[#needed + 1] = QuestSlot(qid, "x" .. (r[2] or 1)) end
 		end
@@ -195,9 +195,9 @@ local function Describe(id, rec)
 
 	-- Recipes you've seen that make it, or use it
 	local makers, uses = {}, {}
-	for sid, sp in pairs(ns.Store:All("spell")) do
+	for sid, sp in pairs(ns.Store:Shown("spell")) do
 		local entry = function(note)
-			return { name = sp.name or "?", icon = sp.icon, note = note, tip = L["Click to open in Trainers."],
+			return { name = sp.name or "?", icon = sp.icon, note = note, tip = L["Click to open in Spells & Recipes."],
 				onClick = function() local p = ns.UI:GetPage("trainers") if p then p:ShowSpell(sid) end end }
 		end
 		if sp.made == id then makers[#makers + 1] = entry(ns.Trainers:GroupName(sp.group)) end
@@ -273,7 +273,7 @@ end
 local function Collect()
 	local rows, total = {}, 0
 	local mine = ownedOnly and (ns.db.chars[ns.CharKey()] or {}).items or nil
-	for id, rec in pairs(ns.Store:All("item")) do
+	for id, rec in pairs(ns.Store:Shown("item")) do
 		total = total + 1
 		local ok = true
 		if filter ~= "" then ok = (rec.name or ""):lower():find(filter, 1, true) ~= nil end
