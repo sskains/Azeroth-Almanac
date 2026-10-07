@@ -1136,8 +1136,9 @@ local function Build()
 	-- two are the choice of game, with room round them)
 	local modeHead = side:CreateFontString(nil, "OVERLAY")
 	modeHead:SetPoint("TOP", side, "TOP", 0, -68)
+	local modeOrn = ns.Ornament(modeHead, 14, 18) -- (this sets the font: the text can only follow it)
 	modeHead:SetText("Choose your game")
-	ns.Ornament(modeHead, 14, 18):Layout()
+	modeOrn:Layout()
 	local MODE_WORDS = { timed = "Timed  2:00", moves = "30 Moves" }
 	local x, half = PAD, FIELD_W / 2
 	for _, mode in ipairs({ "timed", "moves" }) do
