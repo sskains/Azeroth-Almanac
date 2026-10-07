@@ -225,7 +225,12 @@ end
 -- scene of its creature type
 local HABITAT_WORDS = {
 	{ "Underwater", { "shark", "crab", "turtle", "eel", "murloc", "makrura", "naga", "sea ", "tide", "reef", "coral",
-		"clam", "threshadon", "snapjaw", "lobster", "drowned", "water elemental", "hydra" } },
+		"clam", "threshadon", "snapjaw", "lobster", "drowned", "water elemental", "hydra",
+		-- fish and fishing pools ("fish " with its space: a whole word, so "fisherman" stays on land)
+		"fish ", "school of", "jellyfish", "starfish", "piranha", "squid", "octopus", "frenzy", "thresher", "manta",
+		"whale", "dolphin",
+		-- the murloc tribes, whose names rarely say "murloc"
+		"saltspittle", "bluegill", "greymist", "coastrunner", "puddlejumper" } },
 	{ "Shore", { "crocolisk", "pirate", "privateer", "buccaneer", "sailor", "deckhand", "fleet master", "swashbuckler",
 		"corsair", "first mate", "shore", "harbor", "dock" } },
 	{ "Snow", { "frost", "ice ", "icy", "snow", "yeti", "winter", "chillwind", "glacial" } },
