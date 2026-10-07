@@ -41,7 +41,7 @@ local GetIcon = (C_Item and C_Item.GetItemIconByID) or GetItemIcon
 
 -- The two sides. display: creature display IDs recorded on WoW Forever (Murloc Flesheater, Riverpaw
 -- Gnoll). Sounds are the creatures' own voice files.
-local SIDES = {
+local CHAMPS = {
 	murloc = {
 		name = "Murlocs", one = "Murloc", display = 506, item = 1468, -- Murloc Fin
 		color = { 0.35, 1, 0.5 }, hex = "59ff80",
@@ -62,7 +62,47 @@ local SIDES = {
 		cheer = "Yip yip AROOOO!",
 		bot = "Riverpaw Gnoll",
 	},
+	-- Champions that can be chosen (the first two are the classic pair, and are what an older Almanac
+	-- plays as). Those with no `display` yet are hidden until one is set in game: target the creature
+	-- and type /aa mtt champion <key>. `icon` is the round face if the portrait can't be made.
+	faerie = {
+		name = "Faerie Dragons", one = "Faerie Dragon", icon = "Spell_Nature_FaerieFire",
+		color = { 0.9, 0.55, 1 }, hex = "e68cff", cheer = "Tee-hee-hee!", bot = "Faerie Dragon",
+	},
+	greenwhelp = {
+		name = "Green Whelps", one = "Green Whelp", icon = "INV_Misc_Head_Dragon_Green",
+		color = { 0.4, 0.95, 0.4 }, hex = "66f266", cheer = "Rawr!", bot = "Green Whelp",
+	},
+	redwhelp = {
+		name = "Red Whelps", one = "Red Whelp", icon = "INV_Misc_Head_Dragon_Red",
+		color = { 1, 0.4, 0.35 }, hex = "ff6659", cheer = "Rawr!", bot = "Red Whelp",
+	},
+	bluewhelp = {
+		name = "Blue Whelps", one = "Blue Whelp", icon = "INV_Misc_Head_Dragon_Blue",
+		color = { 0.45, 0.7, 1 }, hex = "73b3ff", cheer = "Rawr!", bot = "Blue Whelp",
+	},
+	blackwhelp = {
+		name = "Black Whelps", one = "Black Whelp", icon = "INV_Misc_Head_Dragon_Black",
+		color = { 0.75, 0.6, 0.9 }, hex = "bf99e6", cheer = "Rawr!", bot = "Black Whelp",
+	},
+	slime = {
+		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01",
+		color = { 0.7, 1, 0.3 }, hex = "b3ff4d", cheer = "Blorp blorp!", bot = "Excitable Slime",
+	},
 }
+-- the order they are offered in
+local ROSTER = { "murloc", "gnoll", "faerie", "greenwhelp", "redwhelp", "bluewhelp", "blackwhelp", "slime" }
+-- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
+-- chose the same champion can still be told apart
+local ROLE_RINGS = {
+	murloc = { "talents-node-circle-green", "talents-node-circle-yellow" },
+	gnoll = { "talents-node-circle-red", "talents-node-circle-yellow" },
+}
+local ROLE_COLOR = { murloc = { 0.35, 1, 0.5 }, gnoll = { 1, 0.6, 0.25 } }
+-- SIDES[role] is the champion playing that role (the first mover is "murloc", the second "gnoll", the
+-- names the game began with); it is looked up afresh, so the code below reads SIDES[role].display etc.
+local Look
+local SIDES = setmetatable({}, { __index = function(_, role) return Look(role) end })
 local OTHER = { murloc = "gnoll", gnoll = "murloc" }
 local SND = { challenge = 567409, victory = 567408, failed = 567459, draw = 540233, splash = 540231 }
 
@@ -78,6 +118,36 @@ local db, frame
 local game            -- the current or last game (nil before the first)
 local pendingIn       -- an incoming challenge waiting on the popup { from, gid }
 local warnedNewer = {}
+
+-- Your champion, and who plays which role
+local function Playable(key)
+	local c = CHAMPS[key]
+	return c and c.display and true or false
+end
+
+local function MyChamp()
+	local k = db and db.champion
+	if k and Playable(k) then return k end
+	return "murloc"
+end
+
+-- a champion key from the other player: theirs if we know it, else the role's classic one
+local function ValidChamp(key, fallback)
+	if type(key) == "string" and Playable(key) then return key end
+	return fallback
+end
+
+Look = function(role)
+	local champs = game and game.champs
+	local key
+	if champs then
+		key = champs[role]
+	else
+		local mine = MyChamp() -- (no game yet: your champion on the left, a different one across)
+		key = role == "murloc" and mine or (mine == "gnoll" and "murloc" or "gnoll")
+	end
+	return CHAMPS[key] or CHAMPS[role]
+end
 
 ---------------------------------------------------------------------------
 -- Rules
@@ -201,14 +271,15 @@ local function Face(tex, side)
 	tex:SetTexCoord(0, 1, 0, 1)
 	if tex.SetDesaturated then tex:SetDesaturated(false) end
 	if SetPortraitTextureFromCreatureDisplayID and pcall(SetPortraitTextureFromCreatureDisplayID, tex, s.display) then return end
-	local icon = (GetIcon and GetIcon(s.item)) or "Interface\\Icons\\INV_Misc_QuestionMark"
+	local icon = (s.item and GetIcon and GetIcon(s.item)) or (s.icon and ("Interface\\Icons\\" .. s.icon))
+		or "Interface\\Icons\\INV_Misc_QuestionMark"
 	if SetPortraitToTexture then SetPortraitToTexture(tex, icon) else tex:SetTexture(icon) end
 end
 
 -- the talent window's round node ring in the side's colour; else the minimap tracking ring, tinted
 local function Ring(tex, side, size, anchor)
 	tex:ClearAllPoints()
-	for _, atlas in ipairs(SIDES[side].rings) do
+	for _, atlas in ipairs(ROLE_RINGS[side]) do
 		if HasAtlas(atlas) and pcall(tex.SetAtlas, tex, atlas) then
 			tex:SetVertexColor(1, 1, 1)
 			if tex.SetDesaturated then tex:SetDesaturated(false) end
@@ -221,7 +292,7 @@ local function Ring(tex, side, size, anchor)
 	tex:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 	tex:SetTexCoord(0, 1, 0, 1)
 	if tex.SetDesaturated then tex:SetDesaturated(true) end
-	local c = SIDES[side].color
+	local c = ROLE_COLOR[side]
 	tex:SetVertexColor(c[1], c[2], c[3])
 	local k = size / 21
 	tex:SetSize(53 * k, 53 * k)
@@ -347,9 +418,14 @@ end
 local Refresh, ShowPiece, ClearBoardArt, Celebrate -- forward
 
 local function StartGame(opts)
+	-- who plays what: yours, and theirs (an older Almanac says nothing: its role's classic one)
+	local mine = ValidChamp(opts.myChamp, MyChamp())
+	local theirRole = OTHER[opts.mySide]
+	local theirs = ValidChamp(opts.theirChamp, theirRole)
 	game = {
 		gid = opts.gid, opp = opts.opp, practice = opts.practice, mySide = opts.mySide,
 		board = {}, seq = 0, turn = "murloc", state = "playing", moved = GetTime(),
+		champs = { [opts.mySide] = mine, [theirRole] = theirs },
 	}
 	MT:Open()
 	ClearBoardArt()
@@ -429,7 +505,11 @@ end
 function MT:Practice()
 	if Busy() then Say("finish your game with " .. Short(game.opp) .. " first.") return end
 	local mySide = (game and game.practice and game.state == "over") and OTHER[game.mySide] or "murloc"
-	StartGame({ practice = true, mySide = mySide, opp = SIDES[OTHER[mySide]].bot, gid = "practice" })
+	-- the computer plays a champion other than yours
+	local mine, pool = MyChamp(), {}
+	for _, k in ipairs(ROSTER) do if Playable(k) and k ~= mine then pool[#pool + 1] = k end end
+	local bot = pool[math.random(#pool)] or "gnoll"
+	StartGame({ practice = true, mySide = mySide, opp = CHAMPS[bot].bot, gid = "practice", myChamp = mine, theirChamp = bot })
 end
 
 function MT:Challenge(name)
@@ -457,7 +537,7 @@ function MT:Challenge(name)
 	if game and game.state == "inviting" then Send(game.opp, "X", game.gid) end
 	local gid = NewGid()
 	game = { gid = gid, opp = name, state = "inviting", sent = GetTime(), board = {} }
-	Send(game.opp, "C", gid)
+	Send(game.opp, "C", gid, MyChamp())
 	MT:Open()
 	ClearBoardArt()
 	Refresh()
@@ -484,8 +564,8 @@ function MT:AcceptInvite()
 	pendingIn = nil
 	if not p then return end
 	if Busy() and not SameName(p.from, game.opp) then Send(p.from, "D", p.gid, "busy") return end
-	Send(p.from, "A", p.gid)
-	StartGame({ gid = p.gid, opp = p.from, mySide = "gnoll" })
+	Send(p.from, "A", p.gid, MyChamp())
+	StartGame({ gid = p.gid, opp = p.from, mySide = "gnoll", myChamp = MyChamp(), theirChamp = p.champ })
 end
 
 function MT:DeclineInvite()
@@ -520,13 +600,13 @@ function MT:Rematch()
 	if game.rematchIn then
 		-- they asked first: accept theirs
 		local newGid = game.rematchIn
-		Send(game.opp, "A", newGid)
-		StartGame({ gid = newGid, opp = game.opp, mySide = OTHER[game.mySide] })
+		Send(game.opp, "A", newGid, MyChamp())
+		StartGame({ gid = newGid, opp = game.opp, mySide = OTHER[game.mySide], myChamp = MyChamp(), theirChamp = game.rematchChamp })
 		return
 	end
 	if game.rematchOut then return end
 	game.rematchOut = NewGid()
-	Send(game.opp, "N", game.gid, game.rematchOut)
+	Send(game.opp, "N", game.gid, game.rematchOut, MyChamp())
 	Refresh()
 end
 
@@ -586,7 +666,7 @@ local function OnMessage(text, sender)
 		elseif db.friendsOnly and not IsKnown(sender) then why = "off"
 		elseif (Busy() and not SameName(sender, game.opp)) or pendingIn then why = "busy" end
 		if why then Send(sender, "D", gid, why) return end
-		pendingIn = { from = sender, gid = gid }
+		pendingIn = { from = sender, gid = gid, champ = a }
 		PlayFile(SND.challenge)
 		PlaySide("murloc", "place")
 		local popup = StaticPopup_Show(POPUP, Short(sender))
@@ -605,9 +685,9 @@ local function OnMessage(text, sender)
 		return
 	elseif kind == "A" then
 		if game.state == "inviting" and gid == game.gid then
-			StartGame({ gid = gid, opp = sender, mySide = "murloc" })
+			StartGame({ gid = gid, opp = sender, mySide = "murloc", myChamp = MyChamp(), theirChamp = a })
 		elseif game.state == "over" and game.rematchOut == gid then
-			StartGame({ gid = gid, opp = sender, mySide = OTHER[game.mySide] })
+			StartGame({ gid = gid, opp = sender, mySide = OTHER[game.mySide], myChamp = MyChamp(), theirChamp = a })
 		end
 	elseif kind == "D" and game.state == "inviting" and gid == game.gid then
 		game.state = "idle"
@@ -653,9 +733,10 @@ local function OnMessage(text, sender)
 		if game.rematchOut then
 			-- both asked at once: the smaller id wins, both sides agree without another message
 			local newGid = (a < game.rematchOut) and a or game.rematchOut
-			StartGame({ gid = newGid, opp = game.opp, mySide = OTHER[game.mySide] })
+			StartGame({ gid = newGid, opp = game.opp, mySide = OTHER[game.mySide], myChamp = MyChamp(), theirChamp = b })
 		else
 			game.rematchIn = a
+			game.rematchChamp = b
 			PlayFile(SND.challenge)
 			Refresh()
 		end
@@ -691,11 +772,14 @@ end
 -- Window
 ---------------------------------------------------------------------------
 
+-- a carved-oak plank with gold lettering, as in Wild Gambit and Gem Match (WindowUtil's shared look)
 local function FlatButton(parent, text, width, onClick)
 	local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
 	b:SetSize(width, 24)
 	b:SetText(text)
 	b:SetScript("OnClick", onClick)
+	ns.WoodButton(b)
+	ns.WoodLettering(b, 13)
 	return b
 end
 
@@ -761,34 +845,6 @@ local function Divider(parent, y)
 		line:SetHeight(8)
 	end
 	return line
-end
-
--- A bigger portrait for the window, in the elite target frame's gold dragon (mirrored so it wraps
--- the outside of the window). The dragon is cut from the classic target frame: its portrait hole
--- is 64 px across, centred 36 px from the cut's mirrored edge and 44 px from its top.
-local PORTRAIT = 74
-local function ElitePortrait()
-	local holder = CreateFrame("Frame", nil, frame)
-	holder:SetSize(PORTRAIT, PORTRAIT)
-	holder:SetPoint("CENTER", frame, "TOPLEFT", 22, -20)
-	holder:SetFrameLevel(frame:GetFrameLevel() + 60)
-	local back = holder:CreateTexture(nil, "BACKGROUND")
-	back:SetAllPoints()
-	back:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-	back:SetVertexColor(0, 0, 0, 1)
-	local face = holder:CreateTexture(nil, "ARTWORK")
-	face:SetPoint("TOPLEFT", 3, -3)
-	face:SetPoint("BOTTOMRIGHT", -3, 3)
-	Face(face, "murloc")
-	local k = PORTRAIT / 64
-	local dragon = holder:CreateTexture(nil, "OVERLAY")
-	dragon:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Elite")
-	-- the cut x 146..256, y 0..100 of the 256 x 128 sheet, mirrored
-	dragon:SetTexCoord(1, 146 / 256, 0, 100 / 128)
-	dragon:SetSize(110 * k, 100 * k)
-	dragon:SetPoint("TOPLEFT", holder, "CENTER", -74 * k, 44 * k)
-	holder.face = face
-	return holder
 end
 
 local function CellCenter(i)
@@ -874,8 +930,11 @@ function Celebrate()
 end
 
 local function SetCard(card, side, name, sub, active)
-	if card.sideShown ~= side then
-		card.sideShown = side
+	-- (the champion's record, not the role: a different champion in the same role, or a new model
+	-- for the same one, rebuilds the card)
+	local look = SIDES[side]
+	if card.sideShown ~= look or card.shownDisplay ~= look.display then
+		card.sideShown, card.shownDisplay = look, look.display
 		if card.model.ClearModel then card.model:ClearModel() end
 		if card.model.SetDisplayInfo then pcall(card.model.SetDisplayInfo, card.model, SIDES[side].display) end
 		if card.model.SetPortraitZoom then card.model:SetPortraitZoom(0) end
@@ -911,7 +970,7 @@ function Refresh()
 	-- status line
 	local status
 	if not g or g.state == "idle" then
-		status = g and g.notice or "Challenge a player, or practise against a gnoll."
+		status = g and g.notice or "Challenge a player, or practise against the computer."
 	elseif g.state == "inviting" then
 		status = ("Waiting for %s to answer..."):format(Short(g.opp))
 	elseif playing then
@@ -936,6 +995,8 @@ function Refresh()
 	frame.quit:SetShown(playing and true or false)
 	frame.quit:SetText(MT:CanLeaveFree() and "Leave (no penalty)" or "Resign")
 	frame.soundButton:SetText(db.sound and "Sound: on" or "Sound: off")
+	local choosing = not (g and (g.state == "playing" or g.state == "inviting"))
+	for _, b in ipairs(frame.champArrows) do b:SetShown(choosing) end
 	local w, l, d = Totals()
 	frame.title:SetText(Title())
 	frame.totals:SetText(("|cffffffff%d|r wins   |cffffffff%d|r losses   |cffffffff%d|r draws"):format(w, l, d))
@@ -995,6 +1056,13 @@ local function Build()
 	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 	frame:Hide()
 	tinsert(UISpecialFrames, "AzerothAlmanacMurlocTacToe")
+
+	-- the window's background: Wild Gambit's (the Almanac's dark recipe-list panel)
+	local dark = frame:CreateTexture(nil, "BACKGROUND", nil, -6)
+	dark:SetPoint("TOPLEFT", 3, -24)
+	dark:SetPoint("BOTTOMRIGHT", -3, 3)
+	if not A.Widgets.TryAtlas(dark, unpack(A.Widgets.LIST_BG)) then dark:SetColorTexture(0.05, 0.045, 0.04, 1) end
+	frame.dark = dark
 
 	local titleBg = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
 	titleBg:SetColorTexture(0.08, 0.065, 0.045, 1)
@@ -1059,9 +1127,35 @@ local function Build()
 		card.sub:SetWordWrap(false)
 		frame.cards[which] = card
 	end
+	-- your champion: an arrow either side of your creature changes it (while no game is on)
+	frame.champArrows = {}
+	for _, dir in ipairs({ -1, 1 }) do
+		local card = frame.cards.me
+		local b = CreateFrame("Button", nil, card)
+		b:SetSize(30, 30)
+		b:SetPoint(dir < 0 and "LEFT" or "RIGHT", card, dir < 0 and "LEFT" or "RIGHT", dir < 0 and -4 or 4, 10)
+		b:SetFrameLevel(card:GetFrameLevel() + 10)
+		b:SetNormalTexture(dir < 0 and "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up" or "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+		b:SetPushedTexture(dir < 0 and "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down" or "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+		b:SetHighlightTexture(dir < 0 and "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up" or "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up", "ADD")
+		b:SetScript("OnClick", function() MT:CycleChampion(dir) end)
+		b:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_TOP")
+			GameTooltip:AddLine("Choose your champion", 1, 0.82, 0)
+			GameTooltip:AddLine("Who you play as: it goes with you into every game, and your opponent sees it.", 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", GameTooltip_Hide)
+		frame.champArrows[#frame.champArrows + 1] = b
+	end
 	-- "VS" between the cards, in the game's big gold font (Morpheus made "vs" read as "V8")
+	-- on a carved shield with crossed swords (Wild Gambit's)
+	local vsPlaque = frame:CreateTexture(nil, "ARTWORK")
+	vsPlaque:SetSize(64, 64)
+	vsPlaque:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - 50)
+	vsPlaque:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Plaque_VS")
 	local vs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-	vs:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - 50)
+	vs:SetPoint("CENTER", vsPlaque, "CENTER", 0, 1)
 	vs:SetShadowOffset(1, -1)
 	vs:SetText("VS")
 	frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1212,7 +1306,7 @@ local function Build()
 	local idleTitle = Font(idle, 24, GOLD)
 	idleTitle:SetPoint("TOP", 0, -14)
 	idleTitle:SetText("Mrgl mrgl!")
-	local practice = FlatButton(idle, "Practice vs. a Gnoll", 170, function() MT:Practice() end)
+	local practice = FlatButton(idle, "Practice game", 170, function() MT:Practice() end)
 	practice:SetPoint("BOTTOM", 0, 14)
 	frame.idle = idle
 
@@ -1273,7 +1367,7 @@ local function Build()
 	go:SetPoint("TOPLEFT", 10, -60)
 	local tgt = FlatButton(side, "My target", half, function() MT:Challenge("target") end)
 	tgt:SetPoint("LEFT", go, "RIGHT", 8, 0)
-	local prac = FlatButton(side, "Practice vs. a Gnoll", SIDE_W - 20, function() MT:Practice() end)
+	local prac = FlatButton(side, "Practice game", SIDE_W - 20, function() MT:Practice() end)
 	prac:SetPoint("TOPLEFT", go, "BOTTOMLEFT", 0, -6)
 
 	Divider(side, -124)
@@ -1324,16 +1418,13 @@ local function Build()
 	end)
 	frame.soundButton:SetPoint("BOTTOMLEFT", 10, 10)
 
-	ns.NativeWindow(frame, { title = "Murloc Tac Toe", icon = (GetIcon and GetIcon(1468)) or "Interface\\Icons\\INV_Misc_QuestionMark",
-		hide = { titleBg, icon, title }, close = close, byline = sub })
-	-- the bigger, elite portrait over the template's own (which is hidden)
-	if type(frame.portrait) == "table" then frame.portrait:SetAlpha(0) end
-	local chrome = type(frame.nativeChrome) == "table" and frame.nativeChrome
-	local container = chrome and type(chrome.PortraitContainer) == "table" and chrome.PortraitContainer
-	if container and container.SetAlpha then container:SetAlpha(0) end
-	frame.elite = ElitePortrait()
+	local winIcon = A.Widgets.FindIcon({ "INV_Misc_Head_Murloc_01", "INV_Misc_Fish_02", "INV_Misc_Fish_05" })
+	ns.NativeWindow(frame, { title = "Murloc Tac Toe", icon = winIcon, hide = { titleBg, icon, title }, close = close, byline = sub })
+	-- the corner icon bigger, in the gold elite frame, as in Wild Gambit and Gem Match (a murloc badge
+	-- of its own is to come)
+	ns.GoldEmblem(frame, winIcon)
 	sub:ClearAllPoints()
-	sub:SetPoint("TOPLEFT", frame, "TOPLEFT", 68, -31)
+	sub:SetPoint("TOPLEFT", frame, "TOPLEFT", 172, -31)
 
 	local clock, lastQuit = 0, nil
 	frame:SetScript("OnUpdate", function(self, elapsed)
@@ -1437,6 +1528,52 @@ end
 
 function MT:OnInitialize(saved)
 	db = saved.murloc
+	-- your champion, and the display IDs set in game for champions that don't have one built in
+	db.champion = db.champion or "murloc"
+	db.display = db.display or {}
+	for key, display in pairs(db.display) do
+		if CHAMPS[key] and type(display) == "number" then CHAMPS[key].display = display end
+	end
+end
+
+-- the next (dir = 1) or previous champion that has a model
+function MT:CycleChampion(dir)
+	if game and (game.state == "playing" or game.state == "inviting") then return end
+	local list = {}
+	for _, k in ipairs(ROSTER) do if Playable(k) then list[#list + 1] = k end end
+	if #list < 2 then
+		Say("only one champion has a model so far. Target a creature and type |cffffd100/aa mtt champion <name>|r (|cffffd100/aa mtt champions|r lists them).")
+		return
+	end
+	local cur = 1
+	for i, k in ipairs(list) do if k == MyChamp() then cur = i end end
+	db.champion = list[(cur - 1 + dir) % #list + 1]
+	PlaySide("murloc", "place") -- (the new champion's voice, as you pick it)
+	Refresh()
+end
+
+-- the display ID of the creature you are targeting: its unit loaded into a hidden model, as the
+-- Bestiary does for faces
+local probe
+local function TargetDisplay(callback)
+	if not (UnitExists("target") and not UnitIsPlayer("target")) then callback(nil) return end
+	if not probe then
+		probe = CreateFrame("PlayerModel", nil, UIParent)
+		probe:SetSize(1, 1)
+		probe:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10, -10)
+	end
+	if not pcall(probe.SetUnit, probe, "target") then callback(nil) return end
+	C_Timer.After(0.5, function()
+		local ok, display = pcall(probe.GetDisplayInfo, probe)
+		callback(ok and type(display) == "number" and display > 0 and display or nil)
+	end)
+end
+
+local function SetChampDisplay(key, display)
+	db.display[key] = display
+	CHAMPS[key].display = display
+	Say(("%s now uses model %d."):format(CHAMPS[key].name, display))
+	Refresh()
 end
 
 function MT:OnLogin()
@@ -1491,6 +1628,23 @@ function MT:Command(rest)
 			Finish(nil, nil, "abandoned")
 		else
 			Say("no game to leave.")
+		end
+	elseif low == "champions" then
+		for _, k in ipairs(ROSTER) do
+			local c = CHAMPS[k]
+			Say(("%s (%s): %s"):format(c.name, k, c.display and ("model " .. c.display) or "no model yet: target one and type /aa mtt champion " .. k))
+		end
+	elseif low:match("^champion ") then
+		local key, id = rest:match("^%S+%s+(%S+)%s*(%d*)")
+		key = key and key:lower()
+		if not (key and CHAMPS[key]) then
+			Say("champions: " .. table.concat(ROSTER, ", "))
+		elseif id ~= "" then
+			SetChampDisplay(key, tonumber(id))
+		else
+			TargetDisplay(function(display)
+				if display then SetChampDisplay(key, display) else Say("target the creature (not a player) first, then try again.") end
+			end)
 		end
 	elseif low == "debug" then
 		debugOn = not debugOn
