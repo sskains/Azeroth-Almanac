@@ -280,27 +280,18 @@ local function Face(tex, side)
 	if SetPortraitToTexture then SetPortraitToTexture(tex, icon) else tex:SetTexture(icon) end
 end
 
--- the talent window's round node ring in the side's colour; else the minimap tracking ring, tinted
+-- the carved ring round a face (Wild Gambit's class ring), tinted by role: moss for the first mover,
+-- copper for the second
+local ROLE_TINT = { murloc = { 0.62, 1, 0.55 }, gnoll = { 1, 0.62, 0.38 } }
 local function Ring(tex, side, size, anchor)
 	tex:ClearAllPoints()
-	for _, atlas in ipairs(ROLE_RINGS[side]) do
-		if HasAtlas(atlas) and pcall(tex.SetAtlas, tex, atlas) then
-			tex:SetVertexColor(1, 1, 1)
-			if tex.SetDesaturated then tex:SetDesaturated(false) end
-			if atlas:find("yellow") and side == "gnoll" then tex:SetVertexColor(1, 0.7, 0.45) end
-			tex:SetSize(size * 1.3, size * 1.3)
-			tex:SetPoint("CENTER", anchor)
-			return
-		end
-	end
-	tex:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+	tex:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Class")
 	tex:SetTexCoord(0, 1, 0, 1)
-	if tex.SetDesaturated then tex:SetDesaturated(true) end
-	local c = ROLE_COLOR[side]
+	if tex.SetDesaturated then tex:SetDesaturated(false) end
+	local c = ROLE_TINT[side]
 	tex:SetVertexColor(c[1], c[2], c[3])
-	local k = size / 21
-	tex:SetSize(53 * k, 53 * k)
-	tex:SetPoint("TOPLEFT", anchor, "CENTER", -17.5 * k, 15.5 * k)
+	tex:SetSize(size * 1.36, size * 1.36)
+	tex:SetPoint("CENTER", anchor)
 end
 
 local function FirstAnim(model, list)
@@ -899,6 +890,8 @@ function ClearBoardArt()
 	end
 	frame.winLine:Hide()
 	frame.winGlow:Hide()
+	frame.winMid:Hide()
+	frame.winHead:Hide()
 	frame.lineAnim = nil
 	frame.over:Hide()
 	frame.overDelay = nil
@@ -917,8 +910,7 @@ function Celebrate()
 			frame:Burst(x, y, c, true)
 		end
 		frame.lineAnim = { t = 0, from = g.line[1], to = g.line[3] }
-		frame.winLine:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.95)
-		frame.winGlow:SetColorTexture(c[1], c[2], c[3], 0.35)
+		frame.winGlow:SetVertexColor(c[1], c[2], c[3], 0.7)
 	end
 	local me, them = frame.cards.me.model, frame.cards.them.model
 	if g.result == "win" then
@@ -986,7 +978,7 @@ function Refresh()
 	-- status line
 	local status
 	if not g or g.state == "idle" then
-		status = g and g.notice or "Challenge a player, or practise against the computer."
+		status = g and g.notice or "Challenge a player, or play the computer."
 	elseif g.state == "inviting" then
 		status = ("Waiting for %s to answer..."):format(Short(g.opp))
 	elseif playing then
@@ -1055,7 +1047,7 @@ end
 local function Build()
 	frame = CreateFrame("Frame", "AzerothAlmanacMurlocTacToe", UIParent, "BackdropTemplate")
 	local W = 16 + FRAME_SIZE + 14 + SIDE_W + 16
-	local H = 62 + 118 + 30 + FRAME_SIZE + 16
+	local H = 62 + 118 + 44 + FRAME_SIZE + 16
 	frame:SetSize(W, H)
 	frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
 	frame:SetBackdropColor(0.035, 0.03, 0.025, 0.97)
@@ -1100,12 +1092,12 @@ local function Build()
 
 	-- the two player cards: each creature in 3D, its round face, name and record
 	local cardsW = FRAME_SIZE
-	local cardW = math.floor((cardsW - 40) / 2)
+	local cardW = math.floor((cardsW - 80) / 2)
 	frame.cards = {}
 	for _, which in ipairs({ "me", "them" }) do
 		local card = CreateFrame("Frame", nil, frame, "BackdropTemplate")
 		card:SetSize(cardW, 118)
-		if which == "me" then card:SetPoint("TOPLEFT", 16, -62) else card:SetPoint("TOPLEFT", 16 + cardW + 40, -62) end
+		if which == "me" then card:SetPoint("TOPLEFT", 16, -62) else card:SetPoint("TOPLEFT", 16 + cardW + 80, -62) end
 		if not CARD_PLAIN then QuestFrame(card, true) end
 		card.glow = card:CreateTexture(nil, "BACKGROUND", nil, -1)
 		card.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
@@ -1149,7 +1141,7 @@ local function Build()
 		local card = frame.cards.me
 		local b = CreateFrame("Button", nil, card)
 		b:SetSize(30, 30)
-		b:SetPoint(dir < 0 and "LEFT" or "RIGHT", card, dir < 0 and "LEFT" or "RIGHT", dir < 0 and -4 or 4, 10)
+		b:SetPoint(dir < 0 and "LEFT" or "RIGHT", card, dir < 0 and "LEFT" or "RIGHT", dir < 0 and 6 or -6, 10)
 		b:SetFrameLevel(card:GetFrameLevel() + 10)
 		local arrowTex = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Arrow" .. (dir < 0 and "L" or "R")
 		b:SetSize(38, 33)
@@ -1181,18 +1173,37 @@ local function Build()
 	vs:SetPoint("CENTER", vsPlaque, "CENTER", 0, 1)
 	vs:SetShadowOffset(1, -1)
 	vs:SetText("VS")
-	frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	frame.status:SetPoint("TOPLEFT", 16, -62 - 118 - 8)
-	frame.status:SetWidth(cardsW)
+	-- the status line on the green ribbon of Wild Gambit's "Your turn", under the cards
+	local statusRibbon = frame:CreateTexture(nil, "ARTWORK")
+	statusRibbon:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Banner_Turn")
+	statusRibbon:SetSize(cardsW - 20, (cardsW - 20) / 8)
+	statusRibbon:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - 118 - 22)
+	frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	frame.status:SetPoint("CENTER", statusRibbon, "CENTER", 0, 1)
+	frame.status:SetWidth(300)
 	frame.status:SetJustifyH("CENTER")
+	frame.status:SetShadowOffset(1, -1)
+	hooksecurefunc(frame.status, "SetText", function(fs, t) statusRibbon:SetShown(t ~= nil and t ~= "") end)
 
 	-- the board: the painted swamp board, with the nine sockets in its picture
 	local boardFrame = CreateFrame("Frame", nil, frame)
-	boardFrame:SetPoint("TOPLEFT", 16, -62 - 118 - 30)
+	boardFrame:SetPoint("TOPLEFT", 16, -62 - 118 - 44)
 	boardFrame:SetSize(FRAME_SIZE, FRAME_SIZE)
 	local boardArt = boardFrame:CreateTexture(nil, "BACKGROUND")
 	boardArt:SetAllPoints()
 	boardArt:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Board")
+
+	-- a few fireflies drifting about the swamp (drawn on the board, behind the pieces)
+	frame.flies = {}
+	for k = 1, 9 do
+		local t = boardFrame:CreateTexture(nil, "ARTWORK", nil, 5)
+		t:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+		t:SetBlendMode("ADD")
+		t:SetVertexColor(0.9, 1, 0.5)
+		local size = 7 + (k % 3) * 3
+		t:SetSize(size, size)
+		frame.flies[k] = { tex = t, x = (k * 53) % FRAME_SIZE, y = (k * 97) % FRAME_SIZE, a = k * 1.7, sx = 0.25 + (k % 4) * 0.08, sy = 0.2 + (k % 3) * 0.09, r = 18 + (k % 5) * 9 }
+	end
 
 	local inner = CreateFrame("Frame", nil, boardFrame)
 	inner:SetPoint("TOPLEFT", INSET_X, -INSET_Y)
@@ -1206,10 +1217,10 @@ local function Build()
 		local cell = CreateFrame("Button", nil, inner)
 		cell:SetSize(CELL - 10, CELL - 10)
 		cell:SetPoint("CENTER", inner, "TOPLEFT", x, -y)
-		cell:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-		cell:GetHighlightTexture():SetAlpha(0.25)
+		cell:SetHighlightTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64", "ADD")
+		cell:GetHighlightTexture():SetAlpha(0.35)
 		cell.glow = cell:CreateTexture(nil, "BACKGROUND")
-		cell.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		cell.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
 		cell.glow:SetBlendMode("ADD")
 		cell.glow:SetSize(CELL * 1.5, CELL * 1.5)
 		cell.glow:SetPoint("CENTER")
@@ -1241,12 +1252,26 @@ local function Build()
 	overlay:SetAllPoints(inner)
 	overlay:SetFrameLevel(inner:GetFrameLevel() + 30)
 	frame.overlay = overlay
+	-- the winning line: a wide soft glow in the winner's colour, a gold body, a bright core, and a light
+	-- at the leading end that stays and pulses
 	frame.winGlow = overlay:CreateLine(nil, "ARTWORK")
-	frame.winGlow:SetThickness(16)
+	frame.winGlow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	frame.winGlow:SetThickness(40)
 	frame.winGlow:Hide()
+	frame.winMid = overlay:CreateLine(nil, "ARTWORK", nil, 1)
+	frame.winMid:SetColorTexture(1, 0.78, 0.3, 0.55)
+	frame.winMid:SetThickness(11)
+	frame.winMid:Hide()
 	frame.winLine = overlay:CreateLine(nil, "OVERLAY")
-	frame.winLine:SetThickness(5)
+	frame.winLine:SetColorTexture(1, 0.95, 0.75, 1)
+	frame.winLine:SetThickness(4)
 	frame.winLine:Hide()
+	frame.winHead = overlay:CreateTexture(nil, "OVERLAY", nil, 3)
+	frame.winHead:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	frame.winHead:SetBlendMode("ADD")
+	frame.winHead:SetSize(60, 60)
+	frame.winHead:SetVertexColor(1, 0.95, 0.7)
+	frame.winHead:Hide()
 	frame.bursts = {}
 	function frame:Burst(x, y, color, big)
 		local b
@@ -1287,17 +1312,24 @@ local function Build()
 	frame.waiting = waiting
 
 	local idle = CreateFrame("Frame", nil, boardFrame)
-	idle:SetSize(BOARD - 40, 90)
+	idle:SetSize(320, 130)
 	idle:SetPoint("CENTER", inner)
 	idle:SetFrameLevel(inner:GetFrameLevel() + 35)
-	local idleBg = idle:CreateTexture(nil, "BACKGROUND")
-	idleBg:SetAllPoints()
-	idleBg:SetColorTexture(0, 0, 0, 0.55)
-	local idleTitle = Font(idle, 24, GOLD)
-	idleTitle:SetPoint("TOP", 0, -14)
+	-- (the swamp ribbon with the call of the murlocs on it, and the practice button under it)
+	local idleRibbon = idle:CreateTexture(nil, "OVERLAY", nil, 2)
+	idleRibbon:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Ribbon")
+	idleRibbon:SetTexCoord(0, 1, 0, 0.5781)
+	idleRibbon:SetSize(340, 340 * 0.5781 / 2)
+	idleRibbon:SetPoint("CENTER", idle, "CENTER", 0, 14)
+	local idleTitle = idle:CreateFontString(nil, "OVERLAY", nil, 3)
+	idleTitle:SetFont(TITLE_FONT, 24, "")
+	idleTitle:SetTextColor(1, 0.86, 0.4)
+	idleTitle:SetShadowColor(0, 0, 0, 0.9)
+	idleTitle:SetShadowOffset(1, -1)
+	idleTitle:SetPoint("CENTER", idleRibbon, "CENTER", 0, -4)
 	idleTitle:SetText("Mrgl mrgl!")
 	local practice = FlatButton(idle, "Practice game", 170, function() MT:Practice() end)
-	practice:SetPoint("BOTTOM", 0, 14)
+	practice:SetPoint("BOTTOM", 0, 2)
 	frame.idle = idle
 
 	-- game over panel
@@ -1436,6 +1468,16 @@ local function Build()
 	local clock, lastQuit = 0, nil
 	frame:SetScript("OnUpdate", function(self, elapsed)
 		clock = clock + elapsed
+		-- the light at the end of the winning line pulses
+		if self.winHead:IsShown() then self.winHead:SetAlpha(0.6 + 0.4 * math.sin(clock * 6)) end
+		-- the fireflies wander and flicker
+		for _, f in ipairs(self.flies) do
+			local fx = f.x + math.sin(clock * f.sx + f.a) * f.r
+			local fy = f.y + math.cos(clock * f.sy + f.a * 1.3) * f.r
+			f.tex:ClearAllPoints()
+			f.tex:SetPoint("CENTER", self.inner:GetParent(), "TOPLEFT", fx, -fy)
+			f.tex:SetAlpha(0.15 + 0.5 * math.max(0, math.sin(clock * 1.7 + f.a * 2)))
+		end
 		-- the active card glows in and out
 		local pulse = 0.55 + 0.45 * math.sin(clock * 4)
 		for _, card in pairs(self.cards) do if card.active then card.glow:SetAlpha(pulse) end end
@@ -1480,11 +1522,14 @@ local function Build()
 			local dx, dy = (x2 - x1) * 0.18, (y2 - y1) * 0.18 -- run a little past the end pieces
 			x1, y1, x2, y2 = x1 - dx, y1 - dy, x2 + dx, y2 + dy
 			local ex, ey = x1 + (x2 - x1) * p, y1 + (y2 - y1) * p
-			for _, l in ipairs({ self.winGlow, self.winLine }) do
+			for _, l in ipairs({ self.winGlow, self.winMid, self.winLine }) do
 				l:SetStartPoint("TOPLEFT", self.inner, x1, -y1)
 				l:SetEndPoint("TOPLEFT", self.inner, ex, -ey)
 				l:Show()
 			end
+			self.winHead:ClearAllPoints()
+			self.winHead:SetPoint("CENTER", self.inner, "TOPLEFT", ex, -ey)
+			self.winHead:Show()
 			if p >= 1 then self.lineAnim = nil end
 		end
 		-- the result panel, after the line has drawn
