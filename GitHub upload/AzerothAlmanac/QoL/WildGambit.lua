@@ -3070,18 +3070,17 @@ local function Build()
 	frame.beginButton.glow:SetVertexColor(1, 0.8, 0.3)
 	frame.beginButton.glow:SetSize(WG.BEGIN_W + 90, WG.BEGIN_H + 70)
 	frame.beginButton.glow:SetPoint("CENTER")
-	-- a gold border round the plank that brightens and dims, and a streak of light that sweeps across
-	-- it every couple of seconds (clipped to the button)
+	-- a streak of light that sweeps across it every couple of seconds (clipped to the button) and
+	-- a few small gold sparkles that kindle round the plank, drift up and fade
 	local bb = frame.beginButton
-	bb.border = {}
-	for k, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 2 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 2 },
-		{ "TOPLEFT", "BOTTOMLEFT", 2, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 2, nil } }) do
+	bb.sparks = {}
+	for k = 1, 9 do
 		local t = bb:CreateTexture(nil, "OVERLAY", nil, 6)
-		t:SetColorTexture(1, 0.86, 0.38, 1)
-		t:SetPoint(e[1], bb, e[1], (e[1]:find("LEFT") and -6 or 6), (e[1]:find("TOP") and 7 or -7))
-		t:SetPoint(e[2], bb, e[2], (e[2]:find("LEFT") and -6 or 6), (e[2]:find("TOP") and 7 or -7))
-		if e[3] then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
-		bb.border[k] = t
+		t:SetTexture(GLOW_TEX)
+		t:SetBlendMode("ADD")
+		t:SetVertexColor(1, 0.9, 0.55)
+		t:SetAlpha(0)
+		bb.sparks[k] = { tex = t, age = 99, life = 1, x = 0, y = 0, size = 8, speed = 12 }
 	end
 	bb.shine = CreateFrame("Frame", nil, bb)
 	bb.shine:SetPoint("TOPLEFT", -4, 5)
@@ -3093,16 +3092,33 @@ local function Build()
 	bb.streak:SetBlendMode("ADD")
 	bb.streak:SetVertexColor(1, 0.95, 0.7)
 	bb.streak:SetSize(46, WG.BEGIN_H + 40)
-	bb:HookScript("OnUpdate", function(self)
+	bb:HookScript("OnUpdate", function(self, el)
 		local on = self:IsEnabled()
 		local t = GetTime()
 		local a = on and (0.4 + 0.3 * math.sin(t * 3)) or 0
 		self.glow:SetAlpha(a)
 		self.glow:SetShown(on and true or false)
-		local edge = on and (0.55 + 0.45 * math.sin(t * 3.4)) or 0
-		for _, line in ipairs(self.border) do
-			line:SetAlpha(edge)
-			line:SetShown(on and true or false)
+		-- (sparkles: each is born at a random spot on or just above the plank, rises slowly and
+		-- twinkles out; a spent one is reborn only while Begin can be pressed)
+		local w, h = self:GetWidth(), self:GetHeight()
+		for _, s in ipairs(self.sparks) do
+			s.age = s.age + el
+			if s.age >= s.life then
+				if on and math.random() < 0.06 then
+					s.age, s.life = 0, 1.1 + math.random() * 1.1
+					s.x, s.y = (math.random() - 0.5) * (w + 8), (math.random() - 0.5) * h
+					s.size, s.speed = 6 + math.random() * 7, 8 + math.random() * 10
+				else
+					s.tex:SetAlpha(0)
+				end
+			end
+			if s.age < s.life then
+				local p = s.age / s.life
+				s.tex:ClearAllPoints()
+				s.tex:SetPoint("CENTER", self, "CENTER", s.x, s.y + s.speed * s.age)
+				s.tex:SetSize(s.size, s.size)
+				s.tex:SetAlpha(0.75 * math.sin(math.pi * p) * (0.7 + 0.3 * math.sin(s.age * 17)))
+			end
 		end
 		-- (the streak: 0.9 s across, then a rest)
 		local p = (t % 2.6) / 0.9
