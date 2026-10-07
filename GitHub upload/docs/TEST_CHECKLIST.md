@@ -6,6 +6,11 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased
+
+- [ ] Murloc Tac Toe, new look (`/reload`): the dark window background; the wooden buttons (text fits: "Challenge", "My target", "Practice game", "Resign", "Sound: on"); the corner icon in the gold dragon frame with a murloc head, not a black circle, and the byline beside it; the VS shield.
+- [ ] Murloc Tac Toe champions: the two arrows beside your creature (only while no game is on) change the creature and the name under it; with only murloc and gnoll set, a message says how to add more; `/aa mtt champions`, then target a faerie dragon / whelp / slime and `/aa mtt champion faerie` (etc.): it joins the cycle; a challenge between two of you shows each other's champion; a game against someone on the old version still works (murloc against gnoll); the practice game plays a different champion; a rematch keeps both champions; the round faces (are they still black? say so).
+
 ## 0.65.0 (full game restart: new Gem Match textures)
 
 - [ ] Gem Match: the painted board, side panel, game-over panel, hint, shards and group/friend scores (the full list is under "Gem Match" in `STATUS.md`, "Needs checking in game first").
