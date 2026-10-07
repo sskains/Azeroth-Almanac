@@ -2773,7 +2773,7 @@ local function Build()
 	frame.pickCards = {}
 	-- the cards lie scattered on the felt, two loose overlapping rows round the middle, each a
 	-- little off true (fixed offsets, so they stay put); the one under the mouse comes to the top
-	local SCATTER = { { -6, 4 }, { 8, -10 }, { -4, 12 }, { 10, -4 }, { -8, 8 }, { 6, 10 }, { -10, -6 }, { 4, 6 }, { -6, -12 }, { 8, 2 } }
+	local SCATTER = { { -6, 4 }, { 8, -10 }, { -4, 12 }, { 10, -4 }, { -8, 8 }, { 6, 10 }, { -10, -6 }, { 4, 6 }, { -6, -12 }, { -10, 18 } } -- (the last card lies a little up and in, clear of the corner)
 	local PSCALE = 0.92
 	local TILTS = { -5, 3, -7, 6, -4, 8, -3, 5, -6, 4 } -- degrees, each card's shadow
 	for i = 1, 10 do
@@ -2869,9 +2869,10 @@ local function Build()
 	-- your spell, as the card you'll hold (hover for the full rules)
 	local spellLabel = prep:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	frame.spellPreview = NewSpellCard(prep)
-	-- (a little smaller, and in from the board's carved edge so it lies wholly on the felt)
+	-- (a little smaller, bottom left in from the board's carved edge so it lies wholly on the felt:
+	-- as far from the centre as Begin is, mirrored)
 	frame.spellPreview:SetScale(0.9)
-	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOMRIGHT", -113, 80)
+	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOM", -((frame:GetWidth() - 32) / 2 - 105) / 0.9, 80 / 0.9)
 	frame.spellPreview:SetFrameLevel(prep:GetFrameLevel() + 20)
 	frame.spellPreview:SetScript("OnEnter", function(self)
 		local ab = self.ability
@@ -2949,7 +2950,10 @@ local function Build()
 	-- pulses while the cards are being shuffled and dealt)
 	local shuffle = CreateFrame("Button", nil, prep)
 	shuffle:SetSize(96, 96)
-	shuffle.dx, shuffle.dy = -265, -498 -- (bottom left, above Back and lined up with it; the deck the cards fly to and from, from the table's top)
+	-- bottom right, over Begin and on its centre line (Begin is 140 wide, 30 in from the panel's edge);
+	-- the deck the cards fly to and from, from the table's top
+	shuffle.dx = (frame:GetWidth() - 32) / 2 - 30 - 70
+	shuffle.dy = -(frame:GetHeight() - TOP - 16 - 132)
 	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
 	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
 	shuffle.glow = shuffle:CreateTexture(nil, "BACKGROUND")
@@ -3013,11 +3017,58 @@ local function Build()
 	end)
 	frame.shuffleButton = shuffle
 	-- Back (to choosing an opponent) and Begin / Ready
-	-- (Back under the dealer button, the same width, so the two line up)
-	frame.backButton = WoodButton(A.Widgets.Button(prep, "Back", 128, function() WG:Back() end))
-	frame.backButton:SetPoint("BOTTOM", pickPanel, "BOTTOM", shuffle.dx, 18)
+	-- Back is a red arrow in a gold ring in the board's top left corner (the game's back arrow where
+	-- the client has it, else the spellbook's page arrow, either one made red)
+	local back = CreateFrame("Button", nil, prep)
+	back:SetSize(44, 44)
+	back:SetPoint("CENTER", prep, "TOPLEFT", 46, -22)
+	back:SetFrameLevel(prep:GetFrameLevel() + 50)
+	back.disc = back:CreateTexture(nil, "BACKGROUND")
+	back.disc:SetTexture(CIRCLE)
+	back.disc:SetVertexColor(0.07, 0.05, 0.04, 0.92)
+	back.disc:SetSize(34, 34)
+	back.disc:SetPoint("CENTER")
+	back.arrow = back:CreateTexture(nil, "ARTWORK")
+	back.arrow:SetSize(26, 26)
+	back.arrow:SetPoint("CENTER", -1, 0)
+	local arrowSet = false
+	for _, atlas in ipairs({ "common-icon-backarrow", "common-icon-back" }) do
+		if not arrowSet and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+			arrowSet = pcall(back.arrow.SetAtlas, back.arrow, atlas)
+		end
+	end
+	if not arrowSet then back.arrow:SetTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up") end
+	back.arrow:SetDesaturated(true)
+	back.arrow:SetVertexColor(1, 0.22, 0.18)
+	back.ring = back:CreateTexture(nil, "OVERLAY")
+	back.ring:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Class")
+	back.ring:SetVertexColor(1, 0.82, 0.4)
+	back.ring:SetAllPoints()
+	back.glow = back:CreateTexture(nil, "BACKGROUND", nil, -1)
+	back.glow:SetTexture(GLOW_TEX)
+	back.glow:SetBlendMode("ADD")
+	back.glow:SetVertexColor(1, 0.4, 0.25)
+	back.glow:SetSize(70, 70)
+	back.glow:SetPoint("CENTER")
+	back.glow:SetAlpha(0)
+	back:SetScript("OnClick", function() WG:Back() end)
+	back:SetScript("OnEnter", function(self)
+		self.arrow:SetVertexColor(1, 0.45, 0.35)
+		self.glow:SetAlpha(0.6)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine("Back", 1, 0.82, 0)
+		GameTooltip:AddLine("Return to choosing an opponent.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	back:SetScript("OnLeave", function(self)
+		self.arrow:SetVertexColor(1, 0.22, 0.18)
+		self.glow:SetAlpha(0)
+		GameTooltip_Hide()
+	end)
+	back:SetScript("OnMouseDown", function(self) self.arrow:SetPoint("CENTER", -1, -1) end)
+	back:SetScript("OnMouseUp", function(self) self.arrow:SetPoint("CENTER", -1, 0) end)
+	frame.backButton = back
 	frame.beginButton = WoodButton(A.Widgets.Button(prep, "Begin", 140, function() WG:BeginClicked() end))
-	WG.WoodLettering(frame.backButton)
 	WG.WoodLettering(frame.beginButton)
 	frame.beginButton:SetPoint("BOTTOMRIGHT", -30, 22)
 	frame.beginButton:SetFrameLevel(prep:GetFrameLevel() + 50)
@@ -3499,7 +3550,8 @@ function WG:PickSpellZoom(sc)
 	local ps = frame.prep:GetEffectiveScale() / ws
 	local feltR = frame.prep:GetRight() * ps - frame:GetLeft() - 49 - 6
 	local feltB = frame.prep:GetBottom() * ps - frame:GetBottom() + 30 + 4
-	local x = math.max(zw / 2 + 12, math.min(frame:GetWidth() - zw / 2 - 12, feltR - zw / 2, cx))
+	local feltL = frame.prep:GetLeft() * ps - frame:GetLeft() + 49 + 6
+	local x = math.max(zw / 2 + 12, feltL + zw / 2, math.min(frame:GetWidth() - zw / 2 - 12, feltR - zw / 2, cx))
 	local y = math.max(zh / 2 + 24, feltB + zh / 2, math.min(frame:GetHeight() - zh / 2 - 30, cy))
 	z:SetScale(zs)
 	z:ClearAllPoints()
