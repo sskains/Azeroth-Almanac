@@ -342,8 +342,17 @@ function WG.AddEmblem(icon)
 	mask:SetAllPoints(e.icon)
 	e.icon:AddMaskTexture(mask)
 	e.ring = e:CreateTexture(nil, "OVERLAY")
-	local ok = e.ring.SetAtlas and pcall(e.ring.SetAtlas, e.ring, "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold")
+	-- the winged gold dragon where the client has it (as on the legendary cards), else the plain ring
+	local ok, wide = false, 1
+	for _, atlas in ipairs({ "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged", "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold" }) do
+		if not ok and e.ring.SetAtlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+			ok = pcall(e.ring.SetAtlas, e.ring, atlas)
+			local info = ok and C_Texture.GetAtlasInfo(atlas)
+			if info and info.width and info.height and info.height > 0 then wide = info.width / info.height end
+		end
+	end
 	Put(e.ring, 118)
+	e.ring:SetWidth(118 * wide) -- (the winged one is wider than it is tall)
 	e.ring:SetShown(ok and true or false)
 	frame.emblem = e
 	return e
