@@ -1225,7 +1225,7 @@ local function BuildGames(P)
 	P:Section(L["Gem Match"], L["Match three or more Classic gems. Match 4 for a power gem that clears 3x3, 5 for an Arcane Crystal that clears a whole colour. Timed (2 minutes) or 30 Moves. Pauses by itself in combat."])
 	P:Buttons({ { L["Play Gem Match"], 150, function() GM:Open() end } })
 	P:Check(L["Game sounds"], nil, function() return db.sound end, function(v) db.sound = v end)
-	P:Check(L["Share my best scores with my guild"], L["Guildmates running Azeroth Almanac see each other's bests beside the board."],
+	P:Check(L["Share my best scores with my guild, group and friends"], L["Guildmates, group members and online friends running Azeroth Almanac see each other's bests beside the board (hidden addon messages; friends by whisper, only between friends)."],
 		function() return db.share end, function(v) db.share = v end)
 	P:Text(function()
 		local timed, moves = GM:Bests()

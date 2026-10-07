@@ -34,7 +34,6 @@ local BOARDS = {
 		inner = { 148 / 841, 150 / 1024, 705 / 841, 900 / 1024 } },
 }
 local BOARD_PAD = 36 -- the outer spikes and clear of the frame's carved inner corners
-local BOARD_ART = BOARDS.Glade -- (a painted board is in use; which one is db.board)
 local ART_X, ART_Y = 78, 68     -- room round the board for the painting's stone frame
 local BOARD_TOP = TOP + ART_Y
 local GOLD = { 1, 0.82, 0.25 }
@@ -225,7 +224,12 @@ end
 -- scene of its creature type
 local HABITAT_WORDS = {
 	{ "Underwater", { "shark", "crab", "turtle", "eel", "murloc", "makrura", "naga", "sea ", "tide", "reef", "coral",
-		"clam", "threshadon", "snapjaw", "lobster", "drowned", "water elemental", "hydra" } },
+		"clam", "threshadon", "snapjaw", "lobster", "drowned", "water elemental", "hydra",
+		-- fish and fishing pools ("fish " with its space: a whole word, so "fisherman" stays on land)
+		"fish ", "school of", "jellyfish", "starfish", "piranha", "squid", "octopus", "frenzy", "thresher", "manta",
+		"whale", "dolphin",
+		-- the murloc tribes, whose names rarely say "murloc"
+		"saltspittle", "bluegill", "greymist", "coastrunner", "puddlejumper" } },
 	{ "Shore", { "crocolisk", "pirate", "privateer", "buccaneer", "sailor", "deckhand", "fleet master", "swashbuckler",
 		"corsair", "first mate", "shore", "harbor", "dock" } },
 	{ "Snow", { "frost", "ice ", "icy", "snow", "yeti", "winter", "chillwind", "glacial" } },
@@ -248,6 +252,36 @@ local function Habitat(name, family, map)
 end
 WG.Habitat = Habitat
 
+WG.Ornament = ns.Ornament -- (the gold heading with its rule and diamond each side; shared with Gem Match)
+
+WG.BEGIN_W, WG.BEGIN_H = 172, 32 -- (Begin, the screen's main button: larger than the rest)
+WG.WoodLettering = ns.WoodLettering -- (the lettering of a wooden button's label; shared with Gem Match)
+
+-- the window's corner icon in the gold elite frame (shared with Gem Match)
+function WG.AddEmblem(icon) return ns.GoldEmblem(frame, icon) end
+
+-- "Let fate decide": the die and its two lines of words as one group, centred in its button (and so
+-- on the board), whatever the words are just now
+function WG:LayoutFate()
+	local f = frame and frame.fateLink
+	if not f then return end
+	local w = math.max(f.text:GetStringWidth() or 0, f.sub:GetStringWidth() or 0)
+	local total = 42 + 12 + w
+	f.die:ClearAllPoints()
+	f.die:SetPoint("LEFT", f, "CENTER", -total / 2, 0)
+end
+
+-- the hint line's text: a short one is the heading (big, with ornaments); the longer messages of an
+-- online match are plain gold sentences
+function WG:SetHint(text)
+	local fs = frame.pickHint
+	local plain = (text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+	local heading = #plain <= 24
+	fs:SetFont("Fonts\\MORPHEUS.TTF", heading and 24 or 15, "")
+	fs:SetText(text)
+	frame.hintOrn:Layout(heading)
+end
+
 local function CardOf(npc, rec)
 	local B = A.Bestiary
 	local level = (rec.hi and rec.hi ~= 0 and rec.hi) or rec.lo or 1
@@ -266,6 +300,8 @@ local function CardOf(npc, rec)
 	local tier = B and B.FullTier and B:FullTier(rec) or WL.TierFromKills(B and B.Tier and B:Tier(rec) or 1, rec.kills)
 	local card = WL.Card(info, tier)
 	card.fav = WG:IsFavorite(npc) or nil
+	card.faction = rec.faction -- (Alliance / Horde creatures wear the crest)
+	card.kills = B and B.KillCount and B:KillCount(rec) or rec.kills or 0 -- (the trophy on the card's strip)
 	return card
 end
 
@@ -307,7 +343,7 @@ end
 function WG:Collection()
 	local cards = {}
 	local B = A.Bestiary
-	for npc, rec in pairs(A.Store and A.Store:All("creature") or {}) do
+	for npc, rec in pairs(A.Store and A.Store:Shown("creature") or {}) do
 		if type(rec) == "table" and rec.name and not (B and B.IsObject and B:IsObject(rec)) then
 			cards[#cards + 1] = CardOf(npc, rec)
 		end
@@ -383,7 +419,7 @@ end
 local function MasterCount()
 	local B, n = A.Bestiary, 0
 	if not (B and B.Tier) then return 0 end
-	for _, rec in pairs(A.Store and A.Store:All("creature") or {}) do
+	for _, rec in pairs(A.Store and A.Store:Shown("creature") or {}) do
 		if type(rec) == "table" and rec.name and not (B.IsObject and B:IsObject(rec)) and B:Tier(rec) >= 4 then n = n + 1 end
 	end
 	return n
@@ -598,7 +634,7 @@ end
 function WG:FallbackOpponent()
 	local B = A.Bestiary
 	local ranks = { {}, {}, {}, {} } -- dungeon bosses, named, elites, the rest
-	for npc, rec in pairs(A.Store and A.Store:All("creature") or {}) do
+	for npc, rec in pairs(A.Store and A.Store:Shown("creature") or {}) do
 		if type(rec) == "table" and rec.name and not (B and B.IsObject and B:IsObject(rec)) then
 			local r = (rec.boss or rec.class == "worldboss") and 1 or (rec.class == "rare" or rec.class == "rareelite") and 2
 				or rec.class == "elite" and 3 or 4
@@ -651,6 +687,7 @@ WG.LearnFace = LearnFace
 -- "Play Wild Gambit" on a unit: a player is challenged; a creature becomes your next practice opponent
 function WG:PlayAgainst(unit)
 	if not (unit and UnitExists(unit)) then return end
+	if not self:LeaveGameFirst(function() WG:PlayAgainst(unit) end) then return end
 	if UnitIsPlayer(unit) then
 		if UnitIsUnit(unit, "player") then return end
 		local n, realm = UnitName(unit)
@@ -780,6 +817,10 @@ local FRAME_ART = {
 	[5] = Frame("5_Epic", { 0.1612, 0.1096, 0.8371, 0.5040 }, { 0.1490, 0.5808, 0.8510, 0.8994 }),
 	[6] = Frame("6_Legendary", { 0.1612, 0.1096, 0.8371, 0.5040 }, { 0.1490, 0.5808, 0.8510, 0.8994 }, { 0, 0.0316, 0, 0 }),
 }
+-- (the strip between the art and the panel, where the kill count sits: its centre, measured from
+-- each painting, down the card)
+FRAME_ART[1].strip, FRAME_ART[2].strip, FRAME_ART[3].strip = 0.5557, 0.6035, 0.5498
+FRAME_ART[4].strip, FRAME_ART[5].strip, FRAME_ART[6].strip = 0.5420, 0.5420, 0.5426
 local GLOW_TEX = "Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64" -- soft, round, bright at the centre
 local GLOW_SPREAD = 70 -- how far past the card's size the glow reaches (in all)
 
@@ -818,7 +859,6 @@ local SPELL_PANEL = { 0.123, 0.651, 0.881, 0.915 } -- the text panel
 local SPELL_PAINT = { banish = "Banish", polymorph = "Polymorph", execute = "Execute", shield = "DivineShield",
 	barkskin = "Barkskin", reincarnation = "Reincarnation", mc = "MindControl", pickpocket = "PickPocket", trap = "FreezingTrap" }
 local SPELL_ASPECT = 1024 / 765 -- (the paintings)
-local SPELL_KIND = { remove = "Removal", protect = "Protection", swap = "Swap" }
 
 local function NewSpellCard(parent)
 	local f = CreateFrame("Button", nil, parent)
@@ -987,36 +1027,6 @@ local function NewCard(parent)
 	f.cframe = over:CreateTexture(nil, "BORDER", nil, 0)
 	f.cframe:SetAllPoints()
 	f.cframe:Hide()
-	f.stroke = Stroke(over, "BORDER", 1)
-	f.quest = over:CreateTexture(nil, "BORDER", nil, 2)
-	f.quest:SetPoint("TOPLEFT", -3, 3)
-	f.quest:SetPoint("BOTTOMRIGHT", 3, -3)
-	if Try(f.quest, "QuestLog-frame") and f.quest.SetTextureSliceMargins then
-		pcall(f.quest.SetTextureSliceMargins, f.quest, 24, 24, 24, 24)
-		if f.quest.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(f.quest.SetTextureSliceMode, f.quest, Enum.UITextureSliceMode.Stretched) end
-	else
-		f.quest.missing = true
-	end
-	f.filigree = over:CreateTexture(nil, "OVERLAY", nil, 1)
-	f.filigree:SetSize(40, 16)
-	f.filigree:SetPoint("TOP", f.window, "BOTTOM", 0, -4)
-	if not Try(f.filigree, "QuestLog-frame-filigree") then f.filigree.missing = true end
-	f.diamond = {
-		Corner(over, "UI-Frame-DiamondMetal-CornerTopLeft", "TOPLEFT", 18, -4, 4),
-		Corner(over, "UI-Frame-DiamondMetal-CornerTopRight", "TOPRIGHT", 18, 4, 4),
-		Corner(over, "UI-Frame-DiamondMetal-CornerBottomLeft", "BOTTOMLEFT", 18, -4, -4),
-		Corner(over, "UI-Frame-DiamondMetal-CornerBottomRight", "BOTTOMRIGHT", 18, 4, -4),
-	}
-	f.metal = {
-		Corner(over, "UI-Frame-Metal-CornerTopLeft", "TOPLEFT", 34, -6, 6),
-		Corner(over, "UI-Frame-Metal-CornerTopRight", "TOPRIGHT", 34, 6, 6),
-		Corner(over, "UI-Frame-Metal-CornerBottomLeft", "BOTTOMLEFT", 34, -6, -6),
-		Corner(over, "UI-Frame-Metal-CornerBottomRight", "BOTTOMRIGHT", 34, 6, -6),
-	}
-	f.dragon = over:CreateTexture(nil, "OVERLAY", nil, 3)
-	f.dragon:SetSize(64, 52)
-	f.dragon:SetPoint("BOTTOM", over, "TOP", 0, -22)
-	if not Try(f.dragon, "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged", "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold") then f.dragon.missing = true end
 	f.sparkle = over:CreateTexture(nil, "OVERLAY", nil, 4)
 	f.sparkle:SetPoint("TOPLEFT", f.window, "TOPLEFT", 4, -4)
 	f.sparkle:SetSize(48, 15)
@@ -1027,15 +1037,6 @@ local function NewCard(parent)
 	f.shine:SetBlendMode("ADD")
 	if not Try(f.shine, "Cast_Crafting_ShineWipe") then f.shine.missing = true end
 	f.shine:Hide()
-	-- a hairline of gold inside the stroke (Studied and up)
-	local inset = CreateFrame("Frame", nil, over)
-	inset:SetPoint("TOPLEFT", 3, -3)
-	inset:SetPoint("BOTTOMRIGHT", -3, 3)
-	f.inner = Stroke(inset, "BORDER", 3)
-	for i = 1, 4 do
-		if i <= 2 then f.inner[i]:SetHeight(1) else f.inner[i]:SetWidth(1) end
-	end
-	f.inner:SetColor(0.95, 0.78, 0.35, 0.8)
 	-- comets: sparks running round the edge (one for Mastered, two for Epic, three for Legendary)
 	f.comets = {}
 	for k = 1, 3 do
@@ -1113,11 +1114,6 @@ local function NewCard(parent)
 	f.quality:SetJustifyH("CENTER")
 	f.quality:SetWordWrap(false)
 	f.quality:SetShadowOffset(1, -1)
-	-- the name plate's covenant border (Mastered and up) and the Legendary's gryphons
-	f.plate = over:CreateTexture(nil, "ARTWORK", nil, 3)
-	f.plate:SetPoint("CENTER", f.banner, "CENTER", 0, 0)
-	f.plate:SetSize(CW + 14, 24)
-	f.plate:Hide()
 	-- the target frame's elite / rare dragon wrapped round each end of the name plate (elites,
 	-- rares, bosses): its ring centred just past each end, the left one mirrored
 	f.plateDragons = {}
@@ -1130,17 +1126,13 @@ local function NewCard(parent)
 		t:Hide()
 		f.plateDragons[k] = t
 	end
-	f.gryphL = over:CreateTexture(nil, "OVERLAY", nil, 3)
-	f.gryphL:SetSize(44, 26)
-	f.gryphL:SetPoint("BOTTOMRIGHT", over, "BOTTOMLEFT", 16, -6)
-	f.gryphR = over:CreateTexture(nil, "OVERLAY", nil, 3)
-	f.gryphR:SetSize(44, 26)
-	f.gryphR:SetPoint("BOTTOMLEFT", over, "BOTTOMRIGHT", -16, -6)
-	if not AtlasPart(f.gryphL, "UI-HUD-ActionBar-Gryphon-Left", 0, 1, 0, 1) then f.gryphL.missing = true end
-	if not AtlasPart(f.gryphR, "UI-HUD-ActionBar-Gryphon-Left", 1, 0, 0, 1) then f.gryphR.missing = true end
-	f.gryphL:Hide() f.gryphR:Hide()
 	-- the level in the talent tree's rank box (gold-rimmed), coloured like a target's level:
 	-- grey .. green .. yellow .. orange .. red against yours
+	-- Alliance or Horde: the faction crest at the art window's bottom right
+	f.factionBadge = over:CreateTexture(nil, "OVERLAY", nil, 6)
+	f.factionBadge:SetSize(20, 20)
+	f.factionBadge:SetPoint("BOTTOMRIGHT", f.window, "BOTTOMRIGHT", -2, 2)
+	f.factionBadge:Hide()
 	f.levelBox = over:CreateTexture(nil, "OVERLAY", nil, 4)
 	f.levelBox:SetSize(24, 24)
 	f.levelBox:SetPoint("CENTER", over, "TOPLEFT", 7, -7) -- the corner badge, like a cost crystal
@@ -1165,6 +1157,26 @@ local function NewCard(parent)
 	f.spikeFill:SetTexture(CIRCLE)
 	f.spikeFill:SetVertexColor(0.55, 0.06, 0.04)
 	f.spikeFill:Hide()
+	-- the kill count, a trophy: the raid skull and the number on the strip between art and panel
+	-- a supporting card playing below its own tier to even the hands out: a small down arrow on
+	-- its tier badge
+	f.lowered = over:CreateTexture(nil, "OVERLAY", nil, 7)
+	f.lowered:SetSize(10, 10)
+	f.lowered:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
+	f.lowered:SetVertexColor(1, 0.35, 0.3)
+	f.lowered:Hide()
+	f.kill = CreateFrame("Frame", nil, over)
+	f.kill:SetSize(40, 9)
+	f.kill:SetFrameLevel(over:GetFrameLevel() + 3)
+	f.kill.icon = f.kill:CreateTexture(nil, "OVERLAY", nil, 6)
+	f.kill.icon:SetSize(7.5, 7.5)
+	f.kill.icon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
+	f.kill.text = f.kill:CreateFontString(nil, "OVERLAY")
+	f.kill.text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 7.3, "OUTLINE")
+	f.kill.text:SetTextColor(1, 1, 1)
+	f.kill.text:SetShadowOffset(0.5, -0.5)
+	f.kill.text:SetPoint("LEFT", f.kill.icon, "RIGHT", 1.2, 0)
+	f.kill:Hide()
 	f.spikeText = over:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	f.spikeText:SetPoint("CENTER", f.spikeRing, "CENTER", 0, 0)
 	f.spikeText:SetDrawLayer("OVERLAY", 6)
@@ -1527,53 +1539,8 @@ function FreezeCard(f)
 end
 
 local SIDE_NAMES = { "North", "East", "South", "West" }
-local function CardTip(f)
-	local card = f.card
-	if not card then return end
-	GameTooltip:SetOwner(f, "ANCHOR_RIGHT")
-	local c = WL.COLORS[card.tier]
-	GameTooltip:AddLine(card.name or "?", c[1], c[2], c[3])
-	GameTooltip:AddLine(("Level %s  -  %s"):format(card.level and card.level > 0 and card.level or "??", WL.TIERS[card.tier]), 1, 1, 1)
-	local parts = {}
-	for d = 1, 4 do parts[d] = ("%s %d"):format(SIDE_NAMES[d], card.s[d]) end
-	GameTooltip:AddLine(table.concat(parts, "   "), 1, 0.82, 0)
-	GameTooltip:AddLine(("%d spikes"):format(card.total), 0.7, 0.7, 0.7)
-	if f.frozen then GameTooltip:AddLine("Frozen solid: nobody's card. Its square is out of the game.", 0.62, 0.86, 1, true) end
-	if card.hero then
-		GameTooltip:AddLine(card.masters and ("Hero card: %d creatures at Master Hunter or above"):format(card.masters) or "Hero card", 0.6, 0.8, 1, true)
-	elseif card.pet then
-		GameTooltip:AddLine(("Companion%s%s"):format(card.species and (": " .. card.species) or "", card.kills and (", " .. card.kills .. " kills together") or ""), 0.6, 0.8, 1, true)
-	end
-	GameTooltip:Show()
-end
 
--- a button in carved oak with bronze rivets (custom art) instead of the game's red one: its riveted
--- ends keep their shape, the middle stretches; lighter under the mouse, darker when pressed
-local function WoodButton(b)
-	if not b or b.wood then return b end
-	for _, key in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
-		local r = b[key]
-		if type(r) == "table" and r.SetAlpha then r:SetAlpha(0) end
-	end
-	for _, get in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }) do
-		local ok, t = pcall(b[get], b)
-		if ok and type(t) == "table" and t.SetAlpha then t:SetAlpha(0) end
-	end
-	local t = b:CreateTexture(nil, "BACKGROUND", nil, 1)
-	t:SetPoint("TOPLEFT", -4, 5)
-	t:SetPoint("BOTTOMRIGHT", 4, -5)
-	t:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Button_Wood")
-	if t.SetTextureSliceMargins then
-		pcall(t.SetTextureSliceMargins, t, 40, 20, 40, 20)
-		if t.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(t.SetTextureSliceMode, t, Enum.UITextureSliceMode.Stretched) end
-	end
-	b.wood = t
-	b:HookScript("OnEnter", function(self) self.wood:SetVertexColor(1.2, 1.15, 1.05) end)
-	b:HookScript("OnLeave", function(self) self.wood:SetVertexColor(1, 1, 1) end)
-	b:HookScript("OnMouseDown", function(self) self.wood:SetVertexColor(0.75, 0.72, 0.68) end)
-	b:HookScript("OnMouseUp", function(self) self.wood:SetVertexColor(self:IsMouseOver() and 1.2 or 1, self:IsMouseOver() and 1.15 or 1, self:IsMouseOver() and 1.05 or 1) end)
-	return b
-end
+local WoodButton = ns.WoodButton -- (shared with Gem Match: UI\WindowUtil.lua)
 
 local function SetOwner(f, color, diamond)
 	for _, g in ipairs(f.gems) do
@@ -1699,10 +1666,6 @@ end
 
 -- the painting behind a card: the creature type's talent painting, a square cut from it at a
 -- spot of its own (each creature always the same), darkened so the creature stands out
-local SCENES = {
-	Beast = "druid", Critter = "hunter", Undead = "priest", Demon = "warlock", Elemental = "shaman",
-	Humanoid = "warrior", Giant = "paladin", Mechanical = "rogue", Dragonkin = "mage",
-}
 -- the painted creature-type scenes (custom art, Media\Scene_<Type>_<n>.tga, 512 x 256 from wide
 -- paintings about 1.83 : 1). Several variants of a type: each creature always gets the same one.
 local SCENE_ART = {
@@ -1753,7 +1716,7 @@ function Scene(f, card)
 	end
 	local kind = SCENE_ART[card.type or ""] and card.type or "Generic"
 	local variants = SCENE_ART[kind]
-	if variants then
+	do
 		local n = 1 + math.floor(spot * variants) % variants
 		f.window:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Scene_" .. kind .. "_" .. n)
 		-- a slice of the wide painting in the window's shape, near the middle (nudged per creature)
@@ -1765,22 +1728,10 @@ function Scene(f, card)
 		f.window:SetDesaturated(false) -- (a grey card keeps its scene in colour; its frame says Poor)
 		return
 	end
-	-- the game's talent painting for the type
-	local key = SCENES[card.type or ""] or "paladin"
-	local W_, H_ = 2046, 1177
-	local w = math.min(1, (H_ * (ww / wh)) / W_)
-	local l = spot * (1 - w)
-	if not AtlasPart(f.window, "talent-background-" .. key, l, l + w, 0, 1) then
-		f.window:SetColorTexture(0.05, 0.035, 0.02, 0.6)
-		return
-	end
-	local dim = 0.8
-	f.window:SetVertexColor(dim, dim, dim)
-	f.window:SetDesaturated(false) -- (a grey card keeps its scene in colour; its frame says Poor)
 end
 
--- a painted tier frame: the card's art window, ribbon and panel go where the painting has them,
--- and the game-art ornaments it replaces are put away; without one, the game-art card as before
+-- the painted tier frame (every tier has one): the card's art window, ribbon and panel go where
+-- the painting has them (0.64.0: the game-art frame and its ornaments are gone)
 function ApplyFrameArt(f, tier)
 	local a = FRAME_ART[tier]
 	-- the panel's text a size larger on the painted frames (their panel is roomier)
@@ -1807,6 +1758,10 @@ function ApplyFrameArt(f, tier)
 		f.panel:ClearAllPoints()
 		f.panel:SetPoint("TOPLEFT", f, "TOPLEFT", p[1] * CW, -p[2] * CH)
 		f.panel:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -(1 - p[3]) * CW, (1 - p[4]) * CH)
+		-- the kill count on the strip between the art and the panel
+		f.kill:ClearAllPoints()
+		f.kill:SetPoint("CENTER", f, "TOP", 0, -(a.strip or (w[4] + p[2]) / 2) * CH)
+		f.kill.placed = true
 		-- the ribbon across the band between the art and the panel
 		local band = (p[2] - w[4]) * CH
 		f.banner:SetPoint("CENTER", f.window, "BOTTOM", 0, -band / 2)
@@ -1824,38 +1779,6 @@ function ApplyFrameArt(f, tier)
 		-- the owner's gem moves to the free top-right corner (the painting has its own crest)
 		f.gems[1]:SetPoint("CENTER", f.ownerTab, "TOPLEFT", 0.48 * TAB, -0.52 * TAB) -- (in the tab's setting)
 		f.crest:Hide()
-		f.stroke:SetShown(false)
-		f.quest:Hide()
-		f.filigree:Hide()
-		for _, t in ipairs(f.diamond) do t:Hide() end
-		for _, t in ipairs(f.metal) do t:Hide() end
-		f.plate:Hide()
-		f.inner:SetShown(false)
-		f.gryphL:Hide() f.gryphR:Hide()
-		f.dragon:Hide()
-	else
-		f.window:SetPoint("TOPLEFT", 5, -5)
-		f.window:SetPoint("BOTTOMRIGHT", -5, ART_BOTTOM)
-		f.cframe:Hide()
-		f.face:Show()
-		f.panel:SetAlpha(1)
-		f.panel:ClearAllPoints()
-		f.panel:SetPoint("TOPLEFT", f.window, "BOTTOMLEFT", 0, -1)
-		f.panel:SetPoint("BOTTOMRIGHT", -5, 5)
-		f.banner:SetPoint("CENTER", f.window, "BOTTOM", 0, 4)
-		f.quality:Show()
-		f.typeText:Show()
-		f.banner:SetSize(BANNER_W, BANNER_W / 6.84)
-		f.gems[1]:SetPoint("CENTER", f.over, "TOP", 0, -1)
-		f.banner:SetAlpha(1)
-		f.quality:ClearAllPoints()
-		f.quality:SetPoint("LEFT", f.panel, "LEFT", 12, 0)
-		f.quality:SetPoint("RIGHT", f.panel, "RIGHT", -12, 0)
-		f.quality:SetPoint("TOP", f.panel, "TOP", 0, -2)
-		f.typeText:SetPoint("LEFT", f.panel, "LEFT", 12, 0)
-		f.typeText:SetPoint("RIGHT", f.panel, "RIGHT", -12, 0)
-		f.crest:Show()
-		f.stroke:SetShown(true)
 	end
 end
 
@@ -1954,13 +1877,6 @@ local function SetCard(f, card)
 		f.icon:Show()
 	end
 	-- frame by tier
-	f.stroke:SetColor(c[1], c[2], c[3], tier == 1 and 0.7 or 1)
-	f.quest:SetShown(tier >= 3 and not f.quest.missing)
-	f.quest:SetVertexColor(c[1] * 0.5 + 0.5, c[2] * 0.5 + 0.5, c[3] * 0.5 + 0.5)
-	f.filigree:SetShown(tier >= 3 and not f.filigree.missing)
-	for _, t in ipairs(f.diamond) do t:SetShown(tier == 4 and not t.missing) end
-	for _, t in ipairs(f.metal) do t:SetShown(tier >= 5 and not t.missing) t:SetVertexColor(tier == 5 and 0.85 or 1, tier == 5 and 0.7 or 0.85, tier == 5 and 1 or 0.5) end
-	f.dragon:SetShown(tier == 6 and not f.dragon.missing)
 	f.sparkle:SetShown(tier >= 5 and not f.sparkle.missing)
 	f.sparkle:SetVertexColor(c[1], c[2], c[3])
 	-- every card: a faint, steady glow of its quality (it pulses while the card is highlighted)
@@ -1974,18 +1890,29 @@ local function SetCard(f, card)
 	f.quality:SetTextColor(q[2], q[3], q[4])
 	f.typeText:SetText(card.type and card.type ~= "Not specified" and card.type or "Creature")
 	f.spikeText:SetText(card.total or "?")
+	f.lowered:ClearAllPoints()
+	f.lowered:SetPoint("CENTER", f.tierRing, "TOPRIGHT", -3, -3)
+	f.lowered:SetShown(card.lowered and true or false)
+	-- the kill count (creatures and companions; never the hero, nor a sheep)
+	local kills = (not card.hero and not card.sheep) and tonumber(card.kills) or nil
+	if kills and kills > 0 then -- (nothing killed yet: no skull and 0, 0.64.0)
+		local n = kills >= 10000 and ("%dk"):format(math.floor(kills / 1000)) or kills >= 1000 and ("%.1fk"):format(kills / 1000) or tostring(kills)
+		f.kill.text:SetText(n)
+		-- centred as a pair: skull and number together
+		local w = 7.5 + 1.2 + math.ceil(f.kill.text:GetStringWidth() or 8)
+		f.kill:SetWidth(w)
+		f.kill.icon:ClearAllPoints()
+		f.kill.icon:SetPoint("LEFT", f.kill, "LEFT", 0, 0)
+		f.kill:Show()
+	else
+		f.kill:Hide()
+	end
+	if A.Widgets and A.Widgets.SetFactionBadge then A.Widgets.SetFactionBadge(f.factionBadge, card.faction) else f.factionBadge:Hide() end
 	Scene(f, card)
 	local icon = TierIcon(tier)
 	f.tierIcon:SetTexture(icon)
 	if type(icon) == "string" and icon:lower():find("^interface\\icons\\") then f.tierIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92) else f.tierIcon:SetTexCoord(0, 1, 0, 1) end
-	-- more ornament as the tier climbs
-	local plate = PLATES[tier]
-	f.plate:SetShown(plate and Try(f.plate, plate) and true or false)
 	PlateDragons(f, card)
-	f.gryphL:SetShown(tier == 6 and not f.gryphL.missing)
-	f.gryphR:SetShown(tier == 6 and not f.gryphR.missing)
-	f.inner:SetShown(tier >= 3)
-	f.inner:SetColor(tier == 6 and 1 or 0.95, tier == 6 and 0.85 or 0.78, tier == 6 and 0.4 or 0.35, tier >= 5 and 1 or 0.7)
 	local comets = tier >= 4 and (tier - 3) or 0
 	for k, cm in ipairs(f.comets) do
 		local on = k <= comets
@@ -1998,11 +1925,9 @@ local function SetCard(f, card)
 	f.glowBase = GLOW[tier]
 	f.name:SetText(card.name or "?")
 	FitName(f)
-	if FRAME_ART[tier] then
+	do
 		local q = QUALITY_TEXT[tier]
 		f.name:SetTextColor(q[2], q[3], q[4]) -- (the quality's colour, as item names)
-	else
-		f.name:SetTextColor(tier == 1 and 0.32 or 0.2, tier == 1 and 0.28 or 0.12, tier == 1 and 0.24 or 0.04) -- dark ink
 	end
 	ApplyFrameArt(f, tier)
 	f.level:SetText(card.level and card.level > 0 and card.level or "??")
@@ -2046,6 +1971,19 @@ function WG:Showcase(parent)
 	f:SetScript("OnUpdate", function(self, elapsed)
 		clock = clock + elapsed
 		CardBling(self, elapsed, clock)
+		if self.zoomTo then
+			local sc = self:GetScale()
+			local nsc = sc + (self.zoomTo - sc) * math.min(1, elapsed * 14)
+			if math.abs(self.zoomTo - nsc) < 0.004 then
+				nsc = self.zoomTo
+				if nsc == self.baseScale then self:SetFrameStrata(self.homeStrata or "MEDIUM") end
+				self.zoomTo = nil
+				self:SetScale(nsc)
+				self:FitModel() -- (a model doesn't follow a scale change)
+			else
+				self:SetScale(nsc)
+			end
+		end
 		-- drag to turn the creature, as on the old model box
 		if self.dragX then
 			local x = GetCursorPosition()
@@ -2059,14 +1997,18 @@ function WG:Showcase(parent)
 			end
 		end
 	end)
+	-- hover: the card grows by 30% where it stands (over the page), and settles back on leaving
 	f:SetScript("OnEnter", function(self)
 		self.select:Show()
-		CardTip(self)
-		GameTooltip:AddLine(" ")
-		GameTooltip:AddLine("Your Wild Gambit card. Drag to turn it, click to open the table.", 0.6, 0.89, 0.42, true)
-		GameTooltip:Show()
+		self.baseScale = self.baseScale or self:GetScale()
+		self.zoomTo = self.baseScale * 1.3
+		self.homeStrata = self.homeStrata or self:GetFrameStrata()
+		self:SetFrameStrata("TOOLTIP")
 	end)
-	f:SetScript("OnLeave", function(self) self.select:Hide() GameTooltip_Hide() end)
+	f:SetScript("OnLeave", function(self)
+		self.select:Hide()
+		self.zoomTo = self.baseScale
+	end)
 	f:SetScript("OnClick", function(self)
 		local dragged = self.dragged
 		self.dragged, self.moved = false, 0
@@ -2196,9 +2138,10 @@ local function Build()
 	frame.trays = {}
 	for k = 1, 2 do
 		local t = frame:CreateTexture(nil, "BACKGROUND", nil, -5)
-		t:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Tray_Hand")
+		-- (the wooden coin tray, custom art; the older oak tray with leaves is Tray_Hand, margins 26 72)
+		t:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Tray_Coins")
 		if t.SetTextureSliceMargins then
-			pcall(t.SetTextureSliceMargins, t, 26, 72, 26, 72)
+			pcall(t.SetTextureSliceMargins, t, 40, 81, 40, 81)
 			if t.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(t.SetTextureSliceMode, t, Enum.UITextureSliceMode.Stretched) end
 		end
 		local x = k == 1 and (16 + COL / 2) or (16 + COL + 12 + ART_X + BW + ART_X + 12 + COL / 2)
@@ -2323,37 +2266,10 @@ local function Build()
 		else
 			p.portrait:SetPoint("CENTER", p, "RIGHT", -portraitX, 0)
 		end
-		-- the round's class ability: a spell button (yours to click, theirs to watch)
-		p.ability = CreateFrame("Button", nil, p)
+		-- (where the spell button was before the spell became a card: now only the ankh's spot)
+		p.ability = CreateFrame("Frame", nil, p)
 		p.ability:SetSize(34, 34)
-		-- (on the outer side of the portrait, so the names have the room towards the "vs")
 		if side == "me" then p.ability:SetPoint("CENTER", p, "LEFT", abilityX, 0) else p.ability:SetPoint("CENTER", p, "RIGHT", -abilityX, 0) end
-		p.ability.icon = p.ability:CreateTexture(nil, "ARTWORK")
-		p.ability.icon:SetAllPoints()
-		p.ability.border = p.ability:CreateTexture(nil, "OVERLAY")
-		-- a carved oak frame with acorns (custom art); its opening is about half its size
-		p.ability.border:SetPoint("CENTER")
-		p.ability.border:SetSize(62, 62)
-		p.ability.border:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Frame_Ability")
-		p.ability.glow = p.ability:CreateTexture(nil, "OVERLAY", nil, 2)
-		p.ability.glow:SetPoint("TOPLEFT", -10, 10)
-		p.ability.glow:SetPoint("BOTTOMRIGHT", 10, -10)
-		p.ability.glow:SetBlendMode("ADD")
-		if not Try(p.ability.glow, "bags-glow-orange") then p.ability.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border") end
-		p.ability.glow:Hide()
-		p.ability:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-		p.ability.side = side
-		p.ability:SetScript("OnClick", function(self) if self.side == "me" then WG:AbilityButton() end end)
-		p.ability:SetScript("OnEnter", function(self)
-			local ab = self.data
-			if not ab then return end
-			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-			GameTooltip:AddLine(ab.name, 1, 0.82, 0)
-			GameTooltip:AddLine(ab.text, 1, 1, 1, true)
-			GameTooltip:AddLine(self.used and "Used this match." or "Once per match, before you place your card (it doesn't use up your turn).", 0.6, 0.6, 0.6, true)
-			GameTooltip:Show()
-		end)
-		p.ability:SetScript("OnLeave", GameTooltip_Hide)
 		p.ability:Hide()
 		-- Reincarnation waiting: an ankh where the spell button was
 		p.ankh = p:CreateTexture(nil, "OVERLAY")
@@ -2405,84 +2321,8 @@ local function Build()
 	frame.board = board
 	-- the painted board (custom art, Media\Board_*.tga): its stone frame sits round the slots, so
 	-- the picture is drawn larger than the board, its inner stone lined up on the 3 x 3 grid
-	if BOARD_ART then
-		frame.boardArt = board:CreateTexture(nil, "BACKGROUND", nil, -8)
-		WG:ApplyBoard()
-	end
-	local ground = board:CreateTexture(nil, "BACKGROUND", nil, -8)
-	ground:SetAllPoints()
-	if BOARD_ART then ground:Hide() end
-	-- crop the 2046 x 1177 painting to the board's shape, centred
-	local frac = (BW / BH) * (1177 / 2046)
-	if not AtlasPart(ground, "talent-background-druid", 0.5 - frac / 2, 0.5 + frac / 2, 0, 1) then
-		ground:SetTexture("Interface\\TalentFrame\\DruidRestoration-TopLeft")
-	end
-	local dim = board:CreateTexture(nil, "BACKGROUND", nil, -7)
-	dim:SetAllPoints()
-	dim:SetColorTexture(0, 0.03, 0, 0.42)
-	if BOARD_ART then dim:Hide() end
-	local frameTex = board:CreateTexture(nil, "BORDER", nil, 1)
-	frameTex:SetPoint("TOPLEFT", -4, 4)
-	frameTex:SetPoint("BOTTOMRIGHT", 4, -4)
-	if BOARD_ART then
-		frameTex:Hide()
-	elseif Try(frameTex, "QuestLog-frame") and frameTex.SetTextureSliceMargins then
-		pcall(frameTex.SetTextureSliceMargins, frameTex, 24, 24, 24, 24)
-		if frameTex.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(frameTex.SetTextureSliceMode, frameTex, Enum.UITextureSliceMode.Stretched) end
-		frameTex:SetVertexColor(0.62, 0.5, 0.32)
-	else
-		frameTex:Hide()
-	end
-	if not BOARD_ART then -- (the game-art board: shadow, talent dividers and nodes, metal corners)
-	-- a shadow round the edge of the clearing (the collections journal's vignette)
-	local vignette = board:CreateTexture(nil, "BACKGROUND", nil, -6)
-	vignette:SetAllPoints()
-	if Try(vignette, "collections-background-shadow-large") then vignette:SetAlpha(0.9) else vignette:Hide() end
-	-- the talent tree's gold dividers between the rows and columns (the vertical divider, turned
-	-- for the rows), each with the talent tree's small ornament at its middle
-	local function Divider(x, y, vertical)
-		local len = vertical and (BH - 2 * MARGIN + 6) or (BW - 2 * MARGIN + 6)
-		local line = board:CreateTexture(nil, "BACKGROUND", nil, -4)
-		line:SetPoint("CENTER", board, "TOPLEFT", x, -y)
-		if Try(line, "Talents-divider-vertical-c60") then
-			line:SetSize(3, len)
-			if not vertical then line:SetRotation(math.pi / 2) end
-			line:SetVertexColor(1, 0.9, 0.7, 0.85)
-		else
-			line:SetColorTexture(0.55, 0.45, 0.25, 0.7)
-			if vertical then line:SetSize(2, len) else line:SetSize(len, 2) end
-		end
-	end
-	local midX, midY = BW / 2, BH / 2
-	for k = 1, 2 do
-		Divider(MARGIN + k * CW + (k - 0.5) * GAP, midY, true)
-		Divider(midX, MARGIN + k * CH + (k - 0.5) * GAP, false)
-	end
-	-- where the dividers cross: a talent node, lit green
-	for kx = 1, 2 do
-		for ky = 1, 2 do
-			local x = MARGIN + kx * CW + (kx - 0.5) * GAP
-			local y = MARGIN + ky * CH + (ky - 0.5) * GAP
-			local node = board:CreateTexture(nil, "BACKGROUND", nil, -3)
-			node:SetSize(22, 22)
-			node:SetPoint("CENTER", board, "TOPLEFT", x, -y)
-			if not Try(node, "talents-node-circle-green") then node:Hide() end
-			local sheen = board:CreateTexture(nil, "BACKGROUND", nil, -2)
-			sheen:SetSize(12, 19)
-			sheen:SetPoint("CENTER", node, "CENTER")
-			sheen:SetBlendMode("ADD")
-			if Try(sheen, "talents-sheen-node") then sheen:SetAlpha(0.5) else sheen:Hide() end
-		end
-	end
-	-- heavy metal corners on the board
-	for _, c in ipairs({ { "TopLeft", "TOPLEFT", -6, 6 }, { "TopRight", "TOPRIGHT", 6, 6 },
-		{ "BottomLeft", "BOTTOMLEFT", -6, -6 }, { "BottomRight", "BOTTOMRIGHT", 6, -6 } }) do
-		local t = board:CreateTexture(nil, "BORDER", nil, 3)
-		t:SetSize(46, 46)
-		t:SetPoint(c[2], c[3], c[4])
-		if Try(t, "UI-Frame-Metal-Corner" .. c[1]) then t:SetVertexColor(0.8, 0.72, 0.55) else t:Hide() end
-	end
-	end
+	frame.boardArt = board:CreateTexture(nil, "BACKGROUND", nil, -8)
+	WG:ApplyBoard()
 	-- the nine mossy slots
 	frame.slots = {}
 	for i = 1, 9 do
@@ -2505,24 +2345,6 @@ local function Build()
 		s.frame:SetAllPoints()
 		s.bg:Hide()
 		s.shade:SetAlpha(0.5)
-		if true then
-			-- (the custom slot)
-		elseif Try(s.frame, "QuestLog-frame") and s.frame.SetTextureSliceMargins then
-			pcall(s.frame.SetTextureSliceMargins, s.frame, 24, 24, 24, 24)
-			if s.frame.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(s.frame.SetTextureSliceMode, s.frame, Enum.UITextureSliceMode.Stretched) end
-			s.frame:SetVertexColor(0.55, 0.62, 0.42, 0.75)
-		else
-			s.frame:Hide()
-			s.edge = Stroke(s, "BORDER", 0)
-			s.edge:SetColor(0.42, 0.55, 0.28, 0.8)
-		end
-		for _, c in ipairs({ { "TopLeft", "TOPLEFT", -3, 3 }, { "TopRight", "TOPRIGHT", 3, 3 },
-			{ "BottomLeft", "BOTTOMLEFT", -3, -3 }, { "BottomRight", "BOTTOMRIGHT", 3, -3 } }) do
-			local t = s:CreateTexture(nil, "BORDER", nil, 2)
-			t:SetSize(14, 14)
-			t:SetPoint(c[2], c[3], c[4])
-			t:Hide() -- (the custom slot has its own trim)
-		end
 		-- under the mouse: a soft white glow from behind the square, gently pulsing (SlotPulse)
 		s.hl = s:CreateTexture(nil, "HIGHLIGHT")
 		s.hl:SetPoint("CENTER")
@@ -2647,13 +2469,14 @@ local function Build()
 	pt:SetText("Pick your card")
 	-- the Wild Gambit logo (custom art) takes the title's place
 	local logo = pickPanel:CreateTexture(nil, "ARTWORK", nil, 3)
-	logo:SetSize(310, 310 / 3.54)
-	logo:SetPoint("TOP", pickPanel, "TOP", 0, -62)
+	logo:SetSize(370, 370 / 3.54)
+	logo:SetPoint("TOP", pickPanel, "TOP", 0, -36)
 	logo:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit")
 	pt:Hide()
 	frame.pickHint = pickPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	frame.pickHint:SetPoint("TOP", logo, "BOTTOM", 0, -2)
 	frame.pickHint:SetWidth(480)
+	frame.hintOrn = WG.Ornament(frame.pickHint, 24, 70) -- ("Choose a card": gold lettering with a rule and diamond each side)
 	-- step 2, preparing: the cards, the class and its spell, Back and Begin (all on `prep`); step 1,
 	-- choosing an opponent, is the lobby (built below, over the same felt)
 	local prep = CreateFrame("Frame", nil, pickPanel)
@@ -2662,7 +2485,7 @@ local function Build()
 	frame.pickCards = {}
 	-- the cards lie scattered on the felt, two loose overlapping rows round the middle, each a
 	-- little off true (fixed offsets, so they stay put); the one under the mouse comes to the top
-	local SCATTER = { { -6, 4 }, { 8, -10 }, { -4, 12 }, { 10, -4 }, { -8, 8 }, { 6, 10 }, { -10, -6 }, { 4, 6 }, { -6, -12 }, { 8, 2 } }
+	local SCATTER = { { -6, 4 }, { 8, -10 }, { -4, 12 }, { 10, -4 }, { -8, 8 }, { 6, 10 }, { -10, -6 }, { 4, 6 }, { -6, -12 }, { -10, 18 } } -- (the last card lies a little up and in, clear of the corner)
 	local PSCALE = 0.92
 	local TILTS = { -5, 3, -7, 6, -4, 8, -3, 5, -6, 4 } -- degrees, each card's shadow
 	for i = 1, 10 do
@@ -2680,8 +2503,8 @@ local function Build()
 		c.tilt:SetVertexColor(0, 0, 0)
 		c.tilt:SetAlpha(0.75)
 		c.tilt:SetRotation(math.rad(TILTS[i]))
-		local x = (col - 2) * 106 + (row == 1 and 36 or -18) + j[1] - 40 -- (room on the right for your spell)
-		local y = -(row == 0 and 272 or 404) + j[2]
+		local x = (col - 2) * 96 + (row == 1 and 32 or -16) + j[1] - 8 -- (the two rows together centred on the board; your spell sits below-right)
+		local y = -(row == 0 and 282 or 408) + j[2]
 		c.px, c.py = x, y
 		c:SetPoint("CENTER", pickPanel, "TOP", x / PSCALE, y / PSCALE)
 		c.pickLevel = pickPanel:GetFrameLevel() + 5 + row * 10 + (col % 2) * 3 + col
@@ -2709,14 +2532,17 @@ local function Build()
 		frame.pickCards[i] = c
 	end
 	-- play as: your own class or any other (its ability is yours for the round)
+	-- (the nine class rings centred on the board, with the heading centred above them)
 	local playAs = prep:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	playAs:SetPoint("BOTTOMLEFT", pickPanel, "BOTTOMLEFT", 160, 90) -- (clear of the coins and the cards above)
-	playAs:SetText("Play as")
+	playAs:SetPoint("BOTTOM", pickPanel, "BOTTOM", 0, 122)
+	playAs:SetText("Choose your class")
+	frame.classOrn = WG.Ornament(playAs, 18, 46)
+	frame.classOrn:Layout()
 	frame.classButtons = {}
 	for i, class in ipairs(CLASSES) do
 		local b = CreateFrame("Button", nil, prep)
 		b:SetSize(32, 32)
-		b:SetPoint("LEFT", playAs, "RIGHT", 14 + (i - 1) * 42, 0)
+		b:SetPoint("BOTTOM", pickPanel, "BOTTOM", (i - (#CLASSES + 1) / 2) * 42, 80)
 		b:SetFrameLevel(pickPanel:GetFrameLevel() + 5)
 		b.ring = b:CreateTexture(nil, "BACKGROUND")
 		-- a carved silver ring (custom art), tinted the class colour when picked
@@ -2755,25 +2581,38 @@ local function Build()
 	-- your spell, as the card you'll hold (hover for the full rules)
 	local spellLabel = prep:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	frame.spellPreview = NewSpellCard(prep)
-	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOMRIGHT", -62, 78)
+	-- (a little smaller, bottom left in from the board's carved edge so it lies wholly on the felt:
+	-- as far from the centre as Begin is, mirrored)
+	frame.spellPreview:SetScale(0.9)
+	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOM", -((frame:GetWidth() - 32) / 2 - 113) / 0.9, 80 / 0.9)
 	frame.spellPreview:SetFrameLevel(prep:GetFrameLevel() + 20)
 	frame.spellPreview:SetScript("OnEnter", function(self)
 		local ab = self.ability
 		if not ab then return end
-		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		-- (grows where it lies, like the cards; the full rules beside the close look)
+		WG:PickSpellZoom(self)
+		GameTooltip:SetOwner(frame.spellZoom:IsShown() and frame.spellZoom or self, "ANCHOR_LEFT")
 		GameTooltip:AddLine(ab.name, 1, 0.82, 0)
 		GameTooltip:AddLine(ab.text, 1, 1, 1, true)
 		GameTooltip:AddLine("Once per match, before you place a card. It doesn't use up your turn.", 0.6, 0.6, 0.6, true)
 		GameTooltip:Show()
 	end)
-	frame.spellPreview:SetScript("OnLeave", GameTooltip_Hide)
-	spellLabel:SetPoint("BOTTOM", frame.spellPreview, "TOP", 0, 6)
+	frame.spellPreview:SetScript("OnLeave", function()
+		WG:PickSpellZoom(nil)
+		GameTooltip_Hide()
+	end)
+	-- under the card (above it the lower row of cards overlapped it), in the screen's gold lettering
+	spellLabel:SetPoint("TOP", frame.spellPreview, "BOTTOM", 0, -5)
+	spellLabel:SetFont(TITLE_FONT, 14, "")
+	spellLabel:SetTextColor(1, 0.82, 0.4)
+	spellLabel:SetShadowColor(0, 0, 0, 0.95)
+	spellLabel:SetShadowOffset(1, -1)
 	spellLabel:SetText("Your spell")
 	-- let fate decide (your card and your class): a die between Back and Begin, glowing on hover
 	-- and burning bright while fate has the choice
 	local fate = CreateFrame("Button", nil, prep)
-	fate:SetSize(230, 52)
-	fate:SetPoint("BOTTOM", prep, "BOTTOM", -20, 14)
+	fate:SetSize(340, 52) -- (centred on the board; the die and its words are centred inside, WG:LayoutFate)
+	fate:SetPoint("BOTTOM", prep, "BOTTOM", 0, 14)
 	fate:SetFrameLevel(prep:GetFrameLevel() + 40)
 	fate.glow = fate:CreateTexture(nil, "BACKGROUND")
 	fate.glow:SetSize(110, 110)
@@ -2782,7 +2621,7 @@ local function Build()
 	fate.glow:SetVertexColor(1, 0.75, 0.3)
 	fate.die = fate:CreateTexture(nil, "ARTWORK")
 	fate.die:SetSize(42, 42)
-	fate.die:SetPoint("LEFT", 6, 0)
+	fate.die:SetPoint("LEFT", fate, "CENTER", -80, 0)
 	fate.die:SetTexture(ICONS .. "INV_Misc_Dice_01")
 	fate.die:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	local dmask = fate:CreateMaskTexture()
@@ -2819,24 +2658,187 @@ local function Build()
 	end)
 	frame.fateLink = fate
 	-- Shuffle: above the first card, where the deck lies on the felt
-	local shuffle = WoodButton(A.Widgets.Button(prep, "Shuffle", 110, function() WG:Shuffle() end))
-	shuffle.dx, shuffle.dy = -300, -190 -- (the deck the cards fly to and from, from the table's top)
+	-- the goblin dealer in his carved ring: click to deal a new hand (glows on hover, rocks and
+	-- pulses while the cards are being shuffled and dealt)
+	local shuffle = CreateFrame("Button", nil, prep)
+	shuffle:SetSize(96, 96)
+	-- bottom right, over Begin and on its centre line (Begin is WG.BEGIN_W wide, 30 in from the
+	-- panel's edge); the deck the cards fly to and from, from the table's top
+	shuffle.dx = (frame:GetWidth() - 32) / 2 - 30 - WG.BEGIN_W / 2
+	shuffle.dy = -(frame:GetHeight() - TOP - 16 - 142)
 	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
 	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
-	shuffle:HookScript("OnEnter", function(self)
+	shuffle.glow = shuffle:CreateTexture(nil, "BACKGROUND")
+	shuffle.glow:SetSize(150, 150)
+	shuffle.glow:SetPoint("CENTER")
+	shuffle.glow:SetTexture(GLOW_TEX)
+	shuffle.glow:SetBlendMode("ADD")
+	shuffle.glow:SetVertexColor(1, 0.75, 0.3)
+	shuffle.glow:SetAlpha(0)
+	shuffle.art = shuffle:CreateTexture(nil, "ARTWORK")
+	shuffle.art:SetSize(96, 96)
+	shuffle.art:SetPoint("CENTER")
+	shuffle.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Dealer_Shuffle")
+	-- the caption on a small carved wooden plank (like the Back and Begin buttons) hung across
+	-- the ring's lower edge; its gold lettering brightens on hover and turns to "Dealing..." while
+	-- the cards are on the move
+	shuffle.plaque = shuffle:CreateTexture(nil, "OVERLAY", nil, 1)
+	shuffle.plaque:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Button_Wood")
+	shuffle.plaque:SetSize(128, 30)
+	shuffle.plaque:SetPoint("TOP", shuffle, "BOTTOM", 0, 10)
+	shuffle.text = shuffle:CreateFontString(nil, "OVERLAY", nil, 2)
+	shuffle.text:SetFont(TITLE_FONT, 13, "")
+	shuffle.text:SetShadowOffset(1, -1)
+	shuffle.text:SetShadowColor(0, 0, 0, 0.9)
+	shuffle.text:SetTextColor(1, 0.82, 0.4)
+	shuffle.text:SetText("Deal a new hand")
+	shuffle.text:SetPoint("CENTER", shuffle.plaque, "CENTER", 0, 1)
+	shuffle:SetScript("OnClick", function() WG:Shuffle() end)
+	shuffle:SetScript("OnMouseDown", function(self) self.down = true end)
+	shuffle:SetScript("OnMouseUp", function(self) self.down = false end)
+	shuffle:SetScript("OnEnter", function(self)
+		self.hover = true
 		GameTooltip:SetOwner(self, "ANCHOR_TOP")
-		GameTooltip:AddLine("Shuffle", 1, 0.82, 0)
-		GameTooltip:AddLine("Deal a fresh set of cards. You and your companions always come back.", 1, 1, 1, true)
+		GameTooltip:AddLine("Deal a new hand", 1, 0.82, 0)
+		GameTooltip:AddLine("Shuffle the cards and deal a fresh set. You and your companions always come back.", 1, 1, 1, true)
 		GameTooltip:Show()
 	end)
-	shuffle:HookScript("OnLeave", GameTooltip_Hide)
+	shuffle:SetScript("OnLeave", function(self)
+		self.hover = false
+		self.down = false
+		GameTooltip_Hide()
+	end)
+	shuffle:SetScript("OnUpdate", function(self, el)
+		local t = GetTime()
+		local target
+		if frame.shuffling then target = 0.7 + 0.3 * math.sin(t * 10)
+		elseif self.hover then target = 0.8
+		else target = 0 end
+		self.g = (self.g or 0) + (target - (self.g or 0)) * math.min(1, el * 10)
+		self.glow:SetAlpha(self.g)
+		local size = self.down and 90 or ((frame.shuffling or self.hover) and 100 or 96)
+		self.art:SetSize(size, size)
+		self.art:SetRotation(frame.shuffling and math.sin(t * 14) * 0.06 or 0)
+		-- (the caption: brighter gold with the mouse over it, "Dealing..." while the cards move)
+		local dealing = frame.shuffling and true or false
+		if dealing ~= self.dealing then
+			self.dealing = dealing
+			self.text:SetText(dealing and "Dealing..." or "Deal a new hand")
+		end
+		if self.hover or dealing then self.text:SetTextColor(1, 0.95, 0.7) else self.text:SetTextColor(1, 0.82, 0.4) end
+	end)
 	frame.shuffleButton = shuffle
 	-- Back (to choosing an opponent) and Begin / Ready
-	frame.backButton = WoodButton(A.Widgets.Button(prep, "Back", 100, function() WG:Back() end))
-	frame.backButton:SetPoint("BOTTOMLEFT", 46, 18)
-	frame.beginButton = WoodButton(A.Widgets.Button(prep, "Begin", 140, function() WG:BeginClicked() end))
+	-- Back is a red arrow in a gold ring in the board's top left corner (the game's back arrow where
+	-- the client has it, else the spellbook's page arrow, either one made red)
+	local back = CreateFrame("Button", nil, prep)
+	back:SetSize(60, 60)
+	back:SetPoint("CENTER", prep, "TOPLEFT", 50, -26)
+	back:SetFrameLevel(prep:GetFrameLevel() + 50)
+	-- (just the painted arrow, no ring or socket)
+	back.arrow = back:CreateTexture(nil, "ARTWORK")
+	back.arrow:SetSize(56, 56)
+	back.arrow:SetPoint("CENTER", 0, 0)
+	back.arrow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Back_Arrow") -- (custom art: a painted red arrow)
+	back.glow = back:CreateTexture(nil, "BACKGROUND", nil, -1)
+	back.glow:SetTexture(GLOW_TEX)
+	back.glow:SetBlendMode("ADD")
+	back.glow:SetVertexColor(1, 0.4, 0.25)
+	back.glow:SetSize(100, 100)
+	back.glow:SetPoint("CENTER")
+	back.glow:SetAlpha(0)
+	back:SetScript("OnClick", function() WG:Back() end)
+	back:SetScript("OnEnter", function(self)
+		self.arrow:SetSize(62, 62)
+		self.glow:SetAlpha(0.6)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine("Back", 1, 0.82, 0)
+		GameTooltip:AddLine("Return to choosing an opponent.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	back:SetScript("OnLeave", function(self)
+		self.arrow:SetSize(56, 56)
+		self.glow:SetAlpha(0)
+		GameTooltip_Hide()
+	end)
+	back:SetScript("OnMouseDown", function(self) self.arrow:SetPoint("CENTER", -1, -1) end)
+	back:SetScript("OnMouseUp", function(self) self.arrow:SetPoint("CENTER", 0, 0) end)
+	frame.backButton = back
+	-- Begin: the screen's main button, bigger, in larger lettering, with a gold glow that breathes
+	-- while it can be pressed (nothing while it can't)
+	frame.beginButton = WoodButton(A.Widgets.Button(prep, "Begin", WG.BEGIN_W, function() WG:BeginClicked() end))
+	frame.beginButton:SetHeight(WG.BEGIN_H)
+	WG.WoodLettering(frame.beginButton, 18)
 	frame.beginButton:SetPoint("BOTTOMRIGHT", -30, 22)
 	frame.beginButton:SetFrameLevel(prep:GetFrameLevel() + 50)
+	frame.beginButton.glow = frame.beginButton:CreateTexture(nil, "BACKGROUND", nil, -2)
+	frame.beginButton.glow:SetTexture(GLOW_TEX)
+	frame.beginButton.glow:SetBlendMode("ADD")
+	frame.beginButton.glow:SetVertexColor(1, 0.8, 0.3)
+	frame.beginButton.glow:SetSize(WG.BEGIN_W + 90, WG.BEGIN_H + 70)
+	frame.beginButton.glow:SetPoint("CENTER")
+	-- a streak of light that sweeps across it every couple of seconds (clipped to the button) and
+	-- a few small gold sparkles that kindle round the plank, drift up and fade
+	local bb = frame.beginButton
+	bb.sparks = {}
+	for k = 1, 9 do
+		local t = bb:CreateTexture(nil, "OVERLAY", nil, 6)
+		t:SetTexture(GLOW_TEX)
+		t:SetBlendMode("ADD")
+		t:SetVertexColor(1, 0.9, 0.55)
+		t:SetAlpha(0)
+		bb.sparks[k] = { tex = t, age = 99, life = 1, x = 0, y = 0, size = 8, speed = 12 }
+	end
+	bb.shine = CreateFrame("Frame", nil, bb)
+	bb.shine:SetPoint("TOPLEFT", -4, 5)
+	bb.shine:SetPoint("BOTTOMRIGHT", 4, -5)
+	bb.shine:SetClipsChildren(true)
+	bb.shine:SetFrameLevel(bb:GetFrameLevel() + 2)
+	bb.streak = bb.shine:CreateTexture(nil, "OVERLAY")
+	bb.streak:SetTexture(GLOW_TEX)
+	bb.streak:SetBlendMode("ADD")
+	bb.streak:SetVertexColor(1, 0.95, 0.7)
+	bb.streak:SetSize(46, WG.BEGIN_H + 40)
+	bb:HookScript("OnUpdate", function(self, el)
+		local on = self:IsEnabled()
+		local t = GetTime()
+		local a = on and (0.4 + 0.3 * math.sin(t * 3)) or 0
+		self.glow:SetAlpha(a)
+		self.glow:SetShown(on and true or false)
+		-- (sparkles: each is born at a random spot on or just above the plank, rises slowly and
+		-- twinkles out; a spent one is reborn only while Begin can be pressed)
+		local w, h = self:GetWidth(), self:GetHeight()
+		for _, s in ipairs(self.sparks) do
+			s.age = s.age + el
+			if s.age >= s.life then
+				if on and math.random() < 0.06 then
+					s.age, s.life = 0, 1.1 + math.random() * 1.1
+					s.x, s.y = (math.random() - 0.5) * (w + 8), (math.random() - 0.5) * h
+					s.size, s.speed = 6 + math.random() * 7, 8 + math.random() * 10
+				else
+					s.tex:SetAlpha(0)
+				end
+			end
+			if s.age < s.life then
+				local p = s.age / s.life
+				s.tex:ClearAllPoints()
+				s.tex:SetPoint("CENTER", self, "CENTER", s.x, s.y + s.speed * s.age)
+				s.tex:SetSize(s.size, s.size)
+				s.tex:SetAlpha(0.75 * math.sin(math.pi * p) * (0.7 + 0.3 * math.sin(s.age * 17)))
+			end
+		end
+		-- (the streak: 0.9 s across, then a rest)
+		local p = (t % 2.6) / 0.9
+		self.shine:SetShown(on and true or false)
+		if on and p < 1 then
+			local w = self.shine:GetWidth()
+			self.streak:ClearAllPoints()
+			self.streak:SetPoint("CENTER", self.shine, "LEFT", -23 + (w + 46) * p, 0)
+			self.streak:SetAlpha(0.65 * math.sin(math.pi * p))
+		else
+			self.streak:SetAlpha(0)
+		end
+	end)
 
 	-- step 1: who will you play? Three tiles on the felt, your record, and a first-time tip
 	local lobby = CreateFrame("Frame", nil, pickPanel)
@@ -2992,12 +2994,14 @@ local function Build()
 	-- the same opponent again (back to choosing your card), or someone new
 	local again = WoodButton(A.Widgets.Button(over, "Play again", 120, function() WG:PlayAgain() end))
 	again:SetPoint("BOTTOMRIGHT", over, "BOTTOM", -4, 4)
+	frame.overAgain = again
 	local leave = WoodButton(A.Widgets.Button(over, "New opponent", 130, function() WG:ShowLobby() end))
 	leave:SetPoint("BOTTOMLEFT", over, "BOTTOM", 4, 4)
 	over:Hide()
 	frame.over = over
 
 	ns.NativeWindow(frame, { title = "Wild Gambit", icon = "Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth", close = close, byline = sub })
+	WG.AddEmblem("Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth") -- (a bigger icon in the gold elite frame)
 	-- tuck the window into a small floating bar (the game goes on; click the bar to come back)
 	local mini = CreateFrame("Button", nil, frame)
 	mini:SetSize(24, 24)
@@ -3055,7 +3059,6 @@ local function Build()
 			end
 		end
 		WG:StepFX(elapsed)
-		if self.boardEyes then WG:StepEyes(clock) end
 		if self.ghost and self.ghost:IsShown() then CardBling(self.ghost, elapsed, clock) end
 		if self.zoom and self.zoom:IsShown() then CardBling(self.zoom, elapsed, clock) end
 		-- the hovered square's glow breathes
@@ -3119,6 +3122,14 @@ local function Build()
 	frame:HookScript("OnHide", function()
 		if frame.ambience and StopSound then StopSound(frame.ambience, 1500) end
 		frame.ambience = nil
+		-- (closed mid-game - Escape, the close button: the game carries on in the bar, so it's
+		-- one click back, 0.64.0; tucking it away on purpose shows the bar itself)
+		C_Timer.After(0, function()
+			local g = game
+			if g and not g.over and not g.result and not frame:IsShown() and not (WG.dock and WG.dock:IsShown()) then
+				WG:Collapse("float")
+			end
+		end)
 	end)
 end
 
@@ -3296,6 +3307,40 @@ function WG:SpellZoom(sc)
 	z:Show()
 end
 
+-- the pick screen's "Your spell" card, looked at closely the way a pick card is: a copy at the
+-- pick zoom grows where it lies (kept inside the window) with the original faded out under it
+function WG:PickSpellZoom(sc)
+	local z = frame and frame.spellZoom
+	if not z then return end
+	local under = z.pickUnder
+	if under and under ~= sc then
+		under:SetAlpha(frame.fate and 0.35 or 1)
+		z.pickUnder = nil
+	end
+	if not (sc and sc.ability and sc:IsShown()) then z:Hide() return end
+	z:SetSpell(sc.ability)
+	local fs, ws = sc:GetEffectiveScale(), frame:GetEffectiveScale()
+	local cx, cy = sc:GetCenter()
+	if not cx then return end
+	cx, cy = cx * fs / ws - frame:GetLeft(), cy * fs / ws - frame:GetBottom()
+	local zs = PICK_ZOOM
+	local zw, zh = CW * zs, CH * zs
+	-- kept on the felt: in from the board's carved edge (about 49 px on the right, 30 at the bottom)
+	local ps = frame.prep:GetEffectiveScale() / ws
+	local feltR = frame.prep:GetRight() * ps - frame:GetLeft() - 49 - 6
+	local feltB = frame.prep:GetBottom() * ps - frame:GetBottom() + 30 + 4
+	local feltL = frame.prep:GetLeft() * ps - frame:GetLeft() + 49 + 6
+	local x = math.max(zw / 2 + 12, feltL + zw / 2, math.min(frame:GetWidth() - zw / 2 - 12, feltR - zw / 2, cx))
+	local y = math.max(zh / 2 + 24, feltB + zh / 2, math.min(frame:GetHeight() - zh / 2 - 30, cy))
+	z:SetScale(zs)
+	z:ClearAllPoints()
+	z:SetPoint("CENTER", frame, "BOTTOMLEFT", x / zs, y / zs)
+	z:SetFrameLevel(frame:GetFrameLevel() + 150)
+	z:Show()
+	sc:SetAlpha(0)
+	z.pickUnder = sc
+end
+
 -- a board card at its square, nudged by (ox, oy) and scaled (for the strike and slam)
 local function BoardPlace(f, ox, oy, scale)
 	scale = scale or 1
@@ -3428,14 +3473,6 @@ function Refresh()
 	PaintPlayer(frame.players.me, UnitName("player"), "player", game.class.me, game.color.me, WL.Count(game.board, "me"))
 	PaintPlayer(frame.players.bot, game.botName, game.botDisplay, game.class.bot, game.color.bot, WL.Count(game.board, "bot"))
 	for side, p in pairs(frame.players) do
-		local ab = game.ability[side]
-		p.ability.data = ab
-		p.ability.used = game.used[side]
-		p.ability.icon:SetTexture(ICONS .. ab.icon)
-		p.ability.icon:SetDesaturated(game.used[side] and true or false)
-		p.ability.icon:SetAlpha(game.used[side] and 0.45 or 1)
-		p.ability.glow:SetShown((game.targeting and side == "me") and true or false)
-		p.ability:Hide() -- (the spell is a card in the hand now)
 		-- a waiting Reincarnation: the ankh by the player's portrait
 		if p.ankh then p.ankh:SetShown(game.board.ankh == side) end
 	end
@@ -3545,15 +3582,13 @@ local function Note(text)
 	Refresh()
 end
 
--- what the spells left on the board: Divine Shield's bubble, the Grounding Totem over a side's
--- cards, Barkskin's bark, your traps
+-- what the spells left on the board: Divine Shield's bubble, Barkskin's bark, your traps
 local function PaintEffects()
 	for cell = 1, 9 do
 		local slot = game.board[cell]
 		local f = game.frames[cell]
 		if f and slot then
-			local grounded = game.board.grounded ~= nil and game.board.grounded == slot.owner
-			f.bubble:SetShown((slot.shield or grounded) and true or false)
+			f.bubble:SetShown(slot.shield and true or false)
 			-- Divine Shield's bubble: the painted holy sphere round the card
 			if slot.shield and not f.bubble.painted then
 				f.bubble.painted = true
@@ -3563,11 +3598,9 @@ local function PaintEffects()
 				f.bubble:SetPoint("CENTER")
 				f.bubble:SetSize(CH * 1.25, CH * 1.25)
 			end
-			if grounded and not slot.shield then f.bubble:SetVertexColor(0.55, 0.8, 1, 0.9) else f.bubble:SetVertexColor(1, 0.9, 0.5, 0.9) end
+			f.bubble:SetVertexColor(1, 0.9, 0.5, 0.9)
 			if slot.shield then
 				f.effect:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Mark_Shield") f.effect:SetTexCoord(0, 1, 0, 1) f.effect:Show()
-			elseif grounded then
-				f.effect:SetTexture(ICONS .. "Spell_Nature_GroundingTotem") f.effect:SetTexCoord(0.08, 0.92, 0.08, 0.92) f.effect:Show()
 			elseif slot.card.bark then
 				f.effect:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Mark_Barkskin") f.effect:SetTexCoord(0, 1, 0, 1) f.effect:Show()
 			else
@@ -3586,45 +3619,57 @@ local function PlayEnd(id)
 	if ok and willPlay and handle and StopSound then C_Timer.After(2.8, function() pcall(StopSound, handle, 300) end) end
 end
 
+-- the result, counted in your record the moment the board settles it (0.62.0: before the last card
+-- lands, so a game tucked away, closed or hidden still counts). Once per game; `forfeit` as EndGame.
+function WG.RecordResult(forfeit)
+	local g = game
+	if not g then return nil end
+	if g.result then return g.result end
+	local mine, theirs = WL.Count(g.board, "me"), WL.Count(g.board, "bot")
+	local p = db.practice
+	if g.tutorial then
+		p = { w = 0, l = 0, d = 0 } -- (the tutorial isn't counted)
+		WG.lastGame = { tutorial = true }
+	end
+	if g.pvp then
+		WG.lastGame = { pvp = g.pvp.opp }
+		local key = Key(g.pvp.opp)
+		db.records[key] = db.records[key] or { w = 0, l = 0, d = 0 }
+		p = db.records[key]
+		p.name = Short(g.pvp.opp)
+		WG.net = nil
+	end
+	local won = (forfeit == "bot") or (not forfeit and mine > theirs)
+	local lost = (forfeit == "me") or (not forfeit and theirs > mine)
+	if won then p.w = p.w + 1 elseif lost then p.l = p.l + 1 else p.d = p.d + 1 end
+	g.result = { mine = mine, theirs = theirs, won = won, lost = lost, p = p, forfeit = forfeit }
+	return g.result
+end
+
 -- `forfeit`: "me" (you gave up) or "bot" (they did): that side loses whatever the board says
 local function EndGame(forfeit)
 	if game.over then return end
+	local r = WG.RecordResult(forfeit)
+	forfeit = r.forfeit
 	game.over = true
 	frame.leave:Hide()
 	if frame.waitNote then frame.waitNote:Hide() end
+	if frame.silentNote then frame.silentNote:Hide() end
 	-- a chosen card never played turns over at the end
 	for _, e in ipairs(game.hands.bot) do
 		if e.frame.hidden then e.frame.hidden = nil e.frame.flipSounded = false e.frame.flipAt = GetTime() + 0.3 end
 	end
-	local mine, theirs = WL.Count(game.board, "me"), WL.Count(game.board, "bot")
+	local mine, theirs, p = r.mine, r.theirs, r.p
+	local won, lost = r.won, r.lost
 	local title, color
-	local p = db.practice
-	if game.tutorial then
-		p = { w = 0, l = 0, d = 0 } -- (the tutorial isn't counted)
-		db.tutorialDone = true
-	end
-	if game.pvp then
-		WG.lastGame = { pvp = game.pvp.opp }
-		local key = Key(game.pvp.opp)
-		db.records[key] = db.records[key] or { w = 0, l = 0, d = 0 }
-		p = db.records[key]
-		p.name = Short(game.pvp.opp)
-		WG.net = nil
-		frame.leave:Hide()
-	end
-	local won = (forfeit == "bot") or (not forfeit and mine > theirs)
-	local lost = (forfeit == "me") or (not forfeit and theirs > mine)
 	if won then
 		title, color = forfeit and ("%s forfeits!"):format(game.botName or "Your opponent") or "Gambit won!", { 1, 0.86, 0.35 }
-		p.w = p.w + 1
 		PlayEnd(SND.win)
 	elseif lost then
 		title, color = forfeit and "You forfeited" or "Gambit lost...", { 1, 0.62, 0.5 }
-		p.l = p.l + 1
 		PlayEnd(SND.loss)
 	else
 		title, color = "A stalemate gambit", { 0.8, 0.85, 1 }
-		p.d = p.d + 1
 		PlayEnd(SND.draw)
 	end
 	frame.over.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Result_" .. (won and "Victory" or lost and "Defeat" or "Draw"))
@@ -3632,8 +3677,33 @@ local function EndGame(forfeit)
 	frame.overTitle:SetTextColor(color[1], color[2], color[3])
 	frame.overSub:SetText(game.tutorial and ("|cffffffff%d - %d|r\n|cffc8bca0Tutorial complete! You're ready for a real gambit.|r"):format(mine, theirs)
 		or ("|cffffffff%d - %d|r\n|cffc8bca0%s: %d won, %d lost, %d drawn|r"):format(mine, theirs, game.pvp and ("Against " .. p.name) or "Practice", p.w, p.l, p.d))
-	C_Timer.After(0.8, function() if frame and game and game.over then frame.over:Show() end end)
+	-- (after the tutorial: on to a real game against a creature)
+	if frame.overAgain then frame.overAgain:SetText(game.tutorial and "Play for real" or "Play again") end
+	local g = game
+	C_Timer.After(0.8, function() if frame and game == g and g.over and not g.dismissed then frame.over:Show() end end)
 	Refresh()
+	WG:PaintDock()
+end
+
+-- a game called off (0.62.0): nobody wins, nothing is counted, and the result banner says so.
+-- `chat`: a line for the chat frame; `why`: a few words under the banner
+function WG:CancelGame(chat, why)
+	local g = game
+	if not g or g.over then return end
+	g.over, g.cancelled = true, true
+	if chat then Tell(chat) end
+	frame.leave:Hide()
+	if frame.waitNote then frame.waitNote:Hide() end
+	if frame.silentNote then frame.silentNote:Hide() end
+	if g.pvp then WG.lastGame = { pvp = g.pvp.opp } WG.net = nil end
+	frame.over.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Result_Draw")
+	frame.overTitle:SetText("Cancelled")
+	frame.overTitle:SetTextColor(0.8, 0.8, 0.8)
+	frame.overSub:SetText("|cffc8bca0Not counted.|r" .. (why and ("\n|cff999999" .. why .. "|r") or ""))
+	if frame.overAgain then frame.overAgain:SetText("Play again") end
+	C_Timer.After(0.5, function() if frame and game == g and not g.dismissed then frame.over:Show() end end)
+	Refresh()
+	WG:PaintDock()
 end
 
 -- the card leaves the hand and flies to its square (the board's rules are already settled);
@@ -3709,10 +3779,15 @@ local function Play1(side, h, cell)
 		entry.frame.flipAt = GetTime() + FLY_TIME * 0.35
 	end
 	game.selected = nil
-	if WL.Full(game.board) then game.flying = (game.flying or 0) + 1 ShowHands() Refresh() return end -- (it ends once it lands)
+	if WL.Full(game.board) then
+		-- (it ends once it lands; the result counts now, and a window that's hidden, docked or closed
+		-- with Escape - no landing - still ends the game a moment later)
+		WG.RecordResult()
+		frame.leave:Hide()
+		C_Timer.After(FLY_TIME + 1.6, function() if game == g and not g.over then EndGame() end end)
+		game.flying = (game.flying or 0) + 1 ShowHands() Refresh() return
+	end
 	game.turn = side == "me" and "bot" or "me"
-	-- (a Grounding Totem lasts until its caster's next turn)
-	WL.TurnStart(game.board, game.turn)
 	PaintEffects()
 	ShowHands()
 	if #game.hands[game.turn] == 0 then EndGame() return end -- (can't happen; just in case)
@@ -3939,13 +4014,6 @@ function WG:ApplyAbility(side, cell, cell2)
 		if ab.key ~= "pickpocket" then WG:FX(ab.key, tf, 0, 1.5) end
 		Reborn(out.saved, 0.45)
 		Note(("%s cast %s, but Reincarnation keeps the card."):format(who, ab.name))
-	elseif out.grounded then
-		for c = 1, 9 do
-			local slot, f = game.board[c], game.frames[c]
-			if slot and f and slot.owner == side then Flash(f, { 0.55, 0.8, 1 }) end
-		end
-		Note(side == "me" and "Grounding Totem: your cards are safe through their next turn."
-			or ("%s drops a Grounding Totem: their cards are safe this turn."):format(game.botName))
 	elseif out.removed then
 		local rem = out.removed
 		local f = game.frames[rem.cell]
@@ -4078,6 +4146,7 @@ function WG:PaintPick()
 	frame.fateLink.text:SetText(frame.fate and "Fate decides!" or "Let fate decide")
 	frame.fateLink.text:SetTextColor(1, frame.fate and 0.9 or 0.82, frame.fate and 0.5 or 0)
 	frame.fateLink.sub:SetText(frame.fate and "your card and class. Click to choose again." or "a random card and class")
+	WG:LayoutFate()
 	local picked = frame.chosen ~= nil or frame.fate
 	local net = WG.net
 	local hint, canGo, label
@@ -4085,7 +4154,7 @@ function WG:PaintPick()
 		local who = Short(net.opp)
 		label = "Ready"
 		if net.state == "inviting" then
-			hint = ("Waiting for %s to answer... Pick your card and class meanwhile."):format(who)
+			hint = ("Waiting for %s to answer... Choose your card and class meanwhile."):format(who)
 			canGo = false
 		elseif net.state == "ready" then
 			hint = ("You're ready. Waiting for %s..."):format(who)
@@ -4094,15 +4163,23 @@ function WG:PaintPick()
 			local lead = net.auto and ("Matched with |cffffd100%s|r!"):format(who)
 				or net.challenger and ("%s accepted!"):format(who)
 				or ("|cffffd100%s|r challenged you."):format(who)
-			hint = lead .. (net.oppBest and (" |cff9be36b%s is ready.|r"):format(who) or "") .. " Pick your card and class, then Ready."
+			hint = lead .. (net.oppBest and (" |cff9be36b%s is ready.|r"):format(who) or "") .. " Choose your card and class, then Ready."
 			canGo = picked
 		end
 	else
 		label = "Begin"
-		hint = frame.fate and "Fate will choose your card. Pick your class, then Begin." or "Pick your card and class."
+		hint = frame.fate and "Fate will choose your card. Choose your class, then Begin." or "Choose a card"
 		canGo = picked
 	end
-	frame.pickHint:SetText(hint)
+	WG:SetHint(hint)
+	-- (a note under the heading once a card is picked: it plays at full strength)
+	if not frame.pickNote then
+		frame.pickNote = frame.pick:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		frame.pickNote:SetPoint("TOP", frame.pickHint, "BOTTOM", 0, -2)
+		frame.pickNote:SetTextColor(0.75, 0.75, 0.75)
+		frame.pickNote:SetText("Your card plays at full strength, unless the hands would end too uneven: then it may be downgraded.")
+	end
+	frame.pickNote:SetShown(frame.chosen ~= nil and not frame.fate)
 	frame.beginButton:SetText(label)
 	frame.beginButton:SetEnabled(canGo and true or false)
 	frame.beginButton:SetAlpha(canGo and 1 or 0.55)
@@ -4144,6 +4221,8 @@ end
 -- the window between games: the felt, its logo and candle, and nothing of a game
 local function ClearTable()
 	Zoom(nil)
+	if game and game.over then game.dismissed = true end
+	if frame.silentNote then frame.silentNote:Hide() end
 	frame.shuffling = nil
 	if frame.deckGlow then frame.deckGlow:Hide() end
 	if frame.waitNote then frame.waitNote:Hide() end
@@ -4215,11 +4294,13 @@ end
 -- step 1: who will you play?
 function WG:ShowLobby()
 	if not frame then Build() end
+	if not self:LeaveGameFirst(function() WG:ShowLobby() end) then return end
 	ClearTable()
+	if frame.pickNote then frame.pickNote:Hide() end -- (only under "Choose a card")
 	if frame.coach then frame.coach:Hide() frame.coach.hl:Hide() end
 	PaintPlayer(frame.players.bot, "|cff999999Who will you play?|r", nil, nil, nil)
 	self.lobbyOpponent = OfferedOpponent()
-	frame.pickHint:SetText("Who will you play?")
+	WG:SetHint("Who will you play?")
 	frame.prep:Hide()
 	frame.lobby:Show()
 	frame.pick:Show()
@@ -4245,10 +4326,11 @@ function WG:LobbyPractice()
 	self:ShowPick()
 end
 
--- after a game: the same opponent again
+-- after a game: the same opponent again (after the tutorial: a creature, for real)
 function WG:PlayAgain()
 	local last = self.lastGame
 	if last and last.pvp then self:Challenge(last.pvp) return end
+	if last and last.tutorial then self.nextOpponent = nil self:ShowPick() return end
 	self.nextOpponent = last and last.opp or nil
 	self:ShowPick()
 end
@@ -4334,6 +4416,8 @@ end
 -- Shuffle: the cards on the table are swept into the deck, riffled twice in plain sight and
 -- dealt again (you and your companions come back; the rest are new). The card you'd picked stays
 -- picked if it comes back. `shown` deals that set instead (the table's opening deal, ShowPick).
+-- The goblin dealer has a word to say each time.
+WG.DEALER_LINES = { 550816, 550811, 550810 } -- (GoblinMaleZanyNPCPissed01, 03, 04)
 WG.SHUFFLE = { gather = 0.4, riffle = 1.25, deal = 0.32, gap = 0.1, split = 78 } -- (seconds; split: the two halves apart)
 function WG:Shuffle(shown)
 	if not (frame and frame.prep:IsShown() and frame:IsShown()) or frame.shuffling then return end
@@ -4348,7 +4432,15 @@ function WG:Shuffle(shown)
 	frame.pickHint:SetText("|cffffd100Shuffling the deck...|r")
 	frame.beginButton:SetEnabled(false)
 	frame.beginButton:SetAlpha(0.55)
-	if db.sound ~= false then PlaySoundFile(567562, "SFX") end -- (the cards picked up)
+	if db.sound ~= false then
+		-- the goblin dealer's banter: one of his lines (file IDs of GoblinMaleZanyNPCPissed01 / 03 / 04),
+		-- never the same one twice running (the riffles sound as the deck is riffled, StepShuffle)
+		local n
+		repeat n = math.random(#WG.DEALER_LINES) until n ~= WG.lastDealerLine or #WG.DEALER_LINES == 1
+		WG.lastDealerLine = n
+		PlaySoundFile(WG.DEALER_LINES[n], "Dialog")
+		PlaySoundFile(567562, "SFX") -- (the cards picked up)
+	end
 	for _, f in ipairs(frame.pickCards) do
 		f.from = { f.px, f.py }
 		f.select:Hide()
@@ -4486,6 +4578,29 @@ function WG:StepShuffle(elapsed)
 	end
 end
 
+-- a game under way before something else starts (0.62.0): true when it's fine to go ahead now.
+-- The tutorial is set aside quietly; a game against a player has to be finished or left first; a
+-- practice game asks to be forfeited (a loss), then `after` carries on.
+function WG:LeaveGameFirst(after)
+	local g = game
+	if not g or g.over or g.result then return true end
+	if g.tutorial then
+		g.over = true
+		if self.tutorTicker then self.tutorTicker:Cancel() self.tutorTicker = nil end
+		if frame.coach then frame.coach:Hide() frame.coach.hl:Hide() end
+		return true
+	end
+	if g.pvp then
+		if frame and not frame:IsShown() then frame:Show() Refresh() end
+		Tell("finish your game first (or Leave).")
+		return false
+	end
+	if frame and not frame:IsShown() then frame:Show() Refresh() end
+	self.afterForfeit = after
+	self:AskForfeit()
+	return false
+end
+
 -- sets the table for a game: both hands, classes, colours, who goes first
 -- o = { mine, theirs, myReserves, theirReserves, myClass, oppClass, oppName, oppDisplay, seed,
 --       first ("me" / "bot"), pvp }
@@ -4503,6 +4618,8 @@ function WG:Begin(o)
 		reserves = { me = o.myReserves or {}, bot = o.theirReserves or {} },
 		tutorial = o.tutorial,
 	}
+	-- (started in combat: paused from the first move)
+	if UnitAffectingCombat and UnitAffectingCombat("player") then game.pause = { me = true } end
 	if frame.coach and not o.tutorial then frame.coach:Hide() frame.coach.hl:Hide() end
 	for i = 1, 9 do frame.slots[i].trap:Hide() end
 	-- (frames are reused game to game: clear what the last game's spells left on them, or a card in
@@ -4545,6 +4662,13 @@ function WG:Begin(o)
 	ShowHands()
 	game.turn = o.first
 	Refresh()
+	-- the pick cap: your card was downgraded to keep the hands even (0.62.0)
+	for _, c in ipairs(o.mine) do
+		if c.picked and c.downgraded then
+			Tell(("your %s plays below full strength this game: even with your other cards at their lowest, the hands would have ended more than %d spikes apart. It's marked with a red arrow."):format(c.name or "card", WL.PICK_GAP))
+			Note(("Your %s was downgraded to keep the hands even."):format(c.name or "card"))
+		end
+	end
 	if game.turn == "bot" and not game.pvp then self:BotTurn() end
 end
 
@@ -4578,7 +4702,7 @@ function WG:Start(pick)
 	for _ = 1, self:Difficulty().weaker do
 		local bi, best
 		for i, c in ipairs(theirs) do
-			local lower = WL.Lower(c)
+			local lower = WL.Lower(c, false, true)
 			if lower and (not best or c.total > theirs[bi].total) then bi, best = i, lower end
 		end
 		if best then best.picked = theirs[bi].picked theirs[bi] = best end
@@ -4607,38 +4731,74 @@ function WG:Start(pick)
 end
 
 ---------------------------------------------------------------------------
--- Playing another Almanac player (hidden addon whispers, prefix AzAlmWG, protocol 1)
+-- Playing another Almanac player (hidden addon whispers, prefix AzAlmWG, protocol 11)
 --   C|gid               challenge                 A|gid    accept    D|gid|why   decline
 --   S|gid|best|class|nonce   ready: your best five's spikes, the round's class, your half of the dice
---   K|gid|i|npc|level|tier|class|n,e,s,w|display|type|name   one card of your hand (i = 1..5),
+--   K|gid|i|npc|level|tier|class|n,e,s,w|display|type|kills|lowered|name   one card of your hand (i = 1..5),
 --                        or a reserve held back for a replacement (i = 6..8)
 --   M|gid|seq|hand|cell  a card played    U|gid|seq|cell|cell2   your ability (0 = none; cell2: Pick Pocket)
---   X|gid               leave / cancel
+--   X|gid|why           leave / cancel (why: card, step, gone, timeout = called off, not counted)
+--   P|gid|0/1           in combat (the game waits)    H|gid   still here (every 15 s in a game)
+--   R|gid               "send your setup again" (S and K once more; the setup's missing pieces)
+--   V|-|version         the reply to a challenge from another protocol (any protocol reads it)
+-- Every whisper goes out through one queue, in order, paced under the game's allowance (0.62.0).
 -- Fair hands: the spike budget is four fifths of the lower of the two bests (room for a random
--- draw to reach it), then whichever hand is still over the other plays its strongest cards a tier
--- lower until the two are within a spike (WL.Equalize: the same on both screens). Dungeon bosses
--- travel with class "boss" (their tier floor), heroes as "hero:CLASS:Home" (their home scene: a capital, or ZephrasIsle), companions "pet:Kind". Protocol 5; the dice are both halves added together, so the
+-- draw to reach it), then whichever hand is still over the other plays its strongest supporting
+-- cards a tier lower until the two are within a spike (WL.Equalize: the same on both screens; a
+-- picked card only past the pick cap, WL.PICK_GAP). Dungeon bosses
+-- travel with class "boss" (their tier floor), heroes as "hero:CLASS:Home" (their home scene: a capital, or ZephrasIsle), companions "pet:Kind". The dice are both halves added together, so the
 -- first player comes out the same on both screens. A removed card's replacement is the reserve
 -- closest in spikes (WL.Replacement), so both screens deal the same card with no round trip. Every card that arrives is
 -- checked against the rules (and the creature's real level); a wrong one ends the game.
 ---------------------------------------------------------------------------
 
-local PREFIX, PROTO = "AzAlmWG", "8"
+local PREFIX, PROTO = "AzAlmWG", "11" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends)
 local POPUP = "AZEROTHALMANAC_WG_CHALLENGE"
 
-local function Send(...)
-	local net = WG.net
-	if not (net and net.opp and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
-	pcall(C_ChatInfo.SendAddonMessage, PREFIX, PROTO .. "|" .. table.concat({ ... }, "|"), "WHISPER", net.opp)
+-- the outgoing queue: one whisper at a time, a short gap between them; one the game turns away
+-- (over its allowance) is tried again a second later, up to 8 times
+WG.outbox = {}
+function WG.Pump()
+	local box = WG.outbox
+	local m = box[1]
+	if not m then WG.pumping = nil return end
+	WG.pumping = true
+	local ok, res = pcall(C_ChatInfo.SendAddonMessage, PREFIX, m.text, "WHISPER", m.to)
+	-- (the result: nothing or true on older clients, 0 for success on newer ones)
+	local sent = ok and (res == nil or res == true or res == 0)
+	if sent or not ok or (m.tries or 0) >= 8 then
+		table.remove(box, 1)
+	else
+		m.tries = (m.tries or 0) + 1
+	end
+	C_Timer.After(sent and 0.12 or 1, WG.Pump)
 end
 
 local function SendTo(target, ...)
-	if C_ChatInfo and C_ChatInfo.SendAddonMessage then
-		pcall(C_ChatInfo.SendAddonMessage, PREFIX, PROTO .. "|" .. table.concat({ ... }, "|"), "WHISPER", target)
-	end
+	if not (target and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
+	local box = WG.outbox
+	box[#box + 1] = { to = target, text = PROTO .. "|" .. table.concat({ ... }, "|") }
+	if not WG.pumping then WG.Pump() end
 end
 
-local function Say(msg) ns.Print("|cff9be36bWild Gambit:|r " .. msg) end
+local function Send(...)
+	local net = WG.net
+	if net and net.opp then SendTo(net.opp, ...) end
+end
+
+-- your setup again (S and every K), for an opponent whose copy went missing
+function WG.Resend(to, sent)
+	for _, m in ipairs(sent or {}) do SendTo(to, unpack(m)) end
+end
+
+-- names with their realm, for deciding who challenges when two lookers meet (both screens must
+-- agree, across realms too)
+function WG.FullKey(name)
+	name = strtrim(name or "")
+	if not name:find("-", 1, true) then name = name .. "-" .. Realm() end
+	return (name:lower():gsub("%s", ""))
+end
+
 
 local function Gid()
 	local t = {}
@@ -4654,12 +4814,14 @@ local function Encode(i, c)
 	-- a hero travels with its class and race ("hero:MAGE:Gnome"); a companion as "pet:<kind>"
 	if c.hero then class = ("hero:%s:%s"):format(c.hero, c.home or "-")
 	elseif c.pet then class = "pet:" .. ((c.species or "-"):gsub("[|:]", " ")) end
+	-- (the kill count before the name, which goes last)
+	local kills = (not c.hero) and tonumber(c.kills) and math.max(0, math.floor(c.kills)) or -1
 	return "K", WG.net.gid, i, c.npc, c.level or 0, c.tier, class, table.concat(c.s, ","), c.display or 0, c.type or "-",
-		((c.name or "?"):gsub("|", "/"))
+		kills, c.lowered and 1 or 0, ((c.name or "?"):gsub("|", "/"))
 end
 
 local function Decode(f)
-	-- f = { proto, "K", gid, i, npc, level, tier, class, "n,e,s,w", display, type, name }
+	-- f = { proto, "K", gid, i, npc, level, tier, class, "n,e,s,w", display, type, kills (-1: none), lowered (0/1), name }
 	local npc, level, tier = tonumber(f[5]), tonumber(f[6]), tonumber(f[7])
 	local s = {}
 	for v in tostring(f[9] or ""):gmatch("%-?%d+") do s[#s + 1] = tonumber(v) end
@@ -4676,10 +4838,15 @@ local function Decode(f)
 		pet, class = true, "pet"
 	end
 	local display = tonumber(f[10])
-	local info = { npc = npc, level = level, class = class, type = f[11] ~= "-" and f[11] or nil, name = f[12], display = display ~= 0 and display or nil,
+	local kills = tonumber(f[12])
+	if not kills or kills < 0 or hero then kills = nil end
+	if kills then kills = math.min(math.floor(kills), 9999999) end
+	local lowered = f[13] == "1" or nil
+	local name = f[14]
+	local info = { npc = npc, level = level, class = class, type = f[11] ~= "-" and f[11] or nil, name = name, display = display ~= 0 and display or nil,
 		hero = hero, home = home, pet = pet, species = species }
-	return { npc = npc, name = f[12], level = level, tier = tier, s = s, total = s[1] + s[2] + s[3] + s[4], info = info,
-		display = info.display, type = info.type, class = class, hero = hero, home = home, pet = pet, species = species }
+	return { npc = npc, name = name, level = level, tier = tier, s = s, total = s[1] + s[2] + s[3] + s[4], info = info,
+		display = info.display, type = info.type, class = class, hero = hero, home = home, pet = pet, species = species, kills = kills, lowered = lowered }
 end
 
 -- is this card possible under the rules?
@@ -4691,12 +4858,13 @@ local function Valid(c)
 	for d = 1, 4 do if c.s[d] < 0 or c.s[d] > cap then return false, "a side" end end
 	-- a hero or a companion: its own level (a tamed pet levels with its owner), within the game's
 	if c.class == "hero" or c.class == "pet" then
-		if c.tier < 2 or c.level < 1 or c.level > 90 then return false, "level" end
+		-- (a supporting companion may play below Fought to even a hand out, 0.61.0)
+		if c.level < 1 or c.level > 90 then return false, "level" end
 		return true
 	end
 	-- (no check against the database's level range: WoW Forever's creatures don't always match it,
 	-- and a mismatch cancelled real games on one screen only; the spikes above follow the level)
-	if c.level < 0 or c.level > 63 then return false, "level" end
+	if c.level < -1 or c.level > 63 then return false, "level" end -- (-1: a skull, level unknown)
 	return true
 end
 
@@ -4708,12 +4876,12 @@ function WG:Challenge(name)
 			local n, realm = UnitName("target")
 			name = (realm and realm ~= "") and (n .. "-" .. realm) or n
 		else
-			Say("target a player, or type their name.")
+			Tell("target a player, or type their name.")
 			return
 		end
 	end
-	if SameName(name, UnitName("player")) then Say("you can't challenge yourself.") return end
-	if game and game.pvp and not game.over then Say("finish your game first (or Leave).") return end
+	if SameName(name, UnitName("player")) then Tell("you can't challenge yourself.") return end
+	if not self:LeaveGameFirst(function() WG:Challenge(name) end) then return end
 	name = name:gsub("^%l", string.upper)
 	self:StopLooking(true)
 	if self.net then SendTo(self.net.opp, "X", self.net.gid) end
@@ -4724,7 +4892,7 @@ function WG:Challenge(name)
 	C_Timer.After(32, function()
 		if self.net == net and net.state == "inviting" then
 			self.net = nil
-			Say(("no answer from %s. They need the same Azeroth Almanac version."):format(Short(name)))
+			Tell(("no answer from %s. They need the same Azeroth Almanac version."):format(Short(name)))
 			if frame:IsShown() and not (game and not game.over) then self:ShowLobby() end
 		end
 	end)
@@ -4751,7 +4919,8 @@ function WG:SendSetup()
 	net.myNonce = math.random(1, 1000000000)
 	net.myPick = frame.chosen
 	local _, raceFile = UnitRace("player")
-	Send("S", net.gid, net.myBest, net.myClass, net.myNonce, raceFile or "-", UnitSex and UnitSex("player") or 2)
+	net.sent = { { "S", net.gid, net.myBest, net.myClass, net.myNonce, raceFile or "-", UnitSex and UnitSex("player") or 2 } }
+	Send(unpack(net.sent[1]))
 	self:TrySetup()
 end
 
@@ -4767,9 +4936,28 @@ function WG:TrySetup()
 	net.hand = WL.Hand(cards, pick, net.budget, rng, true)
 	net.reserves = WL.Reserves(cards, net.hand, rng)
 	net.handSent = true
-	for i, c in ipairs(net.hand) do Send(Encode(i, c)) end
-	for k, c in ipairs(net.reserves) do Send(Encode(WL.HAND + k, c)) end
+	for i, c in ipairs(net.hand) do net.sent[#net.sent + 1] = { Encode(i, c) } end
+	for k, c in ipairs(net.reserves) do net.sent[#net.sent + 1] = { Encode(WL.HAND + k, c) } end
+	for k = 2, #net.sent do Send(unpack(net.sent[k])) end
+	self:WatchSetup(net)
 	self:TryBegin()
+end
+
+-- their cards not all in after 15 seconds: ours go again, and theirs are asked for; still missing
+-- 25 seconds later, the game is called off
+function WG:WatchSetup(net)
+	C_Timer.After(15, function()
+		if self.net ~= net or net.oppHand then return end
+		self.Resend(net.opp, net.sent)
+		Send("R", net.gid)
+		C_Timer.After(25, function()
+			if self.net ~= net or net.oppHand then return end
+			Send("X", net.gid, "timeout")
+			self.net = nil
+			Tell(("%s's cards never arrived; the game is called off."):format(Short(net.opp)))
+			if frame:IsShown() and not (game and not game.over) then self:ShowLobby() end
+		end)
+	end)
 end
 
 function WG:TryBegin()
@@ -4784,14 +4972,24 @@ function WG:TryBegin()
 		local ok, why = Valid(c)
 		if not ok then
 			Send("X", net.gid, "card")
-			Say(("%s's card %s doesn't follow the rules (%s). Game cancelled."):format(Short(net.opp), c.name or "?", why))
+			Tell(("%s's card %s doesn't follow the rules (%s). Game cancelled."):format(Short(net.opp), c.name or "?", why))
 			self.net = nil
 			return
 		end
 		total = total + c.total
 	end
-	-- (no cancelling a hand for being over the budget: elite and boss cards can't drop below their
-	-- starting tier, so a small collection can come in over it; Equalize below evens the hands out)
+	-- over the budget only when every supporting card is already down at tier 1 (elite and boss
+	-- cards keep their floor otherwise; a picked card plays as picked), as WL.Hand builds it
+	if WL.HandTotal(net.oppHand) > net.budget + 1 then
+		for k = 2, #net.oppHand do
+			if net.oppHand[k].tier > 1 then
+				Send("X", net.gid, "card")
+				Tell(("%s's hand is stronger than the table allows. Game cancelled."):format(Short(net.opp)))
+				self.net = nil
+				return
+			end
+		end
+	end
 	-- even the two hands out (the challenger's hand first, so both screens do the same)
 	if net.challenger then WL.Equalize(net.hand, net.oppHand) else WL.Equalize(net.oppHand, net.hand) end
 	net.state = "playing"
@@ -4802,9 +5000,12 @@ function WG:TryBegin()
 	self:Begin({ mine = net.hand, theirs = net.oppHand, myReserves = net.reserves, theirReserves = net.oppRes,
 		myClass = net.myClass, oppClass = net.oppClass,
 		oppName = Short(net.opp), oppDisplay = face, seed = net.seed, first = first,
-		pvp = { opp = net.opp, gid = net.gid } })
+		pvp = { opp = net.opp, gid = net.gid, sent = net.sent } })
 	self.net = nil -- the game itself (game.pvp) carries on from here
 	self:StopLooking(true)
+	-- (already in combat: they wait from the start)
+	if game.pause and game.pause.me then game.pvp.pSent = 1 SendTo(net.opp, "P", net.gid, 1) end
+	self:WatchOpponent()
 	for _, m in ipairs(net.early or {}) do self.OnMessage(m[1], m[2]) end
 	if first == "me" then Play(SND.challenge) end
 end
@@ -4823,12 +5024,23 @@ end
 StaticPopupDialogs["AZEROTHALMANAC_WG_FORFEIT"] = {
 	text = "Forfeit this Wild Gambit match?\n\nIt counts as a loss.",
 	button1 = YES or "Yes", button2 = NO or "No",
-	OnAccept = function() WG:Forfeit() end,
+	OnAccept = function()
+		WG:Forfeit()
+		local after = WG.afterForfeit
+		WG.afterForfeit = nil
+		if after then after() end
+	end,
+	OnCancel = function() WG.afterForfeit = nil end,
 	timeout = 0, whileDead = 1, hideOnEscape = 1, preferredIndex = 3,
 }
 function WG:AskForfeit()
 	if not game or game.over then return end
-	if not (StaticPopup_Show and StaticPopup_Show("AZEROTHALMANAC_WG_FORFEIT")) then self:Forfeit() end
+	if not (StaticPopup_Show and StaticPopup_Show("AZEROTHALMANAC_WG_FORFEIT")) then
+		self:Forfeit()
+		local after = self.afterForfeit
+		self.afterForfeit = nil
+		if after then after() end
+	end
 end
 
 function WG:Forfeit()
@@ -4904,7 +5116,7 @@ end
 
 function WG:FindMatch()
 	if self.queue then self:StopLooking() return end
-	if game and game.pvp and not game.over then Say("finish your game first (or Leave).") return end
+	if game and game.pvp and not game.over then Tell("finish your game first (or Leave).") return end
 	if self.net then self:Leave() end
 	local cards = frame.collection or self:Collection()
 	frame.collection = cards
@@ -4944,7 +5156,7 @@ end
 local function OnLooker(sender, best)
 	local q = WG.queue
 	if not q or WG.net or (game and game.pvp and not game.over) then return end
-	local mine, theirs = Key(UnitName("player")), Key(sender)
+	local mine, theirs = WG.FullKey(UnitName("player")), WG.FullKey(sender)
 	if mine == theirs then return end
 	if mine < theirs then
 		WG:StopLooking(true)
@@ -4954,7 +5166,7 @@ local function OnLooker(sender, best)
 		C_Timer.After(20, function()
 			if WG.net == net and net.state == "inviting" then
 				WG.net = nil
-				Say(("%s didn't answer; looking again."):format(Short(sender)))
+				Tell(("%s didn't answer; looking again."):format(Short(sender)))
 				WG:FindMatch()
 			end
 		end)
@@ -4971,6 +5183,9 @@ local function AcceptChallenge()
 	WG.pending = nil
 	if not p then return end
 	if Busy() then SendTo(p.from, "D", p.gid, "busy") return end
+	if game and not game.over and not game.result then
+		if game.tutorial then WG:LeaveGameFirst() else WG:Forfeit() end
+	end
 	WG.net = { gid = p.gid, opp = p.from, state = "picking" }
 	SendTo(p.from, "A", p.gid)
 	WG:ShowPick()
@@ -4984,11 +5199,27 @@ end
 
 local function OnMessage(text, sender)
 	local f = { strsplit("|", text) }
+	if f[2] == "V" then
+		-- (any protocol) the player we challenged has another version
+		local net = WG.net
+		if net and SameName(sender, net.opp) then
+			WG.net = nil
+			Tell(("%s has Azeroth Almanac %s, and Wild Gambit needs the same version on both sides (you have %s)."):format(Short(sender), f[4] or "?", A.VERSION or "?"))
+			if frame:IsShown() and not (game and not game.over) then WG:ShowLobby() end
+		end
+		return
+	end
 	if f[1] ~= PROTO then
-		-- another version of the game: say so instead of leaving the challenge hanging
-		if f[2] == "C" or f[2] == "A" then
-			Say(("%s has a different version of Wild Gambit. You both need the same Azeroth Almanac version to play."):format(Short(sender)))
-			if f[2] == "A" and WG.net then WG.net = nil end
+		-- another version of the game: say so instead of leaving the challenge hanging, and tell them
+		-- which version we have
+		if f[2] == "C" then
+			SendTo(sender, "V", "-", A.VERSION or "?")
+			if f[4] ~= "q" then
+				Tell(("%s challenged you, but has a different version of Wild Gambit. You both need the same Azeroth Almanac version to play."):format(Short(sender)))
+			end
+		elseif f[2] == "A" and WG.net and SameName(sender, WG.net.opp) then
+			Tell(("%s has a different version of Wild Gambit. You both need the same Azeroth Almanac version to play."):format(Short(sender)))
+			WG.net = nil
 		end
 		return
 	end
@@ -5014,28 +5245,37 @@ local function OnMessage(text, sender)
 		if Busy() or WG.pending then SendTo(sender, "D", gid, "busy") return end
 		WG.pending = { from = sender, gid = gid }
 		Play(SND.challenge)
-		if not StaticPopup_Show(POPUP, Short(sender)) then DeclineChallenge() end
+		local note = (game and not game.over and not game.result and not game.tutorial)
+			and "\n\n|cffff8060Accepting forfeits the practice game you're in.|r" or ""
+		if not StaticPopup_Show(POPUP, Short(sender), note) then DeclineChallenge() end
 		C_Timer.After(30, function() if WG.pending and WG.pending.gid == gid then StaticPopup_Hide(POPUP) DeclineChallenge() end end)
 	elseif kind == "X" and WG.pending and WG.pending.gid == gid then
 		WG.pending = nil
 		StaticPopup_Hide(POPUP)
 	elseif kind == "X" and game and game.pvp and game.pvp.gid == gid and not game.over and SameName(sender, game.pvp.opp) then
-		if f[4] == "card" or f[4] == "step" then
-			-- their screen called the game off (a card it couldn't accept, or the two drifted apart):
-			-- nobody wins, nothing is counted
-			Say(f[4] == "card" and ("%s's Almanac couldn't accept one of your cards; the game is cancelled (not counted)."):format(Short(sender))
-				or ("out of step with %s; the game is cancelled (not counted)."):format(Short(sender)))
-			game.over = true
-			frame.leave:Hide()
-			Refresh()
+		if f[4] == "card" or f[4] == "step" or f[4] == "gone" or f[4] == "timeout" then
+			-- their screen called the game off (a card it couldn't accept, the two drifted apart, or
+			-- they stopped waiting for us): nobody wins, nothing is counted
+			local who = Short(sender)
+			if f[4] == "card" then
+				WG:CancelGame(("%s's Almanac couldn't accept one of your cards; the game is cancelled (not counted)."):format(who), "A card their Almanac couldn't accept.")
+			elseif f[4] == "step" then
+				WG:CancelGame(("out of step with %s; the game is cancelled (not counted)."):format(who), "Out of step with " .. who .. ".")
+			else
+				WG:CancelGame(("%s stopped waiting for your moves; the game is cancelled (not counted)."):format(who), who .. " lost touch with you.")
+			end
 			return
 		end
 		-- they forfeit (or left): the match is yours
-		Say(("%s forfeits the match."):format(Short(sender)))
+		Tell(("%s forfeits the match."):format(Short(sender)))
 		EndGame("bot")
 	elseif not fromOpp then
 		-- moves of the game in progress
 		if game and game.pvp and game.pvp.gid == gid and SameName(sender, game.pvp.opp) and not game.over then
+			game.pvp.heard = GetTime()
+			if game.pvp.silentShown then game.pvp.silentShown = nil WG:OpponentSilent(false) end
+			if kind == "H" then return end
+			if kind == "R" then WG.Resend(game.pvp.opp, game.pvp.sent) return end
 			if kind == "P" then
 				-- they're in combat (1) or out of it (0): the game waits for them
 				game.pause = game.pause or {}
@@ -5049,10 +5289,8 @@ local function OnMessage(text, sender)
 			local seq = tonumber(f[4])
 			if kind == "M" or kind == "U" then
 				if seq ~= game.seq + 1 or game.turn ~= "bot" then
-					Say("out of step with your opponent; the game is cancelled.")
 					SendTo(game.pvp.opp, "X", gid, "step")
-					game.over = true
-					Refresh()
+					WG:CancelGame("out of step with your opponent; the game is cancelled (not counted).", "Out of step with " .. Short(sender) .. ".")
 					return
 				end
 				game.seq = seq
@@ -5060,6 +5298,10 @@ local function OnMessage(text, sender)
 					local h, cell = tonumber(f[5]), tonumber(f[6])
 					if h and cell and game.hands.bot[h] and cell >= 1 and cell <= 9 and not game.board[cell] then
 						Play1("bot", h, cell)
+					else
+						-- (a move this screen can't play: the two have drifted apart)
+						SendTo(game.pvp.opp, "X", gid, "step")
+						WG:CancelGame("out of step with your opponent; the game is cancelled (not counted).", "Out of step with " .. Short(sender) .. ".")
 					end
 				elseif not game.used.bot then
 					local ab = game.ability.bot
@@ -5075,10 +5317,8 @@ local function OnMessage(text, sender)
 					if ok then
 						WG:ApplyAbility("bot", cell, cell2)
 					else
-						Say("out of step with your opponent; the game is cancelled.")
 						SendTo(game.pvp.opp, "X", gid, "step")
-						game.over = true
-						Refresh()
+						WG:CancelGame("out of step with your opponent; the game is cancelled (not counted).", "Out of step with " .. Short(sender) .. ".")
 					end
 				end
 			end
@@ -5088,19 +5328,23 @@ local function OnMessage(text, sender)
 		-- their first move came before this screen had both hands: kept, and played once it begins
 		net.early = net.early or {}
 		net.early[#net.early + 1] = { text, sender }
+	elseif kind == "R" then
+		-- their copy of our setup went missing: again
+		WG.Resend(net.opp, net.sent)
 	elseif kind == "A" and net.state == "inviting" then
-		-- accepted: Ready once you've chosen
+		-- accepted: Ready once you've chosen (their full name from here on, realm and all)
+		net.opp = sender
 		net.state = "accepted"
 		Play(SND.challenge)
 		if frame.prep:IsVisible() then WG:PaintPick() else WG:ShowPick() end
 	elseif kind == "D" then
 		WG.net = nil
-		Say(f[4] == "busy" and ("%s is busy."):format(Short(sender)) or f[4] == "off" and ("%s isn't taking challenges."):format(Short(sender))
+		Tell(f[4] == "busy" and ("%s is busy."):format(Short(sender)) or f[4] == "off" and ("%s isn't taking challenges."):format(Short(sender))
 			or ("%s declined."):format(Short(sender)))
 		if frame:IsShown() and not (game and not game.over) then WG:ShowLobby() end
 	elseif kind == "X" then
 		WG.net = nil
-		Say(("%s left."):format(Short(sender)))
+		Tell(("%s left."):format(Short(sender)))
 		if frame:IsShown() and not (game and not game.over) then WG:ShowLobby() end
 	elseif kind == "S" then
 		net.oppBest, net.oppClass, net.oppNonce = tonumber(f[4]), f[5], tonumber(f[6])
@@ -5233,8 +5477,9 @@ end
 
 function WG:Tutorial()
 	if not frame then Build() end
-	self:StopLooking(true)
 	if Busy() then Tell("finish the game you're in first.") return end
+	if not self:LeaveGameFirst(function() WG:Tutorial() end) then return end
+	self:StopLooking(true)
 	local cards = frame.collection or self:Collection()
 	local bases = {}
 	for _, c in ipairs(cards) do if not c.pet and not c.hero then bases[#bases + 1] = c end end
@@ -5301,11 +5546,13 @@ function WG:Tutorial()
 	if self.tutorTicker then self.tutorTicker:Cancel() end
 	self.tutorTicker = C_Timer.NewTicker(0.1, function(t)
 		local tut = game and game.tutorial
-		if game ~= g or not tut or tut.free or not frame:IsShown() then
+		if game ~= g or not tut or tut.free or g.over then
 			t:Cancel()
-			if game ~= g or not frame:IsShown() then frame.coach:Hide() frame.coach.hl:Hide() end
+			if game ~= g or g.over then frame.coach:Hide() frame.coach.hl:Hide() end
 			return
 		end
+		-- (window tucked away or closed: the coach waits, and carries on when it's back, 0.62.0)
+		if not frame:IsShown() then return end
 		local st = tut.steps[tut.i]
 		if st and st.point then TU.Point(st.point(), st.pad) end -- (follows the cards as the hands move)
 		if st and st.wait and st.wait() and TU.Settled() then
@@ -5326,7 +5573,6 @@ function WG:TutorialNext()
 		tut.hold = false
 		frame.coach:Hide()
 		frame.coach.hl:Hide()
-		db.tutorialDone = true
 		Refresh()
 		return
 	end
@@ -5347,7 +5593,7 @@ end
 
 function WG:TutorialSkip()
 	local tut = game and game.tutorial
-	db.tutorialDone = true
+	if self.tutorTicker then self.tutorTicker:Cancel() self.tutorTicker = nil end
 	if frame.coach then frame.coach:Hide() frame.coach.hl:Hide() end
 	if tut and not tut.free then
 		game.over = true -- (quietly: nothing to record)
@@ -5558,13 +5804,87 @@ function WG:OppCombat(on)
 	end
 end
 
+-- against a player: a "still here" every 15 seconds, and a note when they've gone quiet for a
+-- minute (offline, a loading screen, out of reach) offering to end the game uncounted. Five
+-- minutes of silence ends it.
+WG.SILENT_AFTER, WG.GIVE_UP_AFTER = 60, 300
+function WG:WatchOpponent()
+	local g = game
+	if not (g and g.pvp) then return end
+	g.pvp.heard = GetTime()
+	local beat = 0
+	C_Timer.NewTicker(5, function(t)
+		if game ~= g or g.over then t:Cancel() return end
+		beat = beat + 5
+		if beat >= 15 then beat = 0 SendTo(g.pvp.opp, "H", g.pvp.gid) end
+		local quiet = GetTime() - (g.pvp.heard or GetTime())
+		if quiet >= WG.GIVE_UP_AFTER then
+			t:Cancel()
+			SendTo(g.pvp.opp, "X", g.pvp.gid, "gone")
+			WG:CancelGame(("nothing from %s for five minutes; the game is cancelled (not counted)."):format(g.botName or "your opponent"), "Your opponent stopped answering.")
+		elseif quiet >= WG.SILENT_AFTER and not g.pvp.silentShown then
+			g.pvp.silentShown = true
+			WG:OpponentSilent(true)
+		end
+	end)
+end
+
+function WG:OpponentSilent(on)
+	if not frame then return end
+	local w = frame.silentNote
+	if not w and not on then return end
+	if not w then
+		w = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+		w:SetSize(380, 104)
+		w:SetPoint("CENTER", frame.board, "CENTER", 0, 0)
+		w:SetFrameLevel(frame:GetFrameLevel() + 152)
+		w:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+		w:SetBackdropColor(0.07, 0.055, 0.035, 0.95)
+		w:SetBackdropBorderColor(0.85, 0.68, 0.3)
+		w:EnableMouse(true)
+		w.text = w:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		w.text:SetPoint("TOP", 0, -14)
+		w.text:SetWidth(350)
+		local stop = WoodButton(A.Widgets.Button(w, "End (not counted)", 150, function()
+			w:Hide()
+			local g = game
+			if g and g.pvp and not g.over then
+				SendTo(g.pvp.opp, "X", g.pvp.gid, "gone")
+				WG:CancelGame(nil, "Your opponent stopped answering.")
+			end
+		end))
+		stop:SetPoint("BOTTOMRIGHT", w, "BOTTOM", -6, 12)
+		local stay = WoodButton(A.Widgets.Button(w, "Keep waiting", 120, function() w:Hide() end))
+		stay:SetPoint("BOTTOMLEFT", w, "BOTTOM", 6, 12)
+		frame.silentNote = w
+	end
+	if on then
+		w.text:SetText(("Nothing from |cffffd100%s|r for a minute.\nThey may be offline or out of reach."):format((game and game.botName) or "your opponent"))
+		w:Show()
+		Tell(("nothing from %s for a minute; you can end the game (not counted) or keep waiting."):format((game and game.botName) or "your opponent"))
+	else
+		w:Hide()
+	end
+end
+
 -- combat starts or ends (PLAYER_REGEN_DISABLED / ENABLED)
 function WG:CombatChanged(on)
 	local g = game
 	if g and not g.over then
 		g.pause = g.pause or {}
 		g.pause.me = on or nil
-		if g.pvp then SendTo(g.pvp.opp, "P", g.pvp.gid, on and 1 or 0) end
+		-- (to the other player a second later, and only if it still stands: combat that flickers
+		-- on and off doesn't flood them)
+		if g.pvp and not g.pvp.pTimer then
+			g.pvp.pTimer = true
+			C_Timer.After(1, function()
+				g.pvp.pTimer = nil
+				if game ~= g or g.over then return end
+				local want = (g.pause and g.pause.me) and 1 or 0
+				if want ~= (g.pvp.pSent or 0) then g.pvp.pSent = want SendTo(g.pvp.opp, "P", g.pvp.gid, want) end
+			end)
+		end
 		Refresh()
 	end
 	local mode = db.combatDock or "top"
@@ -5592,7 +5912,7 @@ end
 
 function WG:OnLogin()
 	StaticPopupDialogs[POPUP] = {
-		text = "%s challenges you to |cff9be36bWild Gambit|r!\n\nYour Almanac's creatures against theirs.",
+		text = "%s challenges you to |cff9be36bWild Gambit|r!\n\nYour Almanac's creatures against theirs.%s",
 		button1 = ACCEPT or "Accept", button2 = DECLINE or "Decline",
 		timeout = 30, whileDead = 1, hideOnEscape = 1, preferredIndex = 3,
 		OnAccept = function() AcceptChallenge() end,
@@ -5628,8 +5948,6 @@ end
 
 WG.BOARDS = { { key = "Glade", name = "Forest glade" }, { key = "Ruin", name = "Moonlit ruin" }, { key = "Tavern", name = "Tavern table" },
 	{ key = "HallowsEnd", name = "Hallow's End" }, { key = "WinterVeil", name = "Feast of Winter Veil" } }
--- (a board may also list `eyes` = { { x, y, "red"? }, ... } at fractions of its picture, which glow
--- and pulse, and `crest` = true to hide the vs shield when its art has a centrepiece there)
 WG.DEFAULT_BOARD = "Glade"
 -- the holiday on now, by the calendar (Hallow's End 18 Oct - 1 Nov, Winter Veil 16 Dec - 2 Jan)
 function WG:HolidayBoard()
@@ -5653,42 +5971,6 @@ function WG:ApplyBoard()
 	art:SetSize(w, h)
 	art:ClearAllPoints()
 	art:SetPoint("TOPLEFT", frame.board, "TOPLEFT", MARGIN - BOARD_PAD - a.inner[1] * w, -(MARGIN - BOARD_PAD - a.inner[2] * h))
-	if frame.vsPlaque then frame.vsPlaque:SetShown(not a.crest) frame.vs:SetShown(not a.crest) end
-	-- the creatures' eyes: a hot core in a wider halo, added over the painting (WG:StepEyes pulses them)
-	frame.boardEyes = frame.boardEyes or {}
-	for i, e in ipairs(frame.boardEyes) do e.core:Hide() e.halo:Hide() frame.boardEyes[i].on = false end
-	for i, spot in ipairs(a.eyes or {}) do
-		local e = frame.boardEyes[i]
-		if not e then
-			e = { halo = frame.board:CreateTexture(nil, "BACKGROUND", nil, -6), core = frame.board:CreateTexture(nil, "BACKGROUND", nil, -5) }
-			for _, t in ipairs({ e.halo, e.core }) do t:SetTexture(GLOW_TEX) t:SetBlendMode("ADD") end
-			frame.boardEyes[i] = e
-		end
-		local red = spot[3] == "red"
-		local c = red and { 1, 0.22, 0.08 } or { 0.45, 1, 0.15 }
-		e.halo:SetVertexColor(c[1], c[2], c[3])
-		e.core:SetVertexColor(math.min(1, c[1] + 0.4), math.min(1, c[2] + 0.4), math.min(1, c[3] + 0.4))
-		local size = (red and 0.019 or 0.023) * w
-		e.halo:SetSize(size * 2.8, size * 2.4)
-		e.core:SetSize(size, size * 0.85)
-		for _, t in ipairs({ e.halo, e.core }) do
-			t:ClearAllPoints()
-			t:SetPoint("CENTER", art, "TOPLEFT", spot[1] * w, -spot[2] * h)
-			t:Show()
-		end
-		e.on, e.red, e.phase = true, red, i * 1.7
-	end
-end
-
--- the board's eyes breathe: the dragon's slow and deep, the corners' each a little out of step
-function WG:StepEyes(clock)
-	for _, e in ipairs(frame.boardEyes or {}) do
-		if e.on then
-			local p = e.red and (0.5 + 0.5 * math.sin(clock * 1.6)) or (0.5 + 0.5 * math.sin(clock * 2.3 + e.phase))
-			e.halo:SetAlpha(0.25 + 0.6 * p)
-			e.core:SetAlpha(0.55 + 0.45 * p)
-		end
-	end
 end
 
 WG.BACKS = { { key = "Almanac", name = "Almanac (compass)" }, { key = "Wild", name = "Wild (wolf)" } }
@@ -5749,7 +6031,7 @@ function WG:Command(rest)
 			t:SetScript("OnMouseUp", function(f) f:Hide() end)
 			self.artTest = t
 		end
-		local file = BOARD_ART and BOARD_ART.file or "?"
+		local file = (BOARDS[db.board or ""] or BOARDS.Glade).file
 		local ok = t.tex:SetTexture(file)
 		ns.Print(("Wild Gambit art test: %s  SetTexture -> %s, GetTexture -> %s. Magenta means it didn't load. Click it to close."):format(file, tostring(ok), tostring(t.tex:GetTexture())))
 		t:Show()

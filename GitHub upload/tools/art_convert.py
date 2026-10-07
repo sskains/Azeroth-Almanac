@@ -3,6 +3,20 @@
   python art_convert.py frame <in.png> <out.tga>          card frame: magenta keyed out, cropped,
                                                          256x512; prints its layout for FRAME_ART
   python art_convert.py full  <in.png> <out.tga> [W H]   whole picture, no keying (default 1024x1024)
+  python art_convert.py board <in.png> <out.tga> [k_field k_frame x0,y0,x1,y1]
+                                                         framed board on magenta: keyed, whole canvas kept,
+                                                         playfield and frame darkened (default 0.72 / 0.92)
+  python art_convert.py cut   <in.png> <out.tga> <W> <H> [fill]
+                                                         piece on magenta: keyed, cropped, fitted into a
+                                                         W x H canvas (top left; or stretched with 'fill');
+                                                         prints the used texcoord
+  python art_convert.py tray  <in.png> <out.tga> [W H]    landscape tray on magenta -> tall hand tray:
+                                                         keyed, quarter turn, end caps kept, middle
+                                                         stretched (default 128 x 512)
+  python art_convert.py arrow <in.png> <out.tga> [size]   coloured art on a baked grey checkerboard:
+                                                         squares keyed out by saturation (default 128)
+  python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
+                                                         outside the ring made transparent, squared (default 256)
 
 A frame's layout (fractions of the CARD, the parchment rectangle):
   window = the magenta art window, panel = the dark text panel, band = between them,
@@ -83,12 +97,146 @@ def frame(src, dst):
 def full(src, dst, w=1024, h=1024):
     write_tga(Image.open(src).convert("RGBA").resize((w, h), Image.LANCZOS), dst)
 
-if __name__ == "__main__":
-    if sys.argv[1] == "frame":
-        frame(sys.argv[2], sys.argv[3])
-    else:
-        full(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
+def round_art(src, dst, size=256):
+    """A round picture on a flat dark background (a carved ring, a medallion): the ring's bounds
+    are measured against the background, everything outside the ellipse goes transparent with a
+    soft 1.5 px edge, and it is cropped and squared to size x size."""
+    im = Image.open(src).convert("RGB")
+    a = np.array(im).astype(float)
+    bg = np.median(np.concatenate([a[:12, :12].reshape(-1, 3), a[:12, -12:].reshape(-1, 3),
+                                   a[-12:, :12].reshape(-1, 3), a[-12:, -12:].reshape(-1, 3)]), axis=0)
+    ys, xs = np.where(np.abs(a - bg).sum(axis=2) > 90)
+    x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
+    cx, cy, rx, ry = (x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2 + 0.5, (y1 - y0) / 2 + 0.5
+    yy, xx = np.mgrid[0:a.shape[0], 0:a.shape[1]]
+    # distance outside the ellipse edge in pixels (normalised radius scaled by the mean radius)
+    dist = (np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2) - 1) * (rx + ry) / 2
+    alpha = np.clip(0.5 - dist / 1.5, 0, 1) * 255
+    out = np.dstack([a, alpha]).astype(np.uint8)
+    img = Image.fromarray(out[y0:y1 + 1, x0:x1 + 1], "RGBA").resize((size, size), Image.LANCZOS)
+    print("ring %dx%d at (%d, %d) -> %dx%d" % (x1 - x0 + 1, y1 - y0 + 1, x0, y0, size, size))
+    write_tga(img, dst)
 
+def tray(src, dst, w=128, h=512, cap=0.30):
+    """A landscape tray painted on flat magenta, made into a tall hand tray that the game stretches
+    along its middle only (slice margins: sides 40, ends 72 at the default size): magenta keyed out,
+    cropped, a quarter turn, then the two end caps (`cap` of the length each, the coin piles) kept
+    in proportion and the middle stretched to fill w x h."""
+    a = np.array(Image.open(src).convert("RGB"))
+    out, mag = key_magenta(a)
+    ys, xs = np.where(mag < 0.5)
+    img = Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1], "RGBA").rotate(90, expand=True)
+    sw, sl = img.size  # (width, length) of the turned tray
+    c = int(round(sl * cap))
+    ch = int(round(c * w / sw))  # an end cap's height at the output width
+    parts = [(img.crop((0, 0, sw, c)), ch),
+             (img.crop((0, c, sw, sl - c)), h - 2 * ch),
+             (img.crop((0, sl - c, sw, sl)), ch)]
+    sheet = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    y = 0
+    for piece, ph in parts:
+        sheet.paste(piece.resize((w, ph), Image.LANCZOS), (0, y))
+        y += ph
+    write_tga(sheet, dst)
+    edge_clean(dst)
+    print("tray: end caps %d px, sides 40" % ch)
+
+def arrow(src, dst, size=128):
+    """A painted coloured arrow on a baked grey checkerboard (a screenshot of a transparent
+    picture): the grey squares (no colour) are keyed out by saturation, the edge colours pulled in
+    from the solid parts, cropped square with a small margin."""
+    from PIL import ImageFilter
+    a = np.array(Image.open(src).convert("RGB")).astype(float)
+    mx, mn = a.max(axis=2), a.min(axis=2)
+    sat = (mx - mn) / np.maximum(mx, 1)
+    alpha = np.clip((sat - 0.10) / 0.35, 0, 1)
+    solid = (alpha > 0.95).astype(float)
+    # colour for the soft edge: the blurred colour of the solid pixels nearby
+    def blur(x, r):
+        # (a box blur twice over, by running sums; PIL's blur won't take float images)
+        for _ in range(2):
+            for axis in (0, 1):
+                pad = [(0, 0), (0, 0)]
+                pad[axis] = (r + 1, r)
+                c = np.cumsum(np.pad(x, pad, mode="edge"), axis=axis)
+                x = (np.take(c, range(2 * r + 1, c.shape[axis]), axis=axis)
+                     - np.take(c, range(0, c.shape[axis] - 2 * r - 1), axis=axis)) / (2 * r + 1)
+        return x
+    fill = np.dstack([blur(a[..., c] * solid, 6) / np.maximum(blur(solid, 6), 1e-3) for c in range(3)])
+    rgb = np.where((alpha > 0.95)[..., None], a, fill)
+    out = np.dstack([rgb, alpha * 255]).clip(0, 255).astype(np.uint8)
+    ys, xs = np.where(alpha > 0.5)
+    x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
+    side = int(max(x1 - x0, y1 - y0) * 1.06) + 1
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    crop = Image.fromarray(out[y0:y1 + 1, x0:x1 + 1], "RGBA")
+    canvas.paste(crop, ((side - crop.width) // 2, (side - crop.height) // 2))
+    write_tga(canvas.resize((size, size), Image.LANCZOS), dst)
+    print("arrow %dx%d at (%d, %d) -> %dx%d" % (x1 - x0 + 1, y1 - y0 + 1, x0, y0, size, size))
+
+
+
+def board(src, dst, k_field=0.72, k_frame=0.92, field="135,135,890,890", size=1024):
+    """A framed game board painted on flat magenta: magenta keyed out, the canvas kept whole (the
+    game places it by measured offsets), the playfield (`field` = x0,y0,x1,y1 in source pixels)
+    multiplied by k_field and the frame by k_frame, so the board can be darkened without
+    re-painting; the playfield's edge is feathered over 6 px."""
+    from PIL import ImageFilter
+    a = np.array(Image.open(src).convert("RGB"))
+    out, mag = key_magenta(a)
+    x0, y0, x1, y1 = (int(v) for v in field.split(","))
+    mask = np.zeros(out.shape[:2], np.uint8)
+    mask[y0:y1, x0:x1] = 255
+    mask = np.array(Image.fromarray(mask).filter(ImageFilter.GaussianBlur(3))).astype(float) / 255
+    k = k_frame + (k_field - k_frame) * mask
+    rgb = out[..., :3].astype(float) * k[..., None]
+    out = np.dstack([np.clip(rgb, 0, 255), out[..., 3]]).astype(np.uint8)
+    img = Image.fromarray(out, "RGBA")
+    if img.size != (size, size):
+        img = img.resize((size, size), Image.LANCZOS)
+    write_tga(img, dst)
+    edge_clean(dst)
+
+def cut(src, dst, cw, ch, fill=False):
+    """A piece painted on flat magenta: keyed out, cropped, scaled to fit a cw x ch canvas
+    (power-of-two sizes) in its top-left corner with its shape kept (or, with fill, stretched to
+    the whole canvas), the rest transparent. Prints the used fraction, for SetTexCoord."""
+    from PIL import ImageDraw
+    a = np.array(Image.open(src).convert("RGB"))
+    out, mag = key_magenta(a)
+    # only the magenta joined to the picture's outside is background: pink-purple highlights
+    # inside a gem are art, so they keep their colour and stay solid
+    keyed = mag > 0.02  # (any trace of magenta; the outside is what joins up from the corner)
+    ky, kx = np.where(mag > 0.5)
+    seed = int(np.argmin(ky + kx))  # (the keyed pixel nearest the top left, on the outside)
+    outside = np.zeros_like(keyed)
+    outside[ky[seed], kx[seed]] = True
+    while True:  # (grow the outside through the keyed pixels, four ways, until it stops)
+        grown = outside.copy()
+        grown[1:, :] |= outside[:-1, :]
+        grown[:-1, :] |= outside[1:, :]
+        grown[:, 1:] |= outside[:, :-1]
+        grown[:, :-1] |= outside[:, 1:]
+        grown &= keyed
+        if (grown == outside).all():
+            break
+        outside = grown
+    inside = keyed & ~outside
+    out[inside, :3] = a[inside]
+    out[inside, 3] = 255
+    ys, xs = np.where(mag < 0.5)
+    img = Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1], "RGBA")
+    if fill:
+        w, h = cw, ch
+    else:
+        s = min(cw / img.width, ch / img.height)
+        w, h = max(1, int(round(img.width * s))), max(1, int(round(img.height * s)))
+    canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    canvas.paste(img.resize((w, h), Image.LANCZOS), (0, 0))
+    write_tga(canvas, dst)
+    edge_clean(dst)
+    print("%s: %dx%d used %dx%d of %dx%d  texcoord 0,%.4f,0,%.4f" % (dst.split("\\")[-1], img.width, img.height, w, h, cw, ch, w / cw, h / ch))
 
 def edge_clean(path, width=2):
     """Pull the magenta fringe off a keyed texture's edges: pixels within `width` of transparency
@@ -109,3 +257,19 @@ def edge_clean(path, width=2):
     a[..., 0] -= spill
     a[..., 2] -= spill
     write_tga(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), path)
+
+if __name__ == "__main__":
+    if sys.argv[1] == "frame":
+        frame(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "board":
+        board(sys.argv[2], sys.argv[3], *(float(v) for v in sys.argv[4:6]), *sys.argv[6:7])
+    elif sys.argv[1] == "cut":
+        cut(sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]), len(sys.argv) > 6 and sys.argv[6] == "fill")
+    elif sys.argv[1] == "tray":
+        tray(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
+    elif sys.argv[1] == "arrow":
+        arrow(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
+    elif sys.argv[1] == "round":
+        round_art(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
+    else:
+        full(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
