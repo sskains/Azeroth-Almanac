@@ -2671,8 +2671,8 @@ local function Build()
 		c.tilt:SetVertexColor(0, 0, 0)
 		c.tilt:SetAlpha(0.75)
 		c.tilt:SetRotation(math.rad(TILTS[i]))
-		local x = (col - 2) * 106 + (row == 1 and 36 or -18) + j[1] - 40 -- (room on the right for your spell)
-		local y = -(row == 0 and 272 or 404) + j[2]
+		local x = (col - 2) * 96 + (row == 1 and 32 or -16) + j[1] - 40 -- (room on the right for your spell)
+		local y = -(row == 0 and 282 or 408) + j[2]
 		c.px, c.py = x, y
 		c:SetPoint("CENTER", pickPanel, "TOP", x / PSCALE, y / PSCALE)
 		c.pickLevel = pickPanel:GetFrameLevel() + 5 + row * 10 + (col % 2) * 3 + col
@@ -2814,7 +2814,7 @@ local function Build()
 	-- pulses while the cards are being shuffled and dealt)
 	local shuffle = CreateFrame("Button", nil, prep)
 	shuffle:SetSize(96, 96)
-	shuffle.dx, shuffle.dy = -300, -190 -- (the deck the cards fly to and from, from the table's top)
+	shuffle.dx, shuffle.dy = -207, -178 -- (the deck the cards fly to and from, from the table's top)
 	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
 	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
 	shuffle.glow = shuffle:CreateTexture(nil, "BACKGROUND")
