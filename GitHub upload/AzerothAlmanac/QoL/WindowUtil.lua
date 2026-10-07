@@ -253,3 +253,100 @@ function ns.NativeInset(f)
 	list:SetShown(set)
 	return inset
 end
+
+---------------------------------------------------------------------------
+-- Wooden look shared by Wild Gambit and Gem Match
+---------------------------------------------------------------------------
+
+-- a button in carved oak with bronze rivets (custom art) instead of the game's red one: its riveted
+-- ends keep their shape, the middle stretches; lighter under the mouse, darker when pressed
+function ns.WoodButton(b)
+	if not b or b.wood then return b end
+	for _, key in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
+		local r = b[key]
+		if type(r) == "table" and r.SetAlpha then r:SetAlpha(0) end
+	end
+	for _, get in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }) do
+		local ok, t = pcall(b[get], b)
+		if ok and type(t) == "table" and t.SetAlpha then t:SetAlpha(0) end
+	end
+	local t = b:CreateTexture(nil, "BACKGROUND", nil, 1)
+	t:SetPoint("TOPLEFT", -4, 5)
+	t:SetPoint("BOTTOMRIGHT", 4, -5)
+	t:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Button_Wood")
+	if t.SetTextureSliceMargins then
+		pcall(t.SetTextureSliceMargins, t, 40, 20, 40, 20)
+		if t.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(t.SetTextureSliceMode, t, Enum.UITextureSliceMode.Stretched) end
+	end
+	b.wood = t
+	b:HookScript("OnEnter", function(self) self.wood:SetVertexColor(1.2, 1.15, 1.05) end)
+	b:HookScript("OnLeave", function(self) self.wood:SetVertexColor(1, 1, 1) end)
+	b:HookScript("OnMouseDown", function(self) self.wood:SetVertexColor(0.75, 0.72, 0.68) end)
+	b:HookScript("OnMouseUp", function(self) self.wood:SetVertexColor(self:IsMouseOver() and 1.2 or 1, self:IsMouseOver() and 1.15 or 1, self:IsMouseOver() and 1.05 or 1) end)
+	return b
+end
+
+function ns.WoodLettering(b, size)
+	size = size or 13
+	ns.letterFonts = ns.letterFonts or {}
+	if not ns.letterFonts[size] then
+		local function Make(name, r, g, bl)
+			local f = CreateFont(name)
+			f:SetFont("Fonts\\MORPHEUS.TTF", size, "")
+			f:SetTextColor(r, g, bl)
+			f:SetShadowColor(0, 0, 0, 0.9)
+			f:SetShadowOffset(1, -1)
+			return f
+		end
+		ns.letterFonts[size] = { Make("AzAlmWGLetter" .. size, 1, 0.82, 0.4), Make("AzAlmWGLetterOff" .. size, 0.62, 0.52, 0.32) }
+	end
+	local fonts = ns.letterFonts[size]
+	b:SetNormalFontObject(fonts[1])
+	b:SetHighlightFontObject(fonts[1])
+	b:SetDisabledFontObject(fonts[2])
+	return b
+end
+
+-- the window's corner icon, bigger and in the gold elite frame (the boss portrait's gold dragon ring,
+-- as on the legendary cards) over the template's small round portrait, which it covers with a dark
+-- socket. Centred on where that portrait sits.
+function ns.GoldEmblem(frame, icon)
+	local base = frame:GetFrameLevel()
+	local e = CreateFrame("Frame", nil, frame)
+	e:SetAllPoints(frame)
+	e:EnableMouse(false)
+	e:SetFrameLevel(base + 70)
+	local anchor = frame.portrait
+	local function Put(t, size)
+		t:SetSize(size, size)
+		t:ClearAllPoints()
+		if anchor and anchor.GetCenter then t:SetPoint("CENTER", anchor, "CENTER", 0, 0) else t:SetPoint("CENTER", frame, "TOPLEFT", 28, -28) end
+	end
+	e.socket = e:CreateTexture(nil, "BACKGROUND")
+	e.socket:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+	e.socket:SetVertexColor(0.04, 0.03, 0.025, 1)
+	Put(e.socket, 84)
+	e.icon = e:CreateTexture(nil, "ARTWORK")
+	e.icon:SetTexture(icon)
+	e.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
+	Put(e.icon, 74)
+	local mask = e:CreateMaskTexture()
+	mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	mask:SetAllPoints(e.icon)
+	e.icon:AddMaskTexture(mask)
+	e.ring = e:CreateTexture(nil, "OVERLAY")
+	-- the winged gold dragon where the client has it (as on the legendary cards), else the plain ring
+	local ok, wide = false, 1
+	for _, atlas in ipairs({ "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged", "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold" }) do
+		if not ok and e.ring.SetAtlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+			ok = pcall(e.ring.SetAtlas, e.ring, atlas)
+			local info = ok and C_Texture.GetAtlasInfo(atlas)
+			if info and info.width and info.height and info.height > 0 then wide = info.width / info.height end
+		end
+	end
+	Put(e.ring, 118)
+	e.ring:SetWidth(118 * wide) -- (the winged one is wider than it is tall)
+	e.ring:SetShown(ok and true or false)
+	frame.emblem = e
+	return e
+end

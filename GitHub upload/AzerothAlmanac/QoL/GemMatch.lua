@@ -81,12 +81,22 @@ local function Backdrop(f, bg, border)
 	f:SetBackdropBorderColor(unpack(border))
 end
 
--- The game's red panel button.
+-- A button in Wild Gambit's carved oak with its gold lettering (WindowUtil's shared look).
 local function FlatButton(parent, text, width, onClick)
 	local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
 	b:SetSize(width, 24)
 	b:SetText(text)
 	b:SetScript("OnClick", onClick)
+	ns.WoodButton(b)
+	ns.WoodLettering(b, 13)
+	-- (a gold glow behind the button: the mode that is on; see UpdatePanel)
+	b.glow = b:CreateTexture(nil, "BACKGROUND", nil, -2)
+	b.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	b.glow:SetBlendMode("ADD")
+	b.glow:SetVertexColor(1, 0.8, 0.3)
+	b.glow:SetPoint("TOPLEFT", -14, 12)
+	b.glow:SetPoint("BOTTOMRIGHT", 14, -12)
+	b.glow:SetAlpha(0)
 	return b
 end
 
@@ -666,7 +676,7 @@ function UpdatePanel()
 	end
 	frame.best:SetText(("Your best: |cffffffff%s|r"):format(Number(db.best[db.mode] or 0)))
 	for mode, b in pairs(frame.modeButtons) do
-		if mode == db.mode then b:LockHighlight() else b:UnlockHighlight() end
+		b.glow:SetAlpha(mode == db.mode and 0.7 or 0)
 	end
 	frame.soundButton:SetText(db.sound and "Sound: on" or "Sound: off")
 	frame.pauseButton:SetText(game.state == "paused" and "Resume" or "Pause")
@@ -735,6 +745,13 @@ local function Build()
 	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 	frame:Hide()
 	tinsert(UISpecialFrames, "AzerothAlmanacGemMatch")
+
+	-- the window's background: Wild Gambit's (the Almanac's dark recipe-list panel)
+	local dark = frame:CreateTexture(nil, "BACKGROUND", nil, -6)
+	dark:SetPoint("TOPLEFT", 3, -24)
+	dark:SetPoint("BOTTOMRIGHT", -3, 3)
+	if not A.Widgets.TryAtlas(dark, unpack(A.Widgets.LIST_BG)) then dark:SetColorTexture(0.05, 0.045, 0.04, 1) end
+	frame.dark = dark
 
 	local titleBg = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
 	titleBg:SetColorTexture(0.08, 0.065, 0.045, 1)
@@ -910,6 +927,8 @@ local function Build()
 
 	ns.NativeWindow(frame, { title = "Gem Match", icon = GetIcon(7910) or "Interface\\Icons\\INV_Misc_Gem_01",
 		hide = { titleBg, icon, title }, close = close, byline = sub })
+	-- the corner icon bigger, in the gold elite frame, as in Wild Gambit
+	ns.GoldEmblem(frame, GetIcon(7910) or "Interface\\Icons\\INV_Misc_Gem_01")
 	frame:SetScript("OnUpdate", function(_, elapsed) if board then Step(elapsed) end end)
 	frame:SetScript("OnHide", function() SetPaused(true) end)
 end
