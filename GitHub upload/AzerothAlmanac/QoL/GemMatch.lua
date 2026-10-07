@@ -21,7 +21,10 @@ local HINT_AFTER = 10          -- seconds idle before a hint pulses
 local PREFIX = "AzAlmGame"
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local EDGE = 10                -- the board's gold border, between the frame and the gems
+-- the painted board: its picture is shown FRAME_SIZE square, and the gems' grid starts INSET_X / INSET_Y
+-- in from its top left (measured from the art: the sockets' pitch is 94.4 px of 1024, so 50 px here)
+local FRAME_SIZE = 542
+local INSET_X, INSET_Y = 73.5, 68.5
 local BURST_TIME = 0.45
 -- the game's art: the frost talent painting behind the board, the dialog's gold border
 local BOARD_ART = "Interface\\TalentFrame\\MageFrost-"
@@ -267,7 +270,7 @@ local function UpdateShake(elapsed)
 		frame.shake = nil
 	end
 	frame.inner:ClearAllPoints()
-	frame.inner:SetPoint("TOPLEFT", frame.boardFrame, "TOPLEFT", EDGE + dx, -EDGE + dy)
+	frame.inner:SetPoint("TOPLEFT", frame.boardFrame, "TOPLEFT", INSET_X + dx, -INSET_Y + dy)
 end
 
 local function UpdateFloaters(elapsed)
@@ -717,7 +720,7 @@ end
 
 local function Build()
 	frame = CreateFrame("Frame", "AzerothAlmanacGemMatch", UIParent, "BackdropTemplate")
-	frame:SetSize(16 + BOARD + 2 * EDGE + 14 + 250 + 16, 62 + BOARD + 2 * EDGE + 16)
+	frame:SetSize(16 + FRAME_SIZE + 14 + 250 + 16, 62 + FRAME_SIZE + 16)
 	Backdrop(frame, { 0.035, 0.03, 0.025, 0.97 }, { 0.4, 0.32, 0.16, 1 })
 	frame:SetPoint("CENTER")
 	-- same layer as the game's windows: whichever was clicked last is in front
@@ -756,46 +759,27 @@ local function Build()
 	-- Board
 	-- Board: the dialog's gold border around a dark, frosty painting (the mage's frost talent art,
 	-- toned down to deep blue so the gems stand out), with soft slots for the gems.
-	local boardFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	boardFrame:SetBackdrop({ bgFile = WHITE, edgeFile = GOLD_BORDER, edgeSize = 24,
-		insets = { left = 5, right = 5, top = 5, bottom = 5 } })
-	boardFrame:SetBackdropColor(0.02, 0.03, 0.06, 1)
-	boardFrame:SetBackdropBorderColor(1, 1, 1, 1)
+	-- the painted board (custom art, Media\GemMatch_Board: a carved oak frame with knotwork round
+	-- an 8 x 8 grid of shallow sockets, darkened a little so the gems stand out); the picture's
+	-- sockets are measured to line up with the gems' 50 px cells at FRAME_SIZE
+	local boardFrame = CreateFrame("Frame", nil, frame)
 	boardFrame:SetPoint("TOPLEFT", 16, -62)
-	boardFrame:SetSize(BOARD + 2 * EDGE, BOARD + 2 * EDGE)
+	boardFrame:SetSize(FRAME_SIZE, FRAME_SIZE)
 	frame.boardFrame = boardFrame
-
-	local art = CreateFrame("Frame", nil, boardFrame)
-	art:SetPoint("TOPLEFT", EDGE, -EDGE)
-	art:SetSize(BOARD, BOARD)
-	art:SetClipsChildren(true)
-	local painting = CreateFrame("Frame", nil, art)
-	local scale = BOARD / 320 -- the talent art is 320 x 384: fill the width, centre it
-	painting:SetSize(320 * scale, 384 * scale)
-	painting:SetPoint("CENTER")
-	for _, piece in ipairs({ { "TopLeft", 256, 256, "TOPLEFT" }, { "TopRight", 64, 256, "TOPRIGHT" },
-		{ "BottomLeft", 256, 128, "BOTTOMLEFT" }, { "BottomRight", 64, 128, "BOTTOMRIGHT" } }) do
-		local tex = painting:CreateTexture(nil, "BACKGROUND")
-		tex:SetTexture(BOARD_ART .. piece[1])
-		tex:SetSize(piece[2] * scale, piece[3] * scale)
-		tex:SetPoint(piece[4])
-		tex:SetDesaturated(true)
-		tex:SetVertexColor(0.32, 0.45, 0.7)
-	end
-	local shade = painting:CreateTexture(nil, "BORDER")
-	shade:SetAllPoints(art)
-	shade:SetColorTexture(0, 0.01, 0.04, 0.5)
+	local boardArt = boardFrame:CreateTexture(nil, "BACKGROUND")
+	boardArt:SetAllPoints()
+	boardArt:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Board")
 
 	local inner = CreateFrame("Frame", nil, boardFrame)
-	inner:SetPoint("TOPLEFT", EDGE, -EDGE)
+	inner:SetPoint("TOPLEFT", INSET_X, -INSET_Y)
 	inner:SetSize(BOARD, BOARD)
 	inner:SetClipsChildren(true)
-	inner:SetFrameLevel(art:GetFrameLevel() + 2)
+	inner:SetFrameLevel(boardFrame:GetFrameLevel() + 2)
 	frame.inner = inner
 	for c = 1, COLS do
 		for r = 1, ROWS do
 			local cellBg = inner:CreateTexture(nil, "BACKGROUND")
-			cellBg:SetColorTexture(0, 0, 0, (c + r) % 2 == 0 and 0.32 or 0.18)
+			cellBg:SetColorTexture(0, 0, 0, (c + r) % 2 == 0 and 0.16 or 0.04) -- (a faint chequer over the carved sockets)
 			cellBg:SetSize(CELL - 2, CELL - 2)
 			cellBg:SetPoint("TOPLEFT", (c - 1) * CELL + 1, -(r - 1) * CELL - 1)
 		end

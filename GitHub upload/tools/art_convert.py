@@ -3,6 +3,9 @@
   python art_convert.py frame <in.png> <out.tga>          card frame: magenta keyed out, cropped,
                                                          256x512; prints its layout for FRAME_ART
   python art_convert.py full  <in.png> <out.tga> [W H]   whole picture, no keying (default 1024x1024)
+  python art_convert.py board <in.png> <out.tga> [k_field k_frame x0,y0,x1,y1]
+                                                         framed board on magenta: keyed, whole canvas kept,
+                                                         playfield and frame darkened (default 0.72 / 0.92)
   python art_convert.py tray  <in.png> <out.tga> [W H]    landscape tray on magenta -> tall hand tray:
                                                          keyed, quarter turn, end caps kept, middle
                                                          stretched (default 128 x 512)
@@ -170,6 +173,27 @@ def arrow(src, dst, size=128):
 
 
 
+def board(src, dst, k_field=0.72, k_frame=0.92, field="135,135,890,890", size=1024):
+    """A framed game board painted on flat magenta: magenta keyed out, the canvas kept whole (the
+    game places it by measured offsets), the playfield (`field` = x0,y0,x1,y1 in source pixels)
+    multiplied by k_field and the frame by k_frame, so the board can be darkened without
+    re-painting; the playfield's edge is feathered over 6 px."""
+    from PIL import ImageFilter
+    a = np.array(Image.open(src).convert("RGB"))
+    out, mag = key_magenta(a)
+    x0, y0, x1, y1 = (int(v) for v in field.split(","))
+    mask = np.zeros(out.shape[:2], np.uint8)
+    mask[y0:y1, x0:x1] = 255
+    mask = np.array(Image.fromarray(mask).filter(ImageFilter.GaussianBlur(3))).astype(float) / 255
+    k = k_frame + (k_field - k_frame) * mask
+    rgb = out[..., :3].astype(float) * k[..., None]
+    out = np.dstack([np.clip(rgb, 0, 255), out[..., 3]]).astype(np.uint8)
+    img = Image.fromarray(out, "RGBA")
+    if img.size != (size, size):
+        img = img.resize((size, size), Image.LANCZOS)
+    write_tga(img, dst)
+    edge_clean(dst)
+
 def edge_clean(path, width=2):
     """Pull the magenta fringe off a keyed texture's edges: pixels within `width` of transparency
     that lean magenta (red and blue over green) fade out and lose the tint."""
@@ -193,6 +217,8 @@ def edge_clean(path, width=2):
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
         frame(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "board":
+        board(sys.argv[2], sys.argv[3], *(float(v) for v in sys.argv[4:6]), *sys.argv[6:7])
     elif sys.argv[1] == "tray":
         tray(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "arrow":
