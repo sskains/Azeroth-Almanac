@@ -24,6 +24,7 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 -- the painted board: its picture is shown FRAME_SIZE square, and the gems' grid starts INSET_X / INSET_Y
 -- in from its top left (measured from the art: the sockets' pitch is 94.4 px of 1024, so 50 px here)
 local FRAME_SIZE = 542
+local PANEL_W = 330 -- the carved side panel (its frame takes 58 px each side, so the field inside is PANEL_W - 124 with a little air)
 local INSET_X, INSET_Y = 73.5, 68.5
 local BURST_TIME = 0.45
 -- the game's art: the frost talent painting behind the board, the dialog's gold border
@@ -63,6 +64,8 @@ local db, frame, board
 local game = {}          -- state of the current game
 local pool = {}
 local lastQuery, lastReply = 0, 0
+-- the colour of a name on the leaderboard, by where its score came from
+local VIA_COLOR = { guild = { 0.9, 0.9, 0.9 }, group = { 0.5, 0.8, 1 }, friend = { 0.5, 1, 0.65 } }
 
 local GetIcon = (C_Item and C_Item.GetItemIconByID) or GetItemIcon
 
@@ -162,6 +165,16 @@ local function Acquire(tile)
 		f.mark:SetBlendMode("ADD")
 		f.mark:SetAllPoints()
 		f.mark:Hide()
+		-- the gem picked for this move: a gold glow round it that breathes (see Step), the gem lifted
+		-- over its neighbours so the glow isn't covered
+		f.sel = f:CreateTexture(nil, "OVERLAY", nil, 3)
+		f.sel:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		f.sel:SetBlendMode("ADD")
+		f.sel:SetPoint("CENTER")
+		f.sel:SetSize(CELL * 1.8, CELL * 1.8)
+		f.sel:SetVertexColor(1, 0.85, 0.3)
+		f.sel:Hide()
+		f.baseLevel = f:GetFrameLevel()
 		f:RegisterForClicks("LeftButtonUp")
 		f:SetScript("OnMouseDown", function(self) OnGemDown(self.tile) end)
 		f:SetScript("OnMouseUp", function(self) OnGemUp(self.tile) end)
@@ -172,6 +185,8 @@ local function Acquire(tile)
 	f:SetScale(1)
 	f:SetAlpha(1)
 	f.mark:Hide()
+	f.sel:Hide()
+	f:SetFrameLevel(f.baseLevel)
 	Style(tile)
 	Place(tile)
 	f:Show()
@@ -310,7 +325,11 @@ local function ClearMarks()
 	for c = 1, COLS do
 		for r = 1, ROWS do
 			local t = board.cells[c][r]
-			if t and t.frame then t.frame.mark:Hide() end
+			if t and t.frame then
+				t.frame.mark:Hide()
+				t.frame.sel:Hide()
+				t.frame:SetFrameLevel(t.frame.baseLevel)
+			end
 		end
 	end
 end
@@ -322,6 +341,8 @@ local function Select(tile)
 		tile.frame.mark:SetVertexColor(1, 0.85, 0.3)
 		tile.frame.mark:SetAlpha(1)
 		tile.frame.mark:Show()
+		tile.frame.sel:Show()
+		tile.frame:SetFrameLevel(tile.frame.baseLevel + 8)
 	end
 end
 
@@ -498,6 +519,14 @@ local function Step(elapsed)
 			if t and t.special and t.frame then t.frame.glow:SetAlpha(pulse) end
 		end
 	end
+	-- (the selected gem's glow breathes: brighter and a little wider, then softer)
+	local sel = game.selected and game.selected.frame
+	if sel and sel.sel:IsShown() then
+		local w = 0.5 + 0.5 * math.sin(GetTime() * 5)
+		sel.sel:SetAlpha(0.55 + 0.45 * w)
+		local size = CELL * (1.7 + 0.2 * w)
+		sel.sel:SetSize(size, size)
+	end
 
 	if game.state == "paused" or game.state == "over" or game.state == "ready" then return end
 	if game.mode == "timed" and game.time > 0 then
@@ -611,8 +640,10 @@ local function NewGame(mode)
 end
 
 ---------------------------------------------------------------------------
--- Guild leaderboard
+-- Best scores: guild, group and friends
 ---------------------------------------------------------------------------
+
+local GroupTag = { PARTY = "group", RAID = "group", INSTANCE_CHAT = "group" }
 
 local function GuildBoard()
 	local guild = IsInGuild and IsInGuild() and GetGuildInfo("player")
@@ -621,39 +652,105 @@ local function GuildBoard()
 	return db.guild[guild]
 end
 
-local function SendBests()
-	if not db.share or not (IsInGuild and IsInGuild()) or not C_ChatInfo then return end
-	for mode, score in pairs(db.best) do
-		if score > 0 then C_ChatInfo.SendAddonMessage(PREFIX, ("B|%s|%d"):format(mode, score), "GUILD") end
+-- the group's channel, if you are in one
+local function GroupChannel()
+	if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return "INSTANCE_CHAT" end
+	if IsInRaid and IsInRaid() then return "RAID" end
+	if IsInGroup and IsInGroup() then return "PARTY" end
+end
+
+local function IsFriendName(name)
+	if not (C_FriendList and C_FriendList.GetFriendInfo) then return false end
+	local ok, info = pcall(C_FriendList.GetFriendInfo, Ambiguate(name, "short"))
+	return ok and info and true or false
+end
+
+-- your online friends (at most 40), one after the other a third of a second apart so none is flooded
+local function ToFriends(text)
+	if not (C_FriendList and C_FriendList.GetNumFriends and C_FriendList.GetFriendInfoByIndex) then return end
+	local n, sent = C_FriendList.GetNumFriends() or 0, 0
+	for i = 1, n do
+		local info = C_FriendList.GetFriendInfoByIndex(i)
+		if info and info.connected and info.name and sent < 40 then
+			sent = sent + 1
+			C_Timer.After(sent * 0.35, function()
+				pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, "WHISPER", info.name)
+			end)
+		end
 	end
 end
 
-local function OnMessage(text, sender)
+-- Sends your bests where they were asked for (`channel`, and `target` for a whisper), or with no
+-- channel to everyone who can hear: the guild, the group and online friends.
+local function SendBests(channel, target)
+	if not db.share or not C_ChatInfo then return end
+	for mode, score in pairs(db.best) do
+		if score > 0 then
+			local text = ("B|%s|%d"):format(mode, score)
+			if channel then
+				pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, channel, target)
+			else
+				if IsInGuild and IsInGuild() then C_ChatInfo.SendAddonMessage(PREFIX, text, "GUILD") end
+				local group = GroupChannel()
+				if group then pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, group) end
+				ToFriends(text)
+			end
+		end
+	end
+end
+
+local function OnMessage(text, sender, channel)
 	local name = Ambiguate(sender, "none")
 	if name == UnitName("player") then return end
+	-- whispers only count from your friends; the group and guild channels only reach their members
+	if channel == "WHISPER" and not IsFriendName(name) then return end
 	if text == "Q" then
-		-- Someone opened the game: tell them our bests, a moment later so replies don't all land at once.
+		-- Someone opened the game: tell them our bests where they asked, a moment later so replies
+		-- don't all land at once.
 		if GetTime() - lastReply > 30 then
 			lastReply = GetTime()
-			C_Timer.After(1 + math.random() * 4, SendBests)
+			C_Timer.After(1 + math.random() * 4, function() SendBests(channel, channel == "WHISPER" and sender or nil) end)
 		end
 		return
 	end
 	local mode, score = text:match("^B|(%a+)|(%d+)$")
 	score = tonumber(score)
-	local gb = GuildBoard()
-	if gb and gb[mode] and score and score < 10000000 then
-		if not gb[mode][name] or score > gb[mode][name] then gb[mode][name] = score end
-		if frame and frame:IsShown() then UpdatePanel() end
+	if not (mode and score and score < 10000000) then return end
+	if channel == "GUILD" then
+		local gb = GuildBoard()
+		if gb and gb[mode] then
+			if not gb[mode][name] or score > gb[mode][name] then gb[mode][name] = score end
+		end
+	elseif channel == "WHISPER" or GroupTag[channel] then
+		local circle = db.circle[mode]
+		if circle then
+			local rec = circle[name]
+			if not rec or score > rec.s then circle[name] = { s = score, via = channel == "WHISPER" and "friend" or "group" } end
+		end
+	else
+		return
 	end
+	if frame and frame:IsShown() then UpdatePanel() end
 end
 
+-- everyone's best for a mode: the guild, your group and friends, and you. A name heard from
+-- more than one place counts once, at its highest score, tagged friend over group over guild.
 local function Leaders(mode)
-	local list = {}
+	local byName = {}
+	local function Add(name, score, via)
+		local rec = byName[name]
+		if not rec then byName[name] = { name, score, via = via } return end
+		if score > rec[2] then rec[2] = score end
+		local rank = { guild = 1, group = 2, friend = 3 }
+		if (rank[via] or 0) > (rank[rec.via] or 0) then rec.via = via end
+	end
 	local gb = GuildBoard()
 	if gb then
-		for name, score in pairs(gb[mode] or {}) do tinsert(list, { name, score }) end
+		for name, score in pairs(gb[mode] or {}) do Add(name, score, "guild") end
 	end
+	for name, rec in pairs(db.circle[mode] or {}) do Add(name, rec.s, rec.via) end
+	local list = {}
+	for _, rec in pairs(byName) do tinsert(list, rec) end
 	if db.best[mode] > 0 then tinsert(list, { UnitName("player"), db.best[mode], me = true }) end
 	table.sort(list, function(a, b) return a[2] > b[2] end)
 	return list
@@ -682,12 +779,13 @@ function UpdatePanel()
 	frame.pauseButton:SetText(game.state == "paused" and "Resume" or "Pause")
 
 	local leaders = Leaders(db.mode)
-	frame.boardTitle:SetText(("Guild best  |cff999999%s|r"):format(MODES[db.mode].label))
+	frame.boardTitle:SetText(("Best scores  |cff999999%s|r"):format(MODES[db.mode].label))
 	for i, row in ipairs(frame.leaderRows) do
 		local entry = leaders[i]
 		if entry then
 			row.name:SetText(("%d. %s"):format(i, entry[1]))
-			row.name:SetTextColor(entry.me and GOLD[1] or 0.9, entry.me and GOLD[2] or 0.9, entry.me and GOLD[3] or 0.9)
+			local c = entry.me and GOLD or VIA_COLOR[entry.via] or VIA_COLOR.guild
+			row.name:SetTextColor(c[1], c[2], c[3])
 			row.score:SetText(Number(entry[2]))
 			row:Show()
 		else
@@ -730,7 +828,7 @@ end
 
 local function Build()
 	frame = CreateFrame("Frame", "AzerothAlmanacGemMatch", UIParent, "BackdropTemplate")
-	frame:SetSize(16 + FRAME_SIZE + 14 + 250 + 16, 62 + FRAME_SIZE + 16)
+	frame:SetSize(16 + FRAME_SIZE + 14 + PANEL_W + 16, 62 + FRAME_SIZE + 16)
 	Backdrop(frame, { 0.035, 0.03, 0.025, 0.97 }, { 0.4, 0.32, 0.16, 1 })
 	frame:SetPoint("CENTER")
 	-- same layer as the game's windows: whichever was clicked last is in front
@@ -847,67 +945,92 @@ local function Build()
 	over:Hide()
 	frame.over = over
 
-	-- Side panel
-	local side = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	Backdrop(side, { 0.06, 0.05, 0.04, 0.9 }, { 0.22, 0.18, 0.1, 1 })
+	-- Side panel: a carved-oak panel (custom art, cut in nine so its corners and knotwork keep their
+	-- shape and only the wood between them stretches), everything on the recessed field inside it
+	local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+	local side = CreateFrame("Frame", nil, frame)
 	side:SetPoint("TOPLEFT", boardFrame, "TOPRIGHT", 14, 0)
 	side:SetPoint("BOTTOMRIGHT", -16, 16)
-	ns.NativeInset(side)
+	local sideArt = side:CreateTexture(nil, "BACKGROUND")
+	sideArt:SetAllPoints()
+	sideArt:SetTexture(MEDIA .. "GemMatch_Panel")
+	if sideArt.SetTextureSliceMargins then
+		pcall(sideArt.SetTextureSliceMargins, sideArt, 58, 58, 58, 58)
+		if sideArt.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(sideArt.SetTextureSliceMode, sideArt, Enum.UITextureSliceMode.Stretched) end
+	end
+	frame.side = side
+	-- (the field inside the frame starts 58 px in; the content sits in from there)
+	local PAD, FIELD_W = 62, PANEL_W - 124
 
 	frame.modeButtons = {}
-	local x = 10
+	local x = PAD
 	for _, mode in ipairs({ "timed", "moves" }) do
-		local b = FlatButton(side, MODES[mode].label, 110, function() NewGame(mode) end)
-		b:SetPoint("TOPLEFT", x, -10)
+		local b = FlatButton(side, MODES[mode].label, (FIELD_W - 8) / 2, function() NewGame(mode) end)
+		b:SetPoint("TOPLEFT", x, -62)
 		frame.modeButtons[mode] = b
-		x = x + 118
+		x = x + (FIELD_W - 8) / 2 + 8
 	end
 
+	-- the score on a carved plaque
+	local plaque = side:CreateTexture(nil, "ARTWORK")
+	plaque:SetTexture(MEDIA .. "GemMatch_Plaque")
+	plaque:SetTexCoord(0, 1, 0, 0.6328) -- (the picture fills the top 63% of its square canvas)
+	plaque:SetSize(FIELD_W, FIELD_W * 162 / 512)
+	plaque:SetPoint("TOPLEFT", PAD, -92)
 	local scoreLabel = side:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-	scoreLabel:SetPoint("TOPLEFT", 12, -50)
+	scoreLabel:SetPoint("LEFT", plaque, "LEFT", 38, 2)
 	scoreLabel:SetText("Score")
 	frame.score = side:CreateFontString(nil, "OVERLAY")
-	frame.score:SetFont(TITLE_FONT, 34, "")
+	frame.score:SetFont(TITLE_FONT, 26, "")
 	frame.score:SetTextColor(1, 1, 1)
-	frame.score:SetPoint("TOPLEFT", scoreLabel, "BOTTOMLEFT", 0, -2)
+	frame.score:SetPoint("RIGHT", plaque, "RIGHT", -38, 2)
 	frame.cascade = side:CreateFontString(nil, "OVERLAY")
 	frame.cascade:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
 	frame.cascade:SetTextColor(0.4, 0.85, 1)
-	frame.cascade:SetPoint("TOPRIGHT", -12, -58)
+	frame.cascade:SetPoint("TOPLEFT", PAD, -190)
 
 	frame.movesLabel = side:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-	frame.movesLabel:SetPoint("TOPLEFT", 12, -106)
+	frame.movesLabel:SetPoint("TOPLEFT", PAD, -163)
 	frame.moves = side:CreateFontString(nil, "OVERLAY")
 	frame.moves:SetFont(TITLE_FONT, 26, "")
 	frame.moves:SetTextColor(unpack(GOLD))
 	frame.moves:SetPoint("TOPLEFT", frame.movesLabel, "BOTTOMLEFT", 0, -2)
 	frame.best = side:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	frame.best:SetPoint("TOPLEFT", 12, -154)
+	frame.best:SetPoint("TOPLEFT", PAD, -209)
 
-	local newGame = FlatButton(side, "New game", 110, function() NewGame() end)
-	newGame:SetPoint("TOPLEFT", 10, -178)
-	local hint = FlatButton(side, "Hint", 110, function() game.idle = HINT_AFTER end)
+	-- the gem pouch, spilling beside the moves and best score
+	local pouch = side:CreateTexture(nil, "ARTWORK")
+	pouch:SetTexture(MEDIA .. "GemMatch_Pouch")
+	pouch:SetTexCoord(0, 1, 0, 0.9102)
+	pouch:SetSize(84, 84 * 0.9102)
+	pouch:SetPoint("TOPLEFT", PAD + FIELD_W - 84, -162)
+
+	local bw = (FIELD_W - 8) / 2
+	local newGame = FlatButton(side, "New game", bw, function() NewGame() end)
+	newGame:SetPoint("TOPLEFT", PAD, -244)
+	local hint = FlatButton(side, "Hint", bw, function() game.idle = HINT_AFTER end)
 	hint:SetPoint("LEFT", newGame, "RIGHT", 8, 0)
-	frame.pauseButton = FlatButton(side, "Pause", 110, function() SetPaused(game.state ~= "paused") end)
+	frame.pauseButton = FlatButton(side, "Pause", bw, function() SetPaused(game.state ~= "paused") end)
 	frame.pauseButton:SetPoint("TOPLEFT", newGame, "BOTTOMLEFT", 0, -6)
-	frame.soundButton = FlatButton(side, "Sound: on", 110, function()
+	frame.soundButton = FlatButton(side, "Sound: on", bw, function()
 		db.sound = not db.sound
 		UpdatePanel()
 	end)
 	frame.soundButton:SetPoint("LEFT", frame.pauseButton, "RIGHT", 8, 0)
 
+	-- a twisted-rope divider, then the guild's best scores
 	local line = side:CreateTexture(nil, "ARTWORK")
-	line:SetTexture("Interface\\Common\\UI-TooltipDivider-Transparent")
-	line:SetHeight(8)
-	line:SetPoint("TOPLEFT", 6, -242)
-	line:SetPoint("TOPRIGHT", -6, -242)
+	line:SetTexture(MEDIA .. "GemMatch_Divider")
+	line:SetTexCoord(0, 1, 0, 0.6719)
+	line:SetSize(FIELD_W, FIELD_W * 43 / 512)
+	line:SetPoint("TOPLEFT", PAD, -304)
 	frame.boardTitle = side:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	frame.boardTitle:SetPoint("TOPLEFT", 12, -256)
+	frame.boardTitle:SetPoint("TOPLEFT", PAD, -328)
 	frame.leaderRows = {}
-	for i = 1, 8 do
+	for i = 1, 5 do
 		local row = CreateFrame("Frame", nil, side)
-		row:SetSize(226, 18)
-		row:SetPoint("TOPLEFT", 12, -276 - (i - 1) * 19)
+		row:SetSize(FIELD_W, 18)
+		row:SetPoint("TOPLEFT", PAD, -346 - (i - 1) * 18)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.name:SetPoint("LEFT")
 		row.score = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -915,13 +1038,17 @@ local function Build()
 		frame.leaderRows[i] = row
 	end
 	frame.noLeaders = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	frame.noLeaders:SetPoint("TOPLEFT", 12, -278)
-	frame.noLeaders:SetWidth(226)
+	frame.noLeaders:SetPoint("TOPLEFT", PAD, -348)
+	frame.noLeaders:SetWidth(FIELD_W)
 	frame.noLeaders:SetJustifyH("LEFT")
-	frame.noLeaders:SetText("No scores yet. Finish a game to set one; guildmates running Azeroth Almanac show up here.")
+	frame.noLeaders:SetText("No scores yet. Finish a game to set one; guildmates, friends and party members running Azeroth Almanac show up here.")
+	-- (what the name colours mean)
+	local legend = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	legend:SetPoint("TOPRIGHT", side, "TOPLEFT", PAD + FIELD_W, -330)
+	legend:SetText("|cffe6e6e6guild|r |cff80ccffparty|r |cff80ffa6friends|r")
 	local help = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	help:SetPoint("BOTTOMLEFT", 12, 10)
-	help:SetWidth(226)
+	help:SetPoint("BOTTOMLEFT", PAD, 62)
+	help:SetWidth(FIELD_W)
 	help:SetJustifyH("LEFT")
 	help:SetText("Click two gems next to each other, or drag one. Match 4 for a power gem, 5 for an Arcane Crystal.")
 
@@ -939,6 +1066,10 @@ end
 
 function GM:OnInitialize(saved)
 	db = saved.games
+	-- scores heard from friends and group members (the guild's are kept per guild, in db.guild)
+	db.circle = db.circle or {}
+	db.circle.timed = db.circle.timed or {}
+	db.circle.moves = db.circle.moves or {}
 end
 
 function GM:OnLogin()
@@ -949,8 +1080,8 @@ function GM:OnLogin()
 	events:SetScript("OnEvent", function(_, event, prefix, text, channel, sender)
 		if event == "PLAYER_REGEN_DISABLED" then
 			if frame and board then SetPaused(true) end
-		elseif prefix == PREFIX and channel == "GUILD" and db.share then
-			OnMessage(text, sender)
+		elseif prefix == PREFIX and db.share and (channel == "GUILD" or channel == "WHISPER" or GroupTag[channel]) then
+			OnMessage(text, sender, channel)
 		end
 	end)
 end
@@ -959,10 +1090,13 @@ function GM:Open()
 	if not frame then Build() end
 	frame:Show()
 	if not board then NewGame() else UpdatePanel() end
-	-- Ask guildmates for their bests (at most every 5 minutes).
-	if db.share and IsInGuild and IsInGuild() and C_ChatInfo and GetTime() - lastQuery > 300 then
+	-- Ask guildmates, your group and online friends for their bests (at most every 5 minutes).
+	if db.share and C_ChatInfo and GetTime() - lastQuery > 300 then
 		lastQuery = GetTime()
-		C_ChatInfo.SendAddonMessage(PREFIX, "Q", "GUILD")
+		if IsInGuild and IsInGuild() then C_ChatInfo.SendAddonMessage(PREFIX, "Q", "GUILD") end
+		local group = GroupChannel()
+		if group then pcall(C_ChatInfo.SendAddonMessage, PREFIX, "Q", group) end
+		ToFriends("Q")
 	end
 end
 

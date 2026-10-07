@@ -6,6 +6,10 @@
   python art_convert.py board <in.png> <out.tga> [k_field k_frame x0,y0,x1,y1]
                                                          framed board on magenta: keyed, whole canvas kept,
                                                          playfield and frame darkened (default 0.72 / 0.92)
+  python art_convert.py cut   <in.png> <out.tga> <W> <H> [fill]
+                                                         piece on magenta: keyed, cropped, fitted into a
+                                                         W x H canvas (top left; or stretched with 'fill');
+                                                         prints the used texcoord
   python art_convert.py tray  <in.png> <out.tga> [W H]    landscape tray on magenta -> tall hand tray:
                                                          keyed, quarter turn, end caps kept, middle
                                                          stretched (default 128 x 512)
@@ -194,6 +198,46 @@ def board(src, dst, k_field=0.72, k_frame=0.92, field="135,135,890,890", size=10
     write_tga(img, dst)
     edge_clean(dst)
 
+def cut(src, dst, cw, ch, fill=False):
+    """A piece painted on flat magenta: keyed out, cropped, scaled to fit a cw x ch canvas
+    (power-of-two sizes) in its top-left corner with its shape kept (or, with fill, stretched to
+    the whole canvas), the rest transparent. Prints the used fraction, for SetTexCoord."""
+    from PIL import ImageDraw
+    a = np.array(Image.open(src).convert("RGB"))
+    out, mag = key_magenta(a)
+    # only the magenta joined to the picture's outside is background: pink-purple highlights
+    # inside a gem are art, so they keep their colour and stay solid
+    keyed = mag > 0.02  # (any trace of magenta; the outside is what joins up from the corner)
+    ky, kx = np.where(mag > 0.5)
+    seed = int(np.argmin(ky + kx))  # (the keyed pixel nearest the top left, on the outside)
+    outside = np.zeros_like(keyed)
+    outside[ky[seed], kx[seed]] = True
+    while True:  # (grow the outside through the keyed pixels, four ways, until it stops)
+        grown = outside.copy()
+        grown[1:, :] |= outside[:-1, :]
+        grown[:-1, :] |= outside[1:, :]
+        grown[:, 1:] |= outside[:, :-1]
+        grown[:, :-1] |= outside[:, 1:]
+        grown &= keyed
+        if (grown == outside).all():
+            break
+        outside = grown
+    inside = keyed & ~outside
+    out[inside, :3] = a[inside]
+    out[inside, 3] = 255
+    ys, xs = np.where(mag < 0.5)
+    img = Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1], "RGBA")
+    if fill:
+        w, h = cw, ch
+    else:
+        s = min(cw / img.width, ch / img.height)
+        w, h = max(1, int(round(img.width * s))), max(1, int(round(img.height * s)))
+    canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    canvas.paste(img.resize((w, h), Image.LANCZOS), (0, 0))
+    write_tga(canvas, dst)
+    edge_clean(dst)
+    print("%s: %dx%d used %dx%d of %dx%d  texcoord 0,%.4f,0,%.4f" % (dst.split("\\")[-1], img.width, img.height, w, h, cw, ch, w / cw, h / ch))
+
 def edge_clean(path, width=2):
     """Pull the magenta fringe off a keyed texture's edges: pixels within `width` of transparency
     that lean magenta (red and blue over green) fade out and lose the tint."""
@@ -219,6 +263,8 @@ if __name__ == "__main__":
         frame(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == "board":
         board(sys.argv[2], sys.argv[3], *(float(v) for v in sys.argv[4:6]), *sys.argv[6:7])
+    elif sys.argv[1] == "cut":
+        cut(sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]), len(sys.argv) > 6 and sys.argv[6] == "fill")
     elif sys.argv[1] == "tray":
         tray(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "arrow":
