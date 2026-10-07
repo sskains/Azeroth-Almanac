@@ -7,6 +7,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 ## Unreleased
 
 - **Murloc Tac Toe in the mini games' look** (Asia): the dark window background, the carved-oak buttons with gold lettering, the shared gold dragon frame round a murloc-head corner icon (the empty black circle is gone) and Wild Gambit's carved VS shield.
+- **Murloc Tac Toe, a painted swamp board** (Asia): a carved mossy-oak board with vines, mushrooms and a lily pad round nine sockets (`MurlocTacToe_Board.tga`), with Gem Match's carved side panel and carved pop-ups. The window is 837 x 687. New texture: full game restart.
 - **Champions** (Asia): choose who you play as with the arrows beside your creature; your opponent sees it. The new champions (faerie dragon, dragon whelps, excitable slime) appear once their models are set in game: target the creature and type `/aa mtt champion <name>` (`/aa mtt champions` lists them). Challenge, accept and rematch messages carry the champion; older versions still play (murloc against gnoll). Details: `docs/DESIGN.md` section 71.
 
 ## 0.65.0

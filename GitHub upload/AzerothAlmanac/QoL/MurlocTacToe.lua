@@ -21,11 +21,14 @@ local PREFIX = "AzAlmMTT"
 local PROTO = "1"
 local INVITE_TIMEOUT = 30      -- seconds a challenge waits for an answer
 local STALE = 60               -- seconds waiting on the other player before leaving costs nothing
-local CELL = 100
-local EDGE = 6
+local CELL = 90
 local BOARD = CELL * 3
-local PIECE = 66
-local SIDE_W = 232
+local PIECE = 60
+-- the painted board (custom art, Media\MurlocTacToe_Board): shown FRAME_SIZE square; its nine sockets are
+-- 90 px apart at that size and the grid starts INSET_X / INSET_Y in from its top left (measured from the art)
+local FRAME_SIZE = 461
+local INSET_X, INSET_Y = 97.2, 92.7
+local SIDE_W = 330 -- the carved side panel (its frame takes 58 px each side)
 -- the player cards are plain: the models stand on the window, no frame, background or stage
 local CARD_PLAIN = true
 
@@ -783,6 +786,18 @@ local function FlatButton(parent, text, width, onClick)
 	return b
 end
 
+-- a carved-oak panel behind a pop-up: Gem Match's panel art, cut in nine so its corners keep their shape
+local function Carved(f)
+	local art = f:CreateTexture(nil, "BACKGROUND")
+	art:SetAllPoints()
+	art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Panel")
+	if art.SetTextureSliceMargins then
+		pcall(art.SetTextureSliceMargins, art, 58, 58, 58, 58)
+		if art.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(art.SetTextureSliceMode, art, Enum.UITextureSliceMode.Stretched) end
+	end
+	return art
+end
+
 local function DialogBackdrop(f)
 	f:SetBackdrop({ bgFile = DIALOG_BG, edgeFile = GOLD_BORDER, tile = true, tileSize = 32, edgeSize = 32,
 		insets = { left = 11, right = 12, top = 12, bottom = 11 } })
@@ -1038,8 +1053,8 @@ end
 
 local function Build()
 	frame = CreateFrame("Frame", "AzerothAlmanacMurlocTacToe", UIParent, "BackdropTemplate")
-	local W = 16 + BOARD + 2 * EDGE + 14 + SIDE_W + 16
-	local H = 62 + 118 + 30 + BOARD + 2 * EDGE + 16
+	local W = 16 + FRAME_SIZE + 14 + SIDE_W + 16
+	local H = 62 + 118 + 30 + FRAME_SIZE + 16
 	frame:SetSize(W, H)
 	frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
 	frame:SetBackdropColor(0.035, 0.03, 0.025, 0.97)
@@ -1083,7 +1098,7 @@ local function Build()
 	close:SetPoint("TOPRIGHT", -6, -6)
 
 	-- the two player cards: each creature in 3D, its round face, name and record
-	local cardsW = BOARD + 2 * EDGE
+	local cardsW = FRAME_SIZE
 	local cardW = math.floor((cardsW - 40) / 2)
 	frame.cards = {}
 	for _, which in ipairs({ "me", "them" }) do
@@ -1163,52 +1178,19 @@ local function Build()
 	frame.status:SetWidth(cardsW)
 	frame.status:SetJustifyH("CENTER")
 
-	-- the board: gold dialog border around the shaman's Restoration painting (sea-green water)
-	local boardFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	QuestFrame(boardFrame, true)
+	-- the board: the painted swamp board, with the nine sockets in its picture
+	local boardFrame = CreateFrame("Frame", nil, frame)
 	boardFrame:SetPoint("TOPLEFT", 16, -62 - 118 - 30)
-	boardFrame:SetSize(BOARD + 2 * EDGE, BOARD + 2 * EDGE)
-	local art = CreateFrame("Frame", nil, boardFrame)
-	art:SetPoint("TOPLEFT", EDGE, -EDGE)
-	art:SetSize(BOARD, BOARD)
-	art:SetClipsChildren(true)
-	local painting = CreateFrame("Frame", nil, art)
-	local scale = BOARD / 320
-	painting:SetSize(320 * scale, 384 * scale)
-	painting:SetPoint("CENTER")
-	for _, piece in ipairs({ { "TopLeft", 256, 256, "TOPLEFT" }, { "TopRight", 64, 256, "TOPRIGHT" },
-		{ "BottomLeft", 256, 128, "BOTTOMLEFT" }, { "BottomRight", 64, 128, "BOTTOMRIGHT" } }) do
-		local tex = painting:CreateTexture(nil, "BACKGROUND")
-		tex:SetTexture(BOARD_ART .. piece[1])
-		tex:SetSize(piece[2] * scale, piece[3] * scale)
-		tex:SetPoint(piece[4])
-		tex:SetVertexColor(0.55, 0.75, 0.8)
-	end
-	local shade = painting:CreateTexture(nil, "BORDER")
-	shade:SetAllPoints(art)
-	shade:SetColorTexture(0, 0.02, 0.04, 0.45)
+	boardFrame:SetSize(FRAME_SIZE, FRAME_SIZE)
+	local boardArt = boardFrame:CreateTexture(nil, "BACKGROUND")
+	boardArt:SetAllPoints()
+	boardArt:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Board")
 
 	local inner = CreateFrame("Frame", nil, boardFrame)
-	inner:SetPoint("TOPLEFT", EDGE, -EDGE)
+	inner:SetPoint("TOPLEFT", INSET_X, -INSET_Y)
 	inner:SetSize(BOARD, BOARD)
-	inner:SetFrameLevel(art:GetFrameLevel() + 2)
+	inner:SetFrameLevel(boardFrame:GetFrameLevel() + 2)
 	frame.inner = inner
-	-- the grid: a dark groove with a thin gold line down its middle
-	for k = 1, 2 do
-		for _, vertical in ipairs({ true, false }) do
-			local groove = inner:CreateTexture(nil, "BORDER")
-			local gold = inner:CreateTexture(nil, "ARTWORK")
-			groove:SetColorTexture(0.02, 0.015, 0.01, 0.75)
-			gold:SetColorTexture(0.85, 0.68, 0.2, 0.9)
-			if vertical then
-				groove:SetSize(8, BOARD - 16); groove:SetPoint("TOP", inner, "TOPLEFT", k * CELL, -8)
-				gold:SetSize(2, BOARD - 20); gold:SetPoint("TOP", inner, "TOPLEFT", k * CELL, -10)
-			else
-				groove:SetSize(BOARD - 16, 8); groove:SetPoint("LEFT", inner, "TOPLEFT", 8, -k * CELL)
-				gold:SetSize(BOARD - 20, 2); gold:SetPoint("LEFT", inner, "TOPLEFT", 10, -k * CELL)
-			end
-		end
-	end
 
 	frame.cells = {}
 	for i = 1, 9 do
@@ -1282,17 +1264,17 @@ local function Build()
 	end
 
 	-- the cover while a challenge waits, and the banner when no game is on
-	local waiting = CreateFrame("Frame", nil, boardFrame, "BackdropTemplate")
-	DialogBackdrop(waiting)
-	waiting:SetSize(260, 130)
+	local waiting = CreateFrame("Frame", nil, boardFrame)
+	Carved(waiting)
+	waiting:SetSize(300, 210)
 	waiting:SetPoint("CENTER", inner)
 	waiting:SetFrameLevel(inner:GetFrameLevel() + 40)
 	waiting:EnableMouse(true)
 	frame.waitingText = waiting:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	frame.waitingText:SetPoint("TOP", 0, -26)
-	frame.waitingText:SetWidth(220)
+	frame.waitingText:SetPoint("TOP", 0, -72)
+	frame.waitingText:SetWidth(190)
 	local cancel = FlatButton(waiting, "Cancel", 110, function() MT:CancelChallenge() end)
-	cancel:SetPoint("BOTTOM", 0, 20)
+	cancel:SetPoint("BOTTOM", 0, 64)
 	waiting:Hide()
 	frame.waiting = waiting
 
@@ -1311,40 +1293,48 @@ local function Build()
 	frame.idle = idle
 
 	-- game over panel
-	local over = CreateFrame("Frame", nil, boardFrame, "BackdropTemplate")
-	DialogBackdrop(over)
-	over:SetSize(270, 170)
+	local over = CreateFrame("Frame", nil, boardFrame)
+	Carved(over)
+	over:SetSize(340, 240)
 	over:SetPoint("CENTER", inner)
 	over:SetFrameLevel(inner:GetFrameLevel() + 50)
 	over:EnableMouse(true)
 	frame.overTitle = Font(over, 24, GOLD)
-	frame.overTitle:SetPoint("TOP", 0, -22)
+	frame.overTitle:SetPoint("TOP", 0, -68)
 	frame.overSub = over:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	frame.overSub:SetPoint("TOP", frame.overTitle, "BOTTOM", 0, -8)
 	frame.rematchNote = over:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	frame.rematchNote:SetPoint("TOP", frame.overSub, "BOTTOM", 0, -8)
-	frame.rematch = FlatButton(over, "Rematch", 120, function() MT:Rematch() end)
-	frame.rematch:SetPoint("BOTTOMRIGHT", over, "BOTTOM", -4, 20)
-	local hideOver = FlatButton(over, "Close", 100, function() over:Hide() end)
-	hideOver:SetPoint("BOTTOMLEFT", over, "BOTTOM", 4, 20)
+	frame.rematch = FlatButton(over, "Rematch", 112, function() MT:Rematch() end)
+	frame.rematch:SetPoint("BOTTOMRIGHT", over, "BOTTOM", -4, 62)
+	local hideOver = FlatButton(over, "Close", 96, function() over:Hide() end)
+	hideOver:SetPoint("BOTTOMLEFT", over, "BOTTOM", 4, 62)
 	over:Hide()
 	frame.over = over
 
-	-- side panel: challenge, your title, rivals
-	local side = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	side:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
-	side:SetBackdropColor(0.06, 0.05, 0.04, 0.9)
-	side:SetBackdropBorderColor(0.22, 0.18, 0.1, 1)
-	side:SetPoint("TOPLEFT", frame, "TOPLEFT", 16 + BOARD + 2 * EDGE + 14, -62)
+	-- side panel: the carved oak panel (Gem Match's, cut in nine), challenge, your title, rivals
+	local side = CreateFrame("Frame", nil, frame)
+	side:SetPoint("TOPLEFT", frame, "TOPLEFT", 16 + FRAME_SIZE + 14, -62)
 	side:SetPoint("BOTTOMRIGHT", -16, 16)
-	ns.NativeInset(side)
+	Carved(side)
+	local PAD, FIELD_W = 62, SIDE_W - 124 -- (the field inside the frame starts 58 px in)
+	local function Rope(y)
+		local line = side:CreateTexture(nil, "ARTWORK")
+		line:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Divider")
+		line:SetTexCoord(0, 1, 0, 0.6719)
+		line:SetSize(FIELD_W, FIELD_W * 43 / 512)
+		line:SetPoint("TOPLEFT", PAD, y)
+		return line
+	end
 
-	local head = side:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	head:SetPoint("TOPLEFT", 12, -12)
+	local head = side:CreateFontString(nil, "OVERLAY")
+	head:SetPoint("TOP", side, "TOP", 0, -66)
+	local headOrn = ns.Ornament(head, 14, 16) -- (this sets the font: the text follows it)
 	head:SetText("Challenge a player")
+	headOrn:Layout()
 	local box = CreateFrame("EditBox", nil, side, "InputBoxTemplate")
-	box:SetSize(SIDE_W - 30, 22)
-	box:SetPoint("TOPLEFT", 18, -32)
+	box:SetSize(FIELD_W - 10, 22)
+	box:SetPoint("TOPLEFT", PAD + 8, -88)
 	box:SetAutoFocus(false)
 	box:SetMaxLetters(48)
 	box:SetScript("OnEnterPressed", function(self)
@@ -1359,42 +1349,42 @@ local function Build()
 	box:SetScript("OnEditFocusGained", function() hintText:Hide() end)
 	box:SetScript("OnEditFocusLost", function(self) hintText:SetShown(self:GetText() == "") end)
 	frame.nameBox = box
-	local half = math.floor((SIDE_W - 28) / 2)
+	local half = (FIELD_W - 8) / 2
 	local go = FlatButton(side, "Challenge", half, function()
 		box:ClearFocus()
 		if box:GetText() ~= "" then MT:Challenge(box:GetText()) else MT:Challenge("target") end
 	end)
-	go:SetPoint("TOPLEFT", 10, -60)
+	go:SetPoint("TOPLEFT", PAD, -120)
 	local tgt = FlatButton(side, "My target", half, function() MT:Challenge("target") end)
 	tgt:SetPoint("LEFT", go, "RIGHT", 8, 0)
-	local prac = FlatButton(side, "Practice game", SIDE_W - 20, function() MT:Practice() end)
+	local prac = FlatButton(side, "Practice game", FIELD_W, function() MT:Practice() end)
 	prac:SetPoint("TOPLEFT", go, "BOTTOMLEFT", 0, -6)
 
-	Divider(side, -124)
+	Rope(-182)
 	local yourTitle = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	yourTitle:SetPoint("TOPLEFT", 12, -138)
+	yourTitle:SetPoint("TOPLEFT", PAD, -202)
 	yourTitle:SetText("Your title")
 	frame.title = Font(side, 18, GOLD)
 	frame.title:SetPoint("TOPLEFT", yourTitle, "BOTTOMLEFT", 0, -3)
-	frame.title:SetWidth(SIDE_W - 24)
+	frame.title:SetWidth(FIELD_W)
 	frame.title:SetJustifyH("LEFT")
 	frame.totals = side:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	frame.totals:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -4)
 	frame.practiceLine = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	frame.practiceLine:SetPoint("TOPLEFT", frame.totals, "BOTTOMLEFT", 0, -3)
 
-	Divider(side, -214)
+	Rope(-282)
 	local rivalsHead = side:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	rivalsHead:SetPoint("TOPLEFT", 12, -228)
+	rivalsHead:SetPoint("TOPLEFT", PAD, -304)
 	rivalsHead:SetText("Rivals")
 	local wld = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	wld:SetPoint("TOPRIGHT", -12, -230)
+	wld:SetPoint("TOPRIGHT", side, "TOPLEFT", PAD + FIELD_W, -306)
 	wld:SetText("W - L - D")
 	frame.rivalRows = {}
-	for i = 1, 9 do
+	for i = 1, 8 do
 		local row = CreateFrame("Frame", nil, side)
-		row:SetSize(SIDE_W - 24, 18)
-		row:SetPoint("TOPLEFT", 12, -248 - (i - 1) * 19)
+		row:SetSize(FIELD_W, 18)
+		row:SetPoint("TOPLEFT", PAD, -324 - (i - 1) * 19)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.name:SetPoint("LEFT")
 		row.name:SetPoint("RIGHT", -70, 0)
@@ -1405,18 +1395,18 @@ local function Build()
 		frame.rivalRows[i] = row
 	end
 	frame.noRivals = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	frame.noRivals:SetPoint("TOPLEFT", 12, -250)
-	frame.noRivals:SetWidth(SIDE_W - 24)
+	frame.noRivals:SetPoint("TOPLEFT", PAD, -326)
+	frame.noRivals:SetWidth(FIELD_W)
 	frame.noRivals:SetJustifyH("LEFT")
 	frame.noRivals:SetText("No games yet. Both players need Azeroth Almanac. Right-click a player's portrait or name for \"Murloc Tac Toe\", or type their name above.")
 
-	frame.quit = FlatButton(side, "Resign", SIDE_W - 20, function() MT:Quit() end)
-	frame.quit:SetPoint("BOTTOMLEFT", 10, 40)
-	frame.soundButton = FlatButton(side, "Sound: on", SIDE_W - 20, function()
+	frame.quit = FlatButton(side, "Resign", FIELD_W, function() MT:Quit() end)
+	frame.quit:SetPoint("BOTTOMLEFT", PAD, 96)
+	frame.soundButton = FlatButton(side, "Sound: on", FIELD_W, function()
 		db.sound = not db.sound
 		Refresh()
 	end)
-	frame.soundButton:SetPoint("BOTTOMLEFT", 10, 10)
+	frame.soundButton:SetPoint("BOTTOMLEFT", PAD, 66)
 
 	local winIcon = A.Widgets.FindIcon({ "INV_Misc_Head_Murloc_01", "INV_Misc_Fish_02", "INV_Misc_Fish_05" })
 	ns.NativeWindow(frame, { title = "Murloc Tac Toe", icon = winIcon, hide = { titleBg, icon, title }, close = close, byline = sub })

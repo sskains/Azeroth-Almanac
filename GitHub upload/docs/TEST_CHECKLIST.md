@@ -9,6 +9,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 ## Unreleased
 
 - [ ] Murloc Tac Toe, new look (`/reload`): the dark window background; the wooden buttons (text fits: "Challenge", "My target", "Practice game", "Resign", "Sound: on"); the corner icon in the gold dragon frame with a murloc head, not a black circle, and the byline beside it; the VS shield.
+- [ ] Murloc Tac Toe board (full game restart): the nine sockets under the nine cells (a piece sits in the middle of its socket, faces not cut off or overlapping the rim), the cards as wide as the board, the carved side panel with nothing overlapping (heading, name box, three buttons, titles, eight rival rows, Resign and Sound at the bottom), the waiting and game-over pop-ups inside their panels with the buttons fitting, the winning line and bursts still lined up with the cells, the window on your screen (837 x 687).
 - [ ] Murloc Tac Toe champions: the two arrows beside your creature (only while no game is on) change the creature and the name under it; with only murloc and gnoll set, a message says how to add more; `/aa mtt champions`, then target a faerie dragon / whelp / slime and `/aa mtt champion faerie` (etc.): it joins the cycle; a challenge between two of you shows each other's champion; a game against someone on the old version still works (murloc against gnoll); the practice game plays a different champion; a rematch keeps both champions; the round faces (are they still black? say so).
 
 ## 0.65.0 (full game restart: new Gem Match textures)
