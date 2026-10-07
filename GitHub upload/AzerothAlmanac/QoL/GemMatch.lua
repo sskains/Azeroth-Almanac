@@ -282,6 +282,56 @@ local function UpdateBursts(elapsed)
 	end
 end
 
+-- Little gems that fly out where a gem cleared: the single gems cut from the scatter art, one per
+-- colour, a cell of the 4 x 2 sheet each (green, orange, purple, pale blue, yellow, red, prism).
+local SHARD_SHEET = "Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Shards"
+local function Shards(x, y, tile, count)
+	local cell = tile.special == "prism" and 7 or math.min(tile.kind or 1, 6)
+	local col, row = (cell - 1) % 4, math.floor((cell - 1) / 4)
+	frame.shards = frame.shards or {}
+	for _ = 1, count do
+		local s
+		for _, f in ipairs(frame.shards) do
+			if not f.active then s = f break end
+		end
+		if not s then
+			s = { tex = frame.overlay:CreateTexture(nil, "OVERLAY", nil, 2) }
+			s.tex:SetTexture(SHARD_SHEET)
+			tinsert(frame.shards, s)
+		end
+		s.tex:SetTexCoord(col * 0.25, col * 0.25 + 0.25, row * 0.5, row * 0.5 + 0.5)
+		s.active, s.t = true, 0
+		s.life = 0.55 + math.random() * 0.35
+		s.x, s.y = x, y
+		s.vx, s.vy = (math.random() - 0.5) * 220, -60 - math.random() * 140 -- (y grows downwards: up is negative)
+		s.rot, s.spin = math.random() * 6, (math.random() - 0.5) * 9
+		s.size = 11 + math.random() * 8
+		s.tex:SetSize(s.size, s.size)
+		s.tex:Show()
+	end
+end
+
+local function UpdateShards(elapsed)
+	for _, s in ipairs(frame.shards or {}) do
+		if s.active then
+			s.t = s.t + elapsed
+			local p = s.t / s.life
+			if p >= 1 then
+				s.active = false
+				s.tex:Hide()
+			else
+				s.vy = s.vy + 520 * elapsed
+				s.x, s.y = s.x + s.vx * elapsed, s.y + s.vy * elapsed
+				s.rot = s.rot + s.spin * elapsed
+				s.tex:ClearAllPoints()
+				s.tex:SetPoint("CENTER", frame.inner, "TOPLEFT", s.x, -s.y)
+				if s.tex.SetRotation then s.tex:SetRotation(s.rot) end
+				s.tex:SetAlpha(p < 0.6 and 1 or (1 - p) / 0.4)
+			end
+		end
+	end
+end
+
 -- The board jolts a little on big combos.
 local function UpdateShake(elapsed)
 	local s = frame.shake
@@ -335,7 +385,27 @@ local function ClearMarks()
 	end
 end
 
+-- The hint's glow and bounce taken off both gems, and the hint dropped.
+local function ClearHint()
+	local h = game.hint
+	if not h then return end
+	for i = 1, 2 do
+		local t = h[i]
+		local f = t and t.frame
+		if f then
+			f.mark:Hide()
+			f.sel:Hide()
+			f.sel:SetVertexColor(1, 0.85, 0.3)
+			f:SetFrameLevel(f.baseLevel)
+			f:SetScale(1)
+			Place(t)
+		end
+	end
+	game.hint = nil
+end
+
 local function Select(tile)
+	if tile then ClearHint() game.idle = 0 end -- (picking a gem is taking the hint)
 	ClearMarks()
 	game.selected = tile
 	if tile and tile.frame then
@@ -432,7 +502,10 @@ function BeginClear(result)
 	-- light where each gem goes, in its color
 	for _, cell in pairs(result.clear) do
 		local t = board.cells[cell[1]] and board.cells[cell[1]][cell[2]]
-		if t then Burst((cell[1] - 0.5) * CELL, (cell[2] - 0.5) * CELL, GemInfo(t).color) end
+		if t then
+			Burst((cell[1] - 0.5) * CELL, (cell[2] - 0.5) * CELL, GemInfo(t).color)
+			Shards((cell[1] - 0.5) * CELL, (cell[2] - 0.5) * CELL, t, 2)
+		end
 	end
 	if #result.create > 0 or game.cascade >= 3 then frame.shake = 0.25 end
 
@@ -442,7 +515,10 @@ function BeginClear(result)
 	for _, s in ipairs(result.create) do
 		local t = board.cells[s[1]][s[2]]
 		if t and t.frame then Style(t) end
-		if t then Burst((s[1] - 0.5) * CELL, (s[2] - 0.5) * CELL, GemInfo(t).color, true) end
+		if t then
+			Burst((s[1] - 0.5) * CELL, (s[2] - 0.5) * CELL, GemInfo(t).color, true)
+			Shards((s[1] - 0.5) * CELL, (s[2] - 0.5) * CELL, t, 4)
+		end
 	end
 	game.anim = { t = 0 }
 	game.state = "clear"
@@ -500,6 +576,7 @@ end
 local function Step(elapsed)
 	UpdateFloaters(elapsed)
 	UpdateBursts(elapsed)
+	UpdateShards(elapsed)
 	UpdateShake(elapsed)
 	if frame.cascade.t then
 		frame.cascade.t = frame.cascade.t - elapsed
@@ -543,21 +620,29 @@ local function Step(elapsed)
 		if game.idle > HINT_AFTER and not game.hint then ShowHint() end
 		if game.hint then
 			game.hint.t = game.hint.t + elapsed
-			local a = 0.35 + 0.35 * math.sin(game.hint.t * 6)
+			local w = 0.5 + 0.5 * math.sin(game.hint.t * 6)
 			for i = 1, 2 do
 				local t = game.hint[i]
-				if t and t.frame then
-					t.frame.mark:SetVertexColor(0.4, 0.8, 1)
-					t.frame.mark:SetAlpha(a)
-					t.frame.mark:Show()
+				local f = t and t.frame
+				if f then
+					-- both gems of the move: a bright cyan-white glow that swells, the gem lifted
+					-- over its neighbours and bobbing
+					f.mark:SetVertexColor(0.5, 0.9, 1)
+					f.mark:SetAlpha(0.6 + 0.4 * w)
+					f.mark:Show()
+					f.sel:SetVertexColor(0.45, 0.9, 1)
+					f.sel:SetAlpha(0.6 + 0.4 * w)
+					local size = CELL * (1.7 + 0.35 * w)
+					f.sel:SetSize(size, size)
+					f.sel:Show()
+					f:SetFrameLevel(f.baseLevel + 8)
+					f:SetScale(1 + 0.12 * w)
+					Place(t)
 				end
 			end
 		end
 	elseif state == "swap" or state == "unswap" then
-		if game.hint then
-			for i = 1, 2 do if game.hint[i] and game.hint[i].frame then game.hint[i].frame.mark:Hide() end end
-			game.hint = nil
-		end
+		ClearHint()
 		anim.t = anim.t + elapsed
 		local p = math.min(1, anim.t / SWAP_TIME)
 		local e = p * p * (3 - 2 * p)
@@ -794,11 +879,13 @@ function UpdatePanel()
 		end
 	end
 	frame.noLeaders:SetShown(#leaders == 0)
+	frame.noLeadersGems:SetShown(#leaders == 0)
 end
 
 function EndGame()
 	game.state = "over"
 	Select(nil)
+	ClearHint()
 	local best = db.best[game.mode] or 0
 	local newBest = game.score > best
 	if newBest then
@@ -811,6 +898,10 @@ function EndGame()
 	frame.overTitle:SetText(game.mode == "timed" and "Time's up!" or "Out of moves!")
 	frame.overScore:SetText(Number(game.score))
 	frame.overBest:SetText(newBest and "|cff33ff33New personal best!|r" or ("Your best: " .. Number(best)))
+	frame.over.celebrate = newBest and 0 or nil
+	frame.overGems:ClearAllPoints()
+	frame.overGems:SetPoint("CENTER", frame.over, "BOTTOM", 0, newBest and 76 or 6)
+	frame.overGems:SetAlpha(newBest and 0 or 1)
 	frame.over:Show()
 	UpdatePanel()
 end
@@ -921,6 +1012,11 @@ local function Build()
 	local coverHint = cover:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	coverHint:SetPoint("TOP", coverText, "BOTTOM", 0, -8)
 	coverHint:SetText("Click to continue")
+	local coverGems = cover:CreateTexture(nil, "ARTWORK")
+	coverGems:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Gems")
+	coverGems:SetTexCoord(0, 0.9766, 0, 1)
+	coverGems:SetSize(300, 153)
+	coverGems:SetPoint("CENTER", 0, -118)
 	cover:SetScript("OnMouseDown", function() SetPaused(false) end)
 	cover:Hide()
 	frame.pauseCover = cover
@@ -967,6 +1063,46 @@ local function Build()
 	frame.overBest:SetPoint("TOP", frame.overScore, "BOTTOM", 0, -4)
 	local again = FlatButton(over, "Play again", 140, function() NewGame() end)
 	again:SetPoint("TOP", frame.overBest, "BOTTOM", 0, -10)
+	-- a new personal best: the gems drop out from under the panel and gold sparkles rise
+	frame.overGems = overGems
+	local sparks = {}
+	for k = 1, 14 do
+		local t = over:CreateTexture(nil, "OVERLAY", nil, 4)
+		t:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+		t:SetBlendMode("ADD")
+		t:SetVertexColor(1, 0.9, 0.55)
+		t:SetAlpha(0)
+		sparks[k] = { tex = t, age = 99, life = 1, x = 0, y = 0, size = 10 }
+	end
+	over:SetScript("OnUpdate", function(self, el)
+		local cel = self.celebrate
+		if cel then
+			cel = cel + el
+			self.celebrate = cel < 3.4 and cel or nil
+			local p = math.min(1, cel / 0.7)
+			local e = 1 - (1 - p) * (1 - p)
+			overGems:SetPoint("CENTER", self, "BOTTOM", 0, 6 + 70 * (1 - e))
+			overGems:SetAlpha(e)
+		end
+		for _, s in ipairs(sparks) do
+			s.age = s.age + el
+			if s.age >= s.life then
+				if cel and cel < 3 and math.random() < 0.2 then
+					s.age, s.life = 0, 0.8 + math.random() * 0.7
+					s.x, s.y, s.size = (math.random() - 0.5) * 330, math.random() * 60 - 30, 8 + math.random() * 8
+				else
+					s.tex:SetAlpha(0)
+				end
+			end
+			if s.age < s.life then
+				local q = s.age / s.life
+				s.tex:ClearAllPoints()
+				s.tex:SetPoint("CENTER", self, "BOTTOM", s.x, s.y + 40 * s.age)
+				s.tex:SetSize(s.size, s.size)
+				s.tex:SetAlpha(0.8 * math.sin(math.pi * q))
+			end
+		end
+	end)
 	over:Hide()
 	frame.over = over
 
@@ -1067,6 +1203,13 @@ local function Build()
 	frame.noLeaders:SetWidth(FIELD_W)
 	frame.noLeaders:SetJustifyH("LEFT")
 	frame.noLeaders:SetText("No scores yet. Finish a game to set one; guildmates, friends and party members running Azeroth Almanac show up here.")
+	-- (a faint scatter of gems behind the empty-list text; gone once there is a score)
+	frame.noLeadersGems = side:CreateTexture(nil, "ARTWORK", nil, -1)
+	frame.noLeadersGems:SetTexture(MEDIA .. "GemMatch_Gems")
+	frame.noLeadersGems:SetTexCoord(0, 0.9766, 0, 1)
+	frame.noLeadersGems:SetSize(190, 97)
+	frame.noLeadersGems:SetPoint("TOPLEFT", PAD + 8, -350)
+	frame.noLeadersGems:SetAlpha(0.3)
 	-- (what the name colours mean)
 	local legend = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	legend:SetPoint("TOPRIGHT", side, "TOPLEFT", PAD + FIELD_W, -330)
