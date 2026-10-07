@@ -2828,13 +2828,18 @@ local function Build()
 	frame.spellPreview:SetScript("OnEnter", function(self)
 		local ab = self.ability
 		if not ab then return end
-		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		-- (grows where it lies, like the cards; the full rules beside the close look)
+		WG:PickSpellZoom(self)
+		GameTooltip:SetOwner(frame.spellZoom:IsShown() and frame.spellZoom or self, "ANCHOR_LEFT")
 		GameTooltip:AddLine(ab.name, 1, 0.82, 0)
 		GameTooltip:AddLine(ab.text, 1, 1, 1, true)
 		GameTooltip:AddLine("Once per match, before you place a card. It doesn't use up your turn.", 0.6, 0.6, 0.6, true)
 		GameTooltip:Show()
 	end)
-	frame.spellPreview:SetScript("OnLeave", GameTooltip_Hide)
+	frame.spellPreview:SetScript("OnLeave", function()
+		WG:PickSpellZoom(nil)
+		GameTooltip_Hide()
+	end)
 	spellLabel:SetPoint("BOTTOM", frame.spellPreview, "TOP", 0, 6)
 	spellLabel:SetText("Your spell")
 	-- let fate decide (your card and your class): a die between Back and Begin, glowing on hover
@@ -3416,6 +3421,35 @@ function WG:SpellZoom(sc)
 	z:SetPoint("CENTER", frame, "TOPLEFT", x / scale, -y / scale)
 	z:SetFrameLevel(frame:GetFrameLevel() + 150)
 	z:Show()
+end
+
+-- the pick screen's "Your spell" card, looked at closely the way a pick card is: a copy at the
+-- pick zoom grows where it lies (kept inside the window) with the original faded out under it
+function WG:PickSpellZoom(sc)
+	local z = frame and frame.spellZoom
+	if not z then return end
+	local under = z.pickUnder
+	if under and under ~= sc then
+		under:SetAlpha(frame.fate and 0.35 or 1)
+		z.pickUnder = nil
+	end
+	if not (sc and sc.ability and sc:IsShown()) then z:Hide() return end
+	z:SetSpell(sc.ability)
+	local fs, ws = sc:GetEffectiveScale(), frame:GetEffectiveScale()
+	local cx, cy = sc:GetCenter()
+	if not cx then return end
+	cx, cy = cx * fs / ws - frame:GetLeft(), cy * fs / ws - frame:GetBottom()
+	local zs = PICK_ZOOM
+	local zw, zh = CW * zs, CH * zs
+	local x = math.max(zw / 2 + 12, math.min(frame:GetWidth() - zw / 2 - 12, cx))
+	local y = math.max(zh / 2 + 24, math.min(frame:GetHeight() - zh / 2 - 30, cy))
+	z:SetScale(zs)
+	z:ClearAllPoints()
+	z:SetPoint("CENTER", frame, "BOTTOMLEFT", x / zs, y / zs)
+	z:SetFrameLevel(frame:GetFrameLevel() + 150)
+	z:Show()
+	sc:SetAlpha(0)
+	z.pickUnder = sc
 end
 
 -- a board card at its square, nudged by (ox, oy) and scaled (for the strike and slam)
