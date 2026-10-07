@@ -3,6 +3,8 @@
   python art_convert.py frame <in.png> <out.tga>          card frame: magenta keyed out, cropped,
                                                          256x512; prints its layout for FRAME_ART
   python art_convert.py full  <in.png> <out.tga> [W H]   whole picture, no keying (default 1024x1024)
+  python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
+                                                         outside the ring made transparent, squared (default 256)
 
 A frame's layout (fractions of the CARD, the parchment rectangle):
   window = the magenta art window, panel = the dark text panel, band = between them,
@@ -83,9 +85,31 @@ def frame(src, dst):
 def full(src, dst, w=1024, h=1024):
     write_tga(Image.open(src).convert("RGBA").resize((w, h), Image.LANCZOS), dst)
 
+def round_art(src, dst, size=256):
+    """A round picture on a flat dark background (a carved ring, a medallion): the ring's bounds
+    are measured against the background, everything outside the ellipse goes transparent with a
+    soft 1.5 px edge, and it is cropped and squared to size x size."""
+    im = Image.open(src).convert("RGB")
+    a = np.array(im).astype(float)
+    bg = np.median(np.concatenate([a[:12, :12].reshape(-1, 3), a[:12, -12:].reshape(-1, 3),
+                                   a[-12:, :12].reshape(-1, 3), a[-12:, -12:].reshape(-1, 3)]), axis=0)
+    ys, xs = np.where(np.abs(a - bg).sum(axis=2) > 90)
+    x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
+    cx, cy, rx, ry = (x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2 + 0.5, (y1 - y0) / 2 + 0.5
+    yy, xx = np.mgrid[0:a.shape[0], 0:a.shape[1]]
+    # distance outside the ellipse edge in pixels (normalised radius scaled by the mean radius)
+    dist = (np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2) - 1) * (rx + ry) / 2
+    alpha = np.clip(0.5 - dist / 1.5, 0, 1) * 255
+    out = np.dstack([a, alpha]).astype(np.uint8)
+    img = Image.fromarray(out[y0:y1 + 1, x0:x1 + 1], "RGBA").resize((size, size), Image.LANCZOS)
+    print("ring %dx%d at (%d, %d) -> %dx%d" % (x1 - x0 + 1, y1 - y0 + 1, x0, y0, size, size))
+    write_tga(img, dst)
+
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
         frame(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "round":
+        round_art(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
     else:
         full(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
 
