@@ -350,3 +350,40 @@ function ns.GoldEmblem(frame, icon)
 	frame.emblem = e
 	return e
 end
+
+-- Wild Gambit headings (the pick screen's "Choose a card" / "Choose your class"): the carved-wood
+-- screens' Morpheus lettering in gold with a deep shadow, flanked by a thin gold rule and a small
+-- gold diamond on each side. `o:Layout()` puts the ornaments at the text's current width.
+function ns.Ornament(fs, size, ruleLen)
+	fs:SetFont("Fonts\\MORPHEUS.TTF", size, "")
+	fs:SetTextColor(1, 0.82, 0.4)
+	fs:SetShadowColor(0, 0, 0, 0.95)
+	fs:SetShadowOffset(1.5, -1.5)
+	local parent = fs:GetParent()
+	local o = { fs = fs, size = size, ruleLen = ruleLen }
+	for _, side in ipairs({ "l", "r" }) do
+		local d = parent:CreateTexture(nil, "OVERLAY")
+		d:SetColorTexture(1, 0.82, 0.4, 0.95)
+		d:SetSize(6, 6)
+		d:SetRotation(math.rad(45))
+		local rule = parent:CreateTexture(nil, "OVERLAY")
+		rule:SetColorTexture(1, 0.82, 0.4, 0.5)
+		rule:SetSize(ruleLen, 1.5)
+		o["d" .. side], o["rule" .. side] = d, rule
+	end
+	function o:Layout(show)
+		local on = show ~= false and fs:IsShown()
+		for _, t in ipairs({ self.dl, self.dr, self.rulel, self.ruler }) do t:SetShown(on) end
+		if not on then return end
+		local w = fs:GetStringWidth()
+		self.dl:ClearAllPoints()
+		self.dl:SetPoint("CENTER", fs, "CENTER", -(w / 2 + 12), 0)
+		self.dr:ClearAllPoints()
+		self.dr:SetPoint("CENTER", fs, "CENTER", w / 2 + 12, 0)
+		self.rulel:ClearAllPoints()
+		self.rulel:SetPoint("RIGHT", self.dl, "LEFT", -3, 0)
+		self.ruler:ClearAllPoints()
+		self.ruler:SetPoint("LEFT", self.dr, "RIGHT", 3, 0)
+	end
+	return o
+end

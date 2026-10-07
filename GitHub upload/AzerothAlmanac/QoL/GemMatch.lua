@@ -859,6 +859,10 @@ function UpdatePanel()
 		b:SetAlpha(b.dim and 0.5 or 1)
 		b.dot:SetShown(not b.dim)
 	end
+	if frame.shownMode ~= db.mode then -- (a change of mode: a sweep of light over the switch)
+		frame.shownMode = db.mode
+		frame.modeShine.t = 0
+	end
 	frame.soundButton:SetText(db.sound and "Sound: on" or "Sound: off")
 	frame.pauseButton:SetText(game.state == "paused" and "Resume" or "Pause")
 
@@ -1128,15 +1132,18 @@ local function Build()
 		timed = "Score as much as you can in two minutes.",
 		moves = "Score as much as you can in 30 moves. No clock.",
 	}
-	-- (a caption, so it is plain these two are the choice of game)
-	local modeCaption = side:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	modeCaption:SetPoint("TOPLEFT", PAD, -60)
-	modeCaption:SetText("Game mode  |cff999999(pick one)|r")
+	-- (a heading in Wild Gambit's lettering, with its rule and diamond each side, so it is plain these
+	-- two are the choice of game, with room round them)
+	local modeHead = side:CreateFontString(nil, "OVERLAY")
+	modeHead:SetPoint("TOP", side, "TOP", 0, -68)
+	modeHead:SetText("Choose your game")
+	ns.Ornament(modeHead, 14, 18):Layout()
 	local MODE_WORDS = { timed = "Timed  2:00", moves = "30 Moves" }
 	local x, half = PAD, FIELD_W / 2
 	for _, mode in ipairs({ "timed", "moves" }) do
 		local b = FlatButton(side, MODES[mode].label, half + 2, function() NewGame(mode) end)
-		b:SetPoint("TOPLEFT", x - 1, -76)
+		b:SetPoint("TOPLEFT", x - 1, -92)
+		b:SetHeight(28)
 		b:SetText(MODE_WORDS[mode])
 		-- a gold diamond on the mode you are playing
 		b.dot = b:CreateTexture(nil, "OVERLAY", nil, 5)
@@ -1166,7 +1173,7 @@ local function Build()
 	plaque:SetTexture(MEDIA .. "GemMatch_Plaque")
 	plaque:SetTexCoord(0, 1, 0, 0.6328) -- (the picture fills the top 63% of its square canvas)
 	plaque:SetSize(FIELD_W, FIELD_W * 162 / 512)
-	plaque:SetPoint("TOPLEFT", PAD, -106)
+	plaque:SetPoint("TOPLEFT", PAD, -132)
 	local scoreLabel = side:CreateFontString(nil, "OVERLAY", "GameFontDisable")
 	scoreLabel:SetPoint("LEFT", plaque, "LEFT", 38, 2)
 	scoreLabel:SetText("Score")
@@ -1177,27 +1184,57 @@ local function Build()
 	frame.cascade = side:CreateFontString(nil, "OVERLAY")
 	frame.cascade:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
 	frame.cascade:SetTextColor(0.4, 0.85, 1)
-	frame.cascade:SetPoint("TOPLEFT", PAD, -196)
+	frame.cascade:SetPoint("TOPLEFT", PAD, -258) -- (under the best score, clear of the moves number)
 
 	frame.movesLabel = side:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-	frame.movesLabel:SetPoint("TOPLEFT", PAD, -173)
+	frame.movesLabel:SetPoint("TOPLEFT", PAD, -203)
 	frame.moves = side:CreateFontString(nil, "OVERLAY")
 	frame.moves:SetFont(TITLE_FONT, 26, "")
 	frame.moves:SetTextColor(unpack(GOLD))
 	frame.moves:SetPoint("TOPLEFT", frame.movesLabel, "BOTTOMLEFT", 0, -2)
 	frame.best = side:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	frame.best:SetPoint("TOPLEFT", PAD, -219)
+	frame.best:SetPoint("TOPLEFT", PAD, -249)
 
 	-- the gem pouch, spilling beside the moves and best score
 	local pouch = side:CreateTexture(nil, "ARTWORK")
 	pouch:SetTexture(MEDIA .. "GemMatch_Pouch")
 	pouch:SetTexCoord(0, 1, 0, 0.9102)
 	pouch:SetSize(84, 84 * 0.9102)
-	pouch:SetPoint("TOPLEFT", PAD + FIELD_W - 84, -171)
+	pouch:SetPoint("TOPLEFT", PAD + FIELD_W - 84, -201)
 
+	-- a streak of light sweeps across the switch when the window opens and when the mode changes, and
+	-- the glow of the mode that is on breathes slowly
+	local shine = CreateFrame("Frame", nil, side)
+	shine:SetPoint("TOPLEFT", PAD - 4, -88)
+	shine:SetSize(FIELD_W + 8, 36)
+	shine:SetClipsChildren(true)
+	local streak = shine:CreateTexture(nil, "OVERLAY")
+	streak:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	streak:SetBlendMode("ADD")
+	streak:SetVertexColor(1, 0.95, 0.7)
+	streak:SetSize(50, 70)
+	streak:SetAlpha(0)
+	shine:SetScript("OnUpdate", function(self, el)
+		for _, b in pairs(frame.modeButtons) do
+			if not b.dim then b.glow:SetAlpha(0.55 + 0.25 * math.sin(GetTime() * 2.5)) end
+		end
+		if self.t then
+			self.t = self.t + el
+			local p = self.t / 1.0
+			if p >= 1 then
+				self.t = nil
+				streak:SetAlpha(0)
+			else
+				streak:ClearAllPoints()
+				streak:SetPoint("CENTER", self, "LEFT", -25 + (self:GetWidth() + 50) * p, 0)
+				streak:SetAlpha(0.7 * math.sin(math.pi * p))
+			end
+		end
+	end)
+	frame.modeShine = shine
 	local bw = (FIELD_W - 8) / 2
 	local newGame = FlatButton(side, "New game", bw, function() NewGame() end)
-	newGame:SetPoint("TOPLEFT", PAD, -252)
+	newGame:SetPoint("TOPLEFT", PAD, -278)
 	local hint = FlatButton(side, "Hint", bw, function() if game.state == "idle" and not game.hint then ShowHint() end end)
 	hint:SetPoint("LEFT", newGame, "RIGHT", 8, 0)
 	frame.pauseButton = FlatButton(side, "Pause", bw, function() SetPaused(game.state ~= "paused") end)
@@ -1213,14 +1250,14 @@ local function Build()
 	line:SetTexture(MEDIA .. "GemMatch_Divider")
 	line:SetTexCoord(0, 1, 0, 0.6719)
 	line:SetSize(FIELD_W, FIELD_W * 43 / 512)
-	line:SetPoint("TOPLEFT", PAD, -311)
+	line:SetPoint("TOPLEFT", PAD, -338)
 	frame.boardTitle = side:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	frame.boardTitle:SetPoint("TOPLEFT", PAD, -335)
+	frame.boardTitle:SetPoint("TOPLEFT", PAD, -360)
 	frame.leaderRows = {}
-	for i = 1, 5 do
+	for i = 1, 4 do
 		local row = CreateFrame("Frame", nil, side)
 		row:SetSize(FIELD_W, 18)
-		row:SetPoint("TOPLEFT", PAD, -351 - (i - 1) * 18)
+		row:SetPoint("TOPLEFT", PAD, -377 - (i - 1) * 18)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.name:SetPoint("LEFT")
 		row.score = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1228,7 +1265,7 @@ local function Build()
 		frame.leaderRows[i] = row
 	end
 	frame.noLeaders = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	frame.noLeaders:SetPoint("TOPLEFT", PAD, -353)
+	frame.noLeaders:SetPoint("TOPLEFT", PAD, -379)
 	frame.noLeaders:SetWidth(FIELD_W)
 	frame.noLeaders:SetJustifyH("LEFT")
 	frame.noLeaders:SetText("No scores yet. Finish a game to set one; guildmates, friends and party members running Azeroth Almanac show up here.")
@@ -1237,11 +1274,11 @@ local function Build()
 	frame.noLeadersGems:SetTexture(MEDIA .. "GemMatch_Gems")
 	frame.noLeadersGems:SetTexCoord(0, 0.9766, 0, 1)
 	frame.noLeadersGems:SetSize(190, 97)
-	frame.noLeadersGems:SetPoint("TOPLEFT", PAD + 8, -355)
+	frame.noLeadersGems:SetPoint("TOPLEFT", PAD + 8, -383)
 	frame.noLeadersGems:SetAlpha(0.3)
 	-- (what the name colours mean)
 	local legend = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	legend:SetPoint("TOPRIGHT", side, "TOPLEFT", PAD + FIELD_W, -337)
+	legend:SetPoint("TOPRIGHT", side, "TOPLEFT", PAD + FIELD_W, -362)
 	legend:SetText("|cffe6e6e6guild|r |cff80ccffparty|r |cff80ffa6friends|r")
 	local help = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	help:SetPoint("BOTTOMLEFT", PAD, 62)
@@ -1289,6 +1326,7 @@ end
 function GM:Open()
 	if not frame then Build() end
 	frame:Show()
+	frame.modeShine.t = 0 -- (a sweep of light over the mode switch each time the game opens)
 	if not board then NewGame() else UpdatePanel() end
 	-- Ask guildmates, your group and online friends for their bests (at most every 5 minutes).
 	if db.share and C_ChatInfo and GetTime() - lastQuery > 300 then
