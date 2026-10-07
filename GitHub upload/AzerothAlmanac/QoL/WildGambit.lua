@@ -290,6 +290,26 @@ function WG.Ornament(fs, size, ruleLen)
 	return o
 end
 
+-- the lettering of the dealer button's caption (13 pt Morpheus, gold, shadowed) for a wooden
+-- button's own label: Back and Begin
+function WG.WoodLettering(b)
+	if not WG.letterFonts then
+		local function Make(name, r, g, bl)
+			local f = CreateFont(name)
+			f:SetFont("Fonts\\MORPHEUS.TTF", 13, "")
+			f:SetTextColor(r, g, bl)
+			f:SetShadowColor(0, 0, 0, 0.9)
+			f:SetShadowOffset(1, -1)
+			return f
+		end
+		WG.letterFonts = { Make("AzAlmWGLetter", 1, 0.82, 0.4), Make("AzAlmWGLetterOff", 0.62, 0.52, 0.32) }
+	end
+	b:SetNormalFontObject(WG.letterFonts[1])
+	b:SetHighlightFontObject(WG.letterFonts[1])
+	b:SetDisabledFontObject(WG.letterFonts[2])
+	return b
+end
+
 -- the hint line's text: a short one is the heading (big, with ornaments); the longer messages of an
 -- online match are plain gold sentences
 function WG:SetHint(text)
@@ -2939,6 +2959,8 @@ local function Build()
 	frame.backButton = WoodButton(A.Widgets.Button(prep, "Back", 128, function() WG:Back() end))
 	frame.backButton:SetPoint("BOTTOM", pickPanel, "BOTTOM", shuffle.dx, 18)
 	frame.beginButton = WoodButton(A.Widgets.Button(prep, "Begin", 140, function() WG:BeginClicked() end))
+	WG.WoodLettering(frame.backButton)
+	WG.WoodLettering(frame.beginButton)
 	frame.beginButton:SetPoint("BOTTOMRIGHT", -30, 22)
 	frame.beginButton:SetFrameLevel(prep:GetFrameLevel() + 50)
 
