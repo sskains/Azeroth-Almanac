@@ -24,6 +24,7 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 -- the painted board: its picture is shown FRAME_SIZE square, and the gems' grid starts INSET_X / INSET_Y
 -- in from its top left (measured from the art: the sockets' pitch is 94.4 px of 1024, so 50 px here)
 local FRAME_SIZE = 542
+local RIBBON_V = 0.5547 -- (the ribbon fills this much of its square-ish canvas, from the top: SetTexCoord)
 local PANEL_W = 330 -- the carved side panel (its frame takes 58 px each side, so the field inside is PANEL_W - 124 with a little air)
 local INSET_X, INSET_Y = 73.5, 68.5
 local BURST_TIME = 0.45
@@ -779,7 +780,7 @@ function UpdatePanel()
 	frame.pauseButton:SetText(game.state == "paused" and "Resume" or "Pause")
 
 	local leaders = Leaders(db.mode)
-	frame.boardTitle:SetText(("Best scores  |cff999999%s|r"):format(MODES[db.mode].label))
+	frame.boardTitle:SetText(("Best  |cff999999%s|r"):format(MODES[db.mode].label)) -- (short: the colour key shares its line)
 	for i, row in ipairs(frame.leaderRows) do
 		local entry = leaders[i]
 		if entry then
@@ -924,24 +925,48 @@ local function Build()
 	cover:Hide()
 	frame.pauseCover = cover
 
-	-- Game over panel
-	local over = CreateFrame("Frame", nil, boardFrame, "BackdropTemplate")
-	DialogBackdrop(over)
-	over:SetSize(290, 180)
+	-- Game over panel: the carved panel with the "Well played!" ribbon across its top edge and a
+	-- scatter of gems spilling out from under its bottom edge
+	local over = CreateFrame("Frame", nil, boardFrame)
+	over:SetSize(360, 250)
 	over:SetPoint("CENTER", inner)
 	over:SetFrameLevel(inner:GetFrameLevel() + 50)
 	over:EnableMouse(true)
+	local overGems = over:CreateTexture(nil, "BACKGROUND", nil, -8)
+	overGems:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Gems")
+	overGems:SetTexCoord(0, 0.9766, 0, 1)
+	overGems:SetSize(300, 153)
+	overGems:SetPoint("CENTER", over, "BOTTOM", 0, 6)
+	local overArt = over:CreateTexture(nil, "BACKGROUND", nil, 0)
+	overArt:SetAllPoints()
+	overArt:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Panel")
+	if overArt.SetTextureSliceMargins then
+		pcall(overArt.SetTextureSliceMargins, overArt, 58, 58, 58, 58)
+		if overArt.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(overArt.SetTextureSliceMode, overArt, Enum.UITextureSliceMode.Stretched) end
+	end
+	local ribbon = over:CreateTexture(nil, "OVERLAY", nil, 2)
+	ribbon:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Ribbon")
+	ribbon:SetTexCoord(0, 1, 0, RIBBON_V)
+	ribbon:SetSize(390, 390 * RIBBON_V / 2)
+	ribbon:SetPoint("CENTER", over, "TOP", 0, 0)
+	local ribbonText = over:CreateFontString(nil, "OVERLAY", nil, 3)
+	ribbonText:SetFont(TITLE_FONT, 24, "")
+	ribbonText:SetTextColor(1, 0.86, 0.4)
+	ribbonText:SetShadowColor(0, 0, 0, 0.9)
+	ribbonText:SetShadowOffset(1, -1)
+	ribbonText:SetPoint("CENTER", ribbon, "CENTER", 0, -4)
+	ribbonText:SetText("Well played!")
 	frame.overTitle = over:CreateFontString(nil, "OVERLAY")
-	frame.overTitle:SetFont(TITLE_FONT, 26, "")
+	frame.overTitle:SetFont(TITLE_FONT, 18, "")
 	frame.overTitle:SetTextColor(unpack(GOLD))
-	frame.overTitle:SetPoint("TOP", 0, -20)
+	frame.overTitle:SetPoint("TOP", 0, -70)
 	frame.overScore = over:CreateFontString(nil, "OVERLAY")
 	frame.overScore:SetFont(TITLE_FONT, 34, "")
-	frame.overScore:SetPoint("TOP", frame.overTitle, "BOTTOM", 0, -8)
+	frame.overScore:SetPoint("TOP", frame.overTitle, "BOTTOM", 0, -4)
 	frame.overBest = over:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	frame.overBest:SetPoint("TOP", frame.overScore, "BOTTOM", 0, -6)
+	frame.overBest:SetPoint("TOP", frame.overScore, "BOTTOM", 0, -4)
 	local again = FlatButton(over, "Play again", 140, function() NewGame() end)
-	again:SetPoint("BOTTOM", 0, 20)
+	again:SetPoint("TOP", frame.overBest, "BOTTOM", 0, -10)
 	over:Hide()
 	frame.over = over
 
@@ -1056,6 +1081,9 @@ local function Build()
 		hide = { titleBg, icon, title }, close = close, byline = sub })
 	-- the corner icon bigger, in the gold elite frame, as in Wild Gambit
 	ns.GoldEmblem(frame, GetIcon(7910) or "Interface\\Icons\\INV_Misc_Gem_01")
+	-- the byline ("Azeroth Almanac") would sit behind the bigger icon: to its right instead
+	sub:ClearAllPoints()
+	sub:SetPoint("TOPLEFT", frame, "TOPLEFT", 172, -31)
 	frame:SetScript("OnUpdate", function(_, elapsed) if board then Step(elapsed) end end)
 	frame:SetScript("OnHide", function() SetPaused(true) end)
 end
