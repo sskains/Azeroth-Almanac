@@ -1,4 +1,11 @@
-# Azeroth Almanac – Development Tasks
+# Azeroth Almanac – Design notes
+
+> **This was `docs/TASKS.md` until 2026-10-07.** It's kept as the design record: the ground rules, research findings and decisions behind each feature. Its checkboxes are historical; don't update them.
+> - What to work on, and who: GitHub Issues and the project board (`docs/ROADMAP.md` explains it).
+> - What changed in each version: `CHANGELOG.md`.
+> - What still needs testing in game: `docs/TEST_CHECKLIST.md`.
+>
+> Add to this file when a design decision is made (a new rule, a finding, the agreed design for a feature).
 
 Game: WoW Forever beta (`_classic_beta_`, interface 16001). Addon folder: `Interface\AddOns\AzerothAlmanac`.
 Slash command: `/aa`. Saved variables: `AzerothAlmanacDB` (account-wide).

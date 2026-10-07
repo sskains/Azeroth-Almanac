@@ -2237,7 +2237,9 @@ local function Build()
 		p:SetScale(S)
 		p:SetSize(330 / S, 96 / S)
 		if side == "me" then p:SetPoint("LEFT", frame, "TOPLEFT", 16 / S, -HEAD_Y / S) else p:SetPoint("RIGHT", frame, "TOPRIGHT", -16 / S, -HEAD_Y / S) end
-		local abilityX = (COL / 2) / S -- (the hand column's middle)
+		-- (the spell and the portrait a little out from the hand column, so the nameplate starts
+		-- clear of the portrait's frame and its coin sits whole in the plate's round end)
+		local abilityX = (COL / 2) / S - 6
 		local portraitX = abilityX + 31 + 4 + PORTRAIT_FRAME / 2
 		p:SetFrameLevel(frame:GetFrameLevel() + 140) -- (over the tables, the board and the result)
 		p.portrait = p:CreateTexture(nil, "ARTWORK")
@@ -2264,7 +2266,7 @@ local function Build()
 		-- opponent's mirrored): the score on a bronze coin in its round end, the name along it over
 		-- an inlay of the class colour, and a gold arrow at its far end on the player's turn
 		local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
-		local PW = p.name:GetWidth() + 14
+		local PW = p.name:GetWidth() + 2
 		local PH = PW / 4.4 -- (taller than the painting's own shape, so the name has room)
 		local mine = side == "me"
 		local function X(f) return mine and f * PW or -f * PW end -- (along the plate from its portrait end)
@@ -2273,7 +2275,7 @@ local function Build()
 		p.plate:SetSize(PW, PH)
 		p.plate:SetTexture(MEDIA .. "Header_Nameplate")
 		if not mine then p.plate:SetTexCoord(1, 0, 0, 1) end
-		p.plate:SetPoint(edge, p, edge, mine and (portraitX + PORTRAIT_FRAME / 2 - 10) or -(portraitX + PORTRAIT_FRAME / 2 - 10), 0)
+		p.plate:SetPoint(edge, p, edge, mine and (portraitX + PORTRAIT_FRAME / 2 + 2) or -(portraitX + PORTRAIT_FRAME / 2 + 2), 0)
 		p.inlay = p:CreateTexture(nil, "ARTWORK", nil, -1)
 		p.inlay:SetColorTexture(1, 1, 1, 1)
 		p.inlay:SetSize(0.705 * PW, 0.12 * PH)
@@ -2281,20 +2283,27 @@ local function Build()
 		p.inlay:SetBlendMode("ADD")
 		p.inlay:SetAlpha(0.35)
 		-- whose turn: a warm glow round the plate
+		-- (two layers added together: twice the light, and reaching twice as far)
 		p.plateGlow = p:CreateTexture(nil, "BACKGROUND", nil, 1)
-		p.plateGlow:SetPoint("TOPLEFT", p.plate, "TOPLEFT", -18, 16)
-		p.plateGlow:SetPoint("BOTTOMRIGHT", p.plate, "BOTTOMRIGHT", 18, -16)
+		p.plateGlow:SetPoint("TOPLEFT", p.plate, "TOPLEFT", -36, 32)
+		p.plateGlow:SetPoint("BOTTOMRIGHT", p.plate, "BOTTOMRIGHT", 36, -32)
 		p.plateGlow:SetTexture(GLOW_TEX)
 		p.plateGlow:SetBlendMode("ADD")
 		p.plateGlow:SetVertexColor(1, 0.78, 0.3)
 		p.plateGlow:Hide()
+		p.plateGlow2 = p:CreateTexture(nil, "BACKGROUND", nil, 2)
+		p.plateGlow2:SetAllPoints(p.plateGlow)
+		p.plateGlow2:SetTexture(GLOW_TEX)
+		p.plateGlow2:SetBlendMode("ADD")
+		p.plateGlow2:SetVertexColor(1, 0.78, 0.3)
+		p.plateGlow2:Hide()
 		-- the score on a bronze coin at the portrait's end, over the frames (it has to be seen)
 		p.coin = p:CreateTexture(nil, "OVERLAY", nil, 5)
-		p.coin:SetSize(1.2 * PH, 1.2 * PH)
+		p.coin:SetSize(0.84 * PH, 0.84 * PH) -- (inside the plate's round end)
 		p.coin:SetTexture(MEDIA .. "Header_ScoreCoin")
 		p.coin:SetPoint("CENTER", p.plate, edge, X(0.078), 0.01 * PH)
 		p.score = p:CreateFontString(nil, "OVERLAY", nil, 7)
-		p.score:SetFont(TITLE_FONT, 26, "OUTLINE")
+		p.score:SetFont(TITLE_FONT, 19, "OUTLINE")
 		p.score:SetTextColor(1, 0.95, 0.75)
 		p.score:SetShadowOffset(1, -1)
 		p.score:SetPoint("CENTER", p.coin, "CENTER", 0, 1)
@@ -3046,6 +3055,7 @@ local function Build()
 			end
 		end
 		WG:StepFX(elapsed)
+		if self.boardEyes then WG:StepEyes(clock) end
 		if self.ghost and self.ghost:IsShown() then CardBling(self.ghost, elapsed, clock) end
 		if self.zoom and self.zoom:IsShown() then CardBling(self.zoom, elapsed, clock) end
 		-- the hovered square's glow breathes
@@ -3072,8 +3082,11 @@ local function Build()
 				p.turnGlow:SetAlpha(0.5 + 0.4 * math.sin(clock * 3))
 				-- the arrow at the end of the nameplate points at the name whose turn it is, nudging at it
 				if p.plateGlow then
+					local a = 0.45 + 0.35 * math.sin(clock * 3)
 					p.plateGlow:SetShown(game.turn == side)
-					p.plateGlow:SetAlpha(0.45 + 0.35 * math.sin(clock * 3))
+					p.plateGlow:SetAlpha(a)
+					p.plateGlow2:SetShown(game.turn == side)
+					p.plateGlow2:SetAlpha(a)
 				end
 				if p.turnGem then
 					p.turnGem:SetShown(game.turn == side)
@@ -3443,7 +3456,7 @@ function Refresh()
 			frame.slots[cell].target:SetShown(ok)
 		end
 	end
-	if game.over then for _, p in pairs(frame.players) do p.turnGlow:Hide() if p.turnGem then p.turnGem:Hide() end if p.plateGlow then p.plateGlow:Hide() end end end
+	if game.over then for _, p in pairs(frame.players) do p.turnGlow:Hide() if p.turnGem then p.turnGem:Hide() end if p.plateGlow then p.plateGlow:Hide() p.plateGlow2:Hide() end end end
 	local status
 	if game.over then
 		status = ""
@@ -3868,6 +3881,8 @@ local function Deal(owner, total)
 	f.vanishing = nil
 	f:SetAlpha(1)
 	f.aim:Hide()
+	f.bubble:Hide()
+	f.effect:Hide()
 	SetCard(f, card)
 	SetOwner(f, game.color[owner], owner == "bot")
 	tinsert(game.hands[owner], { card = card, frame = f })
@@ -4043,6 +4058,7 @@ end
 
 -- step 2: the chosen card lifts; the line at the top says what's next; Begin (or Ready) waits for a card
 function WG:PaintPick()
+	if frame.shuffling then return end -- (the deal paints the table when it's done)
 	for _, f in ipairs(frame.pickCards) do
 		local chosen = frame.chosen ~= nil and f.card == frame.chosen
 		f.select:SetShown(chosen)
@@ -4129,6 +4145,7 @@ end
 local function ClearTable()
 	Zoom(nil)
 	frame.shuffling = nil
+	if frame.deckGlow then frame.deckGlow:Hide() end
 	if frame.waitNote then frame.waitNote:Hide() end
 	frame.over:Hide()
 	for _, c in ipairs(frame.cards) do c:Hide() end
@@ -4140,7 +4157,7 @@ local function ClearTable()
 		if p.ankh then p.ankh:Hide() end
 		p.turnGlow:Hide()
 		if p.turnGem then p.turnGem:Hide() end
-		if p.plateGlow then p.plateGlow:Hide() end
+		if p.plateGlow then p.plateGlow:Hide() p.plateGlow2:Hide() end
 	end
 	frame.status:SetText("")
 	frame.leave:Hide()
@@ -4239,17 +4256,23 @@ end
 -- step 2: pick your card and class (the opponent already in the seat across the table)
 function WG:ShowPick()
 	if not frame then Build() end
-	ClearTable()
+	-- (opened fresh: the deck is shuffled and dealt; already open, it's only brought up to date,
+	-- and a shuffle under way is left to finish)
+	local refresh = frame.prep:IsVisible()
+	local busy = refresh and frame.shuffling
+	if not busy then ClearTable() end
 	local cards = self:Collection()
 	frame.collection = cards
 	frame.fate = false
 	local shown, hero = self:PickSet(cards, false)
 	for i, f in ipairs(frame.pickCards) do
 		local c = shown[i]
-		if c then
+		if busy then
+			-- (the deal will set the cards)
+		elseif c then
 			f.flipAt = nil
-			f:FaceDown(false)
 			SetCard(f, c)
+			f:FaceDown(not refresh) -- (backs first: the opening shuffle deals them face up)
 			SetOwner(f, ClassColor(select(2, UnitClass("player"))), false)
 			f:Show()
 		else
@@ -4275,7 +4298,10 @@ function WG:ShowPick()
 	frame.prep:Show()
 	frame.pick:Show()
 	frame:Show()
+	if busy then return end
 	self:PaintPick()
+	-- every pick table opens with the deck shuffled in front of you, then dealt face up
+	if not refresh then self:Shuffle(shown) end
 end
 
 -- the ten on the pick table: you and your companions always; then your favourites and your
@@ -4305,36 +4331,47 @@ function WG:PickSet(cards, random)
 	return shown, hero
 end
 
--- Shuffle: the cards on the table are swept into the deck and dealt again (you and your
--- companions come back; the rest are new). The card you'd picked stays picked if it comes back.
-WG.SHUFFLE = { gather = 0.32, deal = 0.26, gap = 0.07 } -- (seconds: swept up, each card's flight, between cards)
-function WG:Shuffle()
+-- Shuffle: the cards on the table are swept into the deck, riffled twice in plain sight and
+-- dealt again (you and your companions come back; the rest are new). The card you'd picked stays
+-- picked if it comes back. `shown` deals that set instead (the table's opening deal, ShowPick).
+WG.SHUFFLE = { gather = 0.4, riffle = 1.25, deal = 0.32, gap = 0.1, split = 78 } -- (seconds; split: the two halves apart)
+function WG:Shuffle(shown)
 	if not (frame and frame.prep:IsShown() and frame:IsShown()) or frame.shuffling then return end
 	local cards = frame.collection or self:Collection()
 	frame.collection = cards
-	local shown = self:PickSet(cards, true)
+	if type(shown) ~= "table" then shown = self:PickSet(cards, true) end
 	local chosen = frame.chosen
 	if frame.fate then self:Fate(false) end
 	Zoom(nil)
-	frame.shuffling = { t = 0, shown = shown, chosen = chosen, dealt = {} }
+	frame.shuffling = { t = 0, shown = shown, chosen = chosen, dealt = {}, riffled = {} }
 	frame.chosen = nil
-	if db.sound ~= false then
-		PlaySoundFile(567562, "SFX") -- (the cards picked up)
-		for k, id in ipairs({ 567472, 567502, 567457, 567472 }) do -- (riffled)
-			C_Timer.After(0.12 + k * 0.07, function() PlaySoundFile(id, "SFX") end)
-		end
-	end
+	frame.pickHint:SetText("|cffffd100Shuffling the deck...|r")
+	frame.beginButton:SetEnabled(false)
+	frame.beginButton:SetAlpha(0.55)
+	if db.sound ~= false then PlaySoundFile(567562, "SFX") end -- (the cards picked up)
 	for _, f in ipairs(frame.pickCards) do
 		f.from = { f.px, f.py }
 		f.select:Hide()
 	end
+	-- a glow under the deck while it's handled
+	if not frame.deckGlow then
+		frame.deckGlow = frame.pick:CreateTexture(nil, "ARTWORK", nil, 7)
+		frame.deckGlow:SetTexture(GLOW_TEX)
+		frame.deckGlow:SetBlendMode("ADD")
+		frame.deckGlow:SetVertexColor(1, 0.8, 0.35)
+	end
+	frame.deckGlow:ClearAllPoints()
+	frame.deckGlow:SetPoint("CENTER", frame.pick, "TOP", frame.shuffleButton.dx, frame.shuffleButton.dy)
+	frame.deckGlow:SetSize(2 * WG.SHUFFLE.split + 170, 190)
+	frame.deckGlow:SetAlpha(0)
+	frame.deckGlow:Show()
 end
 
 -- one step of a shuffle (from the window's OnUpdate)
 function WG:StepShuffle(elapsed)
 	local sh = frame and frame.shuffling
 	if not sh then return end
-	local SHUFFLE_GATHER, SHUFFLE_DEAL, SHUFFLE_GAP = WG.SHUFFLE.gather, WG.SHUFFLE.deal, WG.SHUFFLE.gap
+	local K = WG.SHUFFLE
 	sh.t = sh.t + elapsed
 	local deckX, deckY = frame.shuffleButton.dx, frame.shuffleButton.dy
 	local function Place(f, x, y, sc)
@@ -4343,13 +4380,18 @@ function WG:StepShuffle(elapsed)
 		f:SetPoint("CENTER", frame.pick, "TOP", x / sc, y / sc)
 	end
 	local ease = function(p) return 1 - (1 - p) * (1 - p) end
-	if sh.t < SHUFFLE_GATHER then
+	local clamp = function(v) return math.max(0, math.min(1, v)) end
+	local dealStart = K.gather + K.riffle + 0.12
+	-- the deck's glow: up while it's in hand, fading as the cards go out
+	local g = sh.t < dealStart and clamp(sh.t / K.gather) or clamp(1 - (sh.t - dealStart) / 0.6)
+	frame.deckGlow:SetAlpha(g * (0.55 + 0.2 * math.sin(sh.t * 9)))
+	if sh.t < K.gather then
 		-- swept into the deck, turning over
-		local p = ease(sh.t / SHUFFLE_GATHER)
+		local p = ease(sh.t / K.gather)
 		for _, f in ipairs(frame.pickCards) do
 			if f:IsShown() and f.from then
 				if not f.backFrame:IsShown() then f:FaceDown(true) end
-				Place(f, f.from[1] + (deckX - f.from[1]) * p, f.from[2] + (deckY - f.from[2]) * p, 0.92 - 0.42 * p)
+				Place(f, f.from[1] + (deckX - f.from[1]) * p, f.from[2] + (deckY - f.from[2]) * p + 30 * math.sin(math.pi * p), 0.92 - 0.3 * p)
 			end
 		end
 		return
@@ -4364,32 +4406,75 @@ function WG:StepShuffle(elapsed)
 				SetOwner(f, ClassColor(select(2, UnitClass("player"))), false)
 				f:FaceDown(true)
 				f.flipAt = nil
-				Place(f, deckX, deckY, 0.5)
+				Place(f, deckX, deckY, 0.62)
 				f:Show()
 			else
 				f:Hide()
 			end
 		end
 	end
+	local n = 0
+	for _, f in ipairs(frame.pickCards) do if f:IsShown() then n = n + 1 end end
+	local u = (sh.t - K.gather) / K.riffle
+	if u < 1 then
+		-- riffled twice: the deck splits into two halves, side by side, and the cards fall back
+		-- together one from each in turn, hopping as they go (each pass has its own riffle sound)
+		local passes = { { 0, 0.2, 0.5 }, { 0.5, 0.68, 1 } } -- split from, merge from, merge to
+		local k = 0
+		for i, f in ipairs(frame.pickCards) do
+			if f:IsShown() then
+				k = k + 1
+				local side = (k % 2 == 1) and -1 or 1
+				local off, hop, lift = 0, 0, 0
+				for _, ps in ipairs(passes) do
+					if u >= ps[1] and u < ps[2] then
+						local e = ease((u - ps[1]) / (ps[2] - ps[1]))
+						off, hop = e, 14 * math.sin(math.pi * e)
+					elseif u >= ps[2] and u < ps[3] then
+						-- (top card of each half first)
+						local q = clamp(((u - ps[2]) / (ps[3] - ps[2]) - (n - k) / n * 0.6) / 0.4)
+						off, hop, lift = 1 - ease(q), 26 * math.sin(math.pi * q), q
+					end
+				end
+				Place(f, deckX + side * K.split * off, deckY + hop + (n - k) * 1.2, 0.62 + 0.05 * math.sin(math.pi * off))
+				f:SetFrameLevel(frame.pick:GetFrameLevel() + 20 + math.floor(lift * 10) + k)
+			end
+		end
+		for pi, ps in ipairs(passes) do
+			if u >= ps[2] and not sh.riffled[pi] then
+				sh.riffled[pi] = true
+				if db.sound ~= false then
+					for m, id in ipairs({ 567472, 567502, 567457, 567472, 567502 }) do
+						C_Timer.After((m - 1) * 0.08, function() PlaySoundFile(id, "SFX") end)
+					end
+				end
+			end
+		end
+		return
+	end
 	-- dealt out one by one, each turning over as it lands
 	local done = true
+	local k = 0
 	for i, f in ipairs(frame.pickCards) do
 		if f:IsShown() then
-			local start = SHUFFLE_GATHER + 0.1 + (i - 1) * SHUFFLE_GAP
-			local p = math.max(0, math.min(1, (sh.t - start) / SHUFFLE_DEAL))
+			k = k + 1
+			local start = dealStart + (k - 1) * K.gap
+			local p = clamp((sh.t - start) / K.deal)
 			if p < 1 then done = false end
 			local e = ease(p)
-			Place(f, deckX + (f.px - deckX) * e, deckY + (f.py - deckY) * e - 18 * math.sin(math.pi * p), 0.5 + 0.42 * e)
+			Place(f, deckX + (f.px - deckX) * e, deckY + (f.py - deckY) * e + 40 * math.sin(math.pi * p), 0.62 + 0.3 * e)
+			if p > 0 then f:SetFrameLevel(f.pickLevel + (p < 1 and 30 or 0)) end
 			if p >= 1 and not sh.dealt[i] then
 				sh.dealt[i] = true
 				f.flipSounded = true
 				f.flipAt = GetTime()
-				if db.sound ~= false and i % 2 == 1 then PlaySoundFile(567556, "SFX") end -- (laid down)
+				if db.sound ~= false and k % 2 == 1 then PlaySoundFile(567556, "SFX") end -- (laid down)
 			end
 		end
 	end
-	if done and sh.t > SHUFFLE_GATHER + 0.1 + 10 * SHUFFLE_GAP + SHUFFLE_DEAL + 0.35 then
+	if done and sh.t > dealStart + n * K.gap + K.deal + 0.35 then
 		frame.shuffling = nil
+		frame.deckGlow:Hide()
 		-- the card you'd picked, if it came back (you are always back)
 		if sh.chosen then
 			for _, f in ipairs(frame.pickCards) do
@@ -4420,7 +4505,9 @@ function WG:Begin(o)
 	}
 	if frame.coach and not o.tutorial then frame.coach:Hide() frame.coach.hl:Hide() end
 	for i = 1, 9 do frame.slots[i].trap:Hide() end
-	for _, c in ipairs(frame.cards) do c:Hide() c.vanishing = nil c.hidden = nil c:SetAlpha(1) c.aim:Hide() end
+	-- (frames are reused game to game: clear what the last game's spells left on them, or a card in
+	-- your new hand could still wear a Divine Shield bubble)
+	for _, c in ipairs(frame.cards) do c:Hide() c.vanishing = nil c.hidden = nil c:SetAlpha(1) c.aim:Hide() c.bubble:Hide() c.effect:Hide() end
 	wipe(frame.anims)
 	local n = 0
 	for _, side in ipairs({ "me", "bot" }) do
@@ -5541,6 +5628,9 @@ end
 
 WG.BOARDS = { { key = "Glade", name = "Forest glade" }, { key = "Ruin", name = "Moonlit ruin" }, { key = "Tavern", name = "Tavern table" },
 	{ key = "HallowsEnd", name = "Hallow's End" }, { key = "WinterVeil", name = "Feast of Winter Veil" } }
+-- (a board may also list `eyes` = { { x, y, "red"? }, ... } at fractions of its picture, which glow
+-- and pulse, and `crest` = true to hide the vs shield when its art has a centrepiece there)
+WG.DEFAULT_BOARD = "Glade"
 -- the holiday on now, by the calendar (Hallow's End 18 Oct - 1 Nov, Winter Veil 16 Dec - 2 Jan)
 function WG:HolidayBoard()
 	local ok, t = pcall(date, "*t")
@@ -5554,7 +5644,7 @@ end
 function WG:ApplyBoard()
 	local art = frame and frame.boardArt
 	if not art then return end
-	local key = (db and db.holidayBoards ~= false and self:HolidayBoard()) or (db and db.board) or "Glade"
+	local key = (db and db.holidayBoards ~= false and self:HolidayBoard()) or (db and db.board) or WG.DEFAULT_BOARD
 	local a = BOARDS[key] or BOARDS.Glade
 	local gw, gh = 3 * CW + 2 * GAP + 2 * BOARD_PAD, 3 * CH + 2 * GAP + 2 * BOARD_PAD
 	local w = gw / (a.inner[3] - a.inner[1])
@@ -5563,6 +5653,42 @@ function WG:ApplyBoard()
 	art:SetSize(w, h)
 	art:ClearAllPoints()
 	art:SetPoint("TOPLEFT", frame.board, "TOPLEFT", MARGIN - BOARD_PAD - a.inner[1] * w, -(MARGIN - BOARD_PAD - a.inner[2] * h))
+	if frame.vsPlaque then frame.vsPlaque:SetShown(not a.crest) frame.vs:SetShown(not a.crest) end
+	-- the creatures' eyes: a hot core in a wider halo, added over the painting (WG:StepEyes pulses them)
+	frame.boardEyes = frame.boardEyes or {}
+	for i, e in ipairs(frame.boardEyes) do e.core:Hide() e.halo:Hide() frame.boardEyes[i].on = false end
+	for i, spot in ipairs(a.eyes or {}) do
+		local e = frame.boardEyes[i]
+		if not e then
+			e = { halo = frame.board:CreateTexture(nil, "BACKGROUND", nil, -6), core = frame.board:CreateTexture(nil, "BACKGROUND", nil, -5) }
+			for _, t in ipairs({ e.halo, e.core }) do t:SetTexture(GLOW_TEX) t:SetBlendMode("ADD") end
+			frame.boardEyes[i] = e
+		end
+		local red = spot[3] == "red"
+		local c = red and { 1, 0.22, 0.08 } or { 0.45, 1, 0.15 }
+		e.halo:SetVertexColor(c[1], c[2], c[3])
+		e.core:SetVertexColor(math.min(1, c[1] + 0.4), math.min(1, c[2] + 0.4), math.min(1, c[3] + 0.4))
+		local size = (red and 0.019 or 0.023) * w
+		e.halo:SetSize(size * 2.8, size * 2.4)
+		e.core:SetSize(size, size * 0.85)
+		for _, t in ipairs({ e.halo, e.core }) do
+			t:ClearAllPoints()
+			t:SetPoint("CENTER", art, "TOPLEFT", spot[1] * w, -spot[2] * h)
+			t:Show()
+		end
+		e.on, e.red, e.phase = true, red, i * 1.7
+	end
+end
+
+-- the board's eyes breathe: the dragon's slow and deep, the corners' each a little out of step
+function WG:StepEyes(clock)
+	for _, e in ipairs(frame.boardEyes or {}) do
+		if e.on then
+			local p = e.red and (0.5 + 0.5 * math.sin(clock * 1.6)) or (0.5 + 0.5 * math.sin(clock * 2.3 + e.phase))
+			e.halo:SetAlpha(0.25 + 0.6 * p)
+			e.core:SetAlpha(0.55 + 0.45 * p)
+		end
+	end
 end
 
 WG.BACKS = { { key = "Almanac", name = "Almanac (compass)" }, { key = "Wild", name = "Wild (wolf)" } }

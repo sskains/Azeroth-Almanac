@@ -2,7 +2,7 @@
 ## Title: Azeroth Almanac
 ## Notes: An adventurer's journal for WoW Forever: everything you discover, across all your characters. /aa
 ## Author: skain
-## Version: 0.51.0
+## Version: 0.53.1
 ## SavedVariables: AzerothAlmanacDB
 ## IconTexture: 133742
 

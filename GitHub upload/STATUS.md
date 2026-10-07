@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.51.0** · 2026-10-06 · WoW Forever beta (interface 16001)
+**Version 0.53.1** · 2026-10-07 · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
@@ -87,9 +87,9 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
   - Hand sizing (0.46.9): six cards at about 0.69 keep their spikes clear; growth as cards leave.
   - Stealth look: smoke layers rise, badge at the frame's left edge; the zoomed hidden card keeps it.
   - "Blocked from an action" popup (SpellStopCasting on Escape / logout): fixed in 0.49.1 (StaticPopupDialogs was being reassigned). Confirm it no longer appears; db.diag keeps the latest 30 blocks.
-- **Open:** GitHub push of the local commits; Tutor portrait art (a dice icon now); Logo_MurlocTacToe / Logo_GemMatch art for the flight prompt.
+- **Open:** Tutor portrait art (a dice icon now); Logo_MurlocTacToe / Logo_GemMatch art for the flight prompt; Dark Portal board with new art.
 
 ## Housekeeping
 
 - `dev/AlmanacProbe` can be removed once nothing needs it.
-- The detailed plan, decisions and per-version history live in `docs/TASKS.md`.
+- Tasks: GitHub Issues and the project board (`docs/ROADMAP.md`). History: `CHANGELOG.md`. Design: `docs/DESIGN.md`. In-game checks: `docs/TEST_CHECKLIST.md`.

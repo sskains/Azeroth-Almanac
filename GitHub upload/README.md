@@ -39,7 +39,10 @@ Also included, ported from Plus Everything (same author): quest targeter, gather
 ```
 AzerothAlmanac/   the addon (copy this into Interface\AddOns)
 tools/            Python build scripts for the hidden databases (Data\*.lua) from the VMaNGOS world database
-docs/TASKS.md     the full development plan and history, section by section
+docs/DESIGN.md    design record: ground rules, research and each feature's agreed design
+docs/ROADMAP.md   how work is tracked (GitHub Issues + project board) and what's next
+docs/TEST_CHECKLIST.md   everything that still needs confirming in game
+CHANGELOG.md      what changed in each version
 docs/ArtCatalogue.md   every game atlas, font and layout recorded in game with /aa artlog
 dev/AlmanacProbe/ the early API probe addon (development only)
 STATUS.md         where the project stands

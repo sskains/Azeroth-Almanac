@@ -421,20 +421,273 @@ local function BuildAlerts(P)
 	end
 end
 
+-- Progression: the creature tiers and the gathering ranks as ladders (badge, what it takes, what it
+-- reveals, the alert it earns, and for creatures the Wild Gambit spikes), how tiers make Wild Gambit
+-- cards, and the account's own counts. Every number is read from the modules, so the page follows
+-- any change to the thresholds. (Fixed, not settings: the same tiers for every player, so cards match.)
 local function BuildTiers(P)
-	-- fixed (not settings): the same tiers for every player, so Wild Gambit cards match too
 	local B, G = ns.Bestiary, ns.Gathering
-	P:Section(L["Research tiers"], L["How many kills or gathers it takes to learn more. Hunted reveals every ability; Master Hunter reveals immunities, resistances and the full loot table. Journeyman reveals everything a node can hold; Expert adds how likely each find is. The last two tiers are milestones (and a creature's Wild Gambit card turns Epic and Legendary)."])
-	local function Row(names, at, unit)
-		local parts = {}
-		for t = 2, 6 do parts[#parts + 1] = ("%s %s"):format(names[t], ns.N(at[t], unit, unit .. "s")) end
-		return table.concat(parts, "  ·  ")
+	local WL = Q and Q.WildLogic
+	local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+	local ALERT = { [2] = L["green alert"], [3] = L["blue alert"], [4] = L["purple alert"], [5] = L["orange alert"] }
+	local function Hex(c) return ("|cff%02x%02x%02x"):format(math.floor(c[1] * 255), math.floor(c[2] * 255), math.floor(c[3] * 255)) end
+	local function Color(t) return (B and B.TIER_COLORS[t]) or { 1, 1, 1 } end
+	local function Font(parent, font, r, g, b)
+		local fs = parent:CreateFontString(nil, "OVERLAY", font)
+		if r then fs:SetTextColor(r, g, b) end
+		fs:SetJustifyH("LEFT")
+		return fs
 	end
-	for _, r in ipairs({ { "normal", L["Creatures"] }, { "rare", L["Rares and bosses"] } }) do
-		local t = B.TIER_KILLS[r[1]]
-		P:Text("|cffffd100" .. r[2] .. ":|r  " .. Row(B.TIERS, { 0, 1, t.studied, t.mastered, t.revered, t.exalted }, "kill"))
+	local function Badge(parent, size, icon, tier)
+		local b = W.Portrait(parent, size)
+		if icon then b.art:SetTexture(icon) b.art:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+		b:SetRing(unpack(Color(tier)))
+		return b
 	end
-	if G then P:Text("|cffffd100" .. L["Gathering and fishing"] .. ":|r  " .. Row(G.TIERS, G.AT, "gather")) end
+	-- a small card in the tier's painted frame, with a number on it ("+3", "7")
+	local function MiniCard(parent, w, tier, text)
+		local c = CreateFrame("Frame", nil, parent)
+		c:SetSize(w, w * 124 / 92)
+		local bg = c:CreateTexture(nil, "BACKGROUND")
+		bg:SetPoint("TOPLEFT", w * 0.1, -w * 0.08)
+		bg:SetPoint("BOTTOMRIGHT", -w * 0.1, w * 0.08)
+		bg:SetColorTexture(0.06, 0.05, 0.04, 1)
+		local art = c:CreateTexture(nil, "ARTWORK")
+		art:SetAllPoints()
+		art:SetTexture(MEDIA .. "Frame_" .. ({ "1_Poor", "2_Common", "3_Uncommon", "4_Rare", "5_Epic", "6_Legendary" })[tier])
+		local n = c:CreateFontString(nil, "OVERLAY", w > 50 and "GameFontHighlightLarge" or "GameFontHighlight")
+		n:SetPoint("CENTER", 0, w * 0.16)
+		n:SetText(text)
+		return c
+	end
+
+	-- one ladder: rows = { { tier, icon, name, need, needSub, reveals, alert, cardText } }
+	local ROW_H = 70
+	local function Ladder(heads, rows)
+		P:Custom(18 + #rows * ROW_H, function(f, w)
+			local hx = { 0, 54, w - 232, w - 74 }
+			for k, h in ipairs(heads) do
+				if h then
+					local fs = Font(f, "GameFontDisableSmall", 0.6, 0.6, 0.6)
+					fs:SetPoint("TOPLEFT", hx[k], 0)
+					fs:SetText(h)
+				end
+			end
+			local prev
+			for k, r in ipairs(rows) do
+				local y = -18 - (k - 1) * ROW_H
+				local c = Color(r[1])
+				local badge = Badge(f, 42, r[2], r[1])
+				badge:SetPoint("TOPLEFT", 0, y - 4)
+				badge:SetFrameLevel(f:GetFrameLevel() + 3)
+				-- the line joining the badges, shading from one tier's colour to the next
+				if prev then
+					local line = f:CreateTexture(nil, "BACKGROUND")
+					line:SetPoint("TOP", prev, "BOTTOM", 0, 2)
+					line:SetPoint("BOTTOM", badge, "TOP", 0, -2)
+					line:SetWidth(3)
+					line:SetColorTexture(1, 1, 1, 1)
+					local a, b2 = Color(r[1] - 1), c
+					if line.SetGradient and CreateColor then
+						pcall(line.SetGradient, line, "VERTICAL", CreateColor(b2[1], b2[2], b2[3], 0.9), CreateColor(a[1], a[2], a[3], 0.9))
+					else
+						line:SetVertexColor(c[1], c[2], c[3], 0.8)
+					end
+				end
+				prev = badge
+				local name = Font(f, "GameFontNormalLarge", c[1], c[2], c[3])
+				name:SetPoint("TOPLEFT", 54, y - 4)
+				name:SetText(r[3])
+				local rev = Font(f, "GameFontHighlightSmall", 0.85, 0.85, 0.85)
+				rev:SetPoint("TOPLEFT", 54, y - 24)
+				rev:SetWidth(w - 54 - 240)
+				rev:SetSpacing(1)
+				rev:SetText(r[6] .. (r[7] and ("\n" .. r[7]) or ""))
+				local need = Font(f, "GameFontHighlightLarge")
+				need:SetPoint("TOPLEFT", w - 232, y - 6)
+				need:SetText(r[4])
+				if r[5] then
+					local sub = Font(f, "GameFontDisableSmall", 0.6, 0.6, 0.6)
+					sub:SetPoint("TOPLEFT", w - 232, y - 26)
+					sub:SetWidth(150)
+					sub:SetText(r[5])
+				end
+				if r[8] then
+					local card = MiniCard(f, 38, r[1], r[8])
+					card:SetPoint("TOPLEFT", w - 66, y - 2)
+				end
+				-- a faint rule between rows
+				if k < #rows then
+					local rule = f:CreateTexture(nil, "BACKGROUND")
+					rule:SetPoint("TOPLEFT", 54, y - ROW_H + 4)
+					rule:SetPoint("TOPRIGHT", 0, y - ROW_H + 4)
+					rule:SetHeight(1)
+					rule:SetColorTexture(0.6, 0.48, 0.25, 0.18)
+				end
+			end
+		end)
+	end
+
+	-- 1. creatures
+	if B then
+		P:Section(L["Creatures"], L["Every creature you meet climbs these tiers as you kill it. Each tier reveals more of it on the Creatures page, and makes its Wild Gambit card stronger. Tiers are shared by all your characters."])
+		local n, r = B.TIER_KILLS.normal, B.TIER_KILLS.rare
+		local needs = { { L["Seen once"] }, { 1 }, { n.studied, r.studied }, { n.mastered, r.mastered }, { n.revered, r.revered }, { n.exalted, r.exalted } }
+		local reveals = {
+			L["Name, level, type and rarity; where you met it."],
+			L["Health, armour, melee damage and the money it drops."],
+			L["Every ability it can use, including ones you've never seen."],
+			L["Immunities, resistances, the full loot table with drop chances, and skinning."],
+			L["A milestone: you know it by heart."],
+			L["A milestone: few in Azeroth know it better."],
+		}
+		local alerts = { nil, nil, 2, 3, 4, 5 }
+		local rows = {}
+		for t = 1, 6 do
+			local nd = needs[t]
+			local need = type(nd[1]) == "number" and ns.N(nd[1], L["kill"], L["kills"]) or nd[1]
+			local sub = nd[2] and nd[2] ~= nd[1] and ("%s %s"):format(L["Rares and bosses:"], ns.N(nd[2], L["kill"], L["kills"])) or nil
+			if t == 2 then sub = L["Rares and bosses too"] end
+			local alert = alerts[t] and (Hex(Color(alerts[t] + 1)) .. ALERT[alerts[t]] .. "|r" .. (t == 4 and L[" · counts toward the Master Hunter milestones"] or "")) or nil
+			local bonus = WL and WL.BONUS[t] or (t - 1)
+			rows[t] = { t, B:TierIcon(t), B.TIERS[t], need, sub, reveals[t], alert, "+" .. bonus }
+		end
+		Ladder({ L["Tier"], L["What it reveals"], L["Kills needed"], WL and L["Card"] or nil }, rows)
+	end
+
+	-- 2. gathering and fishing
+	if G then
+		P:Section(L["Gathering and fishing"], L["Herbs, veins, chests and fishing waters climb ranks the same way, each time you gather from them. Gathering ranks don't change Wild Gambit cards."])
+		local reveals = {
+			L["Pinned on your maps (greyed) when it's in front of you, even if you can't gather it yet."],
+			L["What came out of it is recorded, with where and your skill. Wears your profession's badge."],
+			L["Everything it can hold, from the old records (greyed until you find it)."],
+			L["How likely each find is, too."],
+			L["A gatherer's milestone."],
+			L["A gatherer's milestone: few know it better."],
+		}
+		local rows = {}
+		for t = 1, 6 do
+			local need = t == 1 and L["Seen once"] or ns.N(G.AT[t], L["gather"], L["gathers"])
+			local alert = t >= 3 and (Hex(Color(t)) .. ALERT[t - 1] .. "|r" .. (" |cff999999(\"%s\")|r"):format(G:Title(t, "ore"))) or nil
+			rows[t] = { t, G:TierIcon(t, t == 2 and "herb" or nil), G.TIERS[t], need, nil, reveals[t], alert, nil }
+		end
+		Ladder({ L["Rank"], L["What it reveals"], L["Gathers needed"], nil }, rows)
+	end
+
+	-- 3. Wild Gambit
+	if WL and B then
+		P:Section(L["Wild Gambit"], L["Every creature you've met is a card. Its spikes (its strength on the board) come from its level and its tier, so the more you hunt a creature, the stronger its card."])
+		P:Custom(196, function(f, w)
+			-- the formula: [level] + [tier] = [spikes]
+			local boxes = {
+				{ L["Level base"], ("1 %s %d"):format(L["to"], WL.Base(60)), L["one more spike for every 10 levels"] },
+				{ L["Tier bonus"], ("+0 %s +%d"):format(L["to"], WL.BONUS[6]), L["from the tier, see the cards below"] },
+				{ L["Card spikes"], L["up to"] .. " " .. (WL.Base(60) + WL.BONUS[6]), L["shared out round its four sides"] },
+			}
+			local bw = (w - 60) / 3
+			for k, b in ipairs(boxes) do
+				local box = CreateFrame("Frame", nil, f, "BackdropTemplate")
+				box:SetSize(bw, 64)
+				box:SetPoint("TOPLEFT", (k - 1) * (bw + 30), 0)
+				if box.SetBackdrop then
+					box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+					box:SetBackdropColor(0.08, 0.065, 0.05, 0.9)
+					box:SetBackdropBorderColor(0.55, 0.43, 0.2, 0.8)
+				end
+				local t = Font(box, "GameFontNormalSmall") t:SetPoint("TOP", 0, -6) t:SetJustifyH("CENTER") t:SetText(b[1])
+				local v = Font(box, "GameFontHighlightLarge") v:SetPoint("TOP", 0, -22) v:SetJustifyH("CENTER") v:SetText(b[2])
+				local s2 = Font(box, "GameFontDisableSmall", 0.6, 0.6, 0.6) s2:SetPoint("TOP", 0, -44) s2:SetWidth(bw - 8) s2:SetJustifyH("CENTER") s2:SetText(b[3])
+				if k < 3 then
+					local op = Font(f, "GameFontNormalHuge") op:SetPoint("CENTER", box, "RIGHT", 15, 0) op:SetText(k == 1 and "+" or "=")
+				end
+			end
+			-- the same level-30 creature at every tier
+			local cap = Font(f, "GameFontHighlightSmall", 0.85, 0.85, 0.85)
+			cap:SetPoint("TOPLEFT", 0, -78)
+			cap:SetText(L["The same level 30 creature at each tier:"])
+			local cw = 54
+			local gap = (w - 60 - 6 * cw) / 5 -- (room for the last name, centred under its card)
+			for t = 1, 6 do
+				local card = MiniCard(f, cw, t, tostring(WL.Total(30, t)))
+				card:SetPoint("TOPLEFT", (t - 1) * (cw + gap), -96)
+				local c = Color(t)
+				local nm = Font(f, "GameFontHighlightSmall", c[1], c[2], c[3])
+				nm:SetPoint("TOP", card, "BOTTOM", 0, -2)
+				nm:SetWidth(cw + gap - 4)
+				nm:SetJustifyH("CENTER")
+				nm:SetWordWrap(false)
+				nm:SetText(B.TIERS[t])
+			end
+		end)
+		local HA = WL.HERO_AT or { 10, 25, 50, 100 }
+		P:Text(L["|cffffd100Frames:|r a gold inner line from Hunted; comets run round the edge: one at Master Hunter, two at Epic, three at Legendary."])
+		P:Text(("|cffffd100%s|r %s"):format(L["Head starts:"], L["elites and rares are never below Hunted; rare elites and dungeon bosses never below Master Hunter; your companions start at Fought."]))
+		P:Text(("|cffffd100%s|r " .. L["starts at Fought and climbs with the creatures you've mastered: Hunted at %d, Master Hunter at %d, Epic at %d and Legendary at %d creatures at Master Hunter or above."]):format(L["Your hero card"], HA[1], HA[2], HA[3], HA[4]))
+	end
+
+	-- 4. your progress (this account's own counts; no totals to reach)
+	if B and ns.Store then
+		P:Section(L["Your progress"], L["How far your own Almanac has come, across all your characters."])
+		P:Custom(G and 108 or 68, function(f, w)
+			local function Strip(y, label, tiers, kind)
+				local l = Font(f, "GameFontNormal") l:SetPoint("TOPLEFT", 0, -y - 8) l:SetText(label)
+				local cells = {}
+				local cw = (w - 120) / 6
+				for t = 1, 6 do
+					local icon = kind and G:TierIcon(t, t == 2 and "herb" or nil) or B:TierIcon(t)
+					local b = Badge(f, 30, icon, t)
+					b:SetPoint("TOPLEFT", 120 + (t - 1) * cw, -y)
+					b:EnableMouse(true)
+					local n = Font(f, "GameFontHighlight")
+					n:SetPoint("LEFT", b, "RIGHT", 6, 0)
+					b:SetScript("OnEnter", function(self)
+						GameTooltip:SetOwner(self, "ANCHOR_TOP")
+						GameTooltip:AddLine(tiers[t], unpack(Color(t)))
+						GameTooltip:Show()
+					end)
+					b:SetScript("OnLeave", GameTooltip_Hide)
+					cells[t] = n
+				end
+				return cells
+			end
+			local cr = Strip(0, L["Creatures"], B.TIERS)
+			local gr = G and Strip(40, L["Gathering"], G.TIERS, true)
+			local hero = Font(f, "GameFontHighlightSmall", 0.85, 0.85, 0.85)
+			hero:SetPoint("TOPLEFT", 0, G and -90 or -50)
+			hero:SetWidth(w)
+			local function Count()
+				local ct, gt, masters = { 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0 }, 0
+				for _, rec in pairs(ns.Store:All("creature") or {}) do
+					if type(rec) == "table" and rec.name and not (B.IsObject and B:IsObject(rec)) then
+						local t = B:FullTier(rec)
+						if t then ct[t] = ct[t] + 1 if t >= 4 then masters = masters + 1 end end
+					end
+				end
+				if G then
+					for _, kind in ipairs({ "node", "fishing" }) do
+						for _, rec in pairs(ns.Store:All(kind) or {}) do
+							if type(rec) == "table" then local t = G:Tier(rec) gt[t] = gt[t] + 1 end
+						end
+					end
+				end
+				for t = 1, 6 do
+					cr[t]:SetText(ct[t])
+					if gr then gr[t]:SetText(gt[t]) end
+				end
+				if WL and WL.HeroTier then
+					local ht = WL.HeroTier(masters)
+					local nextAt
+					for _, at in ipairs(WL.HERO_AT or {}) do if masters < at then nextAt = at break end end
+					hero:SetText(("|cffffd100%s|r %s%s|r  ·  %s%s"):format(L["Your hero card:"], Hex(Color(ht)), B.TIERS[ht] or "?",
+						ns.N(masters, L["creature at Master Hunter or above"], L["creatures at Master Hunter or above"]),
+						nextAt and (", " .. ns.N(nextAt - masters, L["more for the next tier"], L["more for the next tier"])) or ""))
+				end
+			end
+			Count()
+			tinsert(refreshers, function() pcall(Count) end)
+		end)
+	end
 end
 
 local function BuildRecords(P)
@@ -1016,7 +1269,7 @@ local function BuildGambit(P)
 	end, function(i) db.table = tables[i].key db.tablePicked = true Q.WildGambit:ApplyTable() end)
 	local boards = Q.WildGambit.BOARDS
 	P:Picker(L["Board"], boards, function()
-		for i, t in ipairs(boards) do if t.key == (db.board or "Glade") then return i end end
+		for i, t in ipairs(boards) do if t.key == (db.board or Q.WildGambit.DEFAULT_BOARD or "Glade") then return i end end
 		return 1
 	end, function(i) db.board = boards[i].key Q.WildGambit:ApplyBoard() end)
 	P:Check(L["Holiday boards"], L["During Hallow's End (18 October - 1 November) and the Feast of Winter Veil (16 December - 2 January) the board dresses for the season, whichever board you picked."],
@@ -1047,8 +1300,8 @@ local PAGE_LIST = {
 		desc = L["The minimap button, the window, key bindings and slash commands."] },
 	{ id = "alerts", label = L["Discovery alerts"], icon = "INV_Misc_Note_01", build = BuildAlerts, aliases = { "toasts" },
 		desc = L["Which discoveries get an alert."] },
-	{ id = "tiers", label = L["Research tiers"], icon = "INV_Misc_Head_Dragon_01", build = BuildTiers,
-		desc = L["How many kills reveal more of a creature on the Creatures page."] },
+	{ id = "tiers", label = L["Progression"], icon = "INV_Misc_Head_Dragon_01", build = BuildTiers, aliases = { "progression", "research", "ranks" },
+		desc = L["What each creature tier and gathering rank reveals, what it earns, and how it shapes your Wild Gambit cards."] },
 	{ id = "records", label = L["Records"], icon = "INV_Scroll_03", build = BuildRecords,
 		desc = L["What's recorded, and erasing it."] },
 	{ cat = L["Questing"] },

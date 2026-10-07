@@ -39,8 +39,15 @@ Say which area you're in before starting, and avoid the other person's files unt
 
 - The version lives in three places: `AzerothAlmanac/AzerothAlmanac.toc`, `AzerothAlmanac/Core.lua` (`ns.VERSION`) and `STATUS.md`.
 - **Feature branches don't bump the version.** Shannon bumps it once on `main` when releasing, and builds the release zips.
-- Every change adds a line to `docs/TASKS.md` describing it (`- [?] <what changed>`; `[x]` once confirmed in game). The release gets its version number then.
-- Things that need checking in game go under "Needs checking in game first" in `STATUS.md`.
+- Every change adds a line to `CHANGELOG.md` under an **Unreleased** heading at the top; Shannon turns that heading into the version number when releasing.
+- Anything that needs checking in game goes in `docs/TEST_CHECKLIST.md` under its area.
+- Design decisions go in `docs/DESIGN.md` (the old `docs/TASKS.md`; its checkboxes are historical).
+
+## 5b. Tracking work
+
+- GitHub Issues are the task list; the project board shows To do / In progress / Needs testing / Done. See `docs/ROADMAP.md`.
+- Assign yourself and move the card to In progress **before** starting, so we never both take the same thing.
+- One branch per issue; reference it in the pull request (`Closes #12`).
 
 ## 6. Code conventions
 
