@@ -2888,7 +2888,12 @@ local function Build()
 		WG:PickSpellZoom(nil)
 		GameTooltip_Hide()
 	end)
-	spellLabel:SetPoint("BOTTOM", frame.spellPreview, "TOP", 0, 6)
+	-- under the card (above it the lower row of cards overlapped it), in the screen's gold lettering
+	spellLabel:SetPoint("TOP", frame.spellPreview, "BOTTOM", 0, -5)
+	spellLabel:SetFont(TITLE_FONT, 14, "")
+	spellLabel:SetTextColor(1, 0.82, 0.4)
+	spellLabel:SetShadowColor(0, 0, 0, 0.95)
+	spellLabel:SetShadowOffset(1, -1)
 	spellLabel:SetText("Your spell")
 	-- let fate decide (your card and your class): a die between Back and Begin, glowing on hover
 	-- and burning bright while fate has the choice
