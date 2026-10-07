@@ -3,6 +3,10 @@
   python art_convert.py frame <in.png> <out.tga>          card frame: magenta keyed out, cropped,
                                                          256x512; prints its layout for FRAME_ART
   python art_convert.py full  <in.png> <out.tga> [W H]   whole picture, no keying (default 1024x1024)
+  python art_convert.py slot  <in.png> <out.tga> [W H]    landscape tray on magenta -> portrait board slot
+                                                         (keyed, cropped, quarter turn; default 256 x 512)
+  python art_convert.py arrow <in.png> <out.tga> [size]   coloured art on a baked grey checkerboard:
+                                                         squares keyed out by saturation (default 128)
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
                                                          outside the ring made transparent, squared (default 256)
 
@@ -105,13 +109,51 @@ def round_art(src, dst, size=256):
     print("ring %dx%d at (%d, %d) -> %dx%d" % (x1 - x0 + 1, y1 - y0 + 1, x0, y0, size, size))
     write_tga(img, dst)
 
-if __name__ == "__main__":
-    if sys.argv[1] == "frame":
-        frame(sys.argv[2], sys.argv[3])
-    elif sys.argv[1] == "round":
-        round_art(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
-    else:
-        full(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
+def slot(src, dst, w=256, h=512):
+    """A landscape tray painted on flat magenta, made into a portrait board slot: magenta keyed
+    out, cropped to the tray, turned a quarter turn, squared up to w x h (default 256 x 512)."""
+    a = np.array(Image.open(src).convert("RGB"))
+    out, mag = key_magenta(a)
+    ys, xs = np.where(mag < 0.5)
+    img = Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1], "RGBA")
+    img = img.rotate(90, expand=True).resize((w, h), Image.LANCZOS)
+    write_tga(img, dst)
+    edge_clean(dst)
+
+def arrow(src, dst, size=128):
+    """A painted coloured arrow on a baked grey checkerboard (a screenshot of a transparent
+    picture): the grey squares (no colour) are keyed out by saturation, the edge colours pulled in
+    from the solid parts, cropped square with a small margin."""
+    from PIL import ImageFilter
+    a = np.array(Image.open(src).convert("RGB")).astype(float)
+    mx, mn = a.max(axis=2), a.min(axis=2)
+    sat = (mx - mn) / np.maximum(mx, 1)
+    alpha = np.clip((sat - 0.10) / 0.35, 0, 1)
+    solid = (alpha > 0.95).astype(float)
+    # colour for the soft edge: the blurred colour of the solid pixels nearby
+    def blur(x, r):
+        # (a box blur twice over, by running sums; PIL's blur won't take float images)
+        for _ in range(2):
+            for axis in (0, 1):
+                pad = [(0, 0), (0, 0)]
+                pad[axis] = (r + 1, r)
+                c = np.cumsum(np.pad(x, pad, mode="edge"), axis=axis)
+                x = (np.take(c, range(2 * r + 1, c.shape[axis]), axis=axis)
+                     - np.take(c, range(0, c.shape[axis] - 2 * r - 1), axis=axis)) / (2 * r + 1)
+        return x
+    fill = np.dstack([blur(a[..., c] * solid, 6) / np.maximum(blur(solid, 6), 1e-3) for c in range(3)])
+    rgb = np.where((alpha > 0.95)[..., None], a, fill)
+    out = np.dstack([rgb, alpha * 255]).clip(0, 255).astype(np.uint8)
+    ys, xs = np.where(alpha > 0.5)
+    x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
+    side = int(max(x1 - x0, y1 - y0) * 1.06) + 1
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    crop = Image.fromarray(out[y0:y1 + 1, x0:x1 + 1], "RGBA")
+    canvas.paste(crop, ((side - crop.width) // 2, (side - crop.height) // 2))
+    write_tga(canvas.resize((size, size), Image.LANCZOS), dst)
+    print("arrow %dx%d at (%d, %d) -> %dx%d" % (x1 - x0 + 1, y1 - y0 + 1, x0, y0, size, size))
+
 
 
 def edge_clean(path, width=2):
@@ -133,3 +175,15 @@ def edge_clean(path, width=2):
     a[..., 0] -= spill
     a[..., 2] -= spill
     write_tga(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), path)
+
+if __name__ == "__main__":
+    if sys.argv[1] == "frame":
+        frame(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "slot":
+        slot(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
+    elif sys.argv[1] == "arrow":
+        arrow(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
+    elif sys.argv[1] == "round":
+        round_art(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
+    else:
+        full(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))

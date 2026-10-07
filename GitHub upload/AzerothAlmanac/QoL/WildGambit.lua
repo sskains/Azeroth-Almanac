@@ -292,21 +292,25 @@ end
 
 -- the lettering of the dealer button's caption (13 pt Morpheus, gold, shadowed) for a wooden
 -- button's own label: Back and Begin
-function WG.WoodLettering(b)
-	if not WG.letterFonts then
+WG.BEGIN_W, WG.BEGIN_H = 172, 32 -- (Begin, the screen's main button: larger than the rest)
+function WG.WoodLettering(b, size)
+	size = size or 13
+	WG.letterFonts = WG.letterFonts or {}
+	if not WG.letterFonts[size] then
 		local function Make(name, r, g, bl)
 			local f = CreateFont(name)
-			f:SetFont("Fonts\\MORPHEUS.TTF", 13, "")
+			f:SetFont("Fonts\\MORPHEUS.TTF", size, "")
 			f:SetTextColor(r, g, bl)
 			f:SetShadowColor(0, 0, 0, 0.9)
 			f:SetShadowOffset(1, -1)
 			return f
 		end
-		WG.letterFonts = { Make("AzAlmWGLetter", 1, 0.82, 0.4), Make("AzAlmWGLetterOff", 0.62, 0.52, 0.32) }
+		WG.letterFonts[size] = { Make("AzAlmWGLetter" .. size, 1, 0.82, 0.4), Make("AzAlmWGLetterOff" .. size, 0.62, 0.52, 0.32) }
 	end
-	b:SetNormalFontObject(WG.letterFonts[1])
-	b:SetHighlightFontObject(WG.letterFonts[1])
-	b:SetDisabledFontObject(WG.letterFonts[2])
+	local fonts = WG.letterFonts[size]
+	b:SetNormalFontObject(fonts[1])
+	b:SetHighlightFontObject(fonts[1])
+	b:SetDisabledFontObject(fonts[2])
 	return b
 end
 
@@ -2611,7 +2615,7 @@ local function Build()
 		s.frame = s:CreateTexture(nil, "BORDER", nil, 0)
 		s.frame:SetPoint("TOPLEFT", -3, 3)
 		s.frame:SetPoint("BOTTOMRIGHT", 3, -3)
-		s.frame:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Slot_Board") -- a stone slot with bronze trim (custom art)
+		s.frame:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Slot_Tray") -- a wooden coin tray (custom art; the old stone slot is Slot_Board)
 		s.frame:SetAllPoints()
 		s.bg:Hide()
 		s.shade:SetAlpha(0.5)
@@ -2872,7 +2876,7 @@ local function Build()
 	-- (a little smaller, bottom left in from the board's carved edge so it lies wholly on the felt:
 	-- as far from the centre as Begin is, mirrored)
 	frame.spellPreview:SetScale(0.9)
-	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOM", -((frame:GetWidth() - 32) / 2 - 105) / 0.9, 80 / 0.9)
+	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOM", -((frame:GetWidth() - 32) / 2 - 93) / 0.9, 80 / 0.9)
 	frame.spellPreview:SetFrameLevel(prep:GetFrameLevel() + 20)
 	frame.spellPreview:SetScript("OnEnter", function(self)
 		local ab = self.ability
@@ -2950,10 +2954,10 @@ local function Build()
 	-- pulses while the cards are being shuffled and dealt)
 	local shuffle = CreateFrame("Button", nil, prep)
 	shuffle:SetSize(96, 96)
-	-- bottom right, over Begin and on its centre line (Begin is 140 wide, 30 in from the panel's edge);
-	-- the deck the cards fly to and from, from the table's top
-	shuffle.dx = (frame:GetWidth() - 32) / 2 - 30 - 70
-	shuffle.dy = -(frame:GetHeight() - TOP - 16 - 132)
+	-- bottom right, over Begin and on its centre line (Begin is WG.BEGIN_W wide, 30 in from the
+	-- panel's edge); the deck the cards fly to and from, from the table's top
+	shuffle.dx = (frame:GetWidth() - 32) / 2 - 30 - WG.BEGIN_W / 2
+	shuffle.dy = -(frame:GetHeight() - TOP - 16 - 142)
 	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
 	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
 	shuffle.glow = shuffle:CreateTexture(nil, "BACKGROUND")
@@ -3029,17 +3033,9 @@ local function Build()
 	back.disc:SetSize(34, 34)
 	back.disc:SetPoint("CENTER")
 	back.arrow = back:CreateTexture(nil, "ARTWORK")
-	back.arrow:SetSize(26, 26)
-	back.arrow:SetPoint("CENTER", -1, 0)
-	local arrowSet = false
-	for _, atlas in ipairs({ "common-icon-backarrow", "common-icon-back" }) do
-		if not arrowSet and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
-			arrowSet = pcall(back.arrow.SetAtlas, back.arrow, atlas)
-		end
-	end
-	if not arrowSet then back.arrow:SetTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up") end
-	back.arrow:SetDesaturated(true)
-	back.arrow:SetVertexColor(1, 0.22, 0.18)
+	back.arrow:SetSize(32, 32)
+	back.arrow:SetPoint("CENTER", 0, 0)
+	back.arrow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Back_Arrow") -- (custom art: a painted red arrow)
 	back.ring = back:CreateTexture(nil, "OVERLAY")
 	back.ring:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Class")
 	back.ring:SetVertexColor(1, 0.82, 0.4)
@@ -3053,7 +3049,7 @@ local function Build()
 	back.glow:SetAlpha(0)
 	back:SetScript("OnClick", function() WG:Back() end)
 	back:SetScript("OnEnter", function(self)
-		self.arrow:SetVertexColor(1, 0.45, 0.35)
+		self.arrow:SetSize(35, 35)
 		self.glow:SetAlpha(0.6)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:AddLine("Back", 1, 0.82, 0)
@@ -3061,17 +3057,32 @@ local function Build()
 		GameTooltip:Show()
 	end)
 	back:SetScript("OnLeave", function(self)
-		self.arrow:SetVertexColor(1, 0.22, 0.18)
+		self.arrow:SetSize(32, 32)
 		self.glow:SetAlpha(0)
 		GameTooltip_Hide()
 	end)
 	back:SetScript("OnMouseDown", function(self) self.arrow:SetPoint("CENTER", -1, -1) end)
-	back:SetScript("OnMouseUp", function(self) self.arrow:SetPoint("CENTER", -1, 0) end)
+	back:SetScript("OnMouseUp", function(self) self.arrow:SetPoint("CENTER", 0, 0) end)
 	frame.backButton = back
-	frame.beginButton = WoodButton(A.Widgets.Button(prep, "Begin", 140, function() WG:BeginClicked() end))
-	WG.WoodLettering(frame.beginButton)
+	-- Begin: the screen's main button, bigger, in larger lettering, with a gold glow that breathes
+	-- while it can be pressed (nothing while it can't)
+	frame.beginButton = WoodButton(A.Widgets.Button(prep, "Begin", WG.BEGIN_W, function() WG:BeginClicked() end))
+	frame.beginButton:SetHeight(WG.BEGIN_H)
+	WG.WoodLettering(frame.beginButton, 18)
 	frame.beginButton:SetPoint("BOTTOMRIGHT", -30, 22)
 	frame.beginButton:SetFrameLevel(prep:GetFrameLevel() + 50)
+	frame.beginButton.glow = frame.beginButton:CreateTexture(nil, "BACKGROUND", nil, -2)
+	frame.beginButton.glow:SetTexture(GLOW_TEX)
+	frame.beginButton.glow:SetBlendMode("ADD")
+	frame.beginButton.glow:SetVertexColor(1, 0.8, 0.3)
+	frame.beginButton.glow:SetSize(WG.BEGIN_W + 90, WG.BEGIN_H + 70)
+	frame.beginButton.glow:SetPoint("CENTER")
+	frame.beginButton:HookScript("OnUpdate", function(self)
+		local on = self:IsEnabled()
+		local a = on and (0.4 + 0.3 * math.sin(GetTime() * 3)) or 0
+		self.glow:SetAlpha(a)
+		self.glow:SetShown(on and true or false)
+	end)
 
 	-- step 1: who will you play? Three tiles on the felt, your record, and a first-time tip
 	local lobby = CreateFrame("Frame", nil, pickPanel)
