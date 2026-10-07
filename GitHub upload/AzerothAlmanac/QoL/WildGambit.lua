@@ -2877,7 +2877,7 @@ local function Build()
 	-- (a little smaller, bottom left in from the board's carved edge so it lies wholly on the felt:
 	-- as far from the centre as Begin is, mirrored)
 	frame.spellPreview:SetScale(0.9)
-	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOM", -((frame:GetWidth() - 32) / 2 - 93) / 0.9, 80 / 0.9)
+	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOM", -((frame:GetWidth() - 32) / 2 - 113) / 0.9, 80 / 0.9)
 	frame.spellPreview:SetFrameLevel(prep:GetFrameLevel() + 20)
 	frame.spellPreview:SetScript("OnEnter", function(self)
 		local ab = self.ability
@@ -3025,32 +3025,24 @@ local function Build()
 	-- Back is a red arrow in a gold ring in the board's top left corner (the game's back arrow where
 	-- the client has it, else the spellbook's page arrow, either one made red)
 	local back = CreateFrame("Button", nil, prep)
-	back:SetSize(44, 44)
-	back:SetPoint("CENTER", prep, "TOPLEFT", 46, -22)
+	back:SetSize(60, 60)
+	back:SetPoint("CENTER", prep, "TOPLEFT", 50, -26)
 	back:SetFrameLevel(prep:GetFrameLevel() + 50)
-	back.disc = back:CreateTexture(nil, "BACKGROUND")
-	back.disc:SetTexture(CIRCLE)
-	back.disc:SetVertexColor(0.07, 0.05, 0.04, 0.92)
-	back.disc:SetSize(34, 34)
-	back.disc:SetPoint("CENTER")
+	-- (just the painted arrow, no ring or socket)
 	back.arrow = back:CreateTexture(nil, "ARTWORK")
-	back.arrow:SetSize(32, 32)
+	back.arrow:SetSize(56, 56)
 	back.arrow:SetPoint("CENTER", 0, 0)
 	back.arrow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Back_Arrow") -- (custom art: a painted red arrow)
-	back.ring = back:CreateTexture(nil, "OVERLAY")
-	back.ring:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Class")
-	back.ring:SetVertexColor(1, 0.82, 0.4)
-	back.ring:SetAllPoints()
 	back.glow = back:CreateTexture(nil, "BACKGROUND", nil, -1)
 	back.glow:SetTexture(GLOW_TEX)
 	back.glow:SetBlendMode("ADD")
 	back.glow:SetVertexColor(1, 0.4, 0.25)
-	back.glow:SetSize(70, 70)
+	back.glow:SetSize(100, 100)
 	back.glow:SetPoint("CENTER")
 	back.glow:SetAlpha(0)
 	back:SetScript("OnClick", function() WG:Back() end)
 	back:SetScript("OnEnter", function(self)
-		self.arrow:SetSize(35, 35)
+		self.arrow:SetSize(62, 62)
 		self.glow:SetAlpha(0.6)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:AddLine("Back", 1, 0.82, 0)
@@ -3058,7 +3050,7 @@ local function Build()
 		GameTooltip:Show()
 	end)
 	back:SetScript("OnLeave", function(self)
-		self.arrow:SetSize(32, 32)
+		self.arrow:SetSize(56, 56)
 		self.glow:SetAlpha(0)
 		GameTooltip_Hide()
 	end)
@@ -3078,11 +3070,51 @@ local function Build()
 	frame.beginButton.glow:SetVertexColor(1, 0.8, 0.3)
 	frame.beginButton.glow:SetSize(WG.BEGIN_W + 90, WG.BEGIN_H + 70)
 	frame.beginButton.glow:SetPoint("CENTER")
-	frame.beginButton:HookScript("OnUpdate", function(self)
+	-- a gold border round the plank that brightens and dims, and a streak of light that sweeps across
+	-- it every couple of seconds (clipped to the button)
+	local bb = frame.beginButton
+	bb.border = {}
+	for k, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 2 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 2 },
+		{ "TOPLEFT", "BOTTOMLEFT", 2, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 2, nil } }) do
+		local t = bb:CreateTexture(nil, "OVERLAY", nil, 6)
+		t:SetColorTexture(1, 0.86, 0.38, 1)
+		t:SetPoint(e[1], bb, e[1], (e[1]:find("LEFT") and -6 or 6), (e[1]:find("TOP") and 7 or -7))
+		t:SetPoint(e[2], bb, e[2], (e[2]:find("LEFT") and -6 or 6), (e[2]:find("TOP") and 7 or -7))
+		if e[3] then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
+		bb.border[k] = t
+	end
+	bb.shine = CreateFrame("Frame", nil, bb)
+	bb.shine:SetPoint("TOPLEFT", -4, 5)
+	bb.shine:SetPoint("BOTTOMRIGHT", 4, -5)
+	bb.shine:SetClipsChildren(true)
+	bb.shine:SetFrameLevel(bb:GetFrameLevel() + 2)
+	bb.streak = bb.shine:CreateTexture(nil, "OVERLAY")
+	bb.streak:SetTexture(GLOW_TEX)
+	bb.streak:SetBlendMode("ADD")
+	bb.streak:SetVertexColor(1, 0.95, 0.7)
+	bb.streak:SetSize(46, WG.BEGIN_H + 40)
+	bb:HookScript("OnUpdate", function(self)
 		local on = self:IsEnabled()
-		local a = on and (0.4 + 0.3 * math.sin(GetTime() * 3)) or 0
+		local t = GetTime()
+		local a = on and (0.4 + 0.3 * math.sin(t * 3)) or 0
 		self.glow:SetAlpha(a)
 		self.glow:SetShown(on and true or false)
+		local edge = on and (0.55 + 0.45 * math.sin(t * 3.4)) or 0
+		for _, line in ipairs(self.border) do
+			line:SetAlpha(edge)
+			line:SetShown(on and true or false)
+		end
+		-- (the streak: 0.9 s across, then a rest)
+		local p = (t % 2.6) / 0.9
+		self.shine:SetShown(on and true or false)
+		if on and p < 1 then
+			local w = self.shine:GetWidth()
+			self.streak:ClearAllPoints()
+			self.streak:SetPoint("CENTER", self.shine, "LEFT", -23 + (w + 46) * p, 0)
+			self.streak:SetAlpha(0.65 * math.sin(math.pi * p))
+		else
+			self.streak:SetAlpha(0)
+		end
 	end)
 
 	-- step 1: who will you play? Three tiles on the felt, your record, and a first-time tip
