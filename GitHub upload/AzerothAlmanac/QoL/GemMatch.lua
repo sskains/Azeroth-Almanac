@@ -17,7 +17,6 @@ local MOVES = 30
 local SWAP_TIME = 0.14
 local CLEAR_TIME = 0.22
 local FALL_ACCEL = 70          -- cells per second squared
-local HINT_AFTER = 10          -- seconds idle before a hint pulses
 local PREFIX = "AzAlmGame"
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
@@ -405,7 +404,7 @@ local function ClearHint()
 end
 
 local function Select(tile)
-	if tile then ClearHint() game.idle = 0 end -- (picking a gem is taking the hint)
+	if tile then ClearHint() end -- (picking a gem is taking the hint)
 	ClearMarks()
 	game.selected = tile
 	if tile and tile.frame then
@@ -436,7 +435,6 @@ local function TrySwap(a, b)
 		return
 	end
 	Select(nil)
-	game.idle = 0
 	AnimateSwap(a, b)
 end
 
@@ -551,7 +549,6 @@ local function Settle()
 	end
 	game.cascade = 0
 	game.state = "idle"
-	game.idle = 0
 	if (game.mode == "moves" and game.moves <= 0) or (game.mode == "timed" and game.time <= 0) then
 		EndGame()
 		return
@@ -616,8 +613,6 @@ local function Step(elapsed)
 	local state, anim = game.state, game.anim
 	if state == "idle" then
 		CheckDrag()
-		game.idle = game.idle + elapsed
-		if game.idle > HINT_AFTER and not game.hint then ShowHint() end
 		if game.hint then
 			game.hint.t = game.hint.t + elapsed
 			local w = 0.5 + 0.5 * math.sin(game.hint.t * 6)
@@ -1169,7 +1164,7 @@ local function Build()
 	local bw = (FIELD_W - 8) / 2
 	local newGame = FlatButton(side, "New game", bw, function() NewGame() end)
 	newGame:SetPoint("TOPLEFT", PAD, -244)
-	local hint = FlatButton(side, "Hint", bw, function() game.idle = HINT_AFTER end)
+	local hint = FlatButton(side, "Hint", bw, function() if game.state == "idle" and not game.hint then ShowHint() end end)
 	hint:SetPoint("LEFT", newGame, "RIGHT", 8, 0)
 	frame.pauseButton = FlatButton(side, "Pause", bw, function() SetPaused(game.state ~= "paused") end)
 	frame.pauseButton:SetPoint("TOPLEFT", newGame, "BOTTOMLEFT", 0, -6)
