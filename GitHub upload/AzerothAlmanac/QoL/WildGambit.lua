@@ -2319,9 +2319,10 @@ local function Build()
 	frame.trays = {}
 	for k = 1, 2 do
 		local t = frame:CreateTexture(nil, "BACKGROUND", nil, -5)
-		t:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Tray_Hand")
+		-- (the wooden coin tray, custom art; the older oak tray with leaves is Tray_Hand, margins 26 72)
+		t:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Tray_Coins")
 		if t.SetTextureSliceMargins then
-			pcall(t.SetTextureSliceMargins, t, 26, 72, 26, 72)
+			pcall(t.SetTextureSliceMargins, t, 40, 81, 40, 81)
 			if t.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(t.SetTextureSliceMode, t, Enum.UITextureSliceMode.Stretched) end
 		end
 		local x = k == 1 and (16 + COL / 2) or (16 + COL + 12 + ART_X + BW + ART_X + 12 + COL / 2)
