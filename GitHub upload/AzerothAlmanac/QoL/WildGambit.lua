@@ -310,6 +310,52 @@ function WG.WoodLettering(b)
 	return b
 end
 
+-- the window's corner icon, bigger and in the gold elite frame (the boss portrait's gold dragon ring,
+-- as on the legendary cards) over the template's small round portrait, which it covers with a dark
+-- socket. Centred on where that portrait sits.
+function WG.AddEmblem(icon)
+	local base = frame:GetFrameLevel()
+	local e = CreateFrame("Frame", nil, frame)
+	e:SetAllPoints(frame)
+	e:EnableMouse(false)
+	e:SetFrameLevel(base + 70)
+	local anchor = frame.portrait
+	local function Put(t, size)
+		t:SetSize(size, size)
+		t:ClearAllPoints()
+		if anchor and anchor.GetCenter then t:SetPoint("CENTER", anchor, "CENTER", 0, 0) else t:SetPoint("CENTER", frame, "TOPLEFT", 28, -28) end
+	end
+	e.socket = e:CreateTexture(nil, "BACKGROUND")
+	e.socket:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+	e.socket:SetVertexColor(0.04, 0.03, 0.025, 1)
+	Put(e.socket, 84)
+	e.icon = e:CreateTexture(nil, "ARTWORK")
+	e.icon:SetTexture(icon)
+	e.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
+	Put(e.icon, 74)
+	local mask = e:CreateMaskTexture()
+	mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	mask:SetAllPoints(e.icon)
+	e.icon:AddMaskTexture(mask)
+	e.ring = e:CreateTexture(nil, "OVERLAY")
+	local ok = e.ring.SetAtlas and pcall(e.ring.SetAtlas, e.ring, "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold")
+	Put(e.ring, 118)
+	e.ring:SetShown(ok and true or false)
+	frame.emblem = e
+	return e
+end
+
+-- "Let fate decide": the die and its two lines of words as one group, centred in its button (and so
+-- on the board), whatever the words are just now
+function WG:LayoutFate()
+	local f = frame and frame.fateLink
+	if not f then return end
+	local w = math.max(f.text:GetStringWidth() or 0, f.sub:GetStringWidth() or 0)
+	local total = 42 + 12 + w
+	f.die:ClearAllPoints()
+	f.die:SetPoint("LEFT", f, "CENTER", -total / 2, 0)
+end
+
 -- the hint line's text: a short one is the heading (big, with ornaments); the longer messages of an
 -- online match are plain gold sentences
 function WG:SetHint(text)
@@ -2823,7 +2869,9 @@ local function Build()
 	-- your spell, as the card you'll hold (hover for the full rules)
 	local spellLabel = prep:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	frame.spellPreview = NewSpellCard(prep)
-	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOMRIGHT", -62, 78)
+	-- (a little smaller, and in from the board's carved edge so it lies wholly on the felt)
+	frame.spellPreview:SetScale(0.9)
+	frame.spellPreview:SetPoint("BOTTOM", prep, "BOTTOMRIGHT", -113, 80)
 	frame.spellPreview:SetFrameLevel(prep:GetFrameLevel() + 20)
 	frame.spellPreview:SetScript("OnEnter", function(self)
 		local ab = self.ability
@@ -2845,8 +2893,8 @@ local function Build()
 	-- let fate decide (your card and your class): a die between Back and Begin, glowing on hover
 	-- and burning bright while fate has the choice
 	local fate = CreateFrame("Button", nil, prep)
-	fate:SetSize(230, 52)
-	fate:SetPoint("BOTTOM", prep, "BOTTOM", -20, 14)
+	fate:SetSize(340, 52) -- (centred on the board; the die and its words are centred inside, WG:LayoutFate)
+	fate:SetPoint("BOTTOM", prep, "BOTTOM", 0, 14)
 	fate:SetFrameLevel(prep:GetFrameLevel() + 40)
 	fate.glow = fate:CreateTexture(nil, "BACKGROUND")
 	fate.glow:SetSize(110, 110)
@@ -2855,7 +2903,7 @@ local function Build()
 	fate.glow:SetVertexColor(1, 0.75, 0.3)
 	fate.die = fate:CreateTexture(nil, "ARTWORK")
 	fate.die:SetSize(42, 42)
-	fate.die:SetPoint("LEFT", 6, 0)
+	fate.die:SetPoint("LEFT", fate, "CENTER", -80, 0)
 	fate.die:SetTexture(ICONS .. "INV_Misc_Dice_01")
 	fate.die:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	local dmask = fate:CreateMaskTexture()
@@ -3129,6 +3177,7 @@ local function Build()
 	frame.over = over
 
 	ns.NativeWindow(frame, { title = "Wild Gambit", icon = "Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth", close = close, byline = sub })
+	WG.AddEmblem("Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth") -- (a bigger icon in the gold elite frame)
 	-- tuck the window into a small floating bar (the game goes on; click the bar to come back)
 	local mini = CreateFrame("Button", nil, frame)
 	mini:SetSize(24, 24)
@@ -3441,8 +3490,12 @@ function WG:PickSpellZoom(sc)
 	cx, cy = cx * fs / ws - frame:GetLeft(), cy * fs / ws - frame:GetBottom()
 	local zs = PICK_ZOOM
 	local zw, zh = CW * zs, CH * zs
-	local x = math.max(zw / 2 + 12, math.min(frame:GetWidth() - zw / 2 - 12, cx))
-	local y = math.max(zh / 2 + 24, math.min(frame:GetHeight() - zh / 2 - 30, cy))
+	-- kept on the felt: in from the board's carved edge (about 49 px on the right, 30 at the bottom)
+	local ps = frame.prep:GetEffectiveScale() / ws
+	local feltR = frame.prep:GetRight() * ps - frame:GetLeft() - 49 - 6
+	local feltB = frame.prep:GetBottom() * ps - frame:GetBottom() + 30 + 4
+	local x = math.max(zw / 2 + 12, math.min(frame:GetWidth() - zw / 2 - 12, feltR - zw / 2, cx))
+	local y = math.max(zh / 2 + 24, feltB + zh / 2, math.min(frame:GetHeight() - zh / 2 - 30, cy))
 	z:SetScale(zs)
 	z:ClearAllPoints()
 	z:SetPoint("CENTER", frame, "BOTTOMLEFT", x / zs, y / zs)
@@ -4231,6 +4284,7 @@ function WG:PaintPick()
 	frame.fateLink.text:SetText(frame.fate and "Fate decides!" or "Let fate decide")
 	frame.fateLink.text:SetTextColor(1, frame.fate and 0.9 or 0.82, frame.fate and 0.5 or 0)
 	frame.fateLink.sub:SetText(frame.fate and "your card and class. Click to choose again." or "a random card and class")
+	WG:LayoutFate()
 	local picked = frame.chosen ~= nil or frame.fate
 	local net = WG.net
 	local hint, canGo, label
