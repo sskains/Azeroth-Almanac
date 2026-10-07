@@ -66,10 +66,11 @@ local CHAMPS = {
 		bot = "Riverpaw Gnoll",
 	},
 	-- Champions that can be chosen (the first two are the classic pair, and are what an older Almanac
-	-- plays as). Those with no `display` yet are hidden until one is set in game: target the creature
-	-- and type /aa mtt champion <key>. `icon` is the round face if the portrait can't be made.
+	-- plays as). Those with no `display` yet are hidden until one is found: from their `npc` (looked up
+	-- in game, below) or set by hand: target the creature and type /aa mtt champion <key>.
+	-- `icon` is the round face if the portrait can't be made.
 	faerie = {
-		name = "Faerie Dragons", one = "Faerie Dragon", icon = "Spell_Nature_FaerieFire",
+		name = "Faerie Dragons", one = "Faerie Dragon", icon = "Spell_Nature_FaerieFire", npc = 206792, -- Baby Faerie Dragon
 		color = { 0.9, 0.55, 1 }, hex = "e68cff", cheer = "Tee-hee-hee!", bot = "Faerie Dragon",
 	},
 	greenwhelp = {
@@ -89,7 +90,7 @@ local CHAMPS = {
 		color = { 0.75, 0.6, 0.9 }, hex = "bf99e6", cheer = "Rawr!", bot = "Black Whelp",
 	},
 	slime = {
-		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01",
+		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01", npc = 266735, -- Excitable Slime (WoW Forever)
 		color = { 0.7, 1, 0.3 }, hex = "b3ff4d", cheer = "Blorp blorp!", bot = "Excitable Slime",
 	},
 }
@@ -1516,13 +1517,18 @@ end
 -- Module API
 ---------------------------------------------------------------------------
 
+local ResolveChampions -- (set below, once the hidden model it uses is described)
 function MT:OnInitialize(saved)
 	db = saved.murloc
 	-- your champion, and the display IDs set in game for champions that don't have one built in
 	db.champion = db.champion or "murloc"
 	db.display = db.display or {}
+	db.npc = db.npc or {}
 	for key, display in pairs(db.display) do
 		if CHAMPS[key] and type(display) == "number" then CHAMPS[key].display = display end
+	end
+	for key, npc in pairs(db.npc) do
+		if CHAMPS[key] and type(npc) == "number" then CHAMPS[key].npc = npc end
 	end
 end
 
@@ -1532,7 +1538,8 @@ function MT:CycleChampion(dir)
 	local list = {}
 	for _, k in ipairs(ROSTER) do if Playable(k) then list[#list + 1] = k end end
 	if #list < 2 then
-		Say("only one champion has a model so far. Target a creature and type |cffffd100/aa mtt champion <name>|r (|cffffd100/aa mtt champions|r lists them).")
+		ResolveChampions()
+		Say("only one champion has a model so far. Looking for the others now; if none turn up, target a creature and type |cffffd100/aa mtt champion <name>|r (|cffffd100/aa mtt champions|r lists them).")
 		return
 	end
 	local cur = 1
@@ -1566,6 +1573,42 @@ local function SetChampDisplay(key, display)
 	Refresh()
 end
 
+-- A champion with an NPC but no model yet: the creature is loaded into a hidden model by its ID (the way
+-- the Bestiary finds faces), one at a time, and the display ID it ends up with is kept for good.
+local resolver, resolving
+function ResolveChampions()
+	if resolving then return end
+	local key
+	for _, k in ipairs(ROSTER) do
+		local c = CHAMPS[k]
+		if c.npc and not c.display and (c.tries or 0) < 3 then key = k break end
+	end
+	if not key then return end
+	resolving = key
+	local c = CHAMPS[key]
+	c.tries = (c.tries or 0) + 1
+	if not resolver then
+		resolver = CreateFrame("PlayerModel", nil, UIParent)
+		resolver:SetSize(1, 1)
+		resolver:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10, -10)
+	end
+	if resolver.ClearModel then pcall(resolver.ClearModel, resolver) end
+	local okBefore, before = pcall(resolver.GetDisplayInfo, resolver)
+	before = okBefore and type(before) == "number" and before or 0
+	pcall(resolver.SetCreature, resolver, c.npc)
+	C_Timer.After(1.2, function()
+		resolving = nil
+		local ok, display = pcall(resolver.GetDisplayInfo, resolver)
+		if ok and type(display) == "number" and display > 0 and display ~= before then
+			c.display = display
+			db.display[key] = display
+			Say(("%s are ready to play (found from creature %d)."):format(c.name, c.npc))
+			Refresh()
+		end
+		ResolveChampions()
+	end)
+end
+
 function MT:OnLogin()
 	StaticPopupDialogs[POPUP] = {
 		text = "%s challenges you to |cff59ff80Murloc Tac Toe|r!\n\nMrglglglgl?",
@@ -1593,6 +1636,7 @@ function MT:OnLogin()
 		end
 	end)
 	AddMenus()
+	C_Timer.After(6, ResolveChampions)
 end
 
 function MT:Open()
@@ -1622,15 +1666,21 @@ function MT:Command(rest)
 	elseif low == "champions" then
 		for _, k in ipairs(ROSTER) do
 			local c = CHAMPS[k]
-			Say(("%s (%s): %s"):format(c.name, k, c.display and ("model " .. c.display) or "no model yet: target one and type /aa mtt champion " .. k))
+			Say(("%s (%s): %s"):format(c.name, k, c.display and ("model " .. c.display) or (c.npc and ("creature " .. c.npc .. ", model not found yet (try /reload)") or "no model yet: target one and type /aa mtt champion " .. k)))
 		end
 	elseif low:match("^champion ") then
-		local key, id = rest:match("^%S+%s+(%S+)%s*(%d*)")
+		local key, second, third = rest:match("^%S+%s+(%S+)%s*(%S*)%s*(%S*)")
 		key = key and key:lower()
 		if not (key and CHAMPS[key]) then
 			Say("champions: " .. table.concat(ROSTER, ", "))
-		elseif id ~= "" then
-			SetChampDisplay(key, tonumber(id))
+		elseif second == "npc" and tonumber(third) then
+			db.npc[key] = tonumber(third)
+			CHAMPS[key].npc, CHAMPS[key].display, CHAMPS[key].tries = tonumber(third), nil, 0
+			db.display[key] = nil
+			Say(("looking up %s from creature %d..."):format(CHAMPS[key].name, tonumber(third)))
+			ResolveChampions()
+		elseif tonumber(second) then
+			SetChampDisplay(key, tonumber(second))
 		else
 			TargetDisplay(function(display)
 				if display then SetChampDisplay(key, display) else Say("target the creature (not a player) first, then try again.") end
