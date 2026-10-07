@@ -2891,7 +2891,7 @@ local function Build()
 	-- pulses while the cards are being shuffled and dealt)
 	local shuffle = CreateFrame("Button", nil, prep)
 	shuffle:SetSize(96, 96)
-	shuffle.dx, shuffle.dy = -257, -498 -- (bottom left, above Back and lined up with it; the deck the cards fly to and from, from the table's top)
+	shuffle.dx, shuffle.dy = -265, -498 -- (bottom left, above Back and lined up with it; the deck the cards fly to and from, from the table's top)
 	shuffle:SetPoint("CENTER", pickPanel, "TOP", shuffle.dx, shuffle.dy)
 	shuffle:SetFrameLevel(prep:GetFrameLevel() + 50)
 	shuffle.glow = shuffle:CreateTexture(nil, "BACKGROUND")
@@ -4442,6 +4442,7 @@ end
 
 -- Shuffle: the cards on the table are swept into the deck and dealt again (you and your
 -- companions come back; the rest are new). The card you'd picked stays picked if it comes back.
+WG.DEALER_LINES = { 550816, 550811, 550810 } -- (GoblinMaleZanyNPCPissed01, 03, 04)
 WG.SHUFFLE = { gather = 0.32, deal = 0.26, gap = 0.07 } -- (seconds: swept up, each card's flight, between cards)
 function WG:Shuffle()
 	if not (frame and frame.prep:IsShown() and frame:IsShown()) or frame.shuffling then return end
@@ -4454,6 +4455,12 @@ function WG:Shuffle()
 	frame.shuffling = { t = 0, shown = shown, chosen = chosen, dealt = {} }
 	frame.chosen = nil
 	if db.sound ~= false then
+		-- the goblin dealer's banter: one of his lines (file IDs of GoblinMaleZanyNPCPissed01 / 03 / 04),
+		-- never the same one twice running
+		local n
+		repeat n = math.random(#WG.DEALER_LINES) until n ~= WG.lastDealerLine or #WG.DEALER_LINES == 1
+		WG.lastDealerLine = n
+		PlaySoundFile(WG.DEALER_LINES[n], "Dialog")
 		PlaySoundFile(567562, "SFX") -- (the cards picked up)
 		for k, id in ipairs({ 567472, 567502, 567457, 567472 }) do -- (riffled)
 			C_Timer.After(0.12 + k * 0.07, function() PlaySoundFile(id, "SFX") end)
