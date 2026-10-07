@@ -3,8 +3,9 @@
   python art_convert.py frame <in.png> <out.tga>          card frame: magenta keyed out, cropped,
                                                          256x512; prints its layout for FRAME_ART
   python art_convert.py full  <in.png> <out.tga> [W H]   whole picture, no keying (default 1024x1024)
-  python art_convert.py slot  <in.png> <out.tga> [W H]    landscape tray on magenta -> portrait board slot
-                                                         (keyed, cropped, quarter turn; default 256 x 512)
+  python art_convert.py tray  <in.png> <out.tga> [W H]    landscape tray on magenta -> tall hand tray:
+                                                         keyed, quarter turn, end caps kept, middle
+                                                         stretched (default 128 x 512)
   python art_convert.py arrow <in.png> <out.tga> [size]   coloured art on a baked grey checkerboard:
                                                          squares keyed out by saturation (default 128)
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
@@ -109,16 +110,29 @@ def round_art(src, dst, size=256):
     print("ring %dx%d at (%d, %d) -> %dx%d" % (x1 - x0 + 1, y1 - y0 + 1, x0, y0, size, size))
     write_tga(img, dst)
 
-def slot(src, dst, w=256, h=512):
-    """A landscape tray painted on flat magenta, made into a portrait board slot: magenta keyed
-    out, cropped to the tray, turned a quarter turn, squared up to w x h (default 256 x 512)."""
+def tray(src, dst, w=128, h=512, cap=0.30):
+    """A landscape tray painted on flat magenta, made into a tall hand tray that the game stretches
+    along its middle only (slice margins: sides 40, ends 72 at the default size): magenta keyed out,
+    cropped, a quarter turn, then the two end caps (`cap` of the length each, the coin piles) kept
+    in proportion and the middle stretched to fill w x h."""
     a = np.array(Image.open(src).convert("RGB"))
     out, mag = key_magenta(a)
     ys, xs = np.where(mag < 0.5)
-    img = Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1], "RGBA")
-    img = img.rotate(90, expand=True).resize((w, h), Image.LANCZOS)
-    write_tga(img, dst)
+    img = Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1], "RGBA").rotate(90, expand=True)
+    sw, sl = img.size  # (width, length) of the turned tray
+    c = int(round(sl * cap))
+    ch = int(round(c * w / sw))  # an end cap's height at the output width
+    parts = [(img.crop((0, 0, sw, c)), ch),
+             (img.crop((0, c, sw, sl - c)), h - 2 * ch),
+             (img.crop((0, sl - c, sw, sl)), ch)]
+    sheet = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    y = 0
+    for piece, ph in parts:
+        sheet.paste(piece.resize((w, ph), Image.LANCZOS), (0, y))
+        y += ph
+    write_tga(sheet, dst)
     edge_clean(dst)
+    print("tray: end caps %d px, sides 40" % ch)
 
 def arrow(src, dst, size=128):
     """A painted coloured arrow on a baked grey checkerboard (a screenshot of a transparent
@@ -179,8 +193,8 @@ def edge_clean(path, width=2):
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
         frame(sys.argv[2], sys.argv[3])
-    elif sys.argv[1] == "slot":
-        slot(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
+    elif sys.argv[1] == "tray":
+        tray(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "arrow":
         arrow(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
     elif sys.argv[1] == "round":
