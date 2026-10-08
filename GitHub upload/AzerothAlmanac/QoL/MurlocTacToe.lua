@@ -73,22 +73,11 @@ local CHAMPS = {
 		name = "Sprite Darters", one = "Sprite Darter", item = 11474, -- Sprite Darter Egg (its pet)
 		icon = "Spell_Nature_FaerieFire", npc = 5278, npcs = { 5278, 206792 }, -- Sprite Darter, then Baby Faerie Dragon
 		color = { 0.9, 0.55, 1 }, hex = "e68cff", cheer = "Tee-hee-hee!", bot = "Sprite Darter",
-	},
-	greenwhelp = {
-		name = "Green Whelps", one = "Green Whelp", icon = "INV_Misc_Head_Dragon_Green",
-		color = { 0.4, 0.95, 0.4 }, hex = "66f266", cheer = "Rawr!", bot = "Green Whelp",
-	},
-	redwhelp = {
-		name = "Red Whelps", one = "Red Whelp", icon = "INV_Misc_Head_Dragon_Red",
-		color = { 1, 0.4, 0.35 }, hex = "ff6659", cheer = "Rawr!", bot = "Red Whelp",
-	},
-	bluewhelp = {
-		name = "Blue Whelps", one = "Blue Whelp", icon = "INV_Misc_Head_Dragon_Blue",
-		color = { 0.45, 0.7, 1 }, hex = "73b3ff", cheer = "Rawr!", bot = "Blue Whelp",
-	},
-	blackwhelp = {
-		name = "Black Whelps", one = "Black Whelp", icon = "INV_Misc_Head_Dragon_Black",
-		color = { 0.75, 0.6, 0.9 }, hex = "bf99e6", cheer = "Rawr!", bot = "Black Whelp",
+		-- PET_SpriteDarterHatchling_Clickable01 - 10 (wowhead sound=23652): the hatchling's chirps, split between
+		-- placing a piece, winning and losing (the split is a guess until each has been heard)
+		place = { 560814, 560815, 560816, 560817, 560818 },
+		win = { 560819, 560820, 560821 },
+		lose = { 560822, 560823 },
 	},
 	-- seasonal: offered only while its holiday is on (the calendar check is shared with Wild Gambit's boards).
 	-- Its model: the pet if you own it (found among your companions), else target it and
@@ -101,12 +90,16 @@ local CHAMPS = {
 	slime = {
 		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01", npc = 266735, -- Excitable Slime (WoW Forever)
 		color = { 0.7, 1, 0.3 }, hex = "b3ff4d", cheer = "Blorp blorp!", bot = "Excitable Slime",
-		place = { 188260 }, -- FX_Slime_Whoosh_Short_01 (wowhead sound=188260, taken as the file ID; more to add for win / lose)
+		-- FX_Slime_Whoosh_Short_01 - 10 (wowhead sound=188260; these are the file IDs, 188260 is its sound kit),
+		-- split between placing a piece, winning and losing (a guess until each has been heard)
+		place = { 4276904, 4276906, 4276908, 4276910, 4276912 },
+		win = { 4276914, 4276916 },
+		lose = { 4276918, 4276920, 4276922 },
 	},
 }
 -- the order they are offered in
 -- (each champion knows its own key, for the voices set in game)
-local ROSTER = { "murloc", "gnoll", "faerie", "greenwhelp", "redwhelp", "bluewhelp", "blackwhelp", "slime", "squashling" }
+local ROSTER = { "murloc", "gnoll", "faerie", "slime", "squashling" }
 -- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
 -- chose the same champion can still be told apart
 local ROLE_RINGS = {
