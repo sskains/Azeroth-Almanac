@@ -65,9 +65,12 @@ local function Refresh()
 		button.icon:SetDesaturated(not ok)
 		button:SetAlpha(ok and 1 or 0.5)
 	end
-	-- the glow: only while you are following this very target
-	local lit = (button.foot and FollowingTarget()) and true or false
-	if button.glow:IsShown() ~= lit then button.glow:SetShown(lit) end
+	-- the aura: lit the whole time you are following someone
+	local lit = (button.foot and following) and true or false
+	if button.glow:IsShown() ~= lit then
+		button.glow:SetShown(lit)
+		button.aura:SetShown(lit)
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -130,21 +133,30 @@ local function Build()
 		end
 	end)
 
-	-- the footsteps' glow: a soft gold light behind them, breathing slowly, only while you are following
+	-- the footsteps' aura: a gold light behind them that breathes slowly, on the whole time you are following someone
 	b.glow = b:CreateTexture(nil, "BACKGROUND")
 	b.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
 	b.glow:SetBlendMode("ADD")
 	b.glow:SetVertexColor(1, 0.8, 0.3)
 	b.glow:SetPoint("CENTER")
 	b.glow:Hide()
+	-- (a second, wider and softer ring of light round it: together the aura behind the prints)
+	b.aura = b:CreateTexture(nil, "BACKGROUND", nil, -1)
+	b.aura:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	b.aura:SetBlendMode("ADD")
+	b.aura:SetVertexColor(1, 0.65, 0.15)
+	b.aura:SetPoint("CENTER")
+	b.aura:Hide()
 	local t = 0
 	b:HookScript("OnUpdate", function(self, dt)
 		if not self.foot then return end
 		t = t + dt
 		local w = self.iconSide or self:GetWidth()
 		local pulse = 0.5 + 0.5 * math.sin(t * 2.2)
-		self.glow:SetSize(w * (2.0 + pulse * 0.25), w * (2.0 + pulse * 0.25))
-		self.glow:SetAlpha((self:IsMouseOver() and 1 or 0.85) * (0.7 + pulse * 0.3))
+		self.glow:SetSize(w * (1.7 + pulse * 0.2), w * (1.7 + pulse * 0.2))
+		self.glow:SetAlpha(0.9 + pulse * 0.1)
+		self.aura:SetSize(w * (2.7 + pulse * 0.3), w * (2.7 + pulse * 0.3))
+		self.aura:SetAlpha(0.55 + pulse * 0.25)
 	end)
 	b:HookScript("OnMouseDown", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, -1) end end)
 	b:HookScript("OnMouseUp", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, 0) end end)
@@ -159,8 +171,10 @@ local function Build()
 			else
 				GameTooltip:AddLine("Follow " .. (R(UnitName("target")) or "target"), 1, 0.82, 0)
 				GameTooltip:AddLine("Click to follow. Move to stop.", 0.8, 0.8, 0.8)
+				if following then GameTooltip:AddLine("(You are following " .. following .. " now.)", 0.5, 1, 0.5) end
 			end
 		else
+			if following then GameTooltip:AddLine("You are following " .. following, 0.5, 1, 0.5) end
 			GameTooltip:AddLine("Follow", 0.6, 0.6, 0.6)
 			GameTooltip:AddLine(why or "Can't follow", 1, 0.4, 0.4)
 		end
