@@ -657,6 +657,53 @@ Enemy players you meet, fight, beat or die to. Same rules as everything else: on
   - [ ] Bug check, then in-game test.
 - Open: final name (Rivals / Adversaries); whether Forever has the honor system and battlegrounds at launch.
 
+## 70. Wild Gambit dungeon cards (designed 2026-10-07) [ ]
+Decided with Shannon 2026-10-07:
+- [ ] **Dealt by chance.** Each time a card leaves a player's hand (played, or a board card removed and replaced), 5% chance the card dealt in its place is a dungeon card. At most one dungeon card per player per match. The hand never goes past 5: the dungeon card *is* the replacement, never an extra card. Rolled with the match's seeded random generator, so both players' games agree (player matches: protocol 12; older versions can't play against it).
+- [ ] **Only dungeons you've entered.** A player is dealt only dungeons and raids in their Almanac (found.instance).
+- [ ] **Played onto the board, no skipped turn.** Playing it is your placement for the turn: it goes on an empty square and becomes a neutral dungeon square: nobody's card, out of play, not scored (like a frozen trap square), carrying the dungeon's effect. Optional: a player may keep it and never play it. It can't be the last card placed on the board (it would end the match with no effect).
+- [ ] **No spikes, one design for all.** Dungeons and raids share one card design and one strength; the card never improves (no tiers, no "Conquered" upgrade). Scenery: the game's own dungeon journal art (EJ background, cropped to the card's portrait shape; e.g. Interface/EncounterJournal/UI-EJ-BACKGROUND-RagefireChasm). A stone-archway frame (not the creature card's), no spike badge, the effect's name and one line of rules.
+- [ ] **Each dungeon its own effect,** from something true of the dungeon. "Enemy" = the other player; effects that remove a card deal its owner a replacement (as Banish does); shielded cards (Divine Shield) are immune to removal, swaps and captures as now.
+- [ ] **Dev command** (asked 2026-10-07): `/aa wgdungeon [dungeon]` (with `/aa debug` on) puts a dungeon card in *your* hand (never the opponent's) during a practice match: the named one, or a random one; it replaces the card in your last hand slot (the hand stays at 5) and ignores the one-per-match cap and the Almanac check, for testing every effect. Refused in player matches (it would desync the two games).
+- [ ] Code mostly in a new file (QoL/WildGambitDungeons.lua: the dungeon list, art, effects, bot scores) with small hooks in WildGambit.lua / WildGambitLogic.lua, to keep clear of the 200-locals limit and of Asia's work on the same files.
+- [ ] **Live torches** (asked 2026-10-07): the frame's two torches glow and flicker like real fire. Media/FX_TorchGlow.tga (soft orange radial glow, made by Claude), added as light over each flame (flames at 24,258 and 232,258 of the 256x512 frame: x 0.094 / 0.906, y 0.505 of the texture), alpha and size wobbling on uneven random timings (each torch on its own, never in step); a faint warm glow on the stone beside each; quieter on the small hand cards, full on the board and the zoomed card.
+- [ ] Bot: a score for each effect, as for its class spell; the art scan picks which dungeons have journal art (the two Forever dungeons likely need their floor map or custom art).
+- [x] Art scan (0.66.2 `/aa ejscan`, run 2026-10-07): 27 of 29 have the journal background `Interface/EncounterJournal/UI-EJ-BACKGROUND-<Name>`, and nearly all also have LOREBG, DUNGEONBUTTON, the group-finder background and icon and a loading screen. Names that differ from the dungeon's: Deadmines, TheStockade, SunkenTemple (Atal'Hakkar), BlackrockSpire (Lower), OnyxiasLair (button: Onyxia), RuinsOfAhnQiraj, TempleOfAhnQiraj. No background: Ruins of Lordaeron (only `Interface/LFGFrame/LFGIcon-RuinsOfLordaeron`) and Hall of Thanes (nothing): these two need custom scenery (Gemini, as the other card art) or their floor map art.
+- [ ] Decided 2026-10-07: Hall of Thanes and Ruins of Lordaeron are built with the rest but switched off (never dealt) until their custom scenery is delivered (Scene_Dungeon_HallOfThanes, Scene_Dungeon_RuinsOfLordaeron). Scenery delivered the same day, so both can be on from the start.
+
+Effects (draft, for review):
+| Dungeon | Effect | Rules |
+|---|---|---|
+| Ragefire Chasm | Molten Floor | Enemy cards next to the square lose 1 spike on every side. |
+| Wailing Caverns | Nightmare Sleep | The enemy's next card captures nothing. |
+| The Deadmines | Cannon Fire | Removes the first enemy card in the square's row. |
+| Shadowfang Keep | Worgen Curse | No class spells for the rest of the match (Shannon's idea). |
+| The Stockade | Lockdown | Cards next to the square can't be captured. |
+| Blackfathom Deeps | Rising Tide | Every card on the board turns 90 degrees clockwise. |
+| Scarlet Monastery | Crusade | Undead and Demon cards lose 2 spikes on every side. |
+| Gnomeregan | Malfunction | Cards next to the square have their spikes evened out round all four sides. |
+| Razorfen Kraul | Thorns | Your cards next to the square get +1 spike on every side. |
+| Razorfen Downs | Death's Head | Undead cards get +2 spikes on every side. |
+| Uldaman | Stone Ward | Your cards next to the square can't be removed or swapped. |
+| Zul'Farrak | Gahz'rilla | The enemy card with the most spikes loses 2 on every side. |
+| Maraudon | Corrupted Earth | Enemy cards in the square's column lose 1 spike on every side. |
+| Temple of Atal'Hakkar | Dreamer's Call | Dragonkin cards get +2 spikes on every side. |
+| Blackrock Depths | Dark Iron Forge | Every card of yours on the board gets +1 spike on every side. |
+| Lower Blackrock Spire | Warchief's Call | Your next card gets +2 spikes on every side. |
+| Upper Blackrock Spire | Rend's Ambush | Removes up to two enemy cards next to the square. |
+| Dire Maul | Gordok Tribute | Take the enemy card on the board with the fewest spikes. |
+| Scholomance | Raise Dead | The last card of yours taken or removed comes back to your hand. |
+| Stratholme | Plagued Streets | Every non-Undead card next to the square loses 1 spike on every side. |
+| Hall of Thanes (Forever) | Anvil Oath | Your cards in the square's row get +1 spike on every side. |
+| Ruins of Lordaeron (Forever) | Fallen Crown | The next enemy card placed next to the square becomes yours. |
+| Molten Core | Lava Waves | Every card except Elementals loses 1 spike on every side. |
+| Onyxia's Lair | Deep Breath | Wipes the square's row: every card there is removed. |
+| Blackwing Lair | Suppression Room | The enemy's next card captures nothing, and can't be captured until your next turn. |
+| Zul'Gurub | Blood of Hakkar | Take an enemy card next to the square. |
+| Ruins of Ahn'Qiraj | Sandstorm | Every card on the board turns 180 degrees. |
+| Temple of Ahn'Qiraj | Eye of C'Thun | Removes the enemy card with the most spikes. |
+| Naxxramas | Plague Wing | Every enemy card on the board loses 1 spike on every side. |
+
 ## What comes from Plus Everything
 
 | Plus Everything | Azeroth Almanac |
@@ -682,6 +729,8 @@ Still not brought over: Quest Givers, SoftProbe, Spell Ranker, Talent Planner, A
 ## Decisions (2026-10-07)
 - Items: hovering a link someone posts in chat does **not** count as discovering the item.
 - The Combat Journal companion is dropped (section 2b).
+- Toasts: the journal-entry badge (docs/art_source/Badge_Journal.png) overlaps the toast's top-right corner like a seal, on every toast that writes a journal entry; the "Almanac" word tag goes.
+- The Almanac's logo is the closed crimson compass-rose journal (docs/art_source/Logo_Almanac.png), replacing the game's red book icon everywhere.
 - Rares: rares and rare elites use the boss research tier counts (kills for Studied / Mastered / Revered / Exalted: 1 / 3 / 10 / 40; B.TIER_KILLS.rare), as built since data version 3.
 
 ## Open questions

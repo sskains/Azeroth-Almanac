@@ -154,7 +154,15 @@ end
 
 local function OnMessage(text, channel, sender)
 	if not sender or IsMe(sender) then return end
-	local kind, version = strsplit("|", text)
+	local kind, version, extra = strsplit("|", text)
+	-- (0.66.0) "K|npc|guid": a groupmate looted a corpse inside an instance
+	if kind == "K" then
+		local npc = tonumber(version)
+		if npc and extra and ViaOf(channel, sender) == "group" and ns.NpcFromGuid(extra) == npc and ns.Bestiary then
+			pcall(ns.Bestiary.SharedKill, ns.Bestiary, npc, extra)
+		end
+		return
+	end
 	if (kind ~= "H" and kind ~= "I") or not version or version == "" then return end
 	Remember(sender, version, ViaOf(channel, sender))
 	if kind == "H" and S().share then
@@ -201,6 +209,12 @@ end
 ---------------------------------------------------------------------------
 -- The tooltip badge
 ---------------------------------------------------------------------------
+
+-- (0.66.0) tell the group's other Almanacs about a corpse looted inside an instance
+function P:ShareKill(npc, guid)
+	local channel = GroupChannel()
+	if channel and npc and type(guid) == "string" then Send("K|" .. npc .. "|" .. guid, channel) end
+end
 
 function P:Get(nameOrUnit)
 	local name = nameOrUnit

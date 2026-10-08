@@ -360,3 +360,68 @@ function Art:AtlasCheck()
 	ns.Print(("atlas check: %d of %d atlases found, %d of %d texture files found. /reload to write it to disk."):format(
 		nFound, nFound + nMissing, #files, #files + #filesMissing))
 end
+
+-- /aa ejscan (0.66.2): which dungeons and raids have the game's dungeon journal art on this client
+-- (for the Wild Gambit dungeon cards, DESIGN section 70). The journal itself isn't on this client,
+-- but its art files are; GetFileIDFromPath says which names exist. Several spellings are tried per
+-- dungeon. Saved to AzerothAlmanacDB.ejscan = { t, version, found = { [dungeon] = { [kind] = { path, fileID } } }, none = { dungeon, ... } }
+local EJ_KINDS = {
+	{ "bg", "Interface/EncounterJournal/UI-EJ-BACKGROUND-" },
+	{ "lore", "Interface/EncounterJournal/UI-EJ-LOREBG-" },
+	{ "button", "Interface/EncounterJournal/UI-EJ-DUNGEONBUTTON-" },
+	{ "lfg", "Interface/LFGFrame/UI-LFG-BACKGROUND-" },
+	{ "lfgicon", "Interface/LFGFrame/LFGIcon-" },
+	{ "load", "Interface/Glues/LoadingScreens/LoadScreen" },
+}
+local EJ_EXTRA = {
+	["The Stockade"] = { "StormwindStockades", "Stockades" },
+	["Lower Blackrock Spire"] = { "BlackrockSpire", "BlackrockSpireLower" },
+	["Upper Blackrock Spire"] = { "BlackrockSpireUpper" },
+	["The Temple of Atal'Hakkar"] = { "SunkenTemple" },
+	["Onyxia's Lair"] = { "Onyxia" },
+	["Ruins of Ahn'Qiraj"] = { "AhnQirajRuins", "AQRuins" },
+	["Temple of Ahn'Qiraj"] = { "AhnQirajTemple", "AQTemple" },
+	["Scarlet Monastery"] = { "ScarletHalls" },
+	["Ruins of Lordaeron"] = { "Lordaeron", "Undercity" },
+}
+local function EJNames(name)
+	local out, seen = {}, {}
+	local function Add(v) if v ~= "" and not seen[v] then seen[v] = true out[#out + 1] = v end end
+	local plain = name:gsub("'", ""):gsub("%-", " ")
+	local camel = plain:gsub("(%a)(%a*)", function(a, b) return a:upper() .. b end):gsub("%s", "")
+	Add(camel)
+	Add((camel:gsub("^The", "")))
+	Add((camel:gsub("Of", "of")))
+	Add((camel:gsub("^The", ""):gsub("Of", "of")))
+	Add(plain:gsub("%s", ""))
+	for _, v in ipairs(EJ_EXTRA[name] or {}) do Add(v) end
+	return out
+end
+
+function Art:EJScan()
+	if not GetFileIDFromPath then ns.Print("this client has no GetFileIDFromPath") return end
+	local found, none, names = {}, {}, {}
+	for _, d in ipairs(ns.DB and ns.DB.dungeon or {}) do
+		if d.name and not names[d.name] then names[d.name] = true names[#names + 1] = d.name end
+	end
+	table.sort(names)
+	for _, name in ipairs(names) do
+		local got
+		for _, k in ipairs(EJ_KINDS) do
+			for _, v in ipairs(EJNames(name)) do
+				local path = k[2] .. v
+				local ok, id = pcall(GetFileIDFromPath, path)
+				if ok and id then
+					got = got or {}
+					got[k[1]] = { path, id }
+					break
+				end
+			end
+		end
+		if got then found[name] = got else none[#none + 1] = name end
+	end
+	ns.db.ejscan = { t = time(), version = ns.VERSION, found = found, none = none }
+	local withBg = 0
+	for _, g in pairs(found) do if g.bg then withBg = withBg + 1 end end
+	ns.Print(("dungeon art: %d of %d dungeons have journal backgrounds; %d have no art found. /reload to save."):format(withBg, #names, #none))
+end

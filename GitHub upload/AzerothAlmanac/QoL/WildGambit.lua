@@ -131,7 +131,8 @@ function WG.PlayerFace(tex, d)
 	for i = 1, 40 do units[#units + 1] = "raid" .. i end
 	for i = 1, 40 do units[#units + 1] = "nameplate" .. i end
 	for _, u in ipairs(units) do
-		if UnitExists(u) and UnitIsPlayer(u) and SameName(GetUnitName and GetUnitName(u, true) or UnitName(u), d.player) then
+		local n = UnitExists(u) and A.Readable(UnitIsPlayer(u)) == true and A.Readable(GetUnitName and GetUnitName(u, true) or UnitName(u))
+		if type(n) == "string" and SameName(n, d.player) then
 			SetPortraitTexture(tex, u)
 			return
 		end
@@ -453,8 +454,8 @@ end
 
 -- the creature your pet is (from its GUID: Pet-0-server-instance-zone-npc-spawn)
 local function PetNpc()
-	local g = UnitGUID and UnitGUID("pet")
-	if not g then return nil end
+	local g = UnitGUID and A.Readable(UnitGUID("pet"))
+	if type(g) ~= "string" then return nil end
 	return tonumber((select(6, strsplit("-", g))))
 end
 local function PetKey(npc, name) return tostring(npc) .. ":" .. (name or "") end
@@ -596,8 +597,18 @@ end) end
 -- elite, else any. Right-click a portrait ("Play Wild Gambit") to pick the opponent yourself.
 ---------------------------------------------------------------------------
 
+-- (0.65.1) This client hands out some units' GUIDs, names and flags as "secret" values (enemy
+-- nameplates in combat, for one): they can't be read, compared or turned into text, and touching
+-- them is an error. Every unit read here goes through A.Readable: a secret counts as unknown.
+function WG.UnitGuid(unit) return A.Readable(UnitGUID(unit)) end
+function WG.SameUnit(unit, guid)
+	return guid ~= nil and unit ~= nil and UnitExists(unit) and WG.UnitGuid(unit) == guid
+end
+
 local function NpcOfGuid(guid)
-	local kind, _, _, _, _, id = strsplit("-", guid or "")
+	guid = A.Readable(guid)
+	if type(guid) ~= "string" then return nil end
+	local kind, _, _, _, _, id = strsplit("-", guid)
 	if kind ~= "Creature" and kind ~= "Vehicle" then return nil end
 	return tonumber(id)
 end
@@ -605,12 +616,17 @@ end
 -- the creature behind a unit, as an opponent (nil for players, pets and things that aren't creatures)
 function WG:OpponentFromUnit(unit)
 	if not (unit and UnitExists and UnitExists(unit)) then return nil end
-	if UnitIsPlayer(unit) or (UnitIsUnit and (UnitIsUnit(unit, "pet") or UnitIsUnit(unit, "player"))) then return nil end
-	local guid = UnitGUID(unit)
+	local R = A.Readable
+	-- (a player, or one the game won't say, isn't a creature to play)
+	if R(UnitIsPlayer(unit)) ~= false then return nil end
+	if UnitIsUnit and (R(UnitIsUnit(unit, "pet")) ~= false or R(UnitIsUnit(unit, "player")) ~= false) then return nil end
+	local guid = WG.UnitGuid(unit)
 	local npc = NpcOfGuid(guid)
 	if not npc then return nil end
+	local name = R(UnitName(unit))
+	if type(name) ~= "string" then return nil end
 	local rec = A.Store and A.Store:Get("creature", npc)
-	return { name = UnitName(unit), npc = npc, guid = guid, unit = unit,
+	return { name = name, npc = npc, guid = guid, unit = unit,
 		display = type(rec) == "table" and rec.display or nil }
 end
 
@@ -625,7 +641,7 @@ function WG:NearbyOpponent()
 	end
 	for _, u in ipairs(units) do
 		local o = self:OpponentFromUnit(u)
-		if o and not seen[o.guid] and not (UnitIsDead and UnitIsDead(u)) then seen[o.guid] = true found[#found + 1] = o end
+		if o and not seen[o.guid] and not (UnitIsDead and A.Readable(UnitIsDead(u)) == true) then seen[o.guid] = true found[#found + 1] = o end
 	end
 	if #found == 0 then return nil end
 	return found[math.random(#found)]
@@ -652,7 +668,7 @@ local function LearnFace(opp, after)
 	if not opp or opp.display or opp.learning then return end
 	-- the unit while it's still the same creature; out of sight, the creature by its ID (the game
 	-- keeps creatures it has seen)
-	local live = opp.unit and UnitExists(opp.unit) and UnitGUID(opp.unit) == opp.guid
+	local live = WG.SameUnit(opp.unit, opp.guid)
 	if not live and not opp.npc then return end
 	if not faceModel then
 		faceModel = CreateFrame("PlayerModel", nil, UIParent)
@@ -688,9 +704,11 @@ WG.LearnFace = LearnFace
 function WG:PlayAgainst(unit)
 	if not (unit and UnitExists(unit)) then return end
 	if not self:LeaveGameFirst(function() WG:PlayAgainst(unit) end) then return end
-	if UnitIsPlayer(unit) then
-		if UnitIsUnit(unit, "player") then return end
+	if A.Readable(UnitIsPlayer(unit)) == true then
+		if A.Readable(UnitIsUnit(unit, "player")) ~= false then return end
 		local n, realm = UnitName(unit)
+		n, realm = A.Readable(n), A.Readable(realm)
+		if type(n) ~= "string" then Tell("the game won't say who that is right now; try again out of combat.") return end
 		self:Challenge((realm and realm ~= "") and (n .. "-" .. realm) or n)
 		return
 	end
@@ -702,8 +720,9 @@ function WG:PlayAgainst(unit)
 end
 
 local function PlayAllowed(unit)
-	return unit and UnitExists(unit) and not UnitIsUnit(unit, "player") and not UnitIsUnit(unit, "pet")
-		and (UnitIsPlayer(unit) or NpcOfGuid(UnitGUID(unit)) ~= nil)
+	local R = A.Readable
+	return unit and UnitExists(unit) and R(UnitIsUnit(unit, "player")) == false and R(UnitIsUnit(unit, "pet")) == false
+		and (R(UnitIsPlayer(unit)) == true or NpcOfGuid(UnitGUID(unit)) ~= nil)
 end
 
 local function HookPlayMenu()
@@ -1572,7 +1591,7 @@ local function SetOwner(f, color, diamond)
 			if type(d) == "table" and d.player then
 				WG.PlayerFace(face, d)
 			elseif type(d) == "table" then
-				if d.unit and UnitExists(d.unit) and UnitGUID(d.unit) == d.guid then SetPortraitTexture(face, d.unit)
+				if WG.SameUnit(d.unit, d.guid) then SetPortraitTexture(face, d.unit)
 				elseif d.display and SetPortraitTextureFromCreatureDisplayID then SetPortraitTextureFromCreatureDisplayID(face, d.display)
 				else face:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark") end
 			elseif type(d) == "string" then
@@ -2420,6 +2439,74 @@ local function Build()
 	frame.spellZoom = NewSpellCard(frame)
 	frame.spellZoom:EnableMouse(false)
 	frame.spellZoom:Hide()
+
+	-- a spell chosen and waiting for its target: the cursor glows blue and sheds sparkles until the spell
+	-- lands (or is put back). It follows the mouse over the whole screen, and only shows while you aim.
+	do
+		local cur = CreateFrame("Frame", nil, UIParent)
+		cur:SetSize(1, 1)
+		cur:SetFrameStrata("TOOLTIP")
+		cur:EnableMouse(false)
+		local halo = cur:CreateTexture(nil, "OVERLAY", nil, 1)
+		halo:SetTexture(GLOW_TEX)
+		halo:SetBlendMode("ADD")
+		halo:SetVertexColor(0.3, 0.6, 1)
+		halo:SetPoint("CENTER", cur, "CENTER")
+		local core = cur:CreateTexture(nil, "OVERLAY", nil, 2)
+		core:SetTexture(GLOW_TEX)
+		core:SetBlendMode("ADD")
+		core:SetVertexColor(0.75, 0.9, 1)
+		core:SetPoint("CENTER", cur, "CENTER")
+		local sparks, LIFE = {}, 1.0
+		for k = 1, 12 do
+			local t = cur:CreateTexture(nil, "OVERLAY", nil, 3)
+			t:SetTexture("Interface\\Cooldown\\star4")
+			t:SetBlendMode("ADD")
+			t:SetVertexColor(0.7, 0.88, 1)
+			sparks[k] = { tex = t, age = LIFE * k / 12, ox = 0, oy = 0, size = 10 }
+		end
+		local clock = 0
+		cur:SetScript("OnUpdate", function(self, dt)
+			if not (frame and frame:IsShown() and game and game.targeting) then
+				if self.aiming then
+					self.aiming = nil
+					halo:Hide() core:Hide()
+					for _, s in ipairs(sparks) do s.tex:Hide() end
+				end
+				return
+			end
+			if not self.aiming then
+				self.aiming = true
+				halo:Show() core:Show()
+			end
+			clock = clock + dt
+			local x, y = GetCursorPosition()
+			local scale = UIParent:GetEffectiveScale()
+			self:ClearAllPoints()
+			self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+			local pulse = 0.5 + 0.5 * math.sin(clock * 5)
+			halo:SetSize(58 + pulse * 10, 58 + pulse * 10)
+			halo:SetAlpha(0.55 + pulse * 0.25)
+			core:SetSize(22, 22)
+			core:SetAlpha(0.7 + pulse * 0.25)
+			for _, s in ipairs(sparks) do
+				s.age = s.age + dt
+				if s.age >= LIFE then -- (born again at a new spot round the cursor)
+					s.age = s.age - LIFE
+					local a, r = math.random() * 6.2832, 6 + math.random() * 22
+					s.ox, s.oy, s.size = math.cos(a) * r, math.sin(a) * r, 8 + math.random() * 8
+				end
+				local u = s.age / LIFE
+				s.tex:SetSize(s.size * (1 - u * 0.5), s.size * (1 - u * 0.5))
+				s.tex:SetAlpha(math.sin(u * 3.1416))
+				s.tex:ClearAllPoints()
+				s.tex:SetPoint("CENTER", self, "CENTER", s.ox, s.oy + u * 14) -- (drifting up as it fades)
+				s.tex:Show()
+			end
+		end)
+		cur.aiming = true -- (so the first idle frame hides it)
+		WG.aimCursor = cur
+	end
 	frame.cards = {}
 	for i = 1, 12 do -- (two more: a removed card's owner is dealt another)
 		local c = NewCard(frame)
@@ -3536,7 +3623,7 @@ function PaintPlayer(p, name, portrait, class, color, score)
 	elseif type(portrait) == "number" and SetPortraitTextureFromCreatureDisplayID then
 		SetPortraitTextureFromCreatureDisplayID(p.portrait, portrait)
 		p.portrait:SetTexCoord(0, 1, 0, 1)
-	elseif type(portrait) == "table" and portrait.unit and UnitExists(portrait.unit) and UnitGUID(portrait.unit) == portrait.guid then
+	elseif type(portrait) == "table" and WG.SameUnit(portrait.unit, portrait.guid) then
 		-- a creature still in sight: its own portrait
 		SetPortraitTexture(p.portrait, portrait.unit)
 		p.portrait:SetTexCoord(0, 1, 0, 1)
@@ -3854,9 +3941,14 @@ function WG:ClickCard(f)
 	if self:Paused() then Note(self:PausedNote()) return end
 	for _, e in ipairs(game.hands.me) do
 		if e.frame == f then
-			-- (a spell's target is on the board, never in your hand)
-			if game.targeting then Note(game.ability.me.name .. ": " .. Hint(game.ability.me) .. ".") return end
-			game.selected = (game.selected == e) and nil or e
+			-- (a spell's target is on the board, never in your hand: picking a card from your hand
+			-- instead puts the spell back, and takes that card)
+			if game.targeting then
+				game.targeting, game.pocket = nil, nil
+				game.selected = e
+			else
+				game.selected = (game.selected == e) and nil or e
+			end
 			ShowHands()
 			Refresh()
 			return
@@ -4266,7 +4358,7 @@ function WG:PaintLobby()
 		if d and SetPortraitTextureFromCreatureDisplayID then
 			SetPortraitTextureFromCreatureDisplayID(tp.portrait.art, d)
 			tp.portrait.art:SetTexCoord(0, 1, 0, 1)
-		elseif opp.unit and UnitExists(opp.unit) and UnitGUID(opp.unit) == opp.guid then
+		elseif WG.SameUnit(opp.unit, opp.guid) then
 			SetPortraitTexture(tp.portrait.art, opp.unit)
 			tp.portrait.art:SetTexCoord(0, 1, 0, 1)
 		else
@@ -4873,8 +4965,9 @@ function WG:Challenge(name)
 	if not frame then Build() end
 	name = name and strtrim(name) or ""
 	if name == "" or name:lower() == "target" then
-		if UnitExists("target") and UnitIsPlayer("target") and not UnitIsUnit("target", "player") then
-			local n, realm = UnitName("target")
+		local n, realm = UnitName("target")
+		n, realm = A.Readable(n), A.Readable(realm)
+		if UnitExists("target") and A.Readable(UnitIsPlayer("target")) == true and A.Readable(UnitIsUnit("target", "player")) == false and type(n) == "string" then
 			name = (realm and realm ~= "") and (n .. "-" .. realm) or n
 		else
 			Tell("target a player, or type their name.")

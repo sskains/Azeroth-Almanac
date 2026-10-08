@@ -1078,17 +1078,39 @@ local function Candidates()
 	return list
 end
 
+-- the unit a frame shows (secure frames keep it as an attribute)
+local function FrameUnit(f)
+	return f.unit or (f.GetAttribute and f:GetAttribute("unit"))
+end
+
+-- (0.65.2) The newer party frames have no global names (PartyMemberFrame1 ... don't exist on this
+-- client): they're children of PartyFrame (and CompactPartyFrame), each with its pet frame. Those
+-- are looked through too.
+local function FromContainer(container, token)
+	if not (container and container.GetChildren) then return nil end
+	for _, child in ipairs({ container:GetChildren() }) do
+		if child:IsVisible() and FrameUnit(child) == token then return child end
+		local pet = child.PetFrame
+		if pet and pet:IsVisible() and FrameUnit(pet) == token then return pet end
+	end
+	for k = 1, 5 do
+		local m = container["MemberFrame" .. k]
+		if m and m:IsVisible() and FrameUnit(m) == token then return m end
+		local pet = m and m.PetFrame
+		if pet and pet:IsVisible() and FrameUnit(pet) == token then return pet end
+	end
+end
+
 local function FrameFor(token)
 	if token == "player" then return PlayerFrame end
 	if token == "pet" and PetFrame and PetFrame:IsVisible() then return PetFrame end
 	for _, name in ipairs(Candidates()) do
 		local f = _G[name]
-		if f and f:IsVisible() then
-			local unit = f.unit or (f.GetAttribute and f:GetAttribute("unit"))
-			if unit == token then return f end
-		end
+		if f and f:IsVisible() and FrameUnit(f) == token then return f end
 	end
+	return FromContainer(_G.PartyFrame, token) or FromContainer(_G.CompactPartyFrame, token)
 end
+HA.FrameFor = FrameFor
 
 local function SortedList()
 	local list = {}
@@ -1255,7 +1277,8 @@ end
 local function UpdateMarkers(e)
 	if not e.glow then return end
 	if e.paw then
-		local show = e.placed and not HideOutOfCombat() and not (e.res and e.res.absent)
+		-- (0.65.4) a pet on the game's own pet frame needs no paw: the frame already says it's a pet
+		local show = e.placed and not e.ownFrame and not HideOutOfCombat() and not (e.res and e.res.absent)
 		if show ~= e.paw:IsShown() then e.paw:SetShown(show) end
 	end
 	local t = e.threat
@@ -1370,6 +1393,27 @@ local function Strip(e, anchorFrame, side, x, y)
 		ShowButton(b)
 		col = col + 1
 	end
+	return line + 1 -- (how many lines of icons it took)
+end
+
+-- beside a frame (side "right"): how far down its name plate ends, so the icons start under the
+-- name, level with the health bar (0.65.3)
+local function NameDrop(f)
+	local nm = f.name or f.Name or (f == PlayerFrame and _G.PlayerName) or nil
+	if not (nm and nm.GetBottom and f.GetTop) then return 0 end
+	local top, bottom = f:GetTop(), nm:GetBottom()
+	if not (top and bottom) then return 0 end
+	local drop = top - bottom * (nm:GetEffectiveScale() / f:GetEffectiveScale())
+	return (drop > 0 and drop < 60) and drop or 0
+end
+
+-- how far right of a pet's frame its owner's frame ends (in the pet frame's units), so the pet's
+-- icons start in the same column as the owner's (0.65.4)
+local function PetShift(ownerFrame, petFrame)
+	local or_, pr = ownerFrame and ownerFrame:GetRight(), petFrame and petFrame:GetRight()
+	if not (or_ and pr) then return 0 end
+	local d = or_ * ownerFrame:GetEffectiveScale() / petFrame:GetEffectiveScale() - pr
+	return (d > 0 and d < 300) and d or 0
 end
 
 -- whose pet a pet token is ("partypet2" -> "party2", "pet" -> "player")
@@ -1531,15 +1575,32 @@ local function Layout()
 	local list = SortedList()
 	local panelList = {}
 	if db.mode == "frames" then
-		local keys = {}
-		for _, e in ipairs(list) do
-			local f = FrameFor(e.token)
-			if f then
-				Strip(e, f, db.side, 4, db.side == "below" and -2 or 0)
-				PlaceMarkers(e, "frame", f)
-				keys[#keys + 1] = e.token .. "=" .. (f:GetName() or "?")
-			elseif not e.pet then
-				panelList[#panelList + 1] = e
+		local keys, placed = {}, {}
+		-- people first, then pets: a pet with no frame of its own (party pet frames are often off)
+		-- gets a line of its own under its owner's icons (0.65.3; they used to be left out)
+		for pass = 1, 2 do
+			for _, e in ipairs(list) do
+				if (pass == 1) == (not e.pet) then
+					local f = FrameFor(e.token)
+					local owner = e.pet and placed[OwnerOf(e.token)]
+					e.ownFrame = f and e.pet or nil
+					if f then
+						local y = db.side == "below" and -2 or -NameDrop(f)
+						-- (0.65.4) a pet on its own frame lines its icons up with its owner's column
+						local x = 4
+						if owner and db.side == "right" then x = 4 + PetShift(owner.f, f) end
+						placed[e.token] = { f = f, y = y, lines = Strip(e, f, db.side, x, y) }
+						PlaceMarkers(e, "frame", f)
+						keys[#keys + 1] = e.token .. "=" .. (f:GetName() or tostring(f))
+					elseif owner then
+						local size = db.iconSize
+						Strip(e, owner.f, db.side, 4 + 8, owner.y - owner.lines * (size + GAP) - 2)
+						owner.lines = owner.lines + math.max(1, math.ceil(#e.order / math.max(1, db.perRow)))
+						keys[#keys + 1] = e.token .. "=under:" .. OwnerOf(e.token)
+					else
+						panelList[#panelList + 1] = e
+					end
+				end
 			end
 		end
 		layoutKey = table.concat(keys, ",")
@@ -2080,7 +2141,7 @@ local function Tick()
 			local keys = {}
 			for _, token in ipairs(roster) do
 				local f = FrameFor(token)
-				keys[#keys + 1] = token .. "=" .. (f and f:GetName() or "?")
+				keys[#keys + 1] = token .. "=" .. (f and (f:GetName() or tostring(f)) or "?")
 			end
 			-- units with a frame are keyed by it; the rest fall into the panel
 			if table.concat(keys, ",") ~= HA.frameKey then
@@ -2209,8 +2270,10 @@ local function Debug()
 		ns.Print(("  %s (%s): heals %d, cast %.1fs, mana %d"):format(m.spell.name, m.spell.kind, SpellAmount(m), m.castTime, m.cost))
 	end
 	for _, token in ipairs(roster) do
-		ns.Print(("%s %s: health %s, max %s, threat %s, dead %s"):format(token, UnitName(token) or "?",
-			yn(R(UnitHealth(token))), yn(R(UnitHealthMax(token))), yn(R(UnitThreatSituation(token))), yn(R(UnitIsDeadOrGhost(token)))))
+		local f = FrameFor(token)
+		ns.Print(("%s %s: health %s, max %s, threat %s, dead %s, frame %s"):format(token, R(UnitName(token)) or "?",
+			yn(R(UnitHealth(token))), yn(R(UnitHealthMax(token))), yn(R(UnitThreatSituation(token))), yn(R(UnitIsDeadOrGhost(token))),
+			f and ((f.GetDebugName and f:GetDebugName()) or f:GetName() or "a frame") or "|cffff4444none (in the window)|r"))
 	end
 	ScanThreat(GetTime())
 	ns.Print(("Enemies in combat that can be asked about: %d."):format(#mobs))

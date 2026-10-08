@@ -24,6 +24,39 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 - **Cat sounds for the Bombay Cat** (Asia): placing a piece, winning and losing play the cat mount's meows (file IDs 3598605-3598623). Change them with `/aa mtt voice`.
 - **A Hallow's End look for Murloc Tac Toe** (Asia): from 18 Oct to 1 Nov the board is a darker oak one with pumpkins, candles and cobwebs, the side panel's dividers become bat-and-pumpkin ones, a heap of pumpkins and sweets sits at its foot and the drifting fireflies turn to embers. Same dates as the seasonal champions (`/aa mtt season` shows it early).
 - **Champions** (Asia): choose who you play as with the arrows beside your creature; your opponent sees it. The Sprite Darter (with the Sprite Darter Egg's icon) and the Excitable Slime are found by their creature IDs a few seconds after login and join the choice (`/aa mtt champions` lists what was found). Challenge, accept and rematch messages carry the champion; older versions still play (murloc against gnoll). Details: `docs/DESIGN.md` section 71.
+- **Wild Gambit, an aimed spell glows at the cursor** (Asia): once you click your spell card and it is waiting for a target, the cursor wears a pulsing blue glow and sheds sparkles until the spell lands or you put it back. Picking a card from your hand while a spell is chosen also puts the spell back (and takes that card).
+
+## 0.66.2
+
+- **Developer: `/aa ejscan`** (with `/aa debug` on) checks which dungeons and raids have the game's dungeon journal art on this client: backgrounds, lore pictures, journal buttons, group-finder art and loading screens, trying several spellings of each dungeon's name. Results are saved to `AzerothAlmanacDB.ejscan` on `/reload`. For the Wild Gambit dungeon cards (DESIGN section 70).
+
+## 0.66.1
+
+- **Fix: a dungeon creature's journal line showed where you were when it got its name** (e.g. Orgrimmar), not the dungeon. The corpse's spot is now kept until the creature is named, and the journal line uses it. Lines already written by 0.66.0 are moved to the dungeon once, the first time you're outside after updating.
+
+## 0.66.0
+
+- **Dungeon creatures are recorded from their corpses.** Inside instances the game hides every creature's GUID and name from addons (in and out of combat), and the combat log is closed to addons, but the loot window still gives each corpse's real GUID. Looting a corpse now makes its Creatures record if it has none: the kill is counted, the loot recorded, and the dungeon's map logged. Its rank comes from the Classic records.
+- **Names arrive on the way out.** The game only answers "what is NPC 11320 called?" outside instances, so a creature first met in a dungeon shows as "Unknown creature #11320" until you leave. Then it gets its name, its journal line and its discovery alert. Seeing it anywhere its name can be read also names it.
+- **Groupmates' loot counts.** When someone else in the group loots a corpse inside an instance and runs the Almanac (0.66.0 or later, with "share" on), their Almanac tells yours, so the kill still counts for you. Loot statistics still count only corpses you looted.
+- **Boss stand-ins fold into the real creature.** Once a boss's corpse is looted and named, its 0.65.4 encounter stand-in (e.g. Oggleflint under -2732) merges into the real record, keeping the larger kill count, and the Dungeons page points at the real one. A boss counted by its encounter isn't counted a second time when you loot it.
+
+## 0.65.4
+
+- **Dungeon bosses reach Creatures.** Inside instances the game hides a creature's GUID and name from addons, so a boss like Oggleflint was counted on the Dungeons page but never made a Creatures record. Now the boss encounter makes that record: the boss's name, level, rank and type, where it was fought, and kills that count toward its research tiers. Where its NPC ID can't be read, it's kept under the encounter's number. Bosses killed before this update get their record (with their kills) the first time you log in. The Dungeons page now links them to Creatures. Ordinary creatures inside instances still can't be identified (the game hides their names too).
+- **Healer Assist pets on the game's pet frames:** a party pet's icons now start in the same column as its owner's, and its paw print is hidden, because the pet frame already shows it's a pet. Tip: party pet frames show after `/run SetCVar("showPartyPets",1)` and a `/reload`.
+
+## 0.65.3
+
+- **Healer Assist beside the portraits:** with "right", the icons now start under the name plate, level with the health bar (they used to start level with the name). A pet with no frame of its own (party pet frames are often hidden) now gets its line of icons just under its owner's, a little indented, instead of being left out (needs "Group members' pets" on; your own pet keeps its pet frame).
+
+## 0.65.2
+
+- **Healer Assist: icons on party members' frames.** This client's party frames have no global names (the old `PartyMemberFrame1` ... don't exist), so a party member's icons went to the Healer Assist window instead of under their portrait. The frames are now also found as children of the party frame (and the raid-style party frame), pets included. `/aa heal debug` now lists which frame each member's icons are on.
+
+## 0.65.1
+
+- **Fix: opening Wild Gambit could throw "attempt to perform string conversion on a secret string value"** when a nameplate or your target belonged to a unit the game keeps secret (enemy nameplates in combat). Every unit Wild Gambit reads (opponent nearby, Play Wild Gambit on a unit, challenge by target, portraits, your pet) now goes through `Readable`: a secret counts as unknown, so that unit is simply skipped.
 
 ## 0.65.0
 
