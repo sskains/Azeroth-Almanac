@@ -81,14 +81,13 @@ local CHAMPS = {
 		lose = { 560822, 560823 },
 	},
 	-- Seasonal champions: offered only while their holiday is on (the calendar check is shared with Wild Gambit's
-	-- boards). Hallow's End: a black tabby (creature 7383, found like the roach; if that fails, the pet among your
-	-- companions, else target a cat and /aa mtt champion tabby) and the plague's cockroach
+	-- boards). Hallow's End: the Bombay cat (its model comes from the pet among your companions, so you need to
+	-- own it; else target a Bombay cat and /aa mtt champion bombay) and the plague's cockroach
 	-- (WoW Forever creature 271913, found like the slime).
-	tabby = {
-		name = "Black Tabbies", one = "Black Tabby", item = 8491, -- Cat Carrier (Black Tabby)
-		npc = 7383, -- Black Tabby Cat (the creature its pet summons; per the Warcraft wiki)
-		companion = { "Black Tabby", "Black Tabby Cat" }, season = "HallowsEnd",
-		color = { 0.62, 0.55, 0.85 }, hex = "9e8cd9", cheer = "Meow-ow-ow!", bot = "Black Tabby",
+	bombay = {
+		name = "Bombay Cats", one = "Bombay Cat", item = 8485, -- Cat Carrier (Bombay)
+		companion = { "Bombay", "Bombay Cat" }, season = "HallowsEnd",
+		color = { 0.62, 0.55, 0.85 }, hex = "9e8cd9", cheer = "Meow-ow-ow!", bot = "Bombay Cat",
 	},
 	roach = {
 		name = "Plagued Cockroaches", one = "Plagued Cockroach", icon = "INV_Misc_Bug_01", npc = 271913,
@@ -107,7 +106,7 @@ local CHAMPS = {
 }
 -- the order they are offered in
 -- (each champion knows its own key, for the voices set in game)
-local ROSTER = { "murloc", "gnoll", "faerie", "slime", "tabby", "roach" }
+local ROSTER = { "murloc", "gnoll", "faerie", "slime", "bombay", "roach" }
 -- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
 -- chose the same champion can still be told apart
 local ROLE_RINGS = {
@@ -2016,11 +2015,13 @@ function MT:OnLogin()
 	end)
 	AddMenus()
 	C_Timer.After(6, ResolveChampions)
+	C_Timer.After(25, ResolveChampions) -- (the companion list can be slow to load)
 end
 
 function MT:Open()
 	if not frame then Build() end
 	frame:Show()
+	ResolveChampions() -- (a companion found by now: the Bombay cat)
 	Refresh()
 end
 
