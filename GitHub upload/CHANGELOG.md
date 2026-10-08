@@ -4,6 +4,10 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **Wild Gambit, an aimed spell glows at the cursor** (Asia): once you click your spell card and it is waiting for a target, the cursor wears a pulsing blue glow and sheds sparkles until the spell lands or you put it back.
+
 ## 0.65.0
 
 Asia's `gem-match-wood-board` branch merged into main (with everything up to 0.64.2).

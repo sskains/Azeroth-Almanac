@@ -6,6 +6,10 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased (/reload)
+
+- [ ] Wild Gambit: click your spell card (one that needs a target): the cursor gets a blue glow with drifting sparkles, also when it leaves the window; it goes when the spell lands, when you click the card again to put it back, and when the game ends or the window closes. A spell with no target (cast at once) shows no glow. The glow sits above every window and never blocks clicks.
+
 ## 0.65.0 (full game restart: new Gem Match textures)
 
 - [ ] Gem Match: the painted board, side panel, game-over panel, hint, shards and group/friend scores (the full list is under "Gem Match" in `STATUS.md`, "Needs checking in game first").

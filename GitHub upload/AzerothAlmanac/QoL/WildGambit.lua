@@ -2419,6 +2419,74 @@ local function Build()
 	frame.spellZoom = NewSpellCard(frame)
 	frame.spellZoom:EnableMouse(false)
 	frame.spellZoom:Hide()
+
+	-- a spell chosen and waiting for its target: the cursor glows blue and sheds sparkles until the spell
+	-- lands (or is put back). It follows the mouse over the whole screen, and only shows while you aim.
+	do
+		local cur = CreateFrame("Frame", nil, UIParent)
+		cur:SetSize(1, 1)
+		cur:SetFrameStrata("TOOLTIP")
+		cur:EnableMouse(false)
+		local halo = cur:CreateTexture(nil, "OVERLAY", nil, 1)
+		halo:SetTexture(GLOW_TEX)
+		halo:SetBlendMode("ADD")
+		halo:SetVertexColor(0.3, 0.6, 1)
+		halo:SetPoint("CENTER", cur, "CENTER")
+		local core = cur:CreateTexture(nil, "OVERLAY", nil, 2)
+		core:SetTexture(GLOW_TEX)
+		core:SetBlendMode("ADD")
+		core:SetVertexColor(0.75, 0.9, 1)
+		core:SetPoint("CENTER", cur, "CENTER")
+		local sparks, LIFE = {}, 1.0
+		for k = 1, 12 do
+			local t = cur:CreateTexture(nil, "OVERLAY", nil, 3)
+			t:SetTexture("Interface\\Cooldown\\star4")
+			t:SetBlendMode("ADD")
+			t:SetVertexColor(0.7, 0.88, 1)
+			sparks[k] = { tex = t, age = LIFE * k / 12, ox = 0, oy = 0, size = 10 }
+		end
+		local clock = 0
+		cur:SetScript("OnUpdate", function(self, dt)
+			if not (frame and frame:IsShown() and game and game.targeting) then
+				if self.aiming then
+					self.aiming = nil
+					halo:Hide() core:Hide()
+					for _, s in ipairs(sparks) do s.tex:Hide() end
+				end
+				return
+			end
+			if not self.aiming then
+				self.aiming = true
+				halo:Show() core:Show()
+			end
+			clock = clock + dt
+			local x, y = GetCursorPosition()
+			local scale = UIParent:GetEffectiveScale()
+			self:ClearAllPoints()
+			self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+			local pulse = 0.5 + 0.5 * math.sin(clock * 5)
+			halo:SetSize(58 + pulse * 10, 58 + pulse * 10)
+			halo:SetAlpha(0.55 + pulse * 0.25)
+			core:SetSize(22, 22)
+			core:SetAlpha(0.7 + pulse * 0.25)
+			for _, s in ipairs(sparks) do
+				s.age = s.age + dt
+				if s.age >= LIFE then -- (born again at a new spot round the cursor)
+					s.age = s.age - LIFE
+					local a, r = math.random() * 6.2832, 6 + math.random() * 22
+					s.ox, s.oy, s.size = math.cos(a) * r, math.sin(a) * r, 8 + math.random() * 8
+				end
+				local u = s.age / LIFE
+				s.tex:SetSize(s.size * (1 - u * 0.5), s.size * (1 - u * 0.5))
+				s.tex:SetAlpha(math.sin(u * 3.1416))
+				s.tex:ClearAllPoints()
+				s.tex:SetPoint("CENTER", self, "CENTER", s.ox, s.oy + u * 14) -- (drifting up as it fades)
+				s.tex:Show()
+			end
+		end)
+		cur.aiming = true -- (so the first idle frame hides it)
+		WG.aimCursor = cur
+	end
 	frame.cards = {}
 	for i = 1, 12 do -- (two more: a removed card's owner is dealt another)
 		local c = NewCard(frame)
