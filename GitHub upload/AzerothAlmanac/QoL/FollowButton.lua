@@ -185,76 +185,6 @@ local function Build()
 	button = b
 end
 
--- /aafollowhit: paint the click area (red) and the button's own frame (blue) so you can see where it is
-local function DrawHit()
-	if not button then return end
-	if not button.hitRed then
-		button.hitRed = button:CreateTexture(nil, "OVERLAY", nil, 7)
-		button.hitRed:SetColorTexture(1, 0, 0, 0.35)
-		button.hitBlue = button:CreateTexture(nil, "OVERLAY", nil, 6)
-		button.hitBlue:SetColorTexture(0.2, 0.4, 1, 0.45)
-		button.hitBlue:SetAllPoints(button.icon) -- (the picture; red is the whole button, which takes the clicks)
-	end
-	local l, r, t, bt = button:GetHitRectInsets()
-	button.hitRed:ClearAllPoints()
-	-- (an inset moves an edge inward when positive, outward when negative)
-	button.hitRed:SetPoint("TOPLEFT", button, "TOPLEFT", (l or 0), -(t or 0))
-	button.hitRed:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -(r or 0), (bt or 0))
-	button.hitRed:SetShown(FB.showHit and true or false)
-	button.hitBlue:SetShown(FB.showHit and true or false)
-end
-
--- while the overlay is on: name the frame under the mouse whenever it changes (what is covering the button?)
-local function Foci()
-	local f = (GetMouseFoci and GetMouseFoci()) or (GetMouseFocus and { GetMouseFocus() }) or {}
-	return f[1]
-end
-local function Describe(f)
-	if not f then return "nothing (the game world)" end
-	local parts, g = {}, f
-	for _ = 1, 4 do
-		if not g then break end
-		local name = g.GetName and g:GetName()
-		local kind = g.GetObjectType and g:GetObjectType() or "?"
-		parts[#parts + 1] = (name or ("<" .. kind .. ">")) .. (g.GetFrameStrata and (" [" .. g:GetFrameStrata() .. " " .. (g.GetFrameLevel and g:GetFrameLevel() or "?") .. "]") or "")
-		g = g.GetParent and g:GetParent() or nil
-	end
-	return table.concat(parts, "  <  ")
-end
-local watcher
-local function Watch()
-	if FB.showHit and not watcher then
-		watcher = C_Timer.NewTicker(0.15, function()
-			if not FB.showHit then return end
-			local f = Foci()
-			if f ~= FB.lastFocus then
-				FB.lastFocus = f
-				print("|cff59ff80Follow button:|r mouse is over " .. Describe(f))
-			end
-		end)
-	elseif not FB.showHit and watcher then
-		watcher:Cancel()
-		watcher = nil
-		FB.lastFocus = nil
-	end
-end
-
-SLASH_AAFOLLOWHIT1 = "/aafollowhit"
-SlashCmdList.AAFOLLOWHIT = function()
-	FB.showHit = not FB.showHit
-	DrawHit()
-	Watch()
-	if button then
-		local l, r, t, bt = button:GetHitRectInsets()
-		local x, y = button:GetCenter()
-		print(("|cff59ff80Follow button:|r strata %s, level %d (the target frame: %s, %d)"):format(button:GetFrameStrata(), button:GetFrameLevel(), TargetFrame and TargetFrame:GetFrameStrata() or "?", TargetFrame and TargetFrame:GetFrameLevel() or 0))
-		print(("|cff59ff80Follow button:|r click area %s (red); the button's own frame is blue, %.0f x %.0f px, insets %.0f / %.0f / %.0f / %.0f, shown: %s, centre at %.0f, %.0f, scale %.2f"):format(
-			FB.showHit and "shown" or "hidden", button:GetWidth(), button:GetHeight(), l or 0, r or 0, t or 0, bt or 0, tostring(button:IsShown()), x or 0, y or 0, button:GetEffectiveScale()))
-	else
-		print("Follow button: not built yet.")
-	end
-end
-
 -- Out of combat: size, place, icon, and the rule that shows it with a target.
 local function Apply()
 	if InCombatLockdown() then pending = true return end
@@ -305,7 +235,6 @@ local function Apply()
 		button:Hide()
 	end
 	button.ok = nil
-	DrawHit()
 	Refresh()
 end
 
@@ -343,9 +272,6 @@ function FB:OnLogin()
 			following = (type(who) == "string" and who ~= "" and who) or R(UnitName("target"))
 		elseif event == "AUTOFOLLOW_END" or event == "PLAYER_ENTERING_WORLD" then
 			following = nil
-		end
-		if FB.showHit and (event == "AUTOFOLLOW_BEGIN" or event == "AUTOFOLLOW_END") then
-			print(("|cff59ff80Follow button:|r %s (%s), following is now %s"):format(event, tostring(who), tostring(following)))
 		end
 		if event == "PLAYER_REGEN_ENABLED" and pending then Apply() end
 		Refresh()
