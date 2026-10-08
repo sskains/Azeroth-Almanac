@@ -4,6 +4,10 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **Follow button stays behind windows** (Asia): the button on the target frame now sits on the target frame's own layer instead of above everything, so the Almanac, the games, the bags and other windows cover it.
+
 ## 0.66.3
 
 Asia's work, merged 2026-10-07: the wg-spell-cursor and murloc-tactoe-restyle branches. (Also: the dungeon cards' design moved to DESIGN section 72, since 70 was already Gem Match's board.)

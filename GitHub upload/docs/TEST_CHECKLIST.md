@@ -6,6 +6,10 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased (/reload)
+
+- [ ] Follow button: target a friendly player, then open the Almanac, a mini game or your bags over the target frame: the window covers the button (it doesn't float on top); with the windows closed it still shows, greys out and follows as before, also in combat.
+
 ## 0.66.3 (/reload; the Murloc Tac Toe items marked "full game restart" need one)
 
 - [ ] Murloc Tac Toe, new look (`/reload`): the dark window background; the wooden buttons (text fits: "Challenge", "My target", "Practice game", "Resign", "Sound: on"); the corner icon in the gold dragon frame with a murloc head, not a black circle, and the byline beside it; the VS shield.
