@@ -6,7 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
-- **Wild Gambit, an aimed spell glows at the cursor** (Asia): once you click your spell card and it is waiting for a target, the cursor wears a pulsing blue glow and sheds sparkles until the spell lands or you put it back.
+- **Wild Gambit, an aimed spell glows at the cursor** (Asia): once you click your spell card and it is waiting for a target, the cursor wears a pulsing blue glow and sheds sparkles until the spell lands or you put it back. Picking a card from your hand while a spell is chosen also puts the spell back (and takes that card).
 
 ## 0.65.0
 

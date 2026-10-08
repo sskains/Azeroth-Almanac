@@ -8,7 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
-- [ ] Wild Gambit: click your spell card (one that needs a target): the cursor gets a blue glow with drifting sparkles, also when it leaves the window; it goes when the spell lands, when you click the card again to put it back, and when the game ends or the window closes. A spell with no target (cast at once) shows no glow. The glow sits above every window and never blocks clicks.
+- [ ] Wild Gambit: click your spell card (one that needs a target): the cursor gets a blue glow with drifting sparkles, also when it leaves the window; it goes when the spell lands, when you click the card again to put it back, and when the game ends or the window closes. A spell with no target (cast at once) shows no glow. Spell chosen, then click a card in your hand: the spell is put back (glow gone, its card no longer aimed) and that card is the held one, ready for a square. The glow sits above every window and never blocks clicks.
 
 ## 0.65.0 (full game restart: new Gem Match textures)
 
