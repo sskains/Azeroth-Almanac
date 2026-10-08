@@ -324,8 +324,15 @@ function FB:OnLogin()
 		pcall(events.RegisterEvent, events, e)
 	end
 	events:SetScript("OnEvent", function(_, event, who)
-		if event == "AUTOFOLLOW_BEGIN" then following = type(who) == "string" and who or nil
-		elseif event == "AUTOFOLLOW_END" then following = nil end
+		if event == "AUTOFOLLOW_BEGIN" then
+			-- (the game names who; if it doesn't, it is the target, which /follow follows)
+			following = (type(who) == "string" and who ~= "" and who) or R(UnitName("target"))
+		elseif event == "AUTOFOLLOW_END" or event == "PLAYER_ENTERING_WORLD" then
+			following = nil
+		end
+		if FB.showHit and (event == "AUTOFOLLOW_BEGIN" or event == "AUTOFOLLOW_END") then
+			print(("|cff59ff80Follow button:|r %s (%s), following is now %s"):format(event, tostring(who), tostring(following)))
+		end
 		if event == "PLAYER_REGEN_ENABLED" and pending then Apply() end
 		Refresh()
 	end)
