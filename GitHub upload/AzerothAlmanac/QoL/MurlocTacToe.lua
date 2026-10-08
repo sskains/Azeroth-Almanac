@@ -1039,6 +1039,7 @@ local function ApplySeasonLook()
 	local hallow = ns.HolidayNow() == "HallowsEnd" or (db and db.anySeason)
 	if frame.hallow == hallow then return end
 	frame.hallow = hallow
+	frame.pile:SetShown(hallow)
 	frame.boardArt:SetTexture(MEDIA .. (hallow and "MurlocTacToe_Board_HallowsEnd" or "MurlocTacToe_Board"))
 	for _, f in ipairs(frame.flies) do
 		f.tex:SetVertexColor(unpack(hallow and { 1, 0.6, 0.2 } or { 0.9, 1, 0.5 })) -- (embers, not fireflies)
@@ -1695,6 +1696,13 @@ local function Build()
 		Refresh()
 	end)
 	frame.musicButton:SetPoint("LEFT", frame.soundButton, "RIGHT", 8, 0)
+	-- Hallow's End: a heap of pumpkins and sweets along the panel's foot (shown in season only)
+	frame.pile = side:CreateTexture(nil, "ARTWORK")
+	frame.pile:SetTexture(MEDIA .. "MurlocTacToe_Pile_HallowsEnd")
+	frame.pile:SetTexCoord(0, 1, 0, 0.4922)
+	frame.pile:SetSize(100, 100 * 126 / 256)
+	frame.pile:SetPoint("BOTTOM", side, "BOTTOM", 0, 8)
+	frame.pile:Hide()
 
 	local winIcon = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Icon" -- (the murloc badge, custom art)
 	ns.NativeWindow(frame, { title = "Murloc Tac Toe", icon = winIcon, hide = { titleBg, icon, title }, close = close, byline = sub })
