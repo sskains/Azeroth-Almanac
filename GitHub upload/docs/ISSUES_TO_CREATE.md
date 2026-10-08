@@ -194,7 +194,7 @@ Check first in game: is the objective text / progress readable (not secret) insi
 ### 27. Wild Gambit dungeon cards
 **Labels:** `wild-gambit` `enhancement` `art`
 ```
-Designed 2026-10-07: docs/DESIGN.md section 70.
+Designed 2026-10-07: docs/DESIGN.md section 72.
 5% chance per card leaving a hand that its replacement is a dungeon card (one per player per match, only dungeons in your Almanac, never a 6th card). Played onto an empty square as your placement: a neutral, unscored, out-of-play square carrying the dungeon's effect. No spikes, one design, never upgrades. Scenery from the game's dungeon journal art; stone-archway frame.
 Steps: 1) scan which dungeons have journal art; 2) review the effects table; 3) card art and frame (Media/), new texture = full restart; 4) rules in WildGambitLogic (seeded deal, neutral square, effects, bot scoring, offline tests); 5) UI (hand, board square, tooltip, sounds); 6) player matches: protocol 12.
 ```

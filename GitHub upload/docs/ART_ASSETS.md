@@ -110,7 +110,7 @@ Switched on in QoL/WildGambit.lua `HERO_ART`. [x] All 17 delivered (0.41.1): cre
 - [ ] Journal-entry badge (docs/art_source/Badge_Journal.png, 2026-10-07): open crimson journal with molten-gold writing; to become Media/Badge_Journal.tga on the Almanac toasts (issue 24). Not converted yet.
 - [ ] Almanac logo (docs/art_source/Logo_Almanac.png, 2026-10-07): closed crimson journal with a gold compass rose; to become Media/Logo_Almanac.tga and replace ns.ICON (133742) everywhere (issue 25). Not converted yet.
 
-## Dungeon cards (designed 2026-10-07, DESIGN section 70)
+## Dungeon cards (designed 2026-10-07, DESIGN section 72)
 
 Scenery for 27 dungeons and raids comes from the game's journal art (UI-EJ-BACKGROUND-*); custom pieces (sources in docs/art_source/):
 - [x] Frame_Dungeon (256x512 from 3:4, delivered 2026-10-07): carved stone archway with torches. Keyed holes in the 256x512 texture: arched art window x 55-201, y 85-322; text plaque x 55-201, y 357-447 (the art converter's printed layout doesn't apply: both holes are see-through).

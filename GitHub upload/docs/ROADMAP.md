@@ -52,7 +52,7 @@ Rules:
 
 ## Next
 
-- **Wild Gambit dungeon cards** (designed 2026-10-07, DESIGN section 70): a rare dungeon card dealt in place of a card, played onto the board as a neutral square with the dungeon's own effect (issue 27). First: the journal art scan and the effects review.
+- **Wild Gambit dungeon cards** (designed 2026-10-07, DESIGN section 72): a rare dungeon card dealt in place of a card, played onto the board as a neutral square with the dungeon's own effect (issue 27). First: the journal art scan and the effects review.
 
 - **Quest kill credit for dungeon kills** (added 2026-10-07): a quest's kill progress counts the kill for its target creature, so kills nobody's Almanac looted still count (issue 26).
 

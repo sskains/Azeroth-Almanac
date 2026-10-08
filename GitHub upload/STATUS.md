@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.66.2** · 2026-10-07 · WoW Forever beta (interface 16001)
+**Version 0.66.3** · 2026-10-07 · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 

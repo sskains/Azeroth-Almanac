@@ -4,7 +4,9 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
-## Unreleased
+## 0.66.3
+
+Asia's work, merged 2026-10-07: the wg-spell-cursor and murloc-tactoe-restyle branches. (Also: the dungeon cards' design moved to DESIGN section 72, since 70 was already Gem Match's board.)
 
 - **Murloc Tac Toe in the mini games' look** (Asia): the dark window background, the carved-oak buttons with gold lettering, the shared gold dragon frame round a murloc-head corner icon (the empty black circle is gone) and Wild Gambit's carved VS shield.
 - **Murloc Tac Toe, a painted swamp board** (Asia): a carved mossy-oak board with vines, mushrooms and a lily pad round nine sockets (`MurlocTacToe_Board.tga`), with Gem Match's carved side panel and carved pop-ups, a murloc badge as the corner icon, a swamp ribbon carrying the result, and mossy carved arrows to choose your champion. The window is 837 x 687. New textures: full game restart.
@@ -28,7 +30,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## 0.66.2
 
-- **Developer: `/aa ejscan`** (with `/aa debug` on) checks which dungeons and raids have the game's dungeon journal art on this client: backgrounds, lore pictures, journal buttons, group-finder art and loading screens, trying several spellings of each dungeon's name. Results are saved to `AzerothAlmanacDB.ejscan` on `/reload`. For the Wild Gambit dungeon cards (DESIGN section 70).
+- **Developer: `/aa ejscan`** (with `/aa debug` on) checks which dungeons and raids have the game's dungeon journal art on this client: backgrounds, lore pictures, journal buttons, group-finder art and loading screens, trying several spellings of each dungeon's name. Results are saved to `AzerothAlmanacDB.ejscan` on `/reload`. For the Wild Gambit dungeon cards (DESIGN section 72).
 
 ## 0.66.1
 

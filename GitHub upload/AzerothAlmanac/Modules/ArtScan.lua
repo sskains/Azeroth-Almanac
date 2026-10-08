@@ -362,7 +362,7 @@ function Art:AtlasCheck()
 end
 
 -- /aa ejscan (0.66.2): which dungeons and raids have the game's dungeon journal art on this client
--- (for the Wild Gambit dungeon cards, DESIGN section 70). The journal itself isn't on this client,
+-- (for the Wild Gambit dungeon cards, DESIGN section 72). The journal itself isn't on this client,
 -- but its art files are; GetFileIDFromPath says which names exist. Several spellings are tried per
 -- dungeon. Saved to AzerothAlmanacDB.ejscan = { t, version, found = { [dungeon] = { [kind] = { path, fileID } } }, none = { dungeon, ... } }
 local EJ_KINDS = {

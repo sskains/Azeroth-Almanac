@@ -6,7 +6,7 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
-## Unreleased (/reload; the Murloc Tac Toe items marked "full game restart" need one)
+## 0.66.3 (/reload; the Murloc Tac Toe items marked "full game restart" need one)
 
 - [ ] Murloc Tac Toe, new look (`/reload`): the dark window background; the wooden buttons (text fits: "Challenge", "My target", "Practice game", "Resign", "Sound: on"); the corner icon in the gold dragon frame with a murloc head, not a black circle, and the byline beside it; the VS shield.
 - [ ] Murloc Tac Toe board (full game restart): the nine sockets under the nine cells (a piece sits in the middle of its socket, faces not cut off or overlapping the rim), the cards as wide as the board, the carved side panel with nothing overlapping (heading, name box, three buttons, titles, eight rival rows, Resign and Sound at the bottom), the waiting and game-over pop-ups inside their panels with the buttons fitting, the winning line and bursts still lined up with the cells, the window on your screen (837 x 687).

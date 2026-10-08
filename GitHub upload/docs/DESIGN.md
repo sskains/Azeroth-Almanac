@@ -657,7 +657,7 @@ Enemy players you meet, fight, beat or die to. Same rules as everything else: on
   - [ ] Bug check, then in-game test.
 - Open: final name (Rivals / Adversaries); whether Forever has the honor system and battlegrounds at launch.
 
-## 70. Wild Gambit dungeon cards (designed 2026-10-07) [ ]
+## 72. Wild Gambit dungeon cards (designed 2026-10-07) [ ]
 Decided with Shannon 2026-10-07:
 - [ ] **Dealt by chance.** Each time a card leaves a player's hand (played, or a board card removed and replaced), 5% chance the card dealt in its place is a dungeon card. At most one dungeon card per player per match. The hand never goes past 5: the dungeon card *is* the replacement, never an extra card. Rolled with the match's seeded random generator, so both players' games agree (player matches: protocol 12; older versions can't play against it).
 - [ ] **Only dungeons you've entered.** A player is dealt only dungeons and raids in their Almanac (found.instance).

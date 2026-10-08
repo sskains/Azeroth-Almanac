@@ -8,7 +8,7 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "0.66.2"
+ns.VERSION = "0.66.3"
 ns.ICON = 133742   -- the Almanac's icon (picked with /aa whatis; was INV_Misc_Book_09)
 
 BINDING_HEADER_AZEROTHALMANAC = "Azeroth Almanac"
