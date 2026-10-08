@@ -101,6 +101,7 @@ local CHAMPS = {
 	slime = {
 		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01", npc = 266735, -- Excitable Slime (WoW Forever)
 		color = { 0.7, 1, 0.3 }, hex = "b3ff4d", cheer = "Blorp blorp!", bot = "Excitable Slime",
+		place = { 188260 }, -- FX_Slime_Whoosh_Short_01 (wowhead sound=188260, taken as the file ID; more to add for win / lose)
 	},
 }
 -- the order they are offered in
