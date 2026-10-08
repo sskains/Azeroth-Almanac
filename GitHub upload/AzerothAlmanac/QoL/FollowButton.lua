@@ -169,6 +169,38 @@ local function Build()
 	button = b
 end
 
+-- /aafollowhit: paint the click area (red) and the button's own frame (blue) so you can see where it is
+local function DrawHit()
+	if not button then return end
+	if not button.hitRed then
+		button.hitRed = button:CreateTexture(nil, "OVERLAY", nil, 7)
+		button.hitRed:SetColorTexture(1, 0, 0, 0.35)
+		button.hitBlue = button:CreateTexture(nil, "OVERLAY", nil, 6)
+		button.hitBlue:SetColorTexture(0.2, 0.4, 1, 0.45)
+		button.hitBlue:SetAllPoints()
+	end
+	local l, r, t, bt = button:GetHitRectInsets()
+	button.hitRed:ClearAllPoints()
+	button.hitRed:SetPoint("TOPLEFT", button, "TOPLEFT", -(l or 0), (t or 0))
+	button.hitRed:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", (r or 0), -(bt or 0))
+	button.hitRed:SetShown(FB.showHit and true or false)
+	button.hitBlue:SetShown(FB.showHit and true or false)
+end
+
+SLASH_AAFOLLOWHIT1 = "/aafollowhit"
+SlashCmdList.AAFOLLOWHIT = function()
+	FB.showHit = not FB.showHit
+	DrawHit()
+	if button then
+		local l, r, t, bt = button:GetHitRectInsets()
+		local x, y = button:GetCenter()
+		print(("|cff59ff80Follow button:|r click area %s (red); the button's own frame is blue, %.0f x %.0f px, insets %.0f / %.0f / %.0f / %.0f, shown: %s, centre at %.0f, %.0f, scale %.2f"):format(
+			FB.showHit and "shown" or "hidden", button:GetWidth(), button:GetHeight(), l or 0, r or 0, t or 0, bt or 0, tostring(button:IsShown()), x or 0, y or 0, button:GetEffectiveScale()))
+	else
+		print("Follow button: not built yet.")
+	end
+end
+
 -- Out of combat: size, place, icon, and the rule that shows it with a target.
 local function Apply()
 	if InCombatLockdown() then pending = true return end
@@ -212,6 +244,7 @@ local function Apply()
 		button:Hide()
 	end
 	button.ok = nil
+	DrawHit()
 	Refresh()
 end
 
