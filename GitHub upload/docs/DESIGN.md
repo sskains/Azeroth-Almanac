@@ -748,7 +748,7 @@ Still not brought over: Quest Givers, SoftProbe, Spell Ranker, Talent Planner, A
 ## Backlog
 _(add new ideas here)_
 
-## 72. Follow button: footsteps (2026-10-07, Asia)
+## 73. Follow button: footsteps (2026-10-07, Asia)
 
 - **Look.** A pair of gold footprints (`Media/Follow_Footsteps.tga`, 64 x 64, source in `docs/art_source/`), no frame or background. The old framed spell icons stay as choices (Settings > Follow button > Icon). A saved winged boot, the old default, becomes the footsteps once (`db.follow.iconV`).
 - **Aura.** Two ADD-blended glow textures behind the prints (gold), breathing slowly, on for as long as you follow anyone: it follows the game's `AUTOFOLLOW_BEGIN` / `AUTOFOLLOW_END` events (the name comes from the event, else the target at that moment) and clears on `PLAYER_ENTERING_WORLD`. It is not tied to the current target. The game's own "Following X." lines come from the plain `/follow` macro the button runs.
