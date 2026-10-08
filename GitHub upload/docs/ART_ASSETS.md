@@ -107,3 +107,14 @@ Switched on in QoL/WildGambit.lua `HERO_ART`. [x] All 17 delivered (0.41.1): cre
 - [x] Frozen card: FX_FrozenCard (256x512, glow on black), Mark_IceShackles (512x256, keyed) (0.45.0).
 - [x] Mark_Trap redone as a frost-rimed freezing trap (0.45.2).
 - [x] Badge_Favorite re-keyed (0.45.3): the magenta glow in the filigree gaps removed (kept only the gold frame and the gem, the frame's largest hole).
+- [ ] Journal-entry badge (docs/art_source/Badge_Journal.png, 2026-10-07): open crimson journal with molten-gold writing; to become Media/Badge_Journal.tga on the Almanac toasts (issue 24). Not converted yet.
+- [ ] Almanac logo (docs/art_source/Logo_Almanac.png, 2026-10-07): closed crimson journal with a gold compass rose; to become Media/Logo_Almanac.tga and replace ns.ICON (133742) everywhere (issue 25). Not converted yet.
+
+## Dungeon cards (designed 2026-10-07, DESIGN section 70)
+
+Scenery for 27 dungeons and raids comes from the game's journal art (UI-EJ-BACKGROUND-*); custom pieces (sources in docs/art_source/):
+- [x] Frame_Dungeon (256x512 from 3:4, delivered 2026-10-07): carved stone archway with torches. Keyed holes in the 256x512 texture: arched art window x 55-201, y 85-322; text plaque x 55-201, y 357-447 (the art converter's printed layout doesn't apply: both holes are see-through).
+- [x] FX_TorchGlow (64x64, made by Claude 2026-10-07): soft orange radial glow for the frame's flickering torches.
+- [x] FX_DungeonPortal (512x512, glow on black, added as light; delivered 2026-10-07): violet and gold swirl.
+- [x] Scene_Dungeon_HallOfThanes (512x512 from 1024x765, stretched; show at 4:3; delivered 2026-10-07): dwarf-king statues, molten channels.
+- [x] Scene_Dungeon_RuinsOfLordaeron (512x512 from 1024x765, stretched; show at 4:3; delivered 2026-10-07): ruined capital under a green sky.
