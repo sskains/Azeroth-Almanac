@@ -311,13 +311,21 @@ local function Ring(tex, side, size, anchor)
 	tex:SetPoint("CENTER", anchor)
 end
 
+-- How far the camera stands back from a champion (a bigger number shows more of it): on the player cards and
+-- on the board. A champion's own `cardCam` / `pieceCam` or a value set in game (/aa mtt cam) comes first.
+local function CamScale(look, which)
+	local c = db and db.cam and look.key and db.cam[look.key]
+	if c and c[which] then return c[which] end
+	return look[which == "card" and "cardCam" or "pieceCam"] or (which == "card" and 1.55 or 1.5)
+end
+
 -- a champion in a model frame: its display, a full-body camera, facing in from its side of the board
 local function SetModel(model, side)
 	local look = SIDES[side]
 	if model.ClearModel then model:ClearModel() end
 	if look.display and model.SetDisplayInfo then pcall(model.SetDisplayInfo, model, look.display) end
 	if model.SetPortraitZoom then model:SetPortraitZoom(0) end
-	if model.SetCamDistanceScale then model:SetCamDistanceScale(look.camScale or 1.3) end
+	if model.SetCamDistanceScale then model:SetCamDistanceScale(CamScale(look, "piece")) end
 	if model.SetFacing then model:SetFacing(side == "murloc" and -0.35 or 0.35) end
 	if model.SetAnimation then model:SetAnimation(0) end
 end
@@ -980,7 +988,7 @@ local function SetCard(card, side, name, sub, active)
 		if card.model.ClearModel then card.model:ClearModel() end
 		if card.model.SetDisplayInfo then pcall(card.model.SetDisplayInfo, card.model, SIDES[side].display) end
 		if card.model.SetPortraitZoom then card.model:SetPortraitZoom(0) end
-		if card.model.SetCamDistanceScale then card.model:SetCamDistanceScale(1.15) end
+		if card.model.SetCamDistanceScale then card.model:SetCamDistanceScale(CamScale(look, "card")) end
 		if card.model.SetFacing then card.model:SetFacing(card.facing) end
 		if card.model.SetAnimation then card.model:SetAnimation(0) end
 		Face(card.face, side)
@@ -1171,7 +1179,7 @@ local function Build()
 		stage:SetVertexColor(0.45, 0.6, 0.7)
 		stage:SetShown(not CARD_PLAIN)
 		card.model = CreateFrame("PlayerModel", nil, card)
-		card.model:SetPoint("TOPLEFT", 5, 0)       -- 5 px higher than the framed look had it
+				card.model:SetPoint("TOPLEFT", 5, 34) -- (reaching 34 px above the card, for headroom)
 		card.model:SetPoint("BOTTOMRIGHT", -5, 67)
 		-- the stump the creature stands on (custom art, the pool faded round it): its top is where the feet are
 		card.stage = card:CreateTexture(nil, "BACKGROUND", nil, 1)
@@ -1328,7 +1336,7 @@ local function Build()
 		cell.base:SetSize(PIECE * 1.15, PIECE * 0.55)
 		cell.base:SetPoint("BOTTOM", 0, -2)
 		cell.model = CreateFrame("PlayerModel", nil, cell.holder)
-		cell.model:SetSize(PIECE + 16, PIECE + 16)
+		cell.model:SetSize(PIECE + 16, PIECE + 44) -- (taller than the socket, for headroom)
 		cell.model:SetPoint("BOTTOM", 0, 2)
 		cell.holder:Hide()
 		cell:SetScript("OnClick", function() MT:Place(i) end)
@@ -1346,7 +1354,7 @@ local function Build()
 	end
 
 	frame.ghostModel = CreateFrame("PlayerModel", nil, inner)
-	frame.ghostModel:SetSize(PIECE + 16, PIECE + 16)
+	frame.ghostModel:SetSize(PIECE + 16, PIECE + 44)
 	frame.ghostModel:SetFrameLevel(inner:GetFrameLevel() + 6)
 	frame.ghostModel:SetAlpha(0.45)
 	frame.ghostModel:Hide()
@@ -1610,7 +1618,7 @@ local function Build()
 	-- the corner icon bigger, in the gold elite frame, as in Wild Gambit and Gem Match
 	ns.GoldEmblem(frame, winIcon)
 	sub:ClearAllPoints()
-	sub:SetPoint("TOPLEFT", frame, "TOPLEFT", 172, -31)
+	sub:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 8)
 
 	local clock, lastQuit = 0, nil
 	frame:SetScript("OnUpdate", function(self, elapsed)
@@ -1748,6 +1756,7 @@ function MT:OnInitialize(saved)
 	db.champion = db.champion or "murloc"
 	db.display = db.display or {}
 	db.npc = db.npc or {}
+	db.cam = db.cam or {} -- { champion = { card = zoom, piece = zoom } } set in game
 	db.voices = db.voices or {}   -- { champion = { place = { ids }, win = ..., lose = ... } } set in game
 	db.ambient = db.ambient or {} -- file IDs of the quiet swamp sounds
 	for key, display in pairs(db.display) do
@@ -1952,6 +1961,17 @@ function MT:Command(rest)
 			Finish(nil, nil, "abandoned")
 		else
 			Say("no game to leave.")
+		end
+	elseif low:match("^cam") then
+		local key, c1, c2 = rest:match("^%S+%s+(%S+)%s*(%S*)%s*(%S*)")
+		key = key and key:lower()
+		if not (key and CHAMPS[key] and tonumber(c1)) then
+			Say("/aa mtt cam <champion> <card zoom> [piece zoom]: a bigger number shows more of the creature (the cards start at 1.55, the board pieces at 1.5). Champions: " .. table.concat(ROSTER, ", "))
+		else
+			db.cam[key] = { card = tonumber(c1), piece = tonumber(c2) }
+			Say(("%s: card zoom %s%s."):format(CHAMPS[key].name, c1, tonumber(c2) and (", piece zoom " .. c2) or ""))
+			if frame then for _, card in pairs(frame.cards) do card.sideShown = nil end end -- (rebuild the cards)
+			Refresh()
 		end
 	elseif low:match("^sound") then
 		local id = tonumber(rest:match("^%S+%s+(%d+)"))
