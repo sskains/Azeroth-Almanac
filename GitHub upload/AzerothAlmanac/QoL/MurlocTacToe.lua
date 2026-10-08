@@ -1031,8 +1031,37 @@ local function SetCard(card, side, name, sub, active)
 	card.turnGem:SetShown(active and true or false)
 end
 
+-- Hallow's End dress: a darker board with pumpkins and candles, and bat-and-pumpkin dividers (the same
+-- dates as the seasonal champions; /aa mtt season shows it early)
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+local function ApplySeasonLook()
+	if not (frame and frame.boardArt) then return end
+	local hallow = ns.HolidayNow() == "HallowsEnd" or (db and db.anySeason)
+	if frame.hallow == hallow then return end
+	frame.hallow = hallow
+	frame.boardArt:SetTexture(MEDIA .. (hallow and "MurlocTacToe_Board_HallowsEnd" or "MurlocTacToe_Board"))
+	for _, f in ipairs(frame.flies) do
+		f.tex:SetVertexColor(unpack(hallow and { 1, 0.6, 0.2 } or { 0.9, 1, 0.5 })) -- (embers, not fireflies)
+	end
+	for _, line in ipairs(frame.ropes or {}) do
+		line:ClearAllPoints()
+		if hallow then
+			line:SetTexture(MEDIA .. "MurlocTacToe_Divider_HallowsEnd")
+			line:SetTexCoord(0, 1, 0, 0.7344)
+			line:SetSize(206, 206 * 94 / 512)
+			line:SetPoint("CENTER", line:GetParent(), "TOPLEFT", 62 + 103, line.y - 8)
+		else
+			line:SetTexture(MEDIA .. "GemMatch_Divider")
+			line:SetTexCoord(0, 1, 0, 0.6719)
+			line:SetSize(206, 206 * 43 / 512)
+			line:SetPoint("TOPLEFT", 62, line.y)
+		end
+	end
+end
+
 function Refresh()
 	if not frame or not frame:IsShown() then return end
+	ApplySeasonLook()
 	local g = game
 	local me = UnitName("player")
 	local playing = g and g.state == "playing"
@@ -1315,6 +1344,7 @@ local function Build()
 	local boardArt = boardFrame:CreateTexture(nil, "BACKGROUND")
 	boardArt:SetAllPoints()
 	boardArt:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Board")
+	frame.boardArt = boardArt
 
 	-- a few fireflies drifting about the swamp (drawn on the board, behind the pieces)
 	frame.flies = {}
@@ -1535,6 +1565,9 @@ local function Build()
 		line:SetTexCoord(0, 1, 0, 0.6719)
 		line:SetSize(FIELD_W, FIELD_W * 43 / 512)
 		line:SetPoint("TOPLEFT", PAD, y)
+		line.y = y
+		frame.ropes = frame.ropes or {}
+		frame.ropes[#frame.ropes + 1] = line
 		return line
 	end
 
