@@ -81,11 +81,12 @@ local CHAMPS = {
 		lose = { 560822, 560823 },
 	},
 	-- Seasonal champions: offered only while their holiday is on (the calendar check is shared with Wild Gambit's
-	-- boards). Hallow's End: a black tabby (its model: the pet if you own it, found among your companions; else
-	-- target a cat and /aa mtt champion tabby, or /aa mtt champion tabby npc <id>) and the plague's cockroach
+	-- boards). Hallow's End: a black tabby (creature 7383, found like the roach; if that fails, the pet among your
+	-- companions, else target a cat and /aa mtt champion tabby) and the plague's cockroach
 	-- (WoW Forever creature 271913, found like the slime).
 	tabby = {
 		name = "Black Tabbies", one = "Black Tabby", item = 8491, -- Cat Carrier (Black Tabby)
+		npc = 7383, -- Black Tabby Cat (the creature its pet summons; per the Warcraft wiki)
 		companion = { "Black Tabby", "Black Tabby Cat" }, season = "HallowsEnd",
 		color = { 0.62, 0.55, 0.85 }, hex = "9e8cd9", cheer = "Meow-ow-ow!", bot = "Black Tabby",
 	},
