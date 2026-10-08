@@ -27,6 +27,15 @@ local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 local db
 local button
 local pending = false
+local following -- the name the game says we are following, or nil
+
+-- is the current target the one we follow? (names only: GUIDs can be secret)
+local function FollowingTarget()
+	if not following then return false end
+	local n = R(UnitName("target"))
+	if type(n) ~= "string" then return false end
+	return n == following or n == following:match("^[^-]+")
+end
 
 ---------------------------------------------------------------------------
 -- Can the target be followed?
@@ -54,8 +63,10 @@ local function Refresh()
 		button.ok = ok
 		button.icon:SetDesaturated(not ok)
 		button:SetAlpha(ok and 1 or 0.5)
-		button.glow:SetShown((ok and button.foot) and true or false)
 	end
+	-- the glow: only while you are following this very target
+	local lit = (button.foot and FollowingTarget()) and true or false
+	if button.glow:IsShown() ~= lit then button.glow:SetShown(lit) end
 end
 
 ---------------------------------------------------------------------------
@@ -116,7 +127,7 @@ local function Build()
 		end
 	end)
 
-	-- the footsteps' glow: a soft gold light behind them, breathing slowly, brighter under the mouse
+	-- the footsteps' glow: a soft gold light behind them, breathing slowly, only while you are following
 	b.glow = b:CreateTexture(nil, "BACKGROUND")
 	b.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
 	b.glow:SetBlendMode("ADD")
@@ -130,7 +141,7 @@ local function Build()
 		local w = self:GetWidth()
 		local pulse = 0.5 + 0.5 * math.sin(t * 2.2)
 		self.glow:SetSize(w * (2.0 + pulse * 0.25), w * (2.0 + pulse * 0.25))
-		self.glow:SetAlpha((self:IsMouseOver() and 0.95 or 0.5) * (0.75 + pulse * 0.25))
+		self.glow:SetAlpha((self:IsMouseOver() and 1 or 0.85) * (0.7 + pulse * 0.3))
 	end)
 	b:HookScript("OnMouseDown", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, -1) end end)
 	b:HookScript("OnMouseUp", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, 0) end end)
@@ -139,8 +150,13 @@ local function Build()
 		GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
 		local ok, why = Followable()
 		if ok then
-			GameTooltip:AddLine("Follow " .. (R(UnitName("target")) or "target"), 1, 0.82, 0)
-			GameTooltip:AddLine("Click to follow. Move to stop.", 0.8, 0.8, 0.8)
+			if FollowingTarget() then
+				GameTooltip:AddLine("Following " .. (R(UnitName("target")) or "target"), 0.5, 1, 0.5)
+				GameTooltip:AddLine("Move to stop.", 0.8, 0.8, 0.8)
+			else
+				GameTooltip:AddLine("Follow " .. (R(UnitName("target")) or "target"), 1, 0.82, 0)
+				GameTooltip:AddLine("Click to follow. Move to stop.", 0.8, 0.8, 0.8)
+			end
 		else
 			GameTooltip:AddLine("Follow", 0.6, 0.6, 0.6)
 			GameTooltip:AddLine(why or "Can't follow", 1, 0.4, 0.4)
@@ -157,7 +173,8 @@ local function Apply()
 	if InCombatLockdown() then pending = true return end
 	pending = false
 	Build()
-	button:SetSize(db.size, db.size)
+	local side = db.icon == FB.FOOT and db.size * 1.3 or db.size
+	button:SetSize(side, side)
 	button:ClearAllPoints()
 	button:SetPoint("TOPRIGHT", TargetFrame or UIParent, "TOPRIGHT", db.x, db.y)
 	local key = db.icon or FB.FOOT
@@ -167,8 +184,9 @@ local function Apply()
 		-- no frame: the prints themselves, a little larger than the framed icons so they read
 		button.icon:SetTexture(MEDIA .. "Follow_Footsteps")
 		button.icon:SetTexCoord(0, 1, 0, 1)
-		button.icon:SetSize(db.size * 1.3, db.size * 1.3)
-		button.icon:SetPoint("CENTER")
+		button.icon:SetAllPoints()
+		-- (the picture's prints fill the middle 72% x 88%: the click lands on them, not on the empty corners)
+		button:SetHitRectInsets(side * 0.14, side * 0.14, side * 0.06, side * 0.06)
 		if button.frameArt then button.frameArt:Hide() end
 		if button.normalArt then button.normalArt:Hide() end
 		button:SetHighlightTexture(MEDIA .. "Follow_Footsteps", "ADD")
@@ -179,6 +197,7 @@ local function Apply()
 		button.icon:SetTexture("Interface\\Icons\\" .. key)
 		button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 		button.icon:SetAllPoints()
+		button:SetHitRectInsets(0, 0, 0, 0)
 		if button.frameArt then button.frameArt:Show() end
 		if button.normalArt then button.normalArt:Show() end
 		SkinFramed(button)
@@ -218,10 +237,12 @@ end
 function FB:OnLogin()
 	Apply()
 	local events = CreateFrame("Frame")
-	for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "UNIT_FLAGS", "PLAYER_DEAD", "PLAYER_ALIVE" }) do
+	for _, e in ipairs({ "AUTOFOLLOW_BEGIN", "AUTOFOLLOW_END", "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "UNIT_FLAGS", "PLAYER_DEAD", "PLAYER_ALIVE" }) do
 		pcall(events.RegisterEvent, events, e)
 	end
-	events:SetScript("OnEvent", function(_, event)
+	events:SetScript("OnEvent", function(_, event, who)
+		if event == "AUTOFOLLOW_BEGIN" then following = type(who) == "string" and who or nil
+		elseif event == "AUTOFOLLOW_END" then following = nil end
 		if event == "PLAYER_REGEN_ENABLED" and pending then Apply() end
 		Refresh()
 	end)
