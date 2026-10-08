@@ -2127,7 +2127,20 @@ function MT:Command(rest)
 			SetChampDisplay(key, tonumber(second))
 		else
 			TargetDisplay(function(display)
-				if display then SetChampDisplay(key, display) else Say("target the creature (not a player) first, then try again.") end
+				if display then SetChampDisplay(key, display) return end
+				-- no model read from the unit (a companion can refuse): its creature ID is in its GUID
+				local guid = UnitExists("target") and UnitGUID("target")
+				local kind, _, _, _, _, id = strsplit("-", guid or "")
+				id = tonumber(id)
+				if id and (kind == "Creature" or kind == "Pet" or kind == "Vehicle") then
+					db.npc[key] = id
+					CHAMPS[key].npc, CHAMPS[key].display, CHAMPS[key].tries = id, nil, 0
+					db.display[key] = nil
+					Say(("%s: target is creature %d, looking up its model..."):format(CHAMPS[key].name, id))
+					ResolveChampions()
+				else
+					Say("target the creature (not a player) first, then try again.")
+				end
 			end)
 		end
 	elseif low == "debug" then
