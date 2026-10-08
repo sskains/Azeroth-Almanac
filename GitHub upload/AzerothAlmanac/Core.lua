@@ -8,7 +8,7 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "0.65.0"
+ns.VERSION = "0.66.2"
 ns.ICON = 133742   -- the Almanac's icon (picked with /aa whatis; was INV_Misc_Book_09)
 
 BINDING_HEADER_AZEROTHALMANAC = "Azeroth Almanac"
@@ -329,7 +329,7 @@ StaticPopupDialogs.AZEROTHALMANAC_RESET = {
 	timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
 }
 
-local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, whatis = true, cards = true }
+local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, ejscan = true, whatis = true, cards = true }
 
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
@@ -417,6 +417,8 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		if ns.Toast then ns.Toast:Test() end
 	elseif cmd == "atlascheck" then
 		ns.ArtScan:AtlasCheck()
+	elseif cmd == "ejscan" then
+		ns.ArtScan:EJScan()
 	elseif cmd == "whatis" then
 		ns.ArtScan:WhatIs(rest)
 	elseif cmd == "cards" then

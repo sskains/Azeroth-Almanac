@@ -190,6 +190,7 @@ end
 
 function B:LearnFace(npc, kind)
 	kind = kind or "creature"
+	if type(npc) == "number" and npc < 0 then return end -- a stand-in from an encounter has no NPC to load
 	kindOf[npc] = kind
 	local rec = npc and ns.Store:Get(kind, npc)
 	if not rec or rec.display or resolving == npc or (tries[npc] or 0) >= 3 then return end
@@ -355,6 +356,7 @@ function B:Seen(unit, isBoss)
 		boss = (isBoss or class == "worldboss") and true or nil,
 	}, name, where)
 	if not rec then return end
+	if rec.unnamed and name then B:Named(npc, rec, name) end
 	if byName and name then byName[name] = npc end
 	Faction(rec)
 	if not rec.display then pcall(B.FaceFromUnit, B, unit, npc) end
@@ -431,6 +433,116 @@ local function CountKill(guid, npc)
 	TierCheck(npc, rec, before)
 	ns:Fire("KILL", npc, rec)
 	ns:Fire("CHANGED", "creature", npc)
+end
+
+-- (0.65.4) a boss kill known only from its encounter (its unit is hidden inside instances)
+B.encKill = {} -- npc -> GetTime() of its encounter kill, so looting its corpse doesn't count it again
+function B:EncounterKill(npc)
+	B.encKill[npc] = GetTime()
+	CountKill("enc:" .. tostring(npc) .. ":" .. time(), npc)
+end
+
+-- (0.66.0) a corpse's kill, once: a boss already counted by its encounter isn't counted again
+function B:CorpseKill(guid, npc)
+	local t = B.encKill[npc]
+	if t and GetTime() - t < 900 then
+		B.encKill[npc] = nil
+		dead[guid] = true
+		return
+	end
+	CountKill(guid, npc)
+end
+
+---------------------------------------------------------------------------
+-- (0.66.0) Creatures known by their corpse. Inside instances the game hides a creature's GUID and
+-- name from addons, but a loot window's sources (GetLootSourceInfo) keep the real GUID. A corpse
+-- with no record makes one from that; its name is asked of the game by GUID ("unit:" hyperlink),
+-- which only answers outside instances, so until then it's "Unknown creature #ID" (rec.unnamed,
+-- rec.pg = a GUID to ask with) and named, journalled and announced on the way out.
+---------------------------------------------------------------------------
+
+local RANK_CLASS = { [0] = "normal", [1] = "elite", [2] = "rareelite", [3] = "worldboss", [4] = "rare" }
+
+function B.NameFromGuid(guid)
+	if type(guid) ~= "string" or not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return nil end
+	local ok, t = pcall(C_TooltipInfo.GetHyperlink, "unit:" .. guid)
+	local line = ok and type(t) == "table" and t.lines and t.lines[1]
+	local name = line and R(line.leftText)
+	if type(name) == "string" and name ~= "" then return name end
+end
+
+function B:FromCorpse(npc, guid)
+	local rec = ns.Store:Get("creature", npc)
+	if rec or not npc then return rec end
+	local name = B.NameFromGuid(guid)
+	local c = ns.CreatureDB and ns.CreatureDB:Get(npc)
+	local where = ns.Where()
+	rec = ns.Store:Discover("creature", npc, {
+		name = name or (L["Unknown creature #%d"]):format(npc),
+		class = c and RANK_CLASS[c.rank] or nil,
+		unnamed = (not name) or nil,
+		pg = (not name) and guid or nil,
+	}, name, where, not name)
+	if not rec then return nil end
+	-- (0.66.1) where its corpse was, for the journal line written when it's named (outside)
+	if not name and not rec.pw and where.map then rec.pw = { m = where.map, x = where.x, y = where.y } end
+	if where.map then
+		rec.z = rec.z or {}
+		rec.z[where.map] = (rec.z[where.map] or 0) + 1
+		B:AddSpot(rec, "spots", where)
+	end
+	if name and ns.Dungeons and ns.Dungeons.MergeStandIn then pcall(ns.Dungeons.MergeStandIn, ns.Dungeons, npc, rec) end
+	return rec
+end
+
+-- a groupmate's Almanac looted a corpse here: the kill is the group's, so it counts for you too
+function B:SharedKill(npc, guid)
+	if dead[guid] then return end
+	if not self:FromCorpse(npc, guid) then return end
+	self:CorpseKill(guid, npc)
+end
+
+-- names for the creatures known only by their corpse (the game answers once you're outside)
+function B:Named(npc, rec, name)
+	local pw = rec.pw
+	rec.name, rec.unnamed, rec.pg, rec.pw = name, nil, nil, nil
+	if byName then byName[name] = npc end
+	-- (0.66.1) the journal places it where its corpse was, not where you stood when it was named
+	ns.Store:AddJournal("creature", npc, name, pw and { map = pw.m, x = pw.x, y = pw.y } or nil)
+	ns:Fire("DISCOVERY", "creature", npc, rec, name, false)
+	if ns.Dungeons and ns.Dungeons.MergeStandIn then pcall(ns.Dungeons.MergeStandIn, ns.Dungeons, npc, rec) end
+	ns:Fire("CHANGED", "creature", npc)
+end
+
+-- (0.66.1) once: 0.66.0 journalled creatures named outside at the spot you stood when named; a
+-- creature line whose map the creature was never met on, from a creature met on one map only,
+-- moves to that map (and its first spot there)
+function B:FixNamedJournal()
+	if not ns.db or ns.db.fixNamedJournal then return end
+	ns.db.fixNamedJournal = true
+	for _, j in ipairs(ns.db.journal or {}) do
+		local rec = j.k == "creature" and ns.Store:Get("creature", j.i)
+		if type(rec) == "table" and rec.z and j.m and not rec.z[j.m] then
+			local only, count = nil, 0
+			for m in pairs(rec.z) do only, count = m, count + 1 end
+			if count == 1 then
+				local spot = rec.spots and rec.spots[only] and rec.spots[only][1]
+				local x, y = spot and spot:match("^([%d%.]+):([%d%.]+)$")
+				j.m, j.x, j.y = only, tonumber(x), tonumber(y)
+			end
+		end
+	end
+end
+
+function B:ResolveNames()
+	if not ns.db then return end
+	pcall(B.FixNamedJournal, B)
+	for npc, rec in pairs(ns.Store:All("creature")) do
+		if type(rec) == "table" and rec.unnamed and rec.pg then
+			local name = B.NameFromGuid(rec.pg)
+			if name then self:Named(npc, rec, name) end
+		end
+	end
 end
 
 function B:CheckDead(unit)
@@ -623,11 +735,17 @@ local function OnLoot()
 			end
 		end
 	end
+	local inInstance = R(IsInInstance and IsInInstance()) == true
 	for guid, c in pairs(byCorpse) do
-		local rec = ns.Store:Get("creature", c.npc)
+		local rec = ns.Store:Get("creature", c.npc) or B:FromCorpse(c.npc, guid)
 		if rec then
 			-- a corpse you can loot was a kill (if it wasn't counted yet)
-			if not looted[guid] and not gathering then CountKill(guid, c.npc) end
+			if not looted[guid] and not gathering then
+				local first = not dead[guid]
+				B:CorpseKill(guid, c.npc)
+				-- (0.66.0) inside, tell the group's other Almanacs (they can't see who died either)
+				if first and inInstance and ns.Peers and ns.Peers.ShareKill then pcall(ns.Peers.ShareKill, ns.Peers, c.npc, guid) end
+			end
 			if gathering and skinned[guid] then
 				-- the same skinning window again
 			elseif gathering then
@@ -655,6 +773,15 @@ end
 ---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
+
+-- (0.66.0) out of an instance: ask the game for the names of creatures known only by their corpse
+for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA" }) do
+	ns:RegisterEvent(e, function()
+		C_Timer.After(3, function()
+			if R(IsInInstance and IsInInstance()) ~= true then pcall(B.ResolveNames, B) end
+		end)
+	end)
+end
 
 ns:RegisterEvent("PLAYER_TARGET_CHANGED", function()
 	if not ns.db then return end

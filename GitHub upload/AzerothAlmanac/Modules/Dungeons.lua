@@ -57,6 +57,7 @@ D.Items = Items
 ---------------------------------------------------------------------------
 
 local run -- { id, t, kills = n }
+local backfilled -- (0.65.4) D:Backfill ran this session
 
 local function Me()
 	local c = ns.db.chars[ns.CharKey()]
@@ -73,6 +74,7 @@ end
 
 function D:Check()
 	if not ns.db then return end
+	if not backfilled then pcall(D.Backfill, D) end
 	local id, name = InstanceNow()
 	if run and run.id ~= id then
 		-- left (or moved to another instance): close the run
@@ -155,6 +157,94 @@ local function Killed(id, key, b)
 	ns:Fire("CHANGED", "instance", id)
 end
 
+-- A boss the game hides from addons (inside instances a creature's GUID and name are secret) gets its
+-- creature record from the encounter: an existing record of the same name, or a stand-in keyed by the
+-- negative encounter ID (-2732). The boss entry's npc points at it, so the page links to Creatures.
+function D:BossCreature(e, b, killed)
+	local B = ns.Bestiary
+	if not (b and b.name and ns.Store) then return end
+	local key = (type(b.npc) == "number" and b.npc) or (B and B.ByName and B:ByName(b.name)) or (e.enc and -e.enc)
+	if not key then return end
+	local where = ns.Where()
+	local crec = ns.Store:Discover("creature", key, { name = b.name, boss = true, class = e.class, type = e.type, enc = e.enc }, b.name, where)
+	if not crec then return end
+	b.npc = key
+	if type(e.level) == "number" then
+		crec.lo = crec.lo and math.min(crec.lo, e.level) or e.level
+		crec.hi = crec.hi and math.max(crec.hi, e.level) or e.level
+		if e.level == -1 then crec.lo, crec.hi = -1, -1 end
+	end
+	if where.map then
+		crec.z = crec.z or {}
+		if not killed then crec.z[where.map] = (crec.z[where.map] or 0) + 1 end
+		if B and B.AddSpot then B:AddSpot(crec, "spots", where) end
+	end
+	if not killed and not crec.display and B and B.FaceFromUnit then pcall(B.FaceFromUnit, B, "boss1", key) end
+	if killed and B and B.EncounterKill then
+		D.fromEncounter = true
+		pcall(B.EncounterKill, B, key)
+		D.fromEncounter = false
+	end
+end
+
+-- (0.66.0) a boss's stand-in (-encounterID) folds into its real record once the real one is known
+-- by name (its corpse was looted and named): kills are the larger of the two (the same kills were
+-- usually counted on both), the dungeon's boss entry points at the real one
+function D:MergeStandIn(npc, rec)
+	if not (rec and rec.name and type(npc) == "number" and npc > 0) then return end
+	local all = ns.Store:All("creature")
+	for key, st in pairs(all) do
+		if type(key) == "number" and key < 0 and type(st) == "table" and st.name == rec.name then
+			rec.kills = math.max(rec.kills or 0, st.kills or 0)
+			rec.kc = rec.kc or {}
+			for ck, n in pairs(st.kc or {}) do rec.kc[ck] = math.max(rec.kc[ck] or 0, n) end
+			rec.c = rec.c or {}
+			for ck, t in pairs(st.c or {}) do if not rec.c[ck] or t < rec.c[ck] then rec.c[ck] = t end end
+			if st.f and (not rec.f or st.f < rec.f) then rec.f, rec.b = st.f, st.b end
+			rec.boss, rec.enc = true, st.enc
+			rec.lo, rec.hi = rec.lo or st.lo, rec.hi or st.hi
+			rec.class, rec.type, rec.display = rec.class or st.class, rec.type or st.type, rec.display or st.display
+			for m, n in pairs(st.z or {}) do rec.z = rec.z or {} rec.z[m] = (rec.z[m] or 0) + n end
+			all[key] = nil
+			for _, inst in pairs(ns.Store:All("instance")) do
+				for _, b in pairs(type(inst) == "table" and inst.bosses or {}) do if b.npc == key then b.npc = npc end end
+			end
+			if ns.Store.ClearShown then ns.Store:ClearShown() end
+			ns:Fire("CHANGED", "creature", npc)
+		end
+	end
+end
+
+-- (0.65.4) bosses killed inside an instance before 0.65.4, with no creature behind them: made now,
+-- with the kills the dungeon records hold (once a session; quiet, no journal or toast)
+function D:Backfill()
+	if backfilled or not ns.db then return end
+	backfilled = true
+	for iid, rec in pairs(ns.Store:All("instance")) do
+		for key, b in pairs(type(rec) == "table" and rec.bosses or {}) do
+			local enc = type(key) == "string" and tonumber(key:match("^e(%d+)$"))
+			if not b.npc and b.name and enc then
+				if not ns.Store:Get("creature", -enc) then
+					local t = b.first and b.first.t or time()
+					local crec = { f = t, b = b.first and b.first.c or ns.CharKey(), n = 1, l = b.lastKill or t,
+						name = b.name, boss = true, enc = enc, c = {}, kc = {} }
+					local total = 0
+					for ck, c in pairs(ns.db.chars or {}) do
+						local n = c.runs and c.runs[iid] and c.runs[iid].kills and c.runs[iid].kills[key]
+						if n and n > 0 then crec.kc[ck] = n crec.c[ck] = t total = total + n end
+					end
+					crec.c[crec.b] = crec.c[crec.b] or t
+					crec.kills = math.max(total, b.kills or 0)
+					if b.map then crec.z = { [b.map] = 1 } end
+					ns.Store:All("creature")[-enc] = crec
+					if ns.Store.ClearShown then ns.Store:ClearShown() end
+				end
+				b.npc = -enc
+			end
+		end
+	end
+end
+
 local encounter -- { id, key }
 ns:RegisterEvent("ENCOUNTER_START", function(_, encounterID, name)
 	local id = InstanceNow()
@@ -163,8 +253,12 @@ ns:RegisterEvent("ENCOUNTER_START", function(_, encounterID, name)
 	local npc = ns.NpcFromGuid(R(UnitGUID("boss1")))
 	local key = npc or (encounterID and ("e" .. encounterID)) or name
 	if not key then return end
-	Boss(id, key, { name = name, npc = npc, encounter = encounterID })
-	encounter = { id = id, key = key, enc = encounterID }
+	local b = Boss(id, key, { name = name, npc = npc, encounter = encounterID })
+	encounter = { id = id, key = key, enc = encounterID,
+		level = R(UnitLevel("boss1")), class = R(UnitClassification("boss1")), type = R(UnitCreatureType("boss1")) }
+	-- (0.65.4) inside instances the game hides a creature's GUID and name, so the Bestiary can't
+	-- see the boss: the encounter makes its creature record instead
+	if b and not npc then pcall(D.BossCreature, D, encounter, b) end
 end)
 
 ns:RegisterEvent("ENCOUNTER_END", function(_, encounterID, name, _, _, success)
@@ -173,7 +267,10 @@ ns:RegisterEvent("ENCOUNTER_END", function(_, encounterID, name, _, _, success)
 	if encounter.enc and encounterID and encounter.enc ~= encounterID then return end
 	local b = Boss(encounter.id, encounter.key, { name = R(name) })
 	if b then
-		if success == 1 or success == true then Killed(encounter.id, encounter.key, b) b.byEncounter = true
+		if success == 1 or success == true then
+			Killed(encounter.id, encounter.key, b)
+			b.byEncounter = true
+			if not b.npc or b.npc < 0 then pcall(D.BossCreature, D, encounter, b, true) end
 		else b.wipes = (b.wipes or 0) + 1 end
 	end
 	encounter = nil
@@ -181,6 +278,7 @@ end)
 
 -- a kill of one of this dungeon's bosses, when the game sent no encounter for it
 ns:On("KILL", function(npc, crec)
+	if D.fromEncounter then return end
 	local id, iname = InstanceNow()
 	if not (id and npc) then return end
 	local isBoss = crec and crec.boss

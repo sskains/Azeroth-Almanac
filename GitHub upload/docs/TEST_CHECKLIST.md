@@ -10,6 +10,37 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 - [ ] Wild Gambit: click your spell card (one that needs a target): the cursor gets a blue glow with drifting sparkles, also when it leaves the window; it goes when the spell lands, when you click the card again to put it back, and when the game ends or the window closes. A spell with no target (cast at once) shows no glow. Spell chosen, then click a card in your hand: the spell is put back (glow gone, its card no longer aimed) and that card is the held one, ready for a square. The glow sits above every window and never blocks clicks.
 
+## 0.66.1 (/reload)
+
+- [ ] Outside after updating: the Molten Elemental journal line now shows Ragefire Chasm (not Orgrimmar).
+- [ ] Loot a new dungeon creature, leave: its journal line shows the dungeon and the spot of the corpse.
+
+## 0.66.0 (/reload)
+
+- [ ] In RFC, loot a trash mob you've never recorded: it appears in Creatures as "Unknown creature #ID" with 1 kill and its loot. No alert yet.
+- [ ] Leave the dungeon: within a few seconds each unknown creature gets its name, a journal line and a discovery alert.
+- [ ] Loot Oggleflint (or another boss), then leave: one Oggleflint record (not two) with the right kills, and the Dungeons page opens it. Killing and looting a boss counts one kill, not two.
+- [ ] Grouped with another 0.66.0 Almanac: a corpse they loot inside counts as a kill for you, and the creature appears for you as well.
+
+## 0.65.4 (/reload)
+
+- [ ] After login: Oggleflint (and any other boss killed inside a dungeon) shows on the Creatures page with your kills, and its row on the Dungeons page opens it in Creatures.
+- [ ] Kill a dungeon boss: its Creatures record appears (or its kills go up), with no duplicate boss row on the Dungeons page and no Lua error.
+- [ ] Party pet frames on: the pet's Healer Assist icons line up under its owner's icons, and there's no green paw. With pet frames off, the indented line under the owner still has its paw.
+
+## 0.65.3 (/reload)
+
+- [ ] Healer Assist "Beside the portraits: right": the icons' top lines up with the bottom of the name plate (party and your own frame).
+- [ ] With "Group members' pets" on: a party member's pet gets an indented line under its owner's icons; your own pet's icons stay on your pet frame.
+
+## 0.65.2 (/reload)
+
+- [ ] In a party, Healer Assist "Beside the portraits": each party member's icons sit under (or right of) their party portrait, not in the window. `/aa heal debug` shows a frame for each member.
+
+## 0.65.1 (/reload)
+
+- [ ] In combat with enemy nameplates showing, open Wild Gambit from the minimap menu: no Lua error; the lobby offers a creature (from your Almanac if none nearby can be read).
+
 ## 0.65.0 (full game restart: new Gem Match textures)
 
 - [ ] Gem Match: the painted board, side panel, game-over panel, hint, shards and group/friend scores (the full list is under "Gem Match" in `STATUS.md`, "Needs checking in game first").

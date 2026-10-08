@@ -46,8 +46,15 @@ Rules:
 - **GitHub sync**: Shannon's 0.53 - 0.64.1 work is in Claude's working copy and the AddOns folder; it goes to `D:\GitHub\Azeroth-Almanac` when the Asia merge is started in GitHub Desktop. Delete there: `docs/TASKS.md`, `Media/Board_DarkPortal.tga`, `UI/Pages/Placeholders.lua`.
 - **Create the GitHub issues** from `docs/ISSUES_TO_CREATE.md` (if not done yet), then delete that file.
 - **Wild Gambit polish** from test results (owner: Shannon).
+- **Journal-entry badge on the toasts** (art saved: `docs/art_source/Badge_Journal.png`): overlapping the corner like a seal, on every toast that writes a journal entry; replaces the "Almanac" tag (issue 24).
+- **New Almanac logo everywhere** (art saved: `docs/art_source/Logo_Almanac.png`): replaces the game's red book icon in the AddOns list, minimap button, window, settings, toasts and tooltips (issue 25).
+- **Bug: Characters page portraits** too small inside their rings (zoom the face or thin the ring; issue 23).
 
 ## Next
+
+- **Wild Gambit dungeon cards** (designed 2026-10-07, DESIGN section 70): a rare dungeon card dealt in place of a card, played onto the board as a neutral square with the dungeon's own effect (issue 27). First: the journal art scan and the effects review.
+
+- **Quest kill credit for dungeon kills** (added 2026-10-07): a quest's kill progress counts the kill for its target creature, so kills nobody's Almanac looted still count (issue 26).
 
 - **People page redesign** (added 2026-10-07): the detail panel and its sub-panel show what this person can teach or sell you; facts about the person move to the name plate panel or a tab of their own.
 - **Spells & Recipes becomes Professions** (added 2026-10-07): a tree of every recipe you've come across, by profession and specialisation, showing which you've learned and which you've found but not yet got.
