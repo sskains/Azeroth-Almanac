@@ -238,6 +238,26 @@ def cut(src, dst, cw, ch, fill=False):
     edge_clean(dst)
     print("%s: %dx%d used %dx%d of %dx%d  texcoord 0,%.4f,0,%.4f" % (dst.split("\\")[-1], img.width, img.height, w, h, cw, ch, w / cw, h / ch))
 
+def stage(src, dst, cw=512, ch=256):
+    """A stage painted standing in a pool on magenta (a stump in water): like `cut`, then the pool's water,
+    which fills a rectangle across the picture, is faded into transparency round the stump (an ellipse,
+    and softly along its top edge) so no hard rectangle is left. Prints the used texcoord."""
+    cut(src, dst, cw, ch)
+    a = np.array(Image.open(dst).convert("RGBA")).astype(float)
+    alpha = a[..., 3]
+    ys, xs = np.where(alpha > 10)
+    x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
+    yy, xx = np.mgrid[0:a.shape[0], 0:a.shape[1]]
+    u = (xx - x0) / float(x1 - x0)
+    v = (yy - y0) / float(y1 - y0)
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    water = (b >= g - 5) & (b > r + 10) & ((r + g + b) / 3 < 120) & (alpha > 0)
+    d = np.sqrt(((u - 0.5) / 0.56) ** 2 + ((v - 0.68) / 0.36) ** 2)
+    fade = np.clip((1.0 - d) / 0.35, 0, 1) * np.clip((v - 0.64) / 0.07, 0, 1)
+    a[..., 3] = np.where(water, alpha * fade, alpha)
+    write_tga(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), dst)
+    print("stage: water faded round the stump")
+
 def edge_clean(path, width=2):
     """Pull the magenta fringe off a keyed texture's edges: pixels within `width` of transparency
     that lean magenta (red and blue over green) fade out and lose the tint."""
@@ -263,6 +283,8 @@ if __name__ == "__main__":
         frame(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == "board":
         board(sys.argv[2], sys.argv[3], *(float(v) for v in sys.argv[4:6]), *sys.argv[6:7])
+    elif sys.argv[1] == "stage":
+        stage(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "cut":
         cut(sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]), len(sys.argv) > 6 and sys.argv[6] == "fill")
     elif sys.argv[1] == "tray":

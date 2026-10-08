@@ -24,6 +24,7 @@ local STALE = 60               -- seconds waiting on the other player before lea
 local CELL = 90
 local BOARD = CELL * 3
 local PIECE = 60
+local CARD_H = 140 -- a player card: the creature on its stump, the carved nameplate over the stump's foot
 -- the painted board (custom art, Media\MurlocTacToe_Board): shown FRAME_SIZE square; its nine sockets are
 -- 90 px apart at that size and the grid starts INSET_X / INSET_Y in from its top left (measured from the art)
 local FRAME_SIZE = 461
@@ -159,8 +160,9 @@ Look = function(role)
 	if champs then
 		key = champs[role]
 	else
-		local mine = MyChamp() -- (no game yet: your champion on the left, a different one across)
-		key = role == "murloc" and mine or (mine == "gnoll" and "murloc" or "gnoll")
+		local mine = MyChamp() -- (no game yet: your champion on the left, the computer's across)
+		local bot = db and db.botChamp
+		key = role == "murloc" and mine or ((bot and Playable(bot)) and bot or (mine == "gnoll" and "murloc" or "gnoll"))
 	end
 	return CHAMPS[key] or CHAMPS[role]
 end
@@ -529,7 +531,7 @@ function MT:Practice()
 	-- the computer plays a champion other than yours
 	local mine, pool = MyChamp(), {}
 	for _, k in ipairs(ROSTER) do if Playable(k) and k ~= mine then pool[#pool + 1] = k end end
-	local bot = pool[math.random(#pool)] or "gnoll"
+	local bot = (db.botChamp and Playable(db.botChamp)) and db.botChamp or pool[math.random(#pool)] or "gnoll"
 	StartGame({ practice = true, mySide = mySide, opp = CHAMPS[bot].bot, gid = "practice", myChamp = mine, theirChamp = bot })
 end
 
@@ -1039,6 +1041,26 @@ function Refresh()
 	frame.soundButton:SetText(db.sound and "Sound: on" or "Sound: off")
 	local choosing = not (g and (g.state == "playing" or g.state == "inviting"))
 	for _, b in ipairs(frame.champArrows) do b:SetShown(choosing) end
+	-- the Champions rows in the side panel: yours, and the computer's
+	local function Name(key)
+		local c = CHAMPS[key]
+		return ("|cff%s%s|r"):format(c.hex, c.name)
+	end
+	local botKey = db.botChamp and Playable(db.botChamp) and db.botChamp
+	if g and (g.state == "playing" or g.state == "over") and g.champs then -- (in a game: the champions in it)
+		frame.myChampRow.name:SetText(Name(g.champs[g.mySide]))
+		frame.botChampRow.name:SetText(Name(g.champs[OTHER[g.mySide]]))
+	else
+		frame.myChampRow.name:SetText(Name(MyChamp()))
+		frame.botChampRow.name:SetText(botKey and Name(botKey) or "|cffaaaaaaRandom|r")
+	end
+	for _, row in ipairs({ frame.myChampRow, frame.botChampRow }) do
+		row.name:SetTextHeight(10)
+		local w = row.name:GetStringWidth()
+		if w and w > 96 then row.name:SetTextHeight(10 * 96 / w) end
+		row[-1]:SetShown(choosing)
+		row[1]:SetShown(choosing)
+	end
 	local w, l, d = Totals()
 	frame.title:SetText(Title())
 	frame.totals:SetText(("|cffffffff%d|r wins   |cffffffff%d|r losses   |cffffffff%d|r draws"):format(w, l, d))
@@ -1081,7 +1103,7 @@ end
 local function Build()
 	frame = CreateFrame("Frame", "AzerothAlmanacMurlocTacToe", UIParent, "BackdropTemplate")
 	local W = 16 + FRAME_SIZE + 14 + SIDE_W + 16
-	local H = 62 + 118 + 44 + FRAME_SIZE + 16
+	local H = 62 + CARD_H + 44 + FRAME_SIZE + 16
 	frame:SetSize(W, H)
 	frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
 	frame:SetBackdropColor(0.035, 0.03, 0.025, 0.97)
@@ -1130,7 +1152,7 @@ local function Build()
 	frame.cards = {}
 	for _, which in ipairs({ "me", "them" }) do
 		local card = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-		card:SetSize(cardW, 118)
+		card:SetSize(cardW, CARD_H)
 		if which == "me" then card:SetPoint("TOPLEFT", 16, -62) else card:SetPoint("TOPLEFT", 16 + cardW + 80, -62) end
 		if not CARD_PLAIN then QuestFrame(card, true) end
 		card.glow = card:CreateTexture(nil, "BACKGROUND", nil, -1)
@@ -1149,7 +1171,13 @@ local function Build()
 		stage:SetShown(not CARD_PLAIN)
 		card.model = CreateFrame("PlayerModel", nil, card)
 		card.model:SetPoint("TOPLEFT", 5, 0)       -- 5 px higher than the framed look had it
-		card.model:SetPoint("BOTTOMRIGHT", -5, 45)
+		card.model:SetPoint("BOTTOMRIGHT", -5, 67)
+		-- the stump the creature stands on (custom art, the pool faded round it): its top is where the feet are
+		card.stage = card:CreateTexture(nil, "BACKGROUND", nil, 1)
+		card.stage:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Stage")
+		card.stage:SetTexCoord(0, 1, 0, 0.9375)
+		card.stage:SetSize(176, 176 * 240 / 512)
+		card.stage:SetPoint("TOP", card, "BOTTOM", 0, 98)
 		card.facing = which == "me" and -0.55 or 0.55
 		-- a carved nameplate (Wild Gambit's) under the creature, which stands behind it; the turn gem lights on it
 		-- while it is this player's move. Yours has its round socket on the left, theirs (mirrored) on the right.
@@ -1225,7 +1253,7 @@ local function Build()
 	-- on a carved shield with crossed swords (Wild Gambit's)
 	local vsPlaque = frame:CreateTexture(nil, "ARTWORK")
 	vsPlaque:SetSize(64, 64)
-	vsPlaque:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - 50)
+	vsPlaque:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - 70)
 	vsPlaque:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Plaque_VS")
 	local vs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
 	vs:SetPoint("CENTER", vsPlaque, "CENTER", 0, 1)
@@ -1235,7 +1263,7 @@ local function Build()
 	local statusRibbon = frame:CreateTexture(nil, "ARTWORK")
 	statusRibbon:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Banner_Turn")
 	statusRibbon:SetSize(cardsW - 20, (cardsW - 20) / 8)
-	statusRibbon:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - 118 - 22)
+	statusRibbon:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - CARD_H - 22)
 	frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	frame.status:SetPoint("CENTER", statusRibbon, "CENTER", 0, 1)
 	frame.status:SetWidth(300)
@@ -1245,7 +1273,7 @@ local function Build()
 
 	-- the board: the painted swamp board, with the nine sockets in its picture
 	local boardFrame = CreateFrame("Frame", nil, frame)
-	boardFrame:SetPoint("TOPLEFT", 16, -62 - 118 - 44)
+	boardFrame:SetPoint("TOPLEFT", 16, -62 - CARD_H - 44)
 	boardFrame:SetSize(FRAME_SIZE, FRAME_SIZE)
 	local boardArt = boardFrame:CreateTexture(nil, "BACKGROUND")
 	boardArt:SetAllPoints()
@@ -1485,8 +1513,46 @@ local function Build()
 	prac:SetPoint("TOPLEFT", go, "BOTTOMLEFT", 0, -6)
 
 	Rope(-182)
+
+	-- who plays: your champion, and the one the computer plays in a practice game (arrows to change them
+	-- while no game is on)
+	local champHead = side:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	champHead:SetPoint("TOPLEFT", PAD, -198)
+	champHead:SetText("Champions")
+	local function ChampRow(y, label, onCycle)
+		local lab = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		lab:SetPoint("TOPLEFT", PAD, y - 6)
+		lab:SetText(label)
+		local row = { label = lab }
+		for _, dir in ipairs({ -1, 1 }) do
+			local b = CreateFrame("Button", nil, side)
+			b:SetSize(28, 24)
+			local art = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Arrow" .. (dir < 0 and "L" or "R")
+			b:SetNormalTexture(art)
+			b:SetPushedTexture(art)
+			b:SetHighlightTexture(art, "ADD")
+			for _, tex in ipairs({ b:GetNormalTexture(), b:GetPushedTexture(), b:GetHighlightTexture() }) do
+				tex:SetTexCoord(0, 1, 0, 0.8672)
+			end
+			b:GetPushedTexture():SetVertexColor(0.75, 0.75, 0.75)
+			b:GetHighlightTexture():SetAlpha(0.45)
+			b:SetScript("OnClick", function() onCycle(dir) end)
+			row[dir] = b
+		end
+		row[-1]:SetPoint("TOPLEFT", PAD + 62, y)
+		row[1]:SetPoint("TOPLEFT", PAD + FIELD_W - 28, y)
+		row.name = side:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.name:SetPoint("LEFT", row[-1], "RIGHT", 2, 0)
+		row.name:SetPoint("RIGHT", row[1], "LEFT", -2, 0)
+		row.name:SetJustifyH("CENTER")
+		row.name:SetWordWrap(false)
+		return row
+	end
+	frame.myChampRow = ChampRow(-220, "You", function(dir) MT:CycleChampion(dir) end)
+	frame.botChampRow = ChampRow(-252, "Computer", function(dir) MT:CycleBot(dir) end)
+	Rope(-284)
 	local yourTitle = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	yourTitle:SetPoint("TOPLEFT", PAD, -202)
+	yourTitle:SetPoint("TOPLEFT", PAD, -304)
 	yourTitle:SetText("Your title")
 	frame.title = Font(side, 18, GOLD)
 	frame.title:SetPoint("TOPLEFT", yourTitle, "BOTTOMLEFT", 0, -3)
@@ -1497,18 +1563,18 @@ local function Build()
 	frame.practiceLine = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	frame.practiceLine:SetPoint("TOPLEFT", frame.totals, "BOTTOMLEFT", 0, -3)
 
-	Rope(-282)
+	Rope(-384)
 	local rivalsHead = side:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	rivalsHead:SetPoint("TOPLEFT", PAD, -304)
+	rivalsHead:SetPoint("TOPLEFT", PAD, -406)
 	rivalsHead:SetText("Rivals")
 	local wld = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	wld:SetPoint("TOPRIGHT", side, "TOPLEFT", PAD + FIELD_W, -306)
+	wld:SetPoint("TOPRIGHT", side, "TOPLEFT", PAD + FIELD_W, -408)
 	wld:SetText("W - L - D")
 	frame.rivalRows = {}
-	for i = 1, 8 do
+	for i = 1, 5 do
 		local row = CreateFrame("Frame", nil, side)
 		row:SetSize(FIELD_W, 18)
-		row:SetPoint("TOPLEFT", PAD, -324 - (i - 1) * 19)
+		row:SetPoint("TOPLEFT", PAD, -426 - (i - 1) * 19)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.name:SetPoint("LEFT")
 		row.name:SetPoint("RIGHT", -70, 0)
@@ -1519,7 +1585,7 @@ local function Build()
 		frame.rivalRows[i] = row
 	end
 	frame.noRivals = side:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	frame.noRivals:SetPoint("TOPLEFT", PAD, -326)
+	frame.noRivals:SetPoint("TOPLEFT", PAD, -428)
 	frame.noRivals:SetWidth(FIELD_W)
 	frame.noRivals:SetJustifyH("LEFT")
 	frame.noRivals:SetText("No games yet. Both players need Azeroth Almanac. Right-click a player's portrait or name for \"Murloc Tac Toe\", or type their name above.")
@@ -1685,6 +1751,17 @@ function MT:OnInitialize(saved)
 end
 
 -- the next (dir = 1) or previous champion that has a model
+-- the champion the computer plays in a practice game: random, or one you choose
+function MT:CycleBot(dir)
+	if game and (game.state == "playing" or game.state == "inviting") then return end
+	local list = { false } -- (false: a random one each game)
+	for _, k in ipairs(ROSTER) do if Playable(k) then list[#list + 1] = k end end
+	local cur = 1
+	for i, k in ipairs(list) do if k == (db.botChamp or false) then cur = i end end
+	db.botChamp = list[(cur - 1 + dir) % #list + 1] or nil
+	Refresh()
+end
+
 function MT:CycleChampion(dir)
 	if game and (game.state == "playing" or game.state == "inviting") then return end
 	local list = {}
