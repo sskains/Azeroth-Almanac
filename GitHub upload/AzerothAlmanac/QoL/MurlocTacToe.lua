@@ -93,6 +93,9 @@ local CHAMPS = {
 	bombay = {
 		name = "Bombay Cats", one = "Bombay Cat", item = 8485, -- Cat Carrier (Bombay)
 		companion = { "Bombay", "Bombay Cat" }, season = "HallowsEnd",
+		place = { 3598605, 3598607, 3598609 }, -- Mon_90_CatMount_CatSounds_01 / 02 / 03
+		win = 3598611,                         -- ..._04
+		lose = 3598623,                        -- ..._10
 		color = { 0.62, 0.55, 0.85 }, hex = "9e8cd9", cheer = "Meow-ow-ow!", bot = "Bombay Cat",
 	},
 	roach = {
