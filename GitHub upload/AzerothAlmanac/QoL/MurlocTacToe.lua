@@ -104,6 +104,7 @@ local CHAMPS = {
 	roach = {
 		name = "Plagued Cockroaches", one = "Plagued Cockroach", icon = "INV_Misc_Bug_01", npc = 271913,
 		season = "HallowsEnd",
+		place = 559315, win = 559315, lose = 559315, -- CockroachDeath (RoachDeath), the one sound it has
 		color = { 0.7, 0.6, 0.25 }, hex = "b39940", cheer = "Skitter skitter!", bot = "Plagued Cockroach",
 	},
 	slime = {
