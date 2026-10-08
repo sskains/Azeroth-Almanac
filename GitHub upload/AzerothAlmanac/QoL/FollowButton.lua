@@ -16,7 +16,7 @@ local FOLLOW_RANGE = 4        -- CheckInteractDistance index: follow distance (a
 local DRIVER = "[@target,exists] show; hide"
 
 -- icons that exist in the game's spell art; the first is the default
-FB.HIT_GROW = 0.35 -- how far the click area reaches past the footsteps, as a fraction of their size, on every side
+FB.HIT_GROW = 0.15 -- how far the click area reaches past the footsteps, as a fraction of their size, on every side
 FB.FOOT = "Footsteps" -- (custom art, Media\Follow_Footsteps: no frame, a soft gold glow drawn in code)
 FB.icons = {
 	{ key = FB.FOOT, name = "Footsteps" },
