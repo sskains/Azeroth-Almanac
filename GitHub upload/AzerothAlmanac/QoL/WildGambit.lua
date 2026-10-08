@@ -3921,9 +3921,14 @@ function WG:ClickCard(f)
 	if self:Paused() then Note(self:PausedNote()) return end
 	for _, e in ipairs(game.hands.me) do
 		if e.frame == f then
-			-- (a spell's target is on the board, never in your hand)
-			if game.targeting then Note(game.ability.me.name .. ": " .. Hint(game.ability.me) .. ".") return end
-			game.selected = (game.selected == e) and nil or e
+			-- (a spell's target is on the board, never in your hand: picking a card from your hand
+			-- instead puts the spell back, and takes that card)
+			if game.targeting then
+				game.targeting, game.pocket = nil, nil
+				game.selected = e
+			else
+				game.selected = (game.selected == e) and nil or e
+			end
 			ShowHands()
 			Refresh()
 			return
