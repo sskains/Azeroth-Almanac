@@ -84,6 +84,8 @@ local function SkinFramed(b)
 	b:GetHighlightTexture():SetAlpha(1)
 	if b:GetPushedTexture() then b:GetPushedTexture():SetAlpha(1) end
 	b:GetHighlightTexture():SetTexCoord(0, 1, 0, 1)
+	b:GetHighlightTexture():ClearAllPoints()
+	b:GetHighlightTexture():SetAllPoints()
 	if HasAtlas("UI-HUD-ActionBar-IconFrame") then
 		if HasAtlas("UI-HUD-ActionBar-IconFrame-Down") then
 			b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
@@ -140,7 +142,7 @@ local function Build()
 	b:HookScript("OnUpdate", function(self, dt)
 		if not self.foot then return end
 		t = t + dt
-		local w = self:GetWidth()
+		local w = self.iconSide or self:GetWidth()
 		local pulse = 0.5 + 0.5 * math.sin(t * 2.2)
 		self.glow:SetSize(w * (2.0 + pulse * 0.25), w * (2.0 + pulse * 0.25))
 		self.glow:SetAlpha((self:IsMouseOver() and 1 or 0.85) * (0.7 + pulse * 0.3))
@@ -178,7 +180,7 @@ local function DrawHit()
 		button.hitRed:SetColorTexture(1, 0, 0, 0.35)
 		button.hitBlue = button:CreateTexture(nil, "OVERLAY", nil, 6)
 		button.hitBlue:SetColorTexture(0.2, 0.4, 1, 0.45)
-		button.hitBlue:SetAllPoints()
+		button.hitBlue:SetAllPoints(button.icon) -- (the picture; red is the whole button, which takes the clicks)
 	end
 	local l, r, t, bt = button:GetHitRectInsets()
 	button.hitRed:ClearAllPoints()
@@ -245,10 +247,16 @@ local function Apply()
 	if InCombatLockdown() then pending = true return end
 	pending = false
 	Build()
-	local side = db.icon == FB.FOOT and db.size * 1.3 or db.size
-	button:SetSize(side, side)
+	local foot = (db.icon or FB.FOOT) == FB.FOOT
+	local side = foot and db.size * 1.3 or db.size -- (the picture's size)
+	-- the footsteps get a genuinely larger button round them (the game gave the middle of a button with stretched hit
+	-- insets to the target frame), about 1.7 times the prints each way; the prints stay where they were
+	local hit = foot and side * (1 + 2 * FB.HIT_GROW) or side
+	button.iconSide = side
+	button:SetSize(hit, hit)
 	button:ClearAllPoints()
-	button:SetPoint("TOPRIGHT", TargetFrame or UIParent, "TOPRIGHT", db.x, db.y)
+	local lift = (hit - side) / 2
+	button:SetPoint("TOPRIGHT", TargetFrame or UIParent, "TOPRIGHT", db.x + lift, db.y + lift)
 	local key = db.icon or FB.FOOT
 	button.foot = key == FB.FOOT
 	button.icon:ClearAllPoints()
@@ -256,15 +264,16 @@ local function Apply()
 		-- no frame: the prints themselves, a little larger than the framed icons so they read
 		button.icon:SetTexture(MEDIA .. "Follow_Footsteps")
 		button.icon:SetTexCoord(0, 1, 0, 1)
-		button.icon:SetAllPoints()
-		-- a generous click area: well beyond the prints themselves (negative insets grow it), about 1.7 times
-		-- their size each way, so the button is easy to hit
-		local grow = -side * FB.HIT_GROW
-		button:SetHitRectInsets(grow, grow, grow, grow)
+		button.icon:SetSize(side, side)
+		button.icon:SetPoint("CENTER")
+		button:SetHitRectInsets(0, 0, 0, 0)
 		if button.frameArt then button.frameArt:Hide() end
 		if button.normalArt then button.normalArt:Hide() end
 		button:SetHighlightTexture(MEDIA .. "Follow_Footsteps", "ADD")
 		button:GetHighlightTexture():SetAlpha(0.35)
+		button:GetHighlightTexture():ClearAllPoints() -- (the highlight is the prints' size, not the whole click area)
+		button:GetHighlightTexture():SetPoint("CENTER")
+		button:GetHighlightTexture():SetSize(side, side)
 		button:SetPushedTexture(MEDIA .. "Follow_Footsteps")
 		button:GetPushedTexture():SetAlpha(0) -- (pressing nudges the prints instead)
 	else
