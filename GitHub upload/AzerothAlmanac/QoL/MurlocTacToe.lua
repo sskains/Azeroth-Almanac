@@ -289,13 +289,26 @@ local function PlayFile(id)
 	if db.sound and id and PlaySoundFile then pcall(PlaySoundFile, id, "SFX") end
 end
 
+-- a random one of a list, never the one played last under the same memo key (a lone sound can only repeat)
+local lastPicked = {}
+local function PickSound(list, memo)
+	if #list == 1 then return list[1] end
+	local n
+	for _ = 1, 12 do -- (bounded, in case a list holds one ID twice)
+		n = math.random(#list)
+		if list[n] ~= lastPicked[memo] then break end
+	end
+	lastPicked[memo] = list[n]
+	return list[n]
+end
+
 local function PlaySide(side, what)
 	local s = SIDES[side]
 	local v = s[what]
 	-- a voice set in game (/aa mtt voice <champion> <place|win|lose> <file IDs>) takes the built-in one's place
 	local mine = db and db.voices and s.key and db.voices[s.key]
 	if mine and mine[what] then v = mine[what] end
-	if type(v) == "table" then v = v[math.random(#v)] end
+	if type(v) == "table" then v = PickSound(v, (s.key or side) .. what) end
 	PlayFile(v)
 end
 
@@ -1726,7 +1739,7 @@ local function Build()
 			self.nextAmbient = self.nextAmbient or (clock + 6)
 			if clock >= self.nextAmbient then
 				self.nextAmbient = clock + 20 + math.random() * 25
-				pcall(PlaySoundFile, db.ambient[math.random(#db.ambient)], "Ambience")
+				pcall(PlaySoundFile, PickSound(db.ambient, "ambient"), "Ambience")
 			end
 		end
 		-- the fireflies of a win drift up, sway and fade; the winner's card glows while it cheers
