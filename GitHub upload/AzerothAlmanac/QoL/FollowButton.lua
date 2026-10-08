@@ -16,6 +16,7 @@ local FOLLOW_RANGE = 4        -- CheckInteractDistance index: follow distance (a
 local DRIVER = "[@target,exists] show; hide"
 
 -- icons that exist in the game's spell art; the first is the default
+FB.HIT_GROW = 0.35 -- how far the click area reaches past the footsteps, as a fraction of their size, on every side
 FB.FOOT = "Footsteps" -- (custom art, Media\Follow_Footsteps: no frame, a soft gold glow drawn in code)
 FB.icons = {
 	{ key = FB.FOOT, name = "Footsteps" },
@@ -185,8 +186,10 @@ local function Apply()
 		button.icon:SetTexture(MEDIA .. "Follow_Footsteps")
 		button.icon:SetTexCoord(0, 1, 0, 1)
 		button.icon:SetAllPoints()
-		-- (the picture's prints fill the middle 72% x 88%: the click lands on them, not on the empty corners)
-		button:SetHitRectInsets(side * 0.14, side * 0.14, side * 0.06, side * 0.06)
+		-- a generous click area: well beyond the prints themselves (negative insets grow it), about 1.7 times
+		-- their size each way, so the button is easy to hit
+		local grow = -side * FB.HIT_GROW
+		button:SetHitRectInsets(grow, grow, grow, grow)
 		if button.frameArt then button.frameArt:Hide() end
 		if button.normalArt then button.normalArt:Hide() end
 		button:SetHighlightTexture(MEDIA .. "Follow_Footsteps", "ADD")
