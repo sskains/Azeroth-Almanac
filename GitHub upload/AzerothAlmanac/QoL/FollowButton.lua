@@ -101,7 +101,8 @@ local function Build()
 	-- on the target frame's own layer, just above it: any window opened over it (the Almanac, the
 	-- games, the bags) covers the button instead of it floating on top
 	b:SetFrameStrata(TargetFrame and TargetFrame:GetFrameStrata() or "MEDIUM")
-	b:SetFrameLevel((TargetFrame and TargetFrame:GetFrameLevel() or 0) + 5)
+	-- (well above the target frame's own pieces, its portrait and plates, which would otherwise take the click)
+	b:SetFrameLevel((TargetFrame and TargetFrame:GetFrameLevel() or 0) + 60)
 	b:RegisterForClicks("AnyUp", "AnyDown")   -- the game picks press or release, per its "cast on key down" option
 	b:SetAttribute("type", "macro")
 	b:SetAttribute("macrotext", "/follow")
@@ -194,6 +195,7 @@ SlashCmdList.AAFOLLOWHIT = function()
 	if button then
 		local l, r, t, bt = button:GetHitRectInsets()
 		local x, y = button:GetCenter()
+		print(("|cff59ff80Follow button:|r strata %s, level %d (the target frame: %s, %d)"):format(button:GetFrameStrata(), button:GetFrameLevel(), TargetFrame and TargetFrame:GetFrameStrata() or "?", TargetFrame and TargetFrame:GetFrameLevel() or 0))
 		print(("|cff59ff80Follow button:|r click area %s (red); the button's own frame is blue, %.0f x %.0f px, insets %.0f / %.0f / %.0f / %.0f, shown: %s, centre at %.0f, %.0f, scale %.2f"):format(
 			FB.showHit and "shown" or "hidden", button:GetWidth(), button:GetHeight(), l or 0, r or 0, t or 0, bt or 0, tostring(button:IsShown()), x or 0, y or 0, button:GetEffectiveScale()))
 	else
