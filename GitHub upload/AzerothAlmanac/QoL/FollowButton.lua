@@ -189,10 +189,46 @@ local function DrawHit()
 	button.hitBlue:SetShown(FB.showHit and true or false)
 end
 
+-- while the overlay is on: name the frame under the mouse whenever it changes (what is covering the button?)
+local function Foci()
+	local f = (GetMouseFoci and GetMouseFoci()) or (GetMouseFocus and { GetMouseFocus() }) or {}
+	return f[1]
+end
+local function Describe(f)
+	if not f then return "nothing (the game world)" end
+	local parts, g = {}, f
+	for _ = 1, 4 do
+		if not g then break end
+		local name = g.GetName and g:GetName()
+		local kind = g.GetObjectType and g:GetObjectType() or "?"
+		parts[#parts + 1] = (name or ("<" .. kind .. ">")) .. (g.GetFrameStrata and (" [" .. g:GetFrameStrata() .. " " .. (g.GetFrameLevel and g:GetFrameLevel() or "?") .. "]") or "")
+		g = g.GetParent and g:GetParent() or nil
+	end
+	return table.concat(parts, "  <  ")
+end
+local watcher
+local function Watch()
+	if FB.showHit and not watcher then
+		watcher = C_Timer.NewTicker(0.15, function()
+			if not FB.showHit then return end
+			local f = Foci()
+			if f ~= FB.lastFocus then
+				FB.lastFocus = f
+				print("|cff59ff80Follow button:|r mouse is over " .. Describe(f))
+			end
+		end)
+	elseif not FB.showHit and watcher then
+		watcher:Cancel()
+		watcher = nil
+		FB.lastFocus = nil
+	end
+end
+
 SLASH_AAFOLLOWHIT1 = "/aafollowhit"
 SlashCmdList.AAFOLLOWHIT = function()
 	FB.showHit = not FB.showHit
 	DrawHit()
+	Watch()
 	if button then
 		local l, r, t, bt = button:GetHitRectInsets()
 		local x, y = button:GetCenter()
