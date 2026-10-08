@@ -1767,6 +1767,16 @@ function MT:CycleBot(dir)
 	local cur = 1
 	for i, k in ipairs(list) do if k == (db.botChamp or false) then cur = i end end
 	db.botChamp = list[(cur - 1 + dir) % #list + 1] or nil
+	-- (after a practice game: the computer's side of the cards changes at once too; Random picks one now)
+	if game and game.practice and game.champs and game.state == "over" then
+		local bot = db.botChamp
+		if not (bot and Playable(bot)) then
+			local pool = {}
+			for _, k in ipairs(ROSTER) do if Playable(k) and k ~= MyChamp() then pool[#pool + 1] = k end end
+			bot = pool[math.random(#pool)] or "gnoll"
+		end
+		game.champs[OTHER[game.mySide]] = bot
+	end
 	Refresh()
 end
 
@@ -1813,7 +1823,9 @@ function MT:CycleChampion(dir)
 	local cur = 1
 	for i, k in ipairs(list) do if k == MyChamp() then cur = i end end
 	db.champion = list[(cur - 1 + dir) % #list + 1]
-	PlaySide("murloc", "place") -- (the new champion's voice, as you pick it)
+	-- (after a game the cards still show the champions that played it: your new choice goes on your side at once)
+	if game and game.champs and game.state == "over" then game.champs[game.mySide] = db.champion end
+	PlaySide(game and game.mySide or "murloc", "place") -- (the new champion's voice, as you pick it)
 	Refresh()
 end
 

@@ -6,7 +6,7 @@
   python art_convert.py board <in.png> <out.tga> [k_field k_frame x0,y0,x1,y1]
                                                          framed board on magenta: keyed, whole canvas kept,
                                                          playfield and frame darkened (default 0.72 / 0.92)
-  python art_convert.py cut   <in.png> <out.tga> <W> <H> [fill]
+  python art_convert.py cut   <in.png> <out.tga> <W> <H> [fill] [keep]
                                                          piece on magenta: keyed, cropped, fitted into a
                                                          W x H canvas (top left; or stretched with 'fill');
                                                          prints the used texcoord
@@ -198,33 +198,64 @@ def board(src, dst, k_field=0.72, k_frame=0.92, field="135,135,890,890", size=10
     write_tga(img, dst)
     edge_clean(dst)
 
-def cut(src, dst, cw, ch, fill=False):
+def cut(src, dst, cw, ch, fill=False, keep=False):
     """A piece painted on flat magenta: keyed out, cropped, scaled to fit a cw x ch canvas
     (power-of-two sizes) in its top-left corner with its shape kept (or, with fill, stretched to
-    the whole canvas), the rest transparent. Prints the used fraction, for SetTexCoord."""
+    the whole canvas), the rest transparent. Prints the used fraction, for SetTexCoord.
+    All the flat background magenta goes, enclosed loops included. With keep, a pink patch enclosed by the
+    art (a highlight inside a gem) is kept; without it the whole picture is keyed plainly."""
     from PIL import ImageDraw
     a = np.array(Image.open(src).convert("RGB"))
     out, mag = key_magenta(a)
     # only the magenta joined to the picture's outside is background: pink-purple highlights
     # inside a gem are art, so they keep their colour and stay solid
-    keyed = mag > 0.02  # (any trace of magenta; the outside is what joins up from the corner)
-    ky, kx = np.where(mag > 0.5)
-    seed = int(np.argmin(ky + kx))  # (the keyed pixel nearest the top left, on the outside)
-    outside = np.zeros_like(keyed)
-    outside[ky[seed], kx[seed]] = True
-    while True:  # (grow the outside through the keyed pixels, four ways, until it stops)
-        grown = outside.copy()
-        grown[1:, :] |= outside[:-1, :]
-        grown[:-1, :] |= outside[1:, :]
-        grown[:, 1:] |= outside[:, :-1]
-        grown[:, :-1] |= outside[:, 1:]
-        grown &= keyed
-        if (grown == outside).all():
-            break
-        outside = grown
-    inside = keyed & ~outside
-    out[inside, :3] = a[inside]
-    out[inside, 3] = 255
+    if keep:
+        keyed = mag > 0.02  # (any trace of magenta; the outside is what joins up from the corner)
+        ky, kx = np.where(mag > 0.5)
+        seed = int(np.argmin(ky + kx))  # (the keyed pixel nearest the top left, on the outside)
+        outside = np.zeros_like(keyed)
+        outside[ky[seed], kx[seed]] = True
+        while True:  # (grow the outside through the keyed pixels, four ways, until it stops)
+            grown = outside.copy()
+            grown[1:, :] |= outside[:-1, :]
+            grown[:-1, :] |= outside[1:, :]
+            grown[:, 1:] |= outside[:, :-1]
+            grown[:, :-1] |= outside[:, 1:]
+            grown &= keyed
+            if (grown == outside).all():
+                break
+            outside = grown
+        inside = keyed & ~outside
+        # Enclosed bits of magenta are told apart: a pocket of the flat background (the loops of a rope, the hole
+        # of a ring) goes transparent like the outside, and so do the soft edge pixels round it; a pink patch of
+        # the art itself (a highlight inside a gem) is kept. A patch is a pocket when it holds any of the pure
+        # background magenta (a few pixels are enough: the smallest rope loops are only a few across).
+        from collections import deque
+        # (pure = within a hair of this picture's own background colour, read from its corners: the pink in a
+        # gem is nearer than "any magenta" but still well away from that exact flat colour)
+        corners = np.concatenate([a[:6, :6].reshape(-1, 3), a[:6, -6:].reshape(-1, 3), a[-6:, :6].reshape(-1, 3), a[-6:, -6:].reshape(-1, 3)])
+        bgc = np.median(corners, axis=0)
+        pure = np.abs(a.astype(int) - bgc.astype(int)).sum(axis=2) < 60
+        seen = np.zeros_like(inside)
+        keep = np.zeros_like(inside)
+        H, W = inside.shape
+        for sy, sx in zip(*np.where(inside)):
+            if seen[sy, sx]:
+                continue
+            comp, q = [], deque([(sy, sx)])
+            seen[sy, sx] = True
+            while q:
+                y, x = q.popleft()
+                comp.append((y, x))
+                for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                    if 0 <= ny < H and 0 <= nx < W and inside[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True
+                        q.append((ny, nx))
+            cy, cx = zip(*comp)
+            if pure[list(cy), list(cx)].sum() < 4:  # none of the flat background in it: it is art
+                keep[list(cy), list(cx)] = True
+        out[keep, :3] = a[keep]
+        out[keep, 3] = 255
     ys, xs = np.where(mag < 0.5)
     img = Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1], "RGBA")
     if fill:
@@ -286,7 +317,7 @@ if __name__ == "__main__":
     elif sys.argv[1] == "stage":
         stage(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "cut":
-        cut(sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]), len(sys.argv) > 6 and sys.argv[6] == "fill")
+        cut(sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]), "fill" in sys.argv[6:], "keep" in sys.argv[6:])
     elif sys.argv[1] == "tray":
         tray(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "arrow":
