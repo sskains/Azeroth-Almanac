@@ -81,9 +81,15 @@ local CHAMPS = {
 		lose = { 560822, 560823 },
 	},
 	-- Seasonal champions: offered only while their holiday is on (the calendar check is shared with Wild Gambit's
-	-- boards). Hallow's End: the Bombay cat (its model comes from the pet among your companions, so you need to
+	-- boards). Hallow's End: the Sinister Squashling (creature 23909, found like the roach), the Bombay cat (its model comes from the pet among your companions, so you need to
 	-- own it; else target a Bombay cat and /aa mtt champion bombay) and the plague's cockroach
 	-- (WoW Forever creature 271913, found like the slime).
+	squashling = {
+		name = "Sinister Squashlings", one = "Sinister Squashling", item = 33154, -- Sinister Squashling (the pet's item)
+		npc = 23909, -- the creature of spell 42609, Sinister Squashling (wowhead)
+		season = "HallowsEnd",
+		color = { 1, 0.6, 0.15 }, hex = "ff9926", cheer = "Boo-hoo-hoo!", bot = "Sinister Squashling",
+	},
 	bombay = {
 		name = "Bombay Cats", one = "Bombay Cat", item = 8485, -- Cat Carrier (Bombay)
 		companion = { "Bombay", "Bombay Cat" }, season = "HallowsEnd",
@@ -106,7 +112,7 @@ local CHAMPS = {
 }
 -- the order they are offered in
 -- (each champion knows its own key, for the voices set in game)
-local ROSTER = { "murloc", "gnoll", "faerie", "slime", "bombay", "roach" }
+local ROSTER = { "murloc", "gnoll", "faerie", "slime", "squashling", "bombay", "roach" }
 -- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
 -- chose the same champion can still be told apart
 local ROLE_RINGS = {
