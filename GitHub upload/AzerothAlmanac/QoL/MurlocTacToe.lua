@@ -88,6 +88,9 @@ local CHAMPS = {
 		name = "Sinister Squashlings", one = "Sinister Squashling", item = 33154, -- Sinister Squashling (the pet's item)
 		npc = 23909, -- the creature of spell 42609, Sinister Squashling (wowhead)
 		season = "HallowsEnd",
+		place = { 4555783, 4555785, 4555787, 4555789 }, -- 10.0_AMB_AzureSpan_Decay_Squish_Movement_Distanced_01-04
+		win = { 4555791, 4555793 },                     -- ..._05-06
+		lose = { 4555795, 4555797 },                    -- ..._07-08
 		color = { 1, 0.6, 0.15 }, hex = "ff9926", cheer = "Boo-hoo-hoo!", bot = "Sinister Squashling",
 	},
 	bombay = {
