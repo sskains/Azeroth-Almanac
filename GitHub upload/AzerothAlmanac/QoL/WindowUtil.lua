@@ -260,7 +260,8 @@ end
 
 -- a button in carved oak with bronze rivets (custom art) instead of the game's red one: its riveted
 -- ends keep their shape, the middle stretches; lighter under the mouse, darker when pressed
-function ns.WoodButton(b)
+-- `allow` (optional) is asked before the click sound: a game passes its own sound setting
+function ns.WoodButton(b, allow)
 	if not b or b.wood then return b end
 	for _, key in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
 		local r = b[key]
@@ -279,6 +280,10 @@ function ns.WoodButton(b)
 		if t.SetTextureSliceMode and Enum and Enum.UITextureSliceMode then pcall(t.SetTextureSliceMode, t, Enum.UITextureSliceMode.Stretched) end
 	end
 	b.wood = t
+	-- the same soft click on every wooden button in every game
+	b:HookScript("OnClick", function()
+		if PlaySound and (not allow or allow()) then pcall(PlaySound, (SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) or 856) end
+	end)
 	b:HookScript("OnEnter", function(self) self.wood:SetVertexColor(1.2, 1.15, 1.05) end)
 	b:HookScript("OnLeave", function(self) self.wood:SetVertexColor(1, 1, 1) end)
 	b:HookScript("OnMouseDown", function(self) self.wood:SetVertexColor(0.75, 0.72, 0.68) end)

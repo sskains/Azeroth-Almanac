@@ -809,7 +809,7 @@ local function FlatButton(parent, text, width, onClick)
 	b:SetSize(width, 24)
 	b:SetText(text)
 	b:SetScript("OnClick", onClick)
-	ns.WoodButton(b)
+	ns.WoodButton(b, function() return db and db.sound end)
 	ns.WoodLettering(b, 13)
 	return b
 end
@@ -930,6 +930,8 @@ function ClearBoardArt()
 	frame.winMid:Hide()
 	frame.winHead:Hide()
 	frame.ghostModel:Hide()
+	for _, p in ipairs(frame.sparks) do p.active = false p.tex:Hide() end
+	for _, card in pairs(frame.cards) do card.cheer = nil end
 	frame.lineAnim = nil
 	frame.over:Hide()
 	frame.overDelay = nil
@@ -953,6 +955,20 @@ function Celebrate()
 	-- the winner's pieces cheer, the loser's slump
 	for _, cell in ipairs(frame.cells) do
 		if cell.side and g.winner then Animate(cell.model, cell.side == g.winner and ANIM_WIN or ANIM_LOSE) end
+	end
+	-- fireflies burst up from the winning line, and the winner's card glows for a few seconds
+	if g.line and g.winner then
+		frame.cards[g.winner == g.mySide and "me" or "them"].cheer = 4
+		local tint = SIDES[g.winner].color
+		C_Timer.After(0.45, function() -- (once the line has drawn across)
+			if game ~= g then return end
+			local big = g.result == "win"
+			for _, i in ipairs(g.line) do
+				local x, y = CellCenter(i)
+				frame:Sparkle(x, y, tint, big and 12 or 5)
+			end
+			if big then for _ = 1, 16 do frame:Sparkle(math.random() * BOARD, math.random() * BOARD, tint, 1) end end
+		end)
 	end
 	local me, them = frame.cards.me.model, frame.cards.them.model
 	if g.result == "win" then
@@ -999,7 +1015,7 @@ local function SetCard(card, side, name, sub, active)
 	card.sub:SetText(sub or "")
 	card.active = active
 	card.glow:SetVertexColor(ROLE_TINT[side][1], ROLE_TINT[side][2], ROLE_TINT[side][3])
-	card.glow:SetShown(active)
+	card.glow:SetShown(active or (card.cheer and card.cheer > 0) or false)
 	card.turnGem:SetShown(active and true or false)
 end
 
@@ -1407,6 +1423,28 @@ local function Build()
 		b.star:SetShown(big and true or false)
 	end
 
+	-- fireflies for a win: they burst up from the winning line and drift, glowing, then fade
+	frame.sparks = {}
+	function frame:Sparkle(x, y, color, n)
+		for _ = 1, n do
+			local p
+			for _, f in ipairs(self.sparks) do if not f.active then p = f break end end
+			if not p then
+				p = { tex = overlay:CreateTexture(nil, "OVERLAY", nil, 5) }
+				p.tex:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+				p.tex:SetBlendMode("ADD")
+				tinsert(self.sparks, p)
+			end
+			p.active, p.t, p.life = true, 0, 1.4 + math.random() * 1.2
+			p.x, p.y = x + (math.random() - 0.5) * 30, y + (math.random() - 0.5) * 22
+			p.vx, p.vy = (math.random() - 0.5) * 36, -18 - math.random() * 34 -- (y grows downwards: up is negative)
+			p.sway, p.size = math.random() * 6, 9 + math.random() * 9
+			-- the winner's colour warmed towards gold
+			p.tex:SetVertexColor((color[1] + 1) / 2, (color[2] + 0.9) / 2, (color[3] + 0.5) / 2)
+			p.tex:Show()
+		end
+	end
+
 	-- the cover while a challenge waits, and the banner when no game is on
 	local waiting = CreateFrame("Frame", nil, boardFrame)
 	Carved(waiting)
@@ -1629,6 +1667,38 @@ local function Build()
 			if clock >= self.nextAmbient then
 				self.nextAmbient = clock + 20 + math.random() * 25
 				pcall(PlaySoundFile, db.ambient[math.random(#db.ambient)], "Ambience")
+			end
+		end
+		-- the fireflies of a win drift up, sway and fade; the winner's card glows while it cheers
+		for _, p in ipairs(self.sparks) do
+			if p.active then
+				p.t = p.t + elapsed
+				local q = p.t / p.life
+				if q >= 1 then
+					p.active = false
+					p.tex:Hide()
+				else
+					p.x = p.x + (p.vx + math.sin(p.t * 2.2 + p.sway) * 14) * elapsed
+					p.y = p.y + p.vy * elapsed
+					p.tex:ClearAllPoints()
+					p.tex:SetPoint("CENTER", self.inner, "TOPLEFT", p.x, -p.y)
+					local s = p.size * (0.85 + 0.3 * math.sin(p.t * 7 + p.sway))
+					p.tex:SetSize(s, s)
+					p.tex:SetAlpha(0.9 * math.sin(math.pi * q))
+				end
+			end
+		end
+		for _, card in pairs(self.cards) do
+			if card.cheer then
+				card.cheer = card.cheer - elapsed
+				if card.cheer <= 0 then
+					card.cheer = nil
+					card.glow:SetShown(card.active and true or false)
+				else
+					card.glow:SetVertexColor(1, 0.85, 0.4)
+					card.glow:Show()
+					card.glow:SetAlpha(0.6 + 0.4 * math.sin(clock * 7))
+				end
 			end
 		end
 		-- the light at the end of the winning line pulses

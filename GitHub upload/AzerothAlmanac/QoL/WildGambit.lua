@@ -1540,7 +1540,8 @@ end
 
 local SIDE_NAMES = { "North", "East", "South", "West" }
 
-local WoodButton = ns.WoodButton -- (shared with Gem Match: UI\WindowUtil.lua)
+-- (shared with Gem Match: WindowUtil.lua; its click sound follows Wild Gambit's sound setting)
+local function WoodButton(b) return ns.WoodButton(b, function() return not db or db.sound ~= false end) end
 
 local function SetOwner(f, color, diamond)
 	for _, g in ipairs(f.gems) do
