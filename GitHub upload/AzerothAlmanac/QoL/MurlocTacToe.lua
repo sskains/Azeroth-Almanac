@@ -70,8 +70,9 @@ local CHAMPS = {
 	-- in game, below) or set by hand: target the creature and type /aa mtt champion <key>.
 	-- `icon` is the round face if the portrait can't be made.
 	faerie = {
-		name = "Faerie Dragons", one = "Faerie Dragon", icon = "Spell_Nature_FaerieFire", npc = 206792, -- Baby Faerie Dragon
-		color = { 0.9, 0.55, 1 }, hex = "e68cff", cheer = "Tee-hee-hee!", bot = "Faerie Dragon",
+		name = "Sprite Darters", one = "Sprite Darter", item = 11474, -- Sprite Darter Egg (its pet)
+		icon = "Spell_Nature_FaerieFire", npc = 5278, npcs = { 5278, 206792 }, -- Sprite Darter, then Baby Faerie Dragon
+		color = { 0.9, 0.55, 1 }, hex = "e68cff", cheer = "Tee-hee-hee!", bot = "Sprite Darter",
 	},
 	greenwhelp = {
 		name = "Green Whelps", one = "Green Whelp", icon = "INV_Misc_Head_Dragon_Green",
@@ -1642,11 +1643,12 @@ function ResolveChampions()
 	local key
 	for _, k in ipairs(ROSTER) do
 		local c = CHAMPS[k]
-		if c.npc and not c.display and (c.tries or 0) < 3 then key = k break end
+		if c.npc and not c.display and (c.tries or 0) < (c.npcs and #c.npcs * 2 or 3) then key = k break end
 	end
 	if not key then return end
 	resolving = key
 	local c = CHAMPS[key]
+	if c.npcs then c.npc = c.npcs[(c.tries or 0) % #c.npcs + 1] end -- (each creature of its list in turn)
 	c.tries = (c.tries or 0) + 1
 	if not resolver then
 		resolver = CreateFrame("PlayerModel", nil, UIParent)
