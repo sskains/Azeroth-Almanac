@@ -104,6 +104,7 @@ local CHAMPS = {
 	},
 }
 -- the order they are offered in
+-- (each champion knows its own key, for the voices set in game)
 local ROSTER = { "murloc", "gnoll", "faerie", "greenwhelp", "redwhelp", "bluewhelp", "blackwhelp", "slime", "squashling" }
 -- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
 -- chose the same champion can still be told apart
@@ -115,6 +116,7 @@ local ROLE_COLOR = { murloc = { 0.35, 1, 0.5 }, gnoll = { 1, 0.6, 0.25 } }
 -- SIDES[role] is the champion playing that role (the first mover is "murloc", the second "gnoll", the
 -- names the game began with); it is looked up afresh, so the code below reads SIDES[role].display etc.
 local Look
+for key, champ in pairs(CHAMPS) do champ.key = key end
 local SIDES = setmetatable({}, { __index = function(_, role) return Look(role) end })
 local OTHER = { murloc = "gnoll", gnoll = "murloc" }
 local SND = { challenge = 567409, victory = 567408, failed = 567459, draw = 540233, splash = 540231 }
@@ -275,6 +277,9 @@ end
 local function PlaySide(side, what)
 	local s = SIDES[side]
 	local v = s[what]
+	-- a voice set in game (/aa mtt voice <champion> <place|win|lose> <file IDs>) takes the built-in one's place
+	local mine = db and db.voices and s.key and db.voices[s.key]
+	if mine and mine[what] then v = mine[what] end
 	if type(v) == "table" then v = v[math.random(#v)] end
 	PlayFile(v)
 end
@@ -308,6 +313,17 @@ local function Ring(tex, side, size, anchor)
 	tex:SetVertexColor(c[1], c[2], c[3])
 	tex:SetSize(size * 1.36, size * 1.36)
 	tex:SetPoint("CENTER", anchor)
+end
+
+-- a champion in a model frame: its display, a full-body camera, facing in from its side of the board
+local function SetModel(model, side)
+	local look = SIDES[side]
+	if model.ClearModel then model:ClearModel() end
+	if look.display and model.SetDisplayInfo then pcall(model.SetDisplayInfo, model, look.display) end
+	if model.SetPortraitZoom then model:SetPortraitZoom(0) end
+	if model.SetCamDistanceScale then model:SetCamDistanceScale(look.camScale or 1.3) end
+	if model.SetFacing then model:SetFacing(side == "murloc" and -0.35 or 0.35) end
+	if model.SetAnimation then model:SetAnimation(0) end
 end
 
 local function FirstAnim(model, list)
@@ -877,11 +893,12 @@ end
 
 function ShowPiece(i, side, animate)
 	local cell = frame.cells[i]
-	Face(cell.face, side)
-	Ring(cell.ring, side, PIECE, cell.face)
+	SetModel(cell.model, side)
+	local tint = ROLE_TINT[side]
+	cell.base:SetVertexColor(tint[1], tint[2], tint[3], 0.55)
 	cell.side = side
 	cell.holder:Show()
-	cell.ghost:Hide()
+	frame.ghostModel:Hide()
 	cell.glow:Hide()
 	if animate then
 		cell.drop = 0
@@ -889,6 +906,7 @@ function ShowPiece(i, side, animate)
 		cell.holder:SetAlpha(0)
 		local x, y = CellCenter(i)
 		frame:Burst(x, y, SIDES[side].color, false)
+		Animate(cell.model, ANIM_ATTACK, 1.1)
 	else
 		cell.drop = nil
 		cell.holder:SetScale(1)
@@ -900,7 +918,6 @@ function ClearBoardArt()
 	if not frame then return end
 	for _, cell in ipairs(frame.cells) do
 		cell.holder:Hide()
-		cell.ghost:Hide()
 		cell.glow:Hide()
 		cell.side, cell.drop = nil, nil
 	end
@@ -908,6 +925,7 @@ function ClearBoardArt()
 	frame.winGlow:Hide()
 	frame.winMid:Hide()
 	frame.winHead:Hide()
+	frame.ghostModel:Hide()
 	frame.lineAnim = nil
 	frame.over:Hide()
 	frame.overDelay = nil
@@ -927,6 +945,10 @@ function Celebrate()
 		end
 		frame.lineAnim = { t = 0, from = g.line[1], to = g.line[3] }
 		frame.winGlow:SetVertexColor(c[1], c[2], c[3], 0.7)
+	end
+	-- the winner's pieces cheer, the loser's slump
+	for _, cell in ipairs(frame.cells) do
+		if cell.side and g.winner then Animate(cell.model, cell.side == g.winner and ANIM_WIN or ANIM_LOSE) end
 	end
 	local me, them = frame.cards.me.model, frame.cards.them.model
 	if g.result == "win" then
@@ -972,7 +994,9 @@ local function SetCard(card, side, name, sub, active)
 	card.sideText:SetText(Colored(side, SIDES[side].name))
 	card.sub:SetText(sub or "")
 	card.active = active
+	card.glow:SetVertexColor(ROLE_TINT[side][1], ROLE_TINT[side][2], ROLE_TINT[side][3])
 	card.glow:SetShown(active)
+	card.turnGem:SetShown(active and true or false)
 end
 
 function Refresh()
@@ -1116,7 +1140,7 @@ local function Build()
 		if which == "me" then card:SetPoint("TOPLEFT", 16, -62) else card:SetPoint("TOPLEFT", 16 + cardW + 80, -62) end
 		if not CARD_PLAIN then QuestFrame(card, true) end
 		card.glow = card:CreateTexture(nil, "BACKGROUND", nil, -1)
-		card.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		card.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
 		card.glow:SetBlendMode("ADD")
 		card.glow:SetPoint("TOPLEFT", -26, 26)
 		card.glow:SetPoint("BOTTOMRIGHT", 26, -26)
@@ -1133,21 +1157,45 @@ local function Build()
 		card.model:SetPoint("TOPLEFT", 5, 0)       -- 5 px higher than the framed look had it
 		card.model:SetPoint("BOTTOMRIGHT", -5, 45)
 		card.facing = which == "me" and -0.55 or 0.55
-		card.face = card:CreateTexture(nil, "ARTWORK")
-		card.face:SetSize(22, 22)
-		card.face:SetPoint("BOTTOMLEFT", 10, 12)
-		card.ring = card:CreateTexture(nil, "OVERLAY")
-		card.name = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		card.name:SetPoint("BOTTOMLEFT", card.face, "RIGHT", 8, 1)
-		card.name:SetPoint("RIGHT", -8, 0)
-		card.name:SetJustifyH("LEFT")
+		-- a carved nameplate (Wild Gambit's) under the creature, which stands behind it; the turn gem lights on it
+		-- while it is this player's move. Yours has its round socket on the left, theirs (mirrored) on the right.
+		-- (the plate is on a frame above the creature's, so the creature stands behind it)
+		local top = CreateFrame("Frame", nil, card)
+		top:SetAllPoints()
+		top:SetFrameLevel(card.model:GetFrameLevel() + 3)
+		local mine = which == "me"
+		local PW = cardW
+		local PH = PW / 4.4
+		card.plate = top:CreateTexture(nil, "ARTWORK", nil, 1)
+		card.plate:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Header_Nameplate")
+		if not mine then card.plate:SetTexCoord(1, 0, 0, 1) end
+		card.plate:SetSize(PW, PH)
+		card.plate:SetPoint("BOTTOM", 0, 14)
+		card.face = top:CreateTexture(nil, "ARTWORK", nil, 2)
+		card.face:SetSize(24, 24)
+		card.face:SetPoint("CENTER", card.plate, mine and "LEFT" or "RIGHT", (mine and 1 or -1) * 0.078 * PW, 0)
+		card.ring = top:CreateTexture(nil, "OVERLAY", nil, 3)
+		card.name = top:CreateFontString(nil, "OVERLAY", nil, 3)
+		card.name:SetFont(TITLE_FONT, 14, "")
+		card.name:SetTextColor(1, 0.92, 0.7)
+		card.name:SetShadowOffset(1, -1)
+		card.name:SetPoint("LEFT", card.plate, "LEFT", (mine and 0.19 or 0.14) * PW, 1)
+		card.name:SetPoint("RIGHT", card.plate, "RIGHT", -(mine and 0.14 or 0.19) * PW, 1)
+		card.name:SetJustifyH("CENTER")
 		card.name:SetWordWrap(false)
+		card.turnGem = top:CreateTexture(nil, "OVERLAY", nil, 4)
+		card.turnGem:SetSize(0.95 * PH, 0.95 * PH)
+		card.turnGem:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Header_TurnGem")
+		if mine then card.turnGem:SetTexCoord(1, 0, 0, 1) end -- (it points back along the plate, at the name)
+		card.turnGem.x = (mine and -1 or 1) * 0.045 * PW
+		card.turnGem:SetPoint("CENTER", card.plate, mine and "RIGHT" or "LEFT", card.turnGem.x, 0)
+		card.turnGem:Hide()
+		-- under the plate: the champion's name and the record, on one line
 		card.sideText = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		card.sideText:SetPoint("TOPLEFT", card.face, "RIGHT", 8, -1)
+		card.sideText:SetPoint("BOTTOMRIGHT", card, "BOTTOM", -4, 1)
 		card.sub = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-		card.sub:SetPoint("LEFT", card.sideText, "RIGHT", 6, 0)
-		card.sub:SetPoint("RIGHT", -8, 0)
-		card.sub:SetJustifyH("RIGHT")
+		card.sub:SetPoint("BOTTOMLEFT", card, "BOTTOM", 4, 1)
+		card.sub:SetJustifyH("LEFT")
 		card.sub:SetWordWrap(false)
 		frame.cards[which] = card
 	end
@@ -1241,28 +1289,44 @@ local function Build()
 		cell.glow:SetSize(CELL * 1.5, CELL * 1.5)
 		cell.glow:SetPoint("CENTER")
 		cell.glow:Hide()
-		cell.ghost = cell:CreateTexture(nil, "ARTWORK")
-		cell.ghost:SetSize(PIECE, PIECE)
-		cell.ghost:SetPoint("CENTER")
-		cell.ghost:SetAlpha(0.35)
-		cell.ghost:Hide()
+		-- the piece: your champion standing in the socket as a small 3D model, on a shadow and a soft glow in its
+		-- role's tint
 		cell.holder = CreateFrame("Frame", nil, cell)
 		cell.holder:SetSize(PIECE, PIECE)
 		cell.holder:SetPoint("CENTER")
-		cell.face = cell.holder:CreateTexture(nil, "ARTWORK")
-		cell.face:SetAllPoints()
-		cell.ring = cell.holder:CreateTexture(nil, "OVERLAY")
+		cell.shadow = cell.holder:CreateTexture(nil, "BACKGROUND", nil, -1)
+		cell.shadow:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+		cell.shadow:SetVertexColor(0, 0, 0, 0.5)
+		cell.shadow:SetSize(PIECE * 0.78, PIECE * 0.26)
+		cell.shadow:SetPoint("BOTTOM", 0, 4)
+		cell.base = cell.holder:CreateTexture(nil, "BACKGROUND", nil, 0)
+		cell.base:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+		cell.base:SetBlendMode("ADD")
+		cell.base:SetSize(PIECE * 1.15, PIECE * 0.55)
+		cell.base:SetPoint("BOTTOM", 0, -2)
+		cell.model = CreateFrame("PlayerModel", nil, cell.holder)
+		cell.model:SetSize(PIECE + 16, PIECE + 16)
+		cell.model:SetPoint("BOTTOM", 0, 2)
 		cell.holder:Hide()
 		cell:SetScript("OnClick", function() MT:Place(i) end)
 		cell:SetScript("OnEnter", function(self)
 			if game and game.state == "playing" and game.turn == game.mySide and not game.board[i] then
-				Face(self.ghost, game.mySide)
-				self.ghost:Show()
+				local gm = frame.ghostModel -- (where your champion would stand, half see-through)
+				SetModel(gm, game.mySide)
+				gm:ClearAllPoints()
+				gm:SetPoint("BOTTOM", self, "BOTTOM", 0, 6)
+				gm:Show()
 			end
 		end)
-		cell:SetScript("OnLeave", function(self) self.ghost:Hide() end)
+		cell:SetScript("OnLeave", function() frame.ghostModel:Hide() end)
 		frame.cells[i] = cell
 	end
+
+	frame.ghostModel = CreateFrame("PlayerModel", nil, inner)
+	frame.ghostModel:SetSize(PIECE + 16, PIECE + 16)
+	frame.ghostModel:SetFrameLevel(inner:GetFrameLevel() + 6)
+	frame.ghostModel:SetAlpha(0.45)
+	frame.ghostModel:Hide()
 
 	local overlay = CreateFrame("Frame", nil, boardFrame)
 	overlay:SetAllPoints(inner)
@@ -1484,6 +1548,14 @@ local function Build()
 	local clock, lastQuit = 0, nil
 	frame:SetScript("OnUpdate", function(self, elapsed)
 		clock = clock + elapsed
+		-- the quiet swamp: now and then one of the ambient sounds (/aa mtt ambient add <file IDs>)
+		if db.sound and db.ambient and #db.ambient > 0 then
+			self.nextAmbient = self.nextAmbient or (clock + 6)
+			if clock >= self.nextAmbient then
+				self.nextAmbient = clock + 20 + math.random() * 25
+				pcall(PlaySoundFile, db.ambient[math.random(#db.ambient)], "Ambience")
+			end
+		end
 		-- the light at the end of the winning line pulses
 		if self.winHead:IsShown() then self.winHead:SetAlpha(0.6 + 0.4 * math.sin(clock * 6)) end
 		-- the fireflies wander and flicker
@@ -1496,7 +1568,14 @@ local function Build()
 		end
 		-- the active card glows in and out
 		local pulse = 0.55 + 0.45 * math.sin(clock * 4)
-		for _, card in pairs(self.cards) do if card.active then card.glow:SetAlpha(pulse) end end
+		for which, card in pairs(self.cards) do
+			if card.active then
+				card.glow:SetAlpha(pulse)
+				local nudge = 3 * math.sin(clock * 4) -- (the gem nudges towards the name and back)
+				card.turnGem:SetPoint("CENTER", card.plate, which == "me" and "RIGHT" or "LEFT", card.turnGem.x + (which == "me" and -nudge or nudge), 0)
+				card.turnGem:SetAlpha(0.8 + 0.2 * math.sin(clock * 3))
+			end
+		end
 		-- pieces dropping in
 		for _, cell in ipairs(self.cells) do
 			if cell.drop then
@@ -1601,6 +1680,8 @@ function MT:OnInitialize(saved)
 	db.champion = db.champion or "murloc"
 	db.display = db.display or {}
 	db.npc = db.npc or {}
+	db.voices = db.voices or {}   -- { champion = { place = { ids }, win = ..., lose = ... } } set in game
+	db.ambient = db.ambient or {} -- file IDs of the quiet swamp sounds
 	for key, display in pairs(db.display) do
 		if CHAMPS[key] and type(display) == "number" then CHAMPS[key].display = display end
 	end
@@ -1749,6 +1830,44 @@ function MT:Command(rest)
 			Finish(nil, nil, "abandoned")
 		else
 			Say("no game to leave.")
+		end
+	elseif low:match("^sound") then
+		local id = tonumber(rest:match("^%S+%s+(%d+)"))
+		if id then pcall(PlaySoundFile, id, "SFX") Say("playing " .. id .. ".") else Say("/aa mtt sound <file ID> plays a sound: a way to find voices for a champion.") end
+	elseif low:match("^voice") then
+		local key, what, ids = rest:match("^%S+%s+(%S+)%s*(%S*)%s*(.*)")
+		key = key and key:lower()
+		if not (key and CHAMPS[key]) then
+			Say("/aa mtt voice <champion> <place|win|lose> <file ID> [more IDs]   or the word clear. Champions: " .. table.concat(ROSTER, ", "))
+		elseif what ~= "place" and what ~= "win" and what ~= "lose" then
+			local v = db.voices[key] or {}
+			Say(("%s: place %s, win %s, lose %s"):format(CHAMPS[key].name, v.place and table.concat(v.place, ",") or "-", v.win and table.concat(v.win, ",") or "-", v.lose and table.concat(v.lose, ",") or "-"))
+		else
+			local list = {}
+			for id in ids:gmatch("%d+") do list[#list + 1] = tonumber(id) end
+			db.voices[key] = db.voices[key] or {}
+			if ids:lower():match("clear") then
+				db.voices[key][what] = nil
+				Say(("%s %s voice cleared."):format(CHAMPS[key].name, what))
+			elseif #list > 0 then
+				db.voices[key][what] = list
+				Say(("%s %s voice set (%d sound%s)."):format(CHAMPS[key].name, what, #list, #list > 1 and "s" or ""))
+				pcall(PlaySoundFile, list[1], "SFX")
+			else
+				Say("give one or more file IDs, or the word clear.")
+			end
+		end
+	elseif low:match("^ambient") then
+		local arg = rest:match("^%S+%s*(.*)") or ""
+		if arg:lower():match("^clear") then
+			wipe(db.ambient)
+			Say("ambient sounds cleared.")
+		elseif arg:lower():match("^add") then
+			local n = 0
+			for id in arg:gmatch("%d+") do db.ambient[#db.ambient + 1] = tonumber(id) n = n + 1 end
+			Say(("%d ambient sound%s added."):format(n, n == 1 and "" or "s"))
+		else
+			Say(("%d ambient sounds: %s. |cffffd100/aa mtt ambient add <file IDs>|r or |cffffd100clear|r."):format(#db.ambient, #db.ambient > 0 and table.concat(db.ambient, ", ") or "none"))
 		end
 	elseif low == "season" then
 		db.anySeason = not db.anySeason
