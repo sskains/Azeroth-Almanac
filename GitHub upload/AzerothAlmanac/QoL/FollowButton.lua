@@ -102,9 +102,9 @@ local function Build()
 	local b = CreateFrame("Button", "AzerothAlmanacFollowButton", UIParent, "SecureActionButtonTemplate")
 	-- on the target frame's own layer, just above it: any window opened over it (the Almanac, the
 	-- games, the bags) covers the button instead of it floating on top
-	b:SetFrameStrata(TargetFrame and TargetFrame:GetFrameStrata() or "MEDIUM")
+	b:SetFrameStrata("MEDIUM") -- (one strata above the target frame's LOW, which took the clicks where they overlapped)
 	-- (well above the target frame's own pieces, its portrait and plates, which would otherwise take the click)
-	b:SetFrameLevel((TargetFrame and TargetFrame:GetFrameLevel() or 0) + 60)
+	b:SetFrameLevel(2) -- (low within MEDIUM: the bags and other windows opened over it still cover it)
 	b:RegisterForClicks("AnyUp", "AnyDown")   -- the game picks press or release, per its "cast on key down" option
 	b:SetAttribute("type", "macro")
 	b:SetAttribute("macrotext", "/follow")
