@@ -1039,6 +1039,7 @@ function Refresh()
 	frame.quit:SetShown(playing and true or false)
 	frame.quit:SetText(MT:CanLeaveFree() and "Leave (no penalty)" or "Resign")
 	frame.soundButton:SetText(db.sound and "Sound: on" or "Sound: off")
+	frame.musicButton:SetText(db.music ~= false and "Music: on" or "Music: off")
 	local choosing = not (g and (g.state == "playing" or g.state == "inviting"))
 	for _, b in ipairs(frame.champArrows) do b:SetShown(choosing) end
 	-- the Champions rows in the side panel: yours, and the computer's
@@ -1592,11 +1593,17 @@ local function Build()
 
 	frame.quit = FlatButton(side, "Resign", FIELD_W, function() MT:Quit() end)
 	frame.quit:SetPoint("BOTTOMLEFT", PAD, 96)
-	frame.soundButton = FlatButton(side, "Sound: on", FIELD_W, function()
+	frame.soundButton = FlatButton(side, "Sound: on", (FIELD_W - 8) / 2, function()
 		db.sound = not db.sound
 		Refresh()
 	end)
 	frame.soundButton:SetPoint("BOTTOMLEFT", PAD, 66)
+	frame.musicButton = FlatButton(side, "Music: on", (FIELD_W - 8) / 2, function()
+		db.music = db.music == false -- (on unless switched off)
+		if db.music == false then MT:StopMusic() else MT:StartMusic() end
+		Refresh()
+	end)
+	frame.musicButton:SetPoint("LEFT", frame.soundButton, "RIGHT", 8, 0)
 
 	local winIcon = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Icon" -- (the murloc badge, custom art)
 	ns.NativeWindow(frame, { title = "Murloc Tac Toe", icon = winIcon, hide = { titleBg, icon, title }, close = close, byline = sub })
@@ -1699,7 +1706,8 @@ local function Build()
 		local free = MT:CanLeaveFree()
 		if free ~= lastQuit then lastQuit = free; Refresh() end
 	end)
-	frame:HookScript("OnShow", function() Refresh() end)
+	frame:HookScript("OnShow", function() Refresh() MT:StartMusic() end)
+	frame:HookScript("OnHide", function() MT:StopMusic() end)
 end
 
 ---------------------------------------------------------------------------
@@ -1760,6 +1768,37 @@ function MT:CycleBot(dir)
 	for i, k in ipairs(list) do if k == (db.botChamp or false) then cur = i end end
 	db.botChamp = list[(cur - 1 + dir) % #list + 1] or nil
 	Refresh()
+end
+
+-- The swamp's music: the game's own light Jungle day tracks (Sound\Music\ZoneMusic\Jungle, the three that
+-- Swamp of Sorrows plays by day), one after another at random while the window is open. They replace the
+-- zone music until it closes (the game resumes it). Lengths are measured from the files.
+local TRACKS = {
+	{ path = "Sound\\Music\\ZoneMusic\\Jungle\\DayJungle01.mp3", secs = 46.1 },
+	{ path = "Sound\\Music\\ZoneMusic\\Jungle\\DayJungle02.mp3", secs = 98.7 },
+	{ path = "Sound\\Music\\ZoneMusic\\Jungle\\DayJungle03.mp3", secs = 48.3 },
+}
+local musicToken, lastTrack
+
+local function NextTrack(token)
+	if musicToken ~= token or not (frame and frame:IsShown()) or db.music == false then return end
+	local n
+	repeat n = math.random(#TRACKS) until n ~= lastTrack or #TRACKS == 1
+	lastTrack = n
+	pcall(PlayMusic, TRACKS[n].path)
+	C_Timer.After(TRACKS[n].secs + 1.5, function() NextTrack(token) end)
+end
+
+function MT:StartMusic()
+	if musicToken or db.music == false or not PlayMusic then return end
+	musicToken = {}
+	NextTrack(musicToken)
+end
+
+function MT:StopMusic()
+	if not musicToken then return end
+	musicToken = nil
+	if StopMusic then pcall(StopMusic) end
 end
 
 function MT:CycleChampion(dir)
@@ -1940,6 +1979,11 @@ function MT:Command(rest)
 		else
 			Say(("%d ambient sounds: %s. |cffffd100/aa mtt ambient add <file IDs>|r or |cffffd100clear|r."):format(#db.ambient, #db.ambient > 0 and table.concat(db.ambient, ", ") or "none"))
 		end
+	elseif low == "music" then
+		db.music = db.music == false
+		if db.music == false then self:StopMusic() else self:StartMusic() end
+		Say("music " .. (db.music == false and "off." or "on."))
+		Refresh()
 	elseif low == "season" then
 		db.anySeason = not db.anySeason
 		Say("seasonal champions " .. (db.anySeason and "are offered all year (for trying them out)." or "are offered only in their holiday."))
