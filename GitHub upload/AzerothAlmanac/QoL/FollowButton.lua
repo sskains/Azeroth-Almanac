@@ -160,8 +160,7 @@ local function Apply()
 	button:SetSize(db.size, db.size)
 	button:ClearAllPoints()
 	button:SetPoint("TOPRIGHT", TargetFrame or UIParent, "TOPRIGHT", db.x, db.y)
-	local key = db.icon
-	if key == nil or key == "Ability_Rogue_Sprint" then key = FB.FOOT end -- (the old default gives way to the footsteps; the boot is still a choice by picking it again)
+	local key = db.icon or FB.FOOT
 	button.foot = key == FB.FOOT
 	button.icon:ClearAllPoints()
 	if button.foot then
@@ -209,6 +208,11 @@ end
 
 function FB:OnInitialize(saved)
 	db = saved.follow
+	-- once: the old default icon (the winged boot) gives way to the footsteps; picking the boot again later sticks
+	if not db.iconV then
+		db.iconV = 2
+		if db.icon == nil or db.icon == "Ability_Rogue_Sprint" then db.icon = FB.FOOT end
+	end
 end
 
 function FB:OnLogin()
