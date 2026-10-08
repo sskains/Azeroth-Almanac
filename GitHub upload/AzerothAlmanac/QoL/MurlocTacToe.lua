@@ -80,13 +80,19 @@ local CHAMPS = {
 		win = { 560819, 560820, 560821 },
 		lose = { 560822, 560823 },
 	},
-	-- seasonal: offered only while its holiday is on (the calendar check is shared with Wild Gambit's boards).
-	-- Its model: the pet if you own it (found among your companions), else target it and
-	-- /aa mtt champion squashling, or /aa mtt champion squashling npc <id>.
-	squashling = {
-		name = "Sinister Squashlings", one = "Sinister Squashling", item = 33154, -- Sinister Squashling (the pet's item)
-		companion = "Sinister Squashling", season = "HallowsEnd",
-		color = { 1, 0.6, 0.15 }, hex = "ff9926", cheer = "Boo-hoo-hoo!", bot = "Sinister Squashling",
+	-- Seasonal champions: offered only while their holiday is on (the calendar check is shared with Wild Gambit's
+	-- boards). Hallow's End: a black tabby (its model: the pet if you own it, found among your companions; else
+	-- target a cat and /aa mtt champion tabby, or /aa mtt champion tabby npc <id>) and the plague's cockroach
+	-- (WoW Forever creature 271913, found like the slime).
+	tabby = {
+		name = "Black Tabbies", one = "Black Tabby", item = 8491, -- Cat Carrier (Black Tabby)
+		companion = { "Black Tabby", "Black Tabby Cat" }, season = "HallowsEnd",
+		color = { 0.62, 0.55, 0.85 }, hex = "9e8cd9", cheer = "Meow-ow-ow!", bot = "Black Tabby",
+	},
+	roach = {
+		name = "Plagued Cockroaches", one = "Plagued Cockroach", icon = "INV_Misc_Bug_01", npc = 271913,
+		season = "HallowsEnd",
+		color = { 0.7, 0.6, 0.25 }, hex = "b39940", cheer = "Skitter skitter!", bot = "Plagued Cockroach",
 	},
 	slime = {
 		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01", npc = 266735, -- Excitable Slime (WoW Forever)
@@ -100,7 +106,7 @@ local CHAMPS = {
 }
 -- the order they are offered in
 -- (each champion knows its own key, for the voices set in game)
-local ROSTER = { "murloc", "gnoll", "faerie", "slime", "squashling" }
+local ROSTER = { "murloc", "gnoll", "faerie", "slime", "tabby", "roach" }
 -- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
 -- chose the same champion can still be told apart
 local ROLE_RINGS = {
@@ -1934,11 +1940,14 @@ end
 
 -- A champion with an NPC but no model yet: the creature is loaded into a hidden model by its ID (the way
 -- the Bestiary finds faces), one at a time, and the display ID it ends up with is kept for good.
-local function CompanionCreature(name)
+local function CompanionCreature(names)
 	if not (GetNumCompanions and GetCompanionInfo) then return nil end
+	if type(names) ~= "table" then names = { names } end
 	for i = 1, GetNumCompanions("CRITTER") or 0 do
 		local creatureID, creatureName = GetCompanionInfo("CRITTER", i)
-		if creatureName == name and type(creatureID) == "number" then return creatureID end
+		for _, name in ipairs(names) do
+			if creatureName == name and type(creatureID) == "number" then return creatureID end
+		end
 	end
 end
 
