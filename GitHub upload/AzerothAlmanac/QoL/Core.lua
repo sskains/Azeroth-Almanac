@@ -51,7 +51,7 @@ ns.defaults = {
 		repair = true, guildRepair = false, sellJunk = true, report = true, search = true, bestReward = true,
 		listView = false, usableOnly = false, unlearnedOnly = false,
 	},
-	follow = { enabled = true, size = 22, x = -2, y = 2, icon = "Footsteps" }
+	follow = { enabled = true, size = 22, x = -2, y = 2, icon = "Footsteps" },
 	healAssist = {
 		enabled = true, mode = "frames", side = "below", iconSize = 24, perRow = 6, maxRows = 5, panelAlpha = 0.8,
 		locked = false, solo = false, includeSelf = true, pets = false, petCare = true, predict = true,
