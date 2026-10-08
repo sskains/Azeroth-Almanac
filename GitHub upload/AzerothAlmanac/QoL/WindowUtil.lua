@@ -387,3 +387,13 @@ function ns.Ornament(fs, size, ruleLen)
 	end
 	return o
 end
+
+-- The holiday on now, by the calendar: "HallowsEnd" (18 Oct - 1 Nov), "WinterVeil" (16 Dec - 2 Jan) or nil.
+-- Shared by Wild Gambit's holiday boards and Murloc Tac Toe's seasonal champions.
+function ns.HolidayNow()
+	local ok, t = pcall(date, "*t")
+	if not (ok and type(t) == "table") then return nil end
+	local m, d = t.month, t.day
+	if (m == 10 and d >= 18) or (m == 11 and d <= 1) then return "HallowsEnd" end
+	if (m == 12 and d >= 16) or (m == 1 and d <= 2) then return "WinterVeil" end
+end

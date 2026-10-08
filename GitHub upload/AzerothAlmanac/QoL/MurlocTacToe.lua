@@ -90,13 +90,21 @@ local CHAMPS = {
 		name = "Black Whelps", one = "Black Whelp", icon = "INV_Misc_Head_Dragon_Black",
 		color = { 0.75, 0.6, 0.9 }, hex = "bf99e6", cheer = "Rawr!", bot = "Black Whelp",
 	},
+	-- seasonal: offered only while its holiday is on (the calendar check is shared with Wild Gambit's boards).
+	-- Its model: the pet if you own it (found among your companions), else target it and
+	-- /aa mtt champion squashling, or /aa mtt champion squashling npc <id>.
+	squashling = {
+		name = "Sinister Squashlings", one = "Sinister Squashling", item = 33154, -- Sinister Squashling (the pet's item)
+		companion = "Sinister Squashling", season = "HallowsEnd",
+		color = { 1, 0.6, 0.15 }, hex = "ff9926", cheer = "Boo-hoo-hoo!", bot = "Sinister Squashling",
+	},
 	slime = {
 		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01", npc = 266735, -- Excitable Slime (WoW Forever)
 		color = { 0.7, 1, 0.3 }, hex = "b3ff4d", cheer = "Blorp blorp!", bot = "Excitable Slime",
 	},
 }
 -- the order they are offered in
-local ROSTER = { "murloc", "gnoll", "faerie", "greenwhelp", "redwhelp", "bluewhelp", "blackwhelp", "slime" }
+local ROSTER = { "murloc", "gnoll", "faerie", "greenwhelp", "redwhelp", "bluewhelp", "blackwhelp", "slime", "squashling" }
 -- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
 -- chose the same champion can still be told apart
 local ROLE_RINGS = {
@@ -125,9 +133,16 @@ local pendingIn       -- an incoming challenge waiting on the popup { from, gid 
 local warnedNewer = {}
 
 -- Your champion, and who plays which role
-local function Playable(key)
+local function Known(key)
 	local c = CHAMPS[key]
 	return c and c.display and true or false
+end
+
+-- what you may choose: known, and (for a seasonal one) its holiday is on (`/aa mtt season` shows them all year)
+local function Playable(key)
+	local c = CHAMPS[key]
+	if not (c and c.display) then return false end
+	return not c.season or (db and db.anySeason) or ns.HolidayNow() == c.season
 end
 
 local function MyChamp()
@@ -138,7 +153,7 @@ end
 
 -- a champion key from the other player: theirs if we know it, else the role's classic one
 local function ValidChamp(key, fallback)
-	if type(key) == "string" and Playable(key) then return key end
+	if type(key) == "string" and Known(key) then return key end -- (an opponent's seasonal one shows whatever the date here)
 	return fallback
 end
 
@@ -1637,12 +1652,21 @@ end
 
 -- A champion with an NPC but no model yet: the creature is loaded into a hidden model by its ID (the way
 -- the Bestiary finds faces), one at a time, and the display ID it ends up with is kept for good.
+local function CompanionCreature(name)
+	if not (GetNumCompanions and GetCompanionInfo) then return nil end
+	for i = 1, GetNumCompanions("CRITTER") or 0 do
+		local creatureID, creatureName = GetCompanionInfo("CRITTER", i)
+		if creatureName == name and type(creatureID) == "number" then return creatureID end
+	end
+end
+
 local resolver, resolving
 function ResolveChampions()
 	if resolving then return end
 	local key
 	for _, k in ipairs(ROSTER) do
 		local c = CHAMPS[k]
+		if c.companion and not c.npc then c.npc = CompanionCreature(c.companion) end
 		if c.npc and not c.display and (c.tries or 0) < (c.npcs and #c.npcs * 2 or 3) then key = k break end
 	end
 	if not key then return end
@@ -1726,10 +1750,14 @@ function MT:Command(rest)
 		else
 			Say("no game to leave.")
 		end
+	elseif low == "season" then
+		db.anySeason = not db.anySeason
+		Say("seasonal champions " .. (db.anySeason and "are offered all year (for trying them out)." or "are offered only in their holiday."))
+		Refresh()
 	elseif low == "champions" then
 		for _, k in ipairs(ROSTER) do
 			local c = CHAMPS[k]
-			Say(("%s (%s): %s"):format(c.name, k, c.display and ("model " .. c.display) or (c.npc and ("creature " .. c.npc .. ", model not found yet (try /reload)") or "no model yet: target one and type /aa mtt champion " .. k)))
+			Say(("%s (%s): %s"):format(c.name, k, (c.season and "[Hallow's End only] " or "") .. (c.display and ("model " .. c.display) or (c.npc and ("creature " .. c.npc .. ", model not found yet (try /reload)") or "no model yet: target one and type /aa mtt champion " .. k))))
 		end
 	elseif low:match("^champion ") then
 		local key, second, third = rest:match("^%S+%s+(%S+)%s*(%S*)%s*(%S*)")

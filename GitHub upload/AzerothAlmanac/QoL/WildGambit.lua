@@ -5950,13 +5950,7 @@ WG.BOARDS = { { key = "Glade", name = "Forest glade" }, { key = "Ruin", name = "
 	{ key = "HallowsEnd", name = "Hallow's End" }, { key = "WinterVeil", name = "Feast of Winter Veil" } }
 WG.DEFAULT_BOARD = "Glade"
 -- the holiday on now, by the calendar (Hallow's End 18 Oct - 1 Nov, Winter Veil 16 Dec - 2 Jan)
-function WG:HolidayBoard()
-	local ok, t = pcall(date, "*t")
-	if not (ok and type(t) == "table") then return nil end
-	local m, d = t.month, t.day
-	if (m == 10 and d >= 18) or (m == 11 and d <= 1) then return "HallowsEnd" end
-	if (m == 12 and d >= 16) or (m == 1 and d <= 2) then return "WinterVeil" end
-end
+function WG:HolidayBoard() return ns.HolidayNow() end -- (the calendar check is shared: WindowUtil.lua)
 
 -- the painted board picked in Settings, fitted so its inner stone sits round the 3 x 3 grid
 function WG:ApplyBoard()
