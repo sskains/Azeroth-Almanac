@@ -16,10 +16,13 @@ local FOLLOW_RANGE = 4        -- CheckInteractDistance index: follow distance (a
 local DRIVER = "[@target,exists] show; hide"
 
 -- icons that exist in the game's spell art; the first is the default
+FB.FOOT = "Footsteps" -- (custom art, Media\Follow_Footsteps: no frame, a soft gold glow drawn in code)
 FB.icons = {
+	{ key = FB.FOOT, name = "Footsteps" },
 	{ key = "Ability_Rogue_Sprint", name = "Winged boot" },
 	{ key = "Ability_Druid_Dash", name = "Running cat" },
 }
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 
 local db
 local button
@@ -51,6 +54,7 @@ local function Refresh()
 		button.ok = ok
 		button.icon:SetDesaturated(not ok)
 		button:SetAlpha(ok and 1 or 0.5)
+		button.glow:SetShown((ok and button.foot) and true or false)
 	end
 end
 
@@ -60,6 +64,23 @@ end
 
 local function HasAtlas(name)
 	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
+end
+
+-- the mouse-over and pressed looks that go with a framed spell icon (the footsteps change them)
+local function SkinFramed(b)
+	b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	b:GetHighlightTexture():SetAlpha(1)
+	if b:GetPushedTexture() then b:GetPushedTexture():SetAlpha(1) end
+	b:GetHighlightTexture():SetTexCoord(0, 1, 0, 1)
+	if HasAtlas("UI-HUD-ActionBar-IconFrame") then
+		if HasAtlas("UI-HUD-ActionBar-IconFrame-Down") then
+			b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+			b:GetPushedTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Down")
+		end
+		if HasAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") then b:GetHighlightTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") end
+	else
+		b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+	end
 end
 
 local function Build()
@@ -77,22 +98,16 @@ local function Build()
 	b.icon:SetAllPoints()
 	b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
-	-- the game's action-button art round it, like the Healer Assist icons
-	b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	-- the game's action-button art round a spell icon, like the Healer Assist icons
 	if HasAtlas("UI-HUD-ActionBar-IconFrame") then
 		b.frameArt = b:CreateTexture(nil, "OVERLAY")
 		b.frameArt:SetAtlas("UI-HUD-ActionBar-IconFrame")
 		b.frameArt:SetAllPoints()
-		if HasAtlas("UI-HUD-ActionBar-IconFrame-Down") then
-			b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
-			b:GetPushedTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Down")
-		end
-		if HasAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") then b:GetHighlightTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") end
 	else
 		b:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
 		b.normalArt = b:GetNormalTexture()
-		b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
 	end
+	SkinFramed(b)
 	b:SetScript("OnSizeChanged", function(self, w)
 		if self.normalArt then
 			self.normalArt:ClearAllPoints()
@@ -100,6 +115,25 @@ local function Build()
 			self.normalArt:SetSize(w * 1.8, w * 1.8)
 		end
 	end)
+
+	-- the footsteps' glow: a soft gold light behind them, breathing slowly, brighter under the mouse
+	b.glow = b:CreateTexture(nil, "BACKGROUND")
+	b.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	b.glow:SetBlendMode("ADD")
+	b.glow:SetVertexColor(1, 0.8, 0.3)
+	b.glow:SetPoint("CENTER")
+	b.glow:Hide()
+	local t = 0
+	b:HookScript("OnUpdate", function(self, dt)
+		if not self.foot then return end
+		t = t + dt
+		local w = self:GetWidth()
+		local pulse = 0.5 + 0.5 * math.sin(t * 2.2)
+		self.glow:SetSize(w * (2.0 + pulse * 0.25), w * (2.0 + pulse * 0.25))
+		self.glow:SetAlpha((self:IsMouseOver() and 0.95 or 0.5) * (0.75 + pulse * 0.25))
+	end)
+	b:HookScript("OnMouseDown", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, -1) end end)
+	b:HookScript("OnMouseUp", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, 0) end end)
 
 	b:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
@@ -126,7 +160,30 @@ local function Apply()
 	button:SetSize(db.size, db.size)
 	button:ClearAllPoints()
 	button:SetPoint("TOPRIGHT", TargetFrame or UIParent, "TOPRIGHT", db.x, db.y)
-	button.icon:SetTexture("Interface\\Icons\\" .. (db.icon or FB.icons[1].key))
+	local key = db.icon
+	if key == nil or key == "Ability_Rogue_Sprint" then key = FB.FOOT end -- (the old default gives way to the footsteps; the boot is still a choice by picking it again)
+	button.foot = key == FB.FOOT
+	button.icon:ClearAllPoints()
+	if button.foot then
+		-- no frame: the prints themselves, a little larger than the framed icons so they read
+		button.icon:SetTexture(MEDIA .. "Follow_Footsteps")
+		button.icon:SetTexCoord(0, 1, 0, 1)
+		button.icon:SetSize(db.size * 1.3, db.size * 1.3)
+		button.icon:SetPoint("CENTER")
+		if button.frameArt then button.frameArt:Hide() end
+		if button.normalArt then button.normalArt:Hide() end
+		button:SetHighlightTexture(MEDIA .. "Follow_Footsteps", "ADD")
+		button:GetHighlightTexture():SetAlpha(0.35)
+		button:SetPushedTexture(MEDIA .. "Follow_Footsteps")
+		button:GetPushedTexture():SetAlpha(0) -- (pressing nudges the prints instead)
+	else
+		button.icon:SetTexture("Interface\\Icons\\" .. key)
+		button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		button.icon:SetAllPoints()
+		if button.frameArt then button.frameArt:Show() end
+		if button.normalArt then button.normalArt:Show() end
+		SkinFramed(button)
+	end
 	if db.enabled then
 		RegisterStateDriver(button, "visibility", DRIVER)
 	else

@@ -6,6 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Follow button: footsteps** (Asia): the button is now a pair of gold footprints with no frame, a soft gold glow that breathes (brighter under the mouse) and a small press nudge; it greys and loses the glow when the target can't be followed. New texture `Follow_Footsteps.tga` (full game restart). The footsteps are the new default icon (it replaces the old default, the winged boot, which stays a choice in Settings > Follow button > Icon).
 - **Follow button stays behind windows** (Asia): the button on the target frame now sits on the target frame's own layer instead of above everything, so the Almanac, the games, the bags and other windows cover it.
 
 ## 0.66.3

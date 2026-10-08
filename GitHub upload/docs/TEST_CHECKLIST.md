@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] Follow button, footsteps (full game restart): target a friendly player: a pair of gold footprints at the target frame's top right, a soft glow that slowly breathes and brightens under the mouse; clicking follows and nudges the prints; a far-off or enemy target greys them and drops the glow; Settings > Follow button > Icon: Footsteps, Winged boot and Running cat all work and switch back and forth cleanly (the framed ones get their frame back), Size changes the footsteps too; Reset position works.
 - [ ] Follow button: target a friendly player, then open the Almanac, a mini game or your bags over the target frame: the window covers the button (it doesn't float on top); with the windows closed it still shows, greys out and follows as before, also in combat.
 
 ## 0.66.3 (/reload; the Murloc Tac Toe items marked "full game restart" need one)
