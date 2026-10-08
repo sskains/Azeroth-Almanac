@@ -182,8 +182,9 @@ local function DrawHit()
 	end
 	local l, r, t, bt = button:GetHitRectInsets()
 	button.hitRed:ClearAllPoints()
-	button.hitRed:SetPoint("TOPLEFT", button, "TOPLEFT", -(l or 0), (t or 0))
-	button.hitRed:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", (r or 0), -(bt or 0))
+	-- (an inset moves an edge inward when positive, outward when negative)
+	button.hitRed:SetPoint("TOPLEFT", button, "TOPLEFT", (l or 0), -(t or 0))
+	button.hitRed:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -(r or 0), (bt or 0))
 	button.hitRed:SetShown(FB.showHit and true or false)
 	button.hitBlue:SetShown(FB.showHit and true or false)
 end
