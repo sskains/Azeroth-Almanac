@@ -44,7 +44,7 @@ local function MenuItems()
 		-- the mini games under their own plate, Z to A
 		{ section = true, text = L["Mini Games"] },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit", text = L["Wild Gambit"], run = function() ns.QoL.WildGambit:Toggle() end },
-		{ icon = { "inv_chihuahuadogpet_costume_murlockgreen", "INV_Misc_Fish_02" }, text = L["Murloc Tac Toe"], run = function() ns.QoL.MurlocTacToe:Toggle() end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Icon", text = L["Murloc Tac Toe"], run = function() ns.QoL.MurlocTacToe:Toggle() end },
 		{ icon = "INV_Misc_Gem_Ruby_02", text = L["Gem Match"], run = function() ns.QoL.GemMatch:Toggle() end },
 		{ divider = true, text = "" },
 		{ icon = "INV_Misc_Gear_01", text = L["Settings"], run = function() ns.Settings:Open() end },

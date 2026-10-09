@@ -1434,7 +1434,7 @@ local PAGE_LIST = {
 		desc = L["A match-three game with Classic gems, for flights and queues."] },
 	{ id = "gambit", label = L["Wild Gambit"], icon = "INV_10_Inscription_DarkmoonCards_Wild_Earth", build = BuildGambit, aliases = { "wild", "cards" },
 		desc = L["The creature card game: your Almanac's creatures as cards."] },
-	{ id = "murloc", label = L["Murloc Tac Toe"], icon = "INV_Misc_Fish_02", build = BuildMurloc, aliases = { "mtt", "tictactoe" },
+	{ id = "murloc", label = L["Murloc Tac Toe"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Icon", build = BuildMurloc, aliases = { "mtt", "tictactoe" },
 		desc = L["Tic-tac-toe against another Azeroth Almanac player: Murlocs against Gnolls."] },
 }
 

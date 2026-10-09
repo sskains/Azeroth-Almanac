@@ -121,7 +121,7 @@ end
 local GAMES = {
 	{ key = "gambit", name = "Wild Gambit", module = "WildGambit", logo = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit",
 		pitch = "How about a hand of Wild Gambit?", tip = "Your Almanac's creatures as cards: a quick round against a nearby creature." },
-	{ key = "murloc", name = "Murloc Tac Toe", module = "MurlocTacToe", icon = "INV_Misc_Head_Murloc_01",
+	{ key = "murloc", name = "Murloc Tac Toe", module = "MurlocTacToe", icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Icon",
 		pitch = "Fancy a quick Murloc Tac Toe?", tip = "Murlocs against gnolls, three in a row. Mrglglgl!" },
 	{ key = "gem", name = "Gem Match", module = "GemMatch", icon = "INV_Misc_Gem_Ruby_02",
 		pitch = "Pass the flight with some Gem Match?", tip = "A match-three game with Classic gems. It pauses by itself in combat." },
@@ -163,8 +163,12 @@ local function GameRow(parent, onPlay)
 			b.art = b:CreateTexture(nil, "ARTWORK")
 			b.art:SetSize(26, 26)
 			b.art:SetPoint("LEFT", 2, 0)
-			b.art:SetTexture("Interface\\Icons\\" .. g.icon)
-			b.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			if g.icon:find("\\", 1, true) then
+				b.art:SetTexture(g.icon) -- (our own painted icon: whole, no border to crop)
+			else
+				b.art:SetTexture("Interface\\Icons\\" .. g.icon)
+				b.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			end
 			b.label = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 			b.label:SetPoint("LEFT", b.art, "RIGHT", 5, 0)
 			b.label:SetPoint("RIGHT", -2, 0)
