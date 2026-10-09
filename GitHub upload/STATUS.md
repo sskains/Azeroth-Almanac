@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.68.9** · 2026-10-08 · WoW Forever beta (interface 16001)
+**Version 0.69.0 (Unreleased)** · 2026-10-08 · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
@@ -31,6 +31,8 @@ Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not
 | 32 | Ctrl-click items to try them on in the dressing room, everywhere | 🧪 | 0.17.3 |
 | 37 | My Characters merged into the Characters page (tabs, name plate, list) | 🧪 | 0.18.0 |
 | 33 | My Characters profession bars in the Skills window's blue style | 🧪 | 0.17.4 |
+| 31–45 | 0.69.0: Journal rearranged (cards, Journey pane, entry list), "New" marks, Recipes and People, gathering skill and lockpicking, dungeon word art, card rework and portal swirl, painted toast and journal icons, First to find crests, heading hover | 🧪 | 0.69.0 |
+| 30 | Journey recorder (where each character walks, flights, boats, hearths, deaths) | 🧪 | 0.69.0 |
 | WG | Wild Gambit card game: practice (Easy/Normal/Hard), player matches, class spells, hidden card, guided tutorial, holiday boards, header nameplates | 🧪 | → 0.49.0 |
 
 ## Not started
