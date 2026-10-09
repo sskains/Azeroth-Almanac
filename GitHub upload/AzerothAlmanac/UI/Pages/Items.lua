@@ -267,6 +267,10 @@ local function Show(id)
 	iconButton:Show()
 	iconButton.id = id
 	iconButton.icon:SetTexture(i.icon or W.FindIcon({ "INV_Misc_QuestionMark" }))
+	-- the edge shows the item's quality: its colour and a thicker line from uncommon up, else the plain thin gold
+	local q = i.quality or rec.q
+	local qc = type(q) == "number" and q >= 2 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] or nil
+	if qc then iconButton.ring:Set(qc.r, qc.g, qc.b, true) else iconButton.ring:Set(0.62, 0.5, 0.24, false) end
 	nameText:SetText(QualityHex(i.quality or rec.q) .. (i.name or rec.name or (L["item %d"]):format(id)) .. "|r")
 	local parts = {}
 	if i.type then parts[#parts + 1] = i.type end
@@ -388,11 +392,12 @@ function page:Build(parent, header)
 	iconButton:SetPoint("TOPLEFT", 2, -2)
 	iconButton.icon = iconButton:CreateTexture(nil, "ARTWORK")
 	iconButton.icon:SetAllPoints()
-	local border = iconButton:CreateTexture(nil, "OVERLAY")
-	border:SetSize(62, 62)
-	border:SetPoint("CENTER")
-	border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+	-- (0.69.2) the icon without its rim, slightly rounded corners and a thin edge (the item's quality colour from uncommon
+	-- up), as the game's own, instead of the black quick-slot square
+	iconButton.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	iconButton.ring = W.RoundIcon(iconButton, iconButton.icon)
 	iconButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	if iconButton.ring.mask and iconButton:GetHighlightTexture().AddMaskTexture then iconButton:GetHighlightTexture():AddMaskTexture(iconButton.ring.mask) end
 	iconButton:SetScript("OnEnter", function(self)
 		if not self.id then return end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
