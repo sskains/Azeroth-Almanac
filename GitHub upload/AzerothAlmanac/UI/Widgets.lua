@@ -1784,12 +1784,18 @@ local function FillSlot(f, e)
 		f.name:ClearAllPoints()
 		f.name:SetFontObject(GameFontNormal)
 		f.name:SetText((e.color or color or "|cffffffff") .. (name or "?") .. "|r")
-		if e.note and e.note ~= "" then
-			f.name:SetPoint("TOPLEFT", f, "TOPLEFT", 40, -7)
-		else
-			f.name:SetPoint("LEFT", f, "LEFT", 40, 0)
+		-- (the text starts well clear of the icon's fade; a name too long for what is left drops to the small font)
+		local TEXT_X = 56
+		if (f.name:GetStringWidth() or 0) > (f:GetWidth() or 0) - TEXT_X - 6 then
+			f.name:SetFontObject(GameFontNormalSmall)
+			f.name:SetText((e.color or color or "|cffffffff") .. (name or "?") .. "|r")
 		end
-		f.name:SetPoint("RIGHT", -8, 0)
+		if e.note and e.note ~= "" then
+			f.name:SetPoint("TOPLEFT", f, "TOPLEFT", TEXT_X, -7)
+		else
+			f.name:SetPoint("LEFT", f, "LEFT", TEXT_X, 0)
+		end
+		f.name:SetPoint("RIGHT", -6, 0)
 		f.wash:SetShown(e.selected and true or false)
 		f.rule:SetAlpha(e.selected and 1 or 0.7)
 	else
