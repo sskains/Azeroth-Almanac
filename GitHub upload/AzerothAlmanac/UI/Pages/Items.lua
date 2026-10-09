@@ -388,10 +388,15 @@ function page:Build(parent, header)
 	iconButton:SetPoint("TOPLEFT", 2, -2)
 	iconButton.icon = iconButton:CreateTexture(nil, "ARTWORK")
 	iconButton.icon:SetAllPoints()
-	local border = iconButton:CreateTexture(nil, "OVERLAY")
-	border:SetSize(62, 62)
-	border:SetPoint("CENTER")
-	border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+	-- (0.69.2) the icon without its rim, a thin gold edge round it (as on the Recipes page) instead of the black quick-slot square
+	iconButton.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local t = iconButton:CreateTexture(nil, "OVERLAY")
+		t:SetColorTexture(0.62, 0.5, 0.24, 1)
+		t:SetPoint(e[1])
+		t:SetPoint(e[2])
+		if e[3] then t:SetHeight(1) else t:SetWidth(1) end
+	end
 	iconButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	iconButton:SetScript("OnEnter", function(self)
 		if not self.id then return end
