@@ -709,7 +709,7 @@ end
 ns:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
 	if W.waitingItems and state.tab == "dungeon" and ns.UI:IsShown() and ns.UI:Current() == "dungeons" then
 		W.waitingItems = false
-		C_Timer.After(0.2, function() if state.tab == "dungeon" then ShowView() end end)
+		C_Timer.After(0.2, function() if state.tab == "dungeon" then ns.UI:Redraw(ShowView) end end) -- (#53: keeps the scroll)
 	end
 end)
 

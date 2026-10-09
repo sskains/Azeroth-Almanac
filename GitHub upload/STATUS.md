@@ -4,6 +4,10 @@
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
+## Release
+
+Not released yet: nobody outside the two of us has the addon, so changes need no migration of players' saved data. Shannon will say when it's time to release, and the version then moves to **1.0**.
+
 ## Built
 
 | # | Area | State | Version |

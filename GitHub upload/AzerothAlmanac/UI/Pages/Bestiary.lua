@@ -990,7 +990,7 @@ ns:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
 	if (waitingItems or W.waitingItems) and shown and ns.UI:IsShown() and ns.UI:Current() == "bestiary" then
 		waitingItems = false
 		W.waitingItems = false
-		C_Timer.After(0.2, function() if shown then Show(shown, true) end end)
+		C_Timer.After(0.2, function() if shown then ns.UI:Redraw(Show, shown, true) end end) -- (#53: keeps the scroll)
 	end
 end)
 

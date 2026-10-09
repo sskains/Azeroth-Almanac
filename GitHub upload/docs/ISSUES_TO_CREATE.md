@@ -388,3 +388,45 @@ The Creatures page's left pane as cards (default) or the list, switched at the t
 ```
 Creatures (and likely Quests, Dungeons, Trainers): the right-hand detail pane jumps to the top while item names load. Keep the scroll when the same entry is redrawn (W.Detail SetBlocks). DESIGN.md section 78.
 ```
+
+### 54. Wild Gambit: cards are earned (kills and wins), the card toast
+**Labels:** `wild-gambit` `feature`
+```
+No card for seeing a creature: Fought is the first card tier; seen-only creatures show an iron ring with their 3D model ("Slay this creature to earn its card"); starter critters as Fought "Starter" cards. A new card toast that is the card itself (flip for new, crack-away for upgrades), held in combat, stacked, replacing the research toast. Friendly NPCs earn their card by Wild Gambit wins (1 / 3 / 5 / 10 / 20, from their starting tier), neutral by win or kill, enemy by kill (wins count too); the card on the People page. DESIGN.md section 79.
+```
+
+### 55. Items: cards, a Type > Slot tree, upgrade arrows
+**Labels:** `almanac` `feature`
+```
+Cards (default) or a tree like Gathering's: Show all, By kind, By quality, On my characters; dropdowns removed, back arrow, search opens matching branches. Tree by item class (Armor by type, then slot), junk folded at the bottom. "Can't use" tint. Green arrow: upgrade for you (spec from talents, stat weights, vs worn gear); gold arrow: upgrade for a same-faction alt from an unbound copy you own; tooltip names them. DESIGN.md section 80.
+```
+
+### 56. Quick fixes: Follow button, Healer Assist, Dungeons boss tab, Shift+J
+**Labels:** `almanac` `bug`
+```
+Follow button only on eligible targets. Healer Assist: more room between its icons and the name plate / health bars so the aggro count reads clearly, buttons' top level with the health bar's top; spells that can't be cast greyed out (mana, nothing to cleanse, range, cooldown). Dungeons: switching boss keeps the current tab instead of going back to Abilities. Default key Shift+J to open the Almanac, with guard rails (DESIGN.md section 83).
+```
+
+### 57. Quest giver tooltip: the quests they offer
+**Labels:** `almanac` `feature`
+```
+"! Quest name" lines on a quest giver's tooltip for the quests the Almanac has seen them offer.
+```
+
+### 58. Mini game challenge forms and the wisp Tutor
+**Labels:** `art` `feature`
+```
+Challenge requests for Wild Gambit, Murloc Tac Toe and Gem Match as proper forms with each game's logo and art. Wild Gambit's Tutor becomes a wisp (3D model, face as fallback). Needs Asia's new assets.
+```
+
+### 59. Mini games across versions
+**Labels:** `almanac` `feature`
+```
+Protocol ranges, features switched off per match (stability first), opponent's version shown before a challenge with the update quest offered, both sides told, board checksum desync guard, release rule, old-vs-new tests. DESIGN.md section 81.
+```
+
+### 60. Auction House: Alt+Right-click bag to auction
+**Labels:** `almanac` `feature`
+```
+Alt+Right-click a bag item on the Auctions tab: into the sell slot with stack and price from Auction Prices; Enter or a second Alt+Right-click posts. DESIGN.md section 82.
+```

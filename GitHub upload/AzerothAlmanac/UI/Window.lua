@@ -74,6 +74,16 @@ end
 
 function UI:Current() return current and current.key end
 
+-- (#53) redraw what's already on screen without moving the reader: the detail panes keep their
+-- scroll (W.Detail's SetBlocks honours UI.refreshing), as for the background refresh below. Used
+-- when item names arrive from the server and a page redraws the entry it shows.
+function UI:Redraw(fn, ...)
+	UI.refreshing = true
+	local ok, err = pcall(fn, ...)
+	UI.refreshing = false
+	if not ok then ns.Debug("redraw: " .. tostring(err)) end
+end
+
 -- Back: one step, to the page you came from, showing what you were looking at there. Going back
 -- uses it up (it never walks further back than the screen before).
 local previous

@@ -443,7 +443,7 @@ end
 ns:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
 	if waiting and ns.UI:IsShown() and list then
 		waiting = false
-		C_Timer.After(0.3, function() if list then page:Refresh() end end)
+		C_Timer.After(0.3, function() if list then ns.UI:Redraw(page.Refresh, page) end end) -- (#53: keeps the scroll)
 	end
 end)
 

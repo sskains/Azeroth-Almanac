@@ -857,7 +857,132 @@ The Creatures page's left pane gets the Journal's card overview (Asia's fading-i
 
 **Bug found the same day: detail pane jumps back to the top** (Creatures, likely Quests, Dungeons, Trainers)
 - Cause: these pages redraw the shown entry when item names arrive from the server (`GET_ITEM_INFO_RECEIVED`, constant while loot information loads) through their own handler, outside `UI.refreshing`, so `SetBlocks` resets the scroll.
-- Fix: the detail pane keeps its scroll whenever the same entry is redrawn; it returns to the top only when a different entry is picked. Done once in the shared pane (`W.Detail`'s `SetBlocks`), so all pages are covered. Ships on its own ahead of the redesign.
+- Fix: the detail pane keeps its scroll whenever the same entry is redrawn; it returns to the top only when a different entry is picked. Ships on its own ahead of the redesign.
+- [?] Built (Unreleased, 2026-10-09): `ns.UI:Redraw(fn, ...)` (UI/Window.lua) runs a redraw with `UI.refreshing` set, which `SetBlocks` already honours for the background refresh; the item-arrival handlers on Creatures, Quests, Dungeons, Trainers and Items use it.
+
+## 79. Wild Gambit: cards are earned, not spotted (agreed with Shannon 2026-10-09) [ ]
+Not released yet: no existing players' collections to migrate (see "Release" in `STATUS.md`).
+
+**Creatures: a card for the kill**
+- Seeing a creature still records it (Sighted stays a research tier on the Creatures page), but no longer gives a card. **Fought is the first card tier.**
+- Sighted cards stay in the code (tier 1, grey) for rare uses, but never count towards a player's deck: not on the pick table, not in the practice gambler's draw, not in hand budgets.
+- **Starter cards:** a brand-new character gets the meadow critters (rabbit, cow, chicken, gazelle, sheep) as **Fought** cards marked "Starter", so there is always a hand to play; they leave the collection as real cards come in.
+- **Not yet earned** (a creature seen but not slain): where its card would be (the Creatures page's card spot, a "Not yet earned" row in Wild Gambit's collection) an **iron-grey ring** in the style of the Characters page's portrait ring, holding the creature's **3D model**. The page header already shows its 2D face, so the ring shows the model, not the face again. The model frame sits inside the ring on a dark disc with its own transparent background, framed (camera distance) so the creature stays inside the circle. Tooltip: "Slay this creature to earn its card." No model known yet: the creature-type icon in the ring.
+- Not playable, so never on the pick table: the "Not yet earned" row works as a wanted list.
+
+**The card toast** (new style)
+- Shown when a card is earned and when a card is upgraded. The toast **is the card**: the card's own art where toasts appear, behaving like the other toasts, at the size of an enlarged card in Wild Gambit's hand (the zoom on hover), large enough to read clearly.
+- New card: it flips over from the card back. Upgrade: the old tier frame cracks away to reveal the new one, with the tier colour's burst.
+- **One toast, not two:** for a creature it replaces the Creatures page's research-tier toast.
+- **Held in combat:** card toasts wait until combat ends; several at once come as a fanned stack ("+3 cards"). Click-through, so it never blocks the game.
+- Settings: "Card toasts" on / off (off: the normal toast instead); the toasts' minimum tier setting applies.
+- Build note: the card drawing moves out of `QoL/WildGambit.lua` (at Lua's 200-locals limit) into its own file, so the toast and the Creatures / People pages can draw a card.
+
+**NPCs: a card for a win**
+- **Friendly NPCs** (your faction's guards, vendors, trainers, quest givers; today on the People page, never cards): the card comes only from **winning a game of Wild Gambit** against them.
+- **Neutral NPCs** (yellow): winning **or** killing, whichever comes first; the higher tier of the two counts.
+- **Enemy NPCs** (e.g. the other faction's guards): as creatures (the kill), and wins count too.
+- **Wins needed** (each NPC counted on its own; abandoned and called-off games never count; Easy, Normal and Hard all count for now, to revisit if it proves too easy):
+
+| Wins | Tier |
+|---|---|
+| 1 | Fought: the card is earned |
+| 3 | Hunted |
+| 5 | Master Hunter |
+| 10 | Epic Hunter |
+| 20 | Legendary Hunter |
+
+- **Starting tiers** stay as for kills (`WL.MinTier`): normal NPCs start at Fought, elites and rares (most guards) at Hunted, rare elites, bosses and world bosses (faction leaders) at Master Hunter. A card never sits below its start: a guard's first win gives Hunted, its next step at 5 wins; a leader's first win gives Master Hunter, then Epic at 10 and Legendary at 20. Nothing goes past Legendary, which is always 20 wins.
+- **The NPC plays stronger** as your card for it climbs, so each upgrade is earned.
+- **Where the card shows:** a friendly NPC's page on **People** gets its card (or the iron ring with "Win a game of Wild Gambit against them to earn their card") and a wins bar like the Creatures page's kills bar ("0 / 1 wins · 1 to Fought"). Neutral and enemy NPCs show on Creatures with both kills and wins.
+- Build notes: wins are recorded per NPC (today only practice totals); a friendly NPC's card is built from its People record (level, elite or not, type), since it has no Creatures record.
+
+## 80. Items page: cards, a tree, and upgrade arrows (agreed with Shannon 2026-10-09) [ ]
+The Items page follows the Creatures page's new pattern (section 78). The right-hand detail pane stays as it is (tooltip card, how it was found, owners, sources).
+
+**Left pane**
+- **Cards** (the default) and **List** (a tree, like Gathering's), switched at the top; the choice is remembered.
+- The Quality and "Owned now" dropdowns are **removed**: the cards replace them.
+- A card opens the tree filtered, under a title line with the back arrow ("← Items › Weapons"); Back returns to the cards.
+- Search jumps to the full tree and unfolds every branch with a match.
+- Cards in Asia's fading-icon look (section 77), each with its count and the green +N for items new since you last looked.
+
+**Card sets**
+1. **Show all**: the full tree, searchable.
+2. **By kind**: the game's own item classes (read instantly with `GetItemInfoInstant`, no server wait): Weapons, Armor, Consumables, Trade Goods, Recipes, Containers, Quest Items, Ammunition and Quivers, Keys, Miscellaneous. The card's icon is the best-quality item of that kind you've found.
+3. **By quality**: Poor to Legendary, in the quality colours; a quality appears only once you've found an item of it (natural discovery).
+4. **On my characters**: a card per character, what they carry now (the saved inventory).
+- Decided: no "By source" card set (too many sets).
+
+**The tree**
+| Branch | Under it |
+|---|---|
+| Weapons | by weapon type: one-handed swords, two-handed axes, daggers, staves, bows, guns, wands ... |
+| Armor | **by type, then slot**: Cloth / Leather / Mail / Plate / Shields / Jewelry (rings, necks, trinkets, cloaks), each split by slot (Head, Shoulders, Chest ...) |
+| Consumables | Food & Drink, Potions, Elixirs, Flasks, Scrolls, Bandages |
+| Trade Goods | Cloth, Leather, Metal & Stone, Herbs, Meat, Elemental, Parts |
+| Recipes | by profession; each row opens that recipe on the Recipes tab (no duplicate page) |
+| Containers | bags, by size |
+| Quest Items | by the quest's zone |
+| Miscellaneous / Junk | grey items folded by default, at the bottom |
+- Rows: icon, name in its quality colour, item level and required level on the right, the "New" glow. Within a branch: best quality first, then item level.
+- Every heading folds, with Fold all / Unfold all, its count and +N new, and the hover highlight.
+- Only branches with found items appear. Branches start folded and their rows are built when opened (an old account holds thousands of items).
+
+**Who can use it**
+- Items your current character can't use get the game's red tint on the slot and a "Can't use" tag: class restrictions, armor proficiency (mail at 40 for Hunters and Shamans, plate at 40 for Warriors and Paladins), weapon skills actually trained.
+- Ctrl-click still opens the dressing room.
+
+**Upgrade arrows**
+- **Green arrow**: an upgrade for the character you're on. **Gold arrow**: an upgrade for one of your other characters that the item can actually reach.
+- How an upgrade is decided, in order:
+  1. Usable (the checks above). Level requirement above the character's level: "Upgrade at 32" instead of the arrow.
+  2. The character's spec: the talent tree with the most points (the Talent Planner already reads the trees; each character's split is saved at logout). A setting overrides the role per character (e.g. a Feral druid who tanks).
+  3. A score from standard classic stat weights per spec (Fury: Strength, crit; Holy: Intellect, Spirit, healing; Protection: Stamina, Defense, Armor ...); weapons add their DPS, wands and ranged weapons theirs. Set bonuses, procs and "on use" effects get a small flat bonus, not real maths.
+  4. Compared with what the character wears (every character's equipped gear is already saved by the Inventory module). Rings, trinkets and one-handers: against the weaker of the two worn. A two-hander: against main hand and off hand together.
+- **Gold arrow rules**: only when a copy you own **is not soulbound** (in any of your characters' bags or bank) and the other character is **the same faction and realm**, so it can be mailed or traded. Bind-on-pickup items, or a copy already bound: no gold arrow, a grey tooltip line instead. Other-faction and other-realm characters never count.
+- **Tooltip** names them:
+  - "Upgrade for you (Fury): +18% · rough guide"
+  - "Upgrade for Thrall (Enhancement) · in your bank"
+  - "Also better for Jaina (Fire) if she gets her own (binds when picked up)"
+- The detail pane gets an "Upgrade for" line too.
+- Build notes: the bag and bank scan also records whether each copy is bound (asked of the game directly, no tooltip reading); talents saved per character; the stat-weight table per class and spec in a data file.
+
+## 81. Mini games across versions: compatibility and guard rails (agreed with Shannon 2026-10-09) [ ]
+Applies to Wild Gambit, Murloc Tac Toe and Gem Match.
+
+**Today**
+- Wild Gambit: protocol number on every message (`PROTO` 12 in `QoL/WildGambit.lua`); any mismatch refuses the game. Each card's stats travel with it, so balance changes can't desync a match. Its message wrongly says the whole Almanac version must match (only the protocol has to).
+- Murloc Tac Toe: protocol 1; other protocols' messages are dropped. Only the older side is told ("has a newer Murloc Tac Toe"); the newer side's challenge just hangs.
+- Gem Match: shares scores only, no protocol; safe today, unguarded for future changes.
+
+**Agreed**
+1. **A range, not one number.** Each game advertises the protocols it can still play (e.g. 11-13); two players use the highest one they share. Message handling for the last two protocols is kept.
+2. **Features gated per match.** A feature that needs a newer protocol is switched off for that match only, and said so on the pick screen (e.g. "Pick Pocket isn't available: Asia's version is older"; the class gets its previous spell). **Stability first:** only features whose old behaviour is still in the code and covered by the compatibility tests are gated this way; anything else raises the minimum protocol instead, and the match is refused as now.
+3. **Know before you challenge.** The lobby and the challenge form show the other player's version with a mark: green (same), yellow (plays, with limits), red (too old). For yellow and red, the older side is offered the **update quest** (`UI/UpdateQuest.lua`, the pretend "New Version Available" quest) to nudge them to update.
+4. **Both sides are always told.** No silent drops: the newer side hears "they need to update", the older side gets the update quest.
+5. **Desync guard.** After every move both sides compare a short checksum of the board; if they ever differ, the game is called off and nothing is counted.
+6. **Release rule.** The protocol is bumped only when the messages change, with a changelog line saying so.
+7. **Tests.** The offline tests (Python + lupa) also play an old-protocol client against the new one.
+
+## 82. Auction House: bag to auction (agreed with Shannon 2026-10-09) [ ]
+- **Alt+Right-click** a bag item while the Auction House's Auctions tab is open: it goes into the sell slot, with the stack size and a price filled in from Auction Prices (`QoL/AuctionPrices.lua`: the last scan, slightly undercut).
+- **Enter**, or Alt+Right-click the same item again, posts it (the click is the hardware event posting needs).
+- Not Shift-click (chat links, stack splitting), not Ctrl-click (the Almanac's dressing room), not plain right-click (uses or equips the item with the Auction House open). Alt+Right-click is also what most auction addons use.
+- Optional: a small "Post all of these" button when you hold several stacks of the same item.
+- Outside the Auctions tab, Alt+Right-click does nothing new.
+
+## 83. Default key to open the Almanac: Shift+J (agreed with Shannon 2026-10-09) [ ]
+The binding already exists (Key Bindings > AddOns > "Open or close the Almanac", `AZEROTHALMANAC_TOGGLE` in `Bindings.xml`) but has no key.
+- **Shift+J**: J for Journal (the Almanac opens on the Journal). Plain J is taken on WoW Forever (Guild & Communities). **Alt+A** (A for Almanac) is the fallback.
+- Ruled out: A (strafe / turn), Y, U and H (character panes on some clients), Shift+A (often mounts or macros).
+- **Guard rails:**
+  - Once only, on the first login with the Almanac, out of combat (a saved flag records that it ran).
+  - Only if the toggle has no key yet and the key is free (`GetBindingAction` empty); never overrides another binding; never re-applied after the player unbinds or changes it.
+  - Shift+J taken: Alt+A; both taken: nothing is bound.
+  - Saved to the player's current binding set (`SaveBindings(GetCurrentBindingSet())`).
+  - Says so once in chat, in the Almanac's red style: "Press Shift+J to open Azeroth Almanac (change it in Key Bindings > AddOns)."
+  - The minimap button's tooltip and the Settings page show the current key ("Open: Shift+J").
 
 ## What comes from Plus Everything
 
