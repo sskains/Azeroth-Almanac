@@ -1,15 +1,16 @@
--- Trainers page: the spells and recipes trainers have shown you, by class and profession.
--- Each class or profession starts with an overview (your characters' skill bars, the trainers
--- you've met, recipe items found); then its spells or recipes, coloured as a trainer colours them
--- for the character you're playing: green can learn now, red not yet, grey already known.
+-- Recipes page (was Spells & Recipes until 0.69.0, #41): the recipes trainers and your profession
+-- windows have shown you, by profession. Each profession starts with an overview (your characters'
+-- skill bars, the trainers you've met, recipe items found); then its recipes, coloured as a trainer
+-- colours them for the character you're playing: green can learn now, red not yet, grey learned.
+-- Class spells, weapon skills and riding are on each trainer's own page in People (Training):
+-- only what that trainer has shown you.
 
 local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
--- (0.55.0) The trainers themselves are on the People page; this is the spells and recipes they
--- teach, by class and profession.
-local page = { key = "trainers", title = L["Spells & Recipes"], icon = { "INV_Misc_Book_08", "INV_Scroll_04", "Trade_Engraving" }, order = 9 }
+-- (the page key stays "trainers", so saved tabs and links keep working)
+local page = { key = "trainers", title = L["Recipes"], icon = { "INV_Scroll_04", "INV_Misc_Book_08", "Trade_Engraving" }, order = 9 }
 local list, detail, countText, filterButton, nameText, subText, iconTex
 local filter, statusFilter = "", nil
 local shown -- { kind = "spell", id } or { kind = "group", group }
@@ -17,9 +18,6 @@ local collapsed = {}
 
 local COLOR = { now = "|cff40c040", later = "|cffe03030", known = "|cff999999", other = "|cffffffff" }
 local STATUS = { now = L["Can learn now"], later = L["Not yet"], known = L["Learned"], other = "" }
--- the profession window's skill bar art for each profession (the client names the art without spaces)
-local function Flavor(name) return (name or "Blacksmithing"):gsub("%s", "") end
-
 local function TR() return ns.Trainers end
 
 local function SpellIcon(id, rec)
@@ -177,8 +175,9 @@ local function DescribeGroup(group)
 		b[#b + 1] = { "banner", L["Your characters"] }
 		for _, r in ipairs(rows) do
 			if r.s then
-				b[#b + 1] = { "bar", ns.CharName(r.key), r.s.rank or 0, r.s.max or 1,
-					("%s %d/%d"):format(name, r.s.rank or 0, r.s.max or 0), Flavor(v) }
+				-- (0.69.0) the blue skills bar, as on the Creatures and Gathering pages and the Characters page
+				b[#b + 1] = { "skillbar", ns.CharName(r.key), r.s.rank or 0, math.max(1, r.s.max or 1),
+					("%s %d / %d"):format(name, r.s.rank or 0, r.s.max or 0) }
 				b[#b + 1] = { "small", "      " .. (L["%s known"]):format(ns.N(r.learned, "recipe", "recipes")) }
 			else
 				b[#b + 1] = { "stat", ns.CharName(r.key), (L["level %d, %s learned"]):format(r.level or 0, ns.N(r.learned, "spell", "spells")) }
@@ -272,27 +271,49 @@ local function Collect()
 	local groups, total, n = {}, 0, 0
 	local me = ns.CharKey()
 	for id, rec in pairs(ns.Store:Shown("spell")) do
-		total = total + 1
 		local g = rec.group or "other:?"
-		groups[g] = groups[g] or {}
-		local st = TR():StatusFor(me, rec, id)
-		local hit = filter == "" or (rec.name or ""):lower():find(filter, 1, true)
-		if hit and (not statusFilter or st == statusFilter) then
-			table.insert(groups[g], { id = id, rec = rec, st = st })
-			n = n + 1
+		-- (class spells, weapon skills and riding: on their trainer's page in People)
+		if TR():IsProfession(g) then
+			total = total + 1
+			groups[g] = groups[g] or {}
+			local st = TR():StatusFor(me, rec, id)
+			local hit = filter == "" or (rec.name or ""):lower():find(filter, 1, true)
+			if hit and (not statusFilter or st == statusFilter) then
+				table.insert(groups[g], { id = id, rec = rec, st = st })
+				n = n + 1
+			end
 		end
 	end
-	for _, t in pairs(ns.Store:Shown("trainer")) do if t.group then groups[t.group] = groups[t.group] or {} end end
+	for _, t in pairs(ns.Store:Shown("trainer")) do
+		if t.group and TR():IsProfession(t.group) then groups[t.group] = groups[t.group] or {} end
+	end
+	-- (0.69.0, #38) recipes found since you last looked: their own group at the top
+	local rows = {}
+	if ns.New then
+		local all = {}
+		for _, items in pairs(groups) do for _, it in ipairs(items) do all[#all + 1] = it end end
+		local new = ns.New:Split("trainers", all, function(it) return it.rec end, function(it) return it.id end)
+		if #new > 0 then
+			for g, items in pairs(groups) do
+				local keep = {}
+				for _, it in ipairs(items) do if not it.isNew then keep[#keep + 1] = it end end
+				groups[g] = keep
+			end
+			local head = ns.New:Header(#new)
+			rows[#rows + 1] = head
+			if not collapsed.new then for _, it in ipairs(new) do rows[#rows + 1] = it end end
+		end
+	end
 	local order = {}
 	for g in pairs(groups) do order[#order + 1] = g end
 	table.sort(order, function(a, b) return GroupOrder(a) < GroupOrder(b) end)
-	local rows = {}
 	for _, g in ipairs(order) do
 		local items = groups[g]
 		rows[#rows + 1] = { header = TR():GroupName(g), group = g, count = #items }
 		table.sort(items, function(a, b)
-			if (a.rec.lvl or 0) ~= (b.rec.lvl or 0) then return (a.rec.lvl or 0) < (b.rec.lvl or 0) end
+			-- (0.69.0) recipes by the skill they need first, then level
 			if (a.rec.skill or 0) ~= (b.rec.skill or 0) then return (a.rec.skill or 0) < (b.rec.skill or 0) end
+			if (a.rec.lvl or 0) ~= (b.rec.lvl or 0) then return (a.rec.lvl or 0) < (b.rec.lvl or 0) end
 			return (a.rec.name or "") < (b.rec.name or "")
 		end)
 		if not collapsed[g] then
@@ -332,17 +353,18 @@ function page:Build(parent, header)
 		collapse = { state = collapsed, key = function(r) return r.header and r.group end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
 		style = "log",   -- the Map & Quest Log look, as on Quests
-		emptyText = L["Nothing yet. Open a trainer's window: everything they teach is recorded here, and the recipes in your profession windows."],
+		emptyText = L["Nothing yet. Open a profession trainer's window, or your own profession window: every recipe you come across is recorded here. Class spells are on each trainer's page in People."],
 		update = function(row, r)
 			row.icon:ClearAllPoints()
 			row:SetHeader(r.header ~= nil, r.header and collapsed[r.group])
 			row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			if ns.New then ns.New:MarkRow(row, r.isNew, "trainers", r.newKey) end
 			if r.header then
 				row.icon:SetPoint("LEFT", 4, 0)
 				row.icon:SetTexture(nil)
 				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
 				row.text:SetText(r.header)
-				row.right:SetText("|cff999999" .. r.count .. "|r")
+				row.right:SetText(r.newHeader and "" or ("|cff999999" .. r.count .. "|r"))
 			elseif r.summary then
 				row.icon:SetPoint("LEFT", 20, 0)
 				row.icon:SetTexture(W.FindIcon(TR():IsProfession(r.group) and { "INV_Misc_Note_01" } or W.KIND.character.icon))
@@ -365,6 +387,7 @@ function page:Build(parent, header)
 			elseif r.summary then
 				Show({ kind = "group", group = r.group })
 			elseif r.id then
+				if ns.New and ns.New:Clicked("trainers", r) then list:Refresh() end
 				Show({ kind = "spell", id = r.id })
 			end
 		end,
@@ -404,20 +427,54 @@ function page:Refresh()
 	end
 	list:SetData(rows)
 	list:Select(keep)
-	countText:SetText((L["%d of %d spells and recipes"]):format(n, total))
+	countText:SetText((L["%d of %d recipes"]):format(n, total))
 	if shown then Show(shown, true) end
 end
 
+-- a trainer who teaches this (a class spell's way to People): one you've met, the latest checked first
+local function TeacherOf(rec)
+	local best, bestT
+	for npc in pairs(rec and rec.trainers or {}) do
+		local t = ns.Store:Get("trainer", npc)
+		if t and (not bestT or (t.checked or 0) > bestT) then best, bestT = npc, t.checked or 0 end
+	end
+	return best
+end
+ns.TrainerTeacherOf = TeacherOf
+
+local function ToPeople(npc)
+	local people = ns.UI:GetPage("townsfolk")
+	if npc and people and people.ShowPerson then people:ShowPerson(npc) else ns.UI:Open("townsfolk") end
+end
+
 function page:ShowGroup(group)
+	-- (0.69.0) class, weapon and riding trainers: their spells are on their People pages
+	if not TR():IsProfession(group) then return ToPeople(nil) end
 	ns.UI:Open("trainers")
 	collapsed[group] = nil
 	shown = { kind = "group", group = group }
 	self:Refresh()
 end
 
-function page:ShowSpell(id)
+-- (0.69.0, #40) opened from a profession card: that profession's recipes, every other group closed,
+-- at the top (group: "skill:<profession name>")
+function page:ShowOnly(group)
 	ns.UI:Open("trainers")
+	if list then
+		for _, r in ipairs(list:Data() or {}) do if type(r) == "table" and r.header and r.group then collapsed[r.group] = true end end
+	end
+	collapsed.new = true
+	collapsed[group] = nil
+	shown = { kind = "group", group = group }
+	self:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
+function page:ShowSpell(id)
 	local rec = ns.Store:Get("spell", id)
+	-- (0.69.0) a class spell opens the trainer who teaches it, in People
+	if rec and not TR():IsProfession(rec.group) then return ToPeople(TeacherOf(rec)) end
+	ns.UI:Open("trainers")
 	if rec and rec.group then collapsed[rec.group] = nil end
 	shown = { kind = "spell", id = id }
 	self:Refresh()

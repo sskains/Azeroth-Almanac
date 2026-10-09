@@ -316,13 +316,34 @@ end
 
 local function Collect()
 	local rows, zones, places, dungeons = {}, 0, 0, 0
+	-- (0.69.0, #38) zones and places found since you last looked: their own group at the top. A new
+	-- place leaves its zone's list for it; a new zone stays in the tree too (it holds its places).
+	local tree = ns.Places:Tree()
+	if ns.New then
+		local new = {}
+		for _, z in ipairs(tree) do
+			if Matches(z.rec) then new[#new + 1] = { kind = "newplace", place = { kind = "zone", z = z, id = z.id }, rec = z.rec, key = "z" .. tostring(z.id) } end
+			for _, sub in ipairs(z.subs) do
+				if Matches(sub.rec) then
+					new[#new + 1] = { kind = "newplace", place = { kind = "subzone", s = sub, id = sub.id }, rec = sub.rec, zoneName = z.rec.name, key = "s" .. tostring(sub.id) }
+				end
+			end
+		end
+		new = ns.New:Split("places", new, function(r) return r.rec end, function(r) return r.key end)
+		if #new > 0 then
+			rows[#rows + 1] = ns.New:Header(#new)
+			if not collapsed.new then for _, r in ipairs(new) do rows[#rows + 1] = r end end
+		end
+	end
 	-- continents, each with its zones, each with its places (the tree is sorted by continent)
 	local lastCont, contRow
-	for _, z in ipairs(ns.Places:Tree()) do
+	for _, z in ipairs(tree) do
 		zones = zones + 1
 		places = places + #z.subs
 		local subs = {}
-		for _, s in ipairs(z.subs) do if Matches(s.rec) then subs[#subs + 1] = s end end
+		for _, s in ipairs(z.subs) do
+			if Matches(s.rec) and not (ns.New and ns.New:IsNew("places", s.rec)) then subs[#subs + 1] = s end
+		end
 		if Matches(z.rec) or #subs > 0 then
 			local cont = z.rec.continent or L["Elsewhere"]
 			if cont ~= lastCont then
@@ -384,15 +405,30 @@ function page:Build(parent, header)
 	left:SetPoint("BOTTOMLEFT", 0, 0)
 	left:SetWidth(330)
 	list = W.List(left, {
-		collapse = { state = collapsed, key = function(r) return (r.kind == "zone" and r.z and r.z.id) or (r.kind == "continent" and r.key) or nil end, refresh = function() page:Refresh() end },
+		collapse = { state = collapsed, key = function(r) return (r.newHeader and "new") or (r.kind == "zone" and r.z and r.z.id) or (r.kind == "continent" and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
 		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No places yet. Every zone and place you enter is recorded here."],
 		update = function(row, r)
-			row:SetHeader(r.kind == "zone" or r.kind == "header" or r.kind == "continent", (r.kind == "zone" and collapsed[r.z.id]) or (r.kind == "continent" and collapsed[r.key]))
+			row:SetHeader(r.newHeader or r.kind == "zone" or r.kind == "header" or r.kind == "continent",
+				(r.newHeader and collapsed.new) or (r.kind == "zone" and collapsed[r.z.id]) or (r.kind == "continent" and collapsed[r.key]))
 			row.icon:ClearAllPoints()
-			if r.kind == "continent" then
+			if ns.New then ns.New:MarkRow(row, r.isNew, "places", r.newKey) end
+			if r.newHeader then
+				row.icon:SetPoint("LEFT", 4, 0)
+				row.icon:SetTexture(nil)
+				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
+				row.text:SetText("|cffffd100" .. r.header .. "|r")
+				row.right:SetText("")
+			elseif r.kind == "newplace" then
+				-- a new zone or place: its icon, its name, and (a place) the zone it's in
+				row.icon:SetPoint("LEFT", 20, 0)
+				row.icon:SetTexture(W.KindIcon(r.place.kind))
+				row.text:SetFontObject(GameFontHighlight)
+				row.text:SetText(r.rec.name or "?")
+				row.right:SetText(r.zoneName and ("|cff999999" .. r.zoneName .. "|r") or "")
+			elseif r.kind == "continent" then
 				row.icon:SetPoint("LEFT", 4, 0)
 				row.icon:SetTexture(W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }))
 				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
@@ -426,7 +462,7 @@ function page:Build(parent, header)
 				row.right:SetText("")
 			end
 		end,
-		restore = function(r) ShowRow(r) end,
+		restore = function(r) ShowRow(r.place or r) end,
 		-- hovering a place outlines it on the map shown (when it's in that zone); leaving puts back
 		-- the selected place's outline (or none for a zone)
 		onHover = function(r)
@@ -463,6 +499,15 @@ function page:Build(parent, header)
 				page:Refresh()
 				return
 			end
+			if r.newHeader then
+				collapsed.new = not collapsed.new
+				page:Refresh()
+				return
+			end
+			if r.kind == "newplace" then
+				if ns.New and ns.New:Clicked("places", r) then list:Refresh() end
+				return ShowRow(r.place)
+			end
 			if r.kind == "zone" and detail.shownZone == r.z.id and not hadFocus then
 				collapsed[r.z.id] = not collapsed[r.z.id]
 				page:Refresh()
@@ -497,12 +542,13 @@ function page:Refresh()
 	local keep
 	if sel then
 		for _, r in ipairs(rows) do
-			if r.kind == sel.kind and ((r.z and sel.z and r.z.id == sel.z.id) or (r.s and sel.s and r.s.id == sel.s.id) or (r.i and sel.i and r.i.id == sel.i.id)) then keep = r end
+			if r.kind == sel.kind and ((r.z and sel.z and r.z.id == sel.z.id) or (r.s and sel.s and r.s.id == sel.s.id) or (r.i and sel.i and r.i.id == sel.i.id)
+				or (r.place and sel.place and r.key == sel.key)) then keep = r end
 		end
 	end
 	list:SetData(rows)
 	list:Select(keep)
-	if keep then ShowRow(keep, true) end
+	if keep then ShowRow(keep.place or keep, true) end
 	countText:SetText((L["%d zones, %d places, %d dungeons"]):format(zones, places, dungeons))
 end
 

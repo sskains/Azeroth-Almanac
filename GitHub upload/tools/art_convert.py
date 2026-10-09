@@ -17,6 +17,11 @@
                                                          squares keyed out by saturation (default 128)
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
                                                          outside the ring made transparent, squared (default 256)
+  python art_convert.py parchment <frame.png> <out.tga> [W H]   (0.69.0, #33) a creature card frame on
+                                                         magenta -> only its painted parchment border (the
+                                                         card's edge to the iron frame), the inside clear; a
+                                                         gap where an ornament sat on it (the top gem) filled
+                                                         from beside it (default 256 x 512)
 
 A frame's layout (fractions of the CARD, the parchment rectangle):
   window = the magenta art window, panel = the dark text panel, band = between them,
@@ -309,6 +314,67 @@ def edge_clean(path, width=2):
     a[..., 2] -= spill
     write_tga(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), path)
 
+def parchment(src, dst, w=256, h=512, depth=34, dark=135):
+    from PIL import ImageFilter
+    im = np.asarray(Image.open(src).convert("RGB")).astype(float)
+    r, g, b = im[..., 0], im[..., 1], im[..., 2]
+    mag = (r > 200) & (g < 80) & (b > 200)
+    ys, xs = np.where(~mag)
+    c = im[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    H, W = c.shape[:2]
+    r, g, b = c[..., 0], c[..., 1], c[..., 2]
+    luma = 0.3 * r + 0.59 * g + 0.11 * b
+    outer = np.clip((np.sqrt((r - 255) ** 2 + g ** 2 + (b - 255) ** 2) - 60) / 120, 0, 1)
+    band = np.zeros((H, W), bool)
+    # from each edge inward: parchment until the first dark pixel (the iron frame)
+    def walk(coords):
+        for k, (y, x) in enumerate(coords):
+            if outer[y, x] < 0.5:
+                continue
+            if luma[y, x] < dark and k > 8:
+                break
+            band[y, x] = True
+    for y in range(H):
+        walk([(y, x) for x in range(depth)])
+        walk([(y, x) for x in range(W - 1, W - 1 - depth, -1)])
+    for x in range(W):
+        walk([(y, x) for y in range(depth)])
+        walk([(y, x) for y in range(H - 1, H - 1 - depth, -1)])
+    m = Image.fromarray((band * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.GaussianBlur(0.8))
+    a = np.asarray(m).astype(float) / 255 * outer
+    rgb = c.copy()
+    k = 1 - outer
+    for ch, mv in ((0, 255), (1, 0), (2, 255)):   # unmix the magenta at the card's edge
+        rgb[..., ch] = np.where(outer > 0.05, (c[..., ch] - k * mv) / np.maximum(outer, 0.05), c[..., ch])
+    out = np.dstack([np.clip(rgb, 0, 255), a * 255])
+    # thin places along an edge (an ornament sat there): copy the nearest full strip, corners left alone
+    L = 40
+    A = out[..., 3].copy()
+    def thick(v):
+        d = 0
+        for i in range(len(v)):
+            if v[i] > 128 or i < 3: d = i
+            else: break
+        return d
+    sides = [
+        (W, lambda i: A[:L, i], lambda i: out[:L, i].copy(), lambda i, s: out.__setitem__((slice(0, L), i), s)),
+        (W, lambda i: A[H - L:, i][::-1], lambda i: out[H - L:, i].copy(), lambda i, s: out.__setitem__((slice(H - L, H), i), s)),
+        (H, lambda i: A[i, :L], lambda i: out[i, :L].copy(), lambda i, s: out.__setitem__((i, slice(0, L)), s)),
+        (H, lambda i: A[i, W - L:][::-1], lambda i: out[i, W - L:].copy(), lambda i, s: out.__setitem__((i, slice(W - L, W)), s)),
+    ]
+    for n, line, get, put in sides:
+        ds = np.array([thick(line(i)) for i in range(n)])
+        med = np.median(ds[int(n * 0.15):int(n * 0.85)])
+        lo, hi = int(n * 0.12), int(n * 0.88)
+        good = [i for i in range(lo, hi) if ds[i] >= med - 3]
+        strips = {j: get(j) for j in good}
+        for i in [i for i in range(lo, hi) if ds[i] < med - 4]:
+            cand = [j for j in good if abs(j - i) > 8] or good
+            put(i, strips[min(cand, key=lambda j: abs(j - i))])
+    img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+    write_tga(img.resize((w, h), Image.LANCZOS), dst)
+    print(f"parchment border {W} x {H} -> {w} x {h}: sides {np.median([thick(A[y, :L]) for y in range(H)]) / W:.3f} of the width")
+
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
         frame(sys.argv[2], sys.argv[3])
@@ -322,6 +388,8 @@ if __name__ == "__main__":
         tray(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "arrow":
         arrow(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
+    elif sys.argv[1] == "parchment":
+        parchment(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "round":
         round_art(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
     else:

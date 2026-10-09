@@ -217,8 +217,14 @@ local function Card()
 	-- (0.67.2) the Almanac's parchment behind the whole frame, as on the creature cards (it shows in the
 	-- plaque and round the arch)
 	c.parch = c:CreateTexture(nil, "BACKGROUND", nil, 2)
-	c.parch:SetPoint("TOPLEFT", c, "TOPLEFT", 0.05 * CARD_W, -0.04 * CARD_H)
-	c.parch:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -0.05 * CARD_W, 0.03 * CARD_H)
+	-- (0.69.0, #33) now a parchment card round the arch, its edge the creature cards' painted border
+	-- (Media\Card_Parchment), as on the Dungeons page's cards; a sliver over the keystone
+	local rim = CARD_W * 0.055
+	c.parch:SetPoint("TOPLEFT", c, "TOPLEFT", -rim, CARD_W * 0.008)
+	c.parch:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", rim, -rim)
+	c.border = c:CreateTexture(nil, "BACKGROUND", nil, 3)
+	c.border:SetTexture(MEDIA .. "Card_Parchment")
+	c.border:SetAllPoints(c.parch)
 	local W = A.Widgets
 	if not (W and W.TryAtlas and W.TryAtlas(c.parch, "QuestDetailsBackgrounds", "QuestBG-Parchment")) then
 		c.parch:SetTexture("Interface\\QuestFrame\\QuestBG")
@@ -226,7 +232,7 @@ local function Card()
 	end
 	c.parch:SetVertexColor(0.95, 0.92, 0.88)
 	c.plaque = c:CreateTexture(nil, "BORDER")
-	c.plaque:SetColorTexture(0, 0, 0, 0) -- (only an anchor for the event's name: the parchment shows)
+	c.plaque:SetColorTexture(0, 0, 0, 0) -- (only an anchor: the dungeon's name sits on it)
 	c.plaque:SetPoint("TOPLEFT", c, "TOPLEFT", ART_L * CARD_W, -PLQ_T * CARD_H)
 	c.plaque:SetPoint("BOTTOMRIGHT", c, "TOPLEFT", ART_R * CARD_W, -PLQ_B * CARD_H)
 	c.frameArt = c:CreateTexture(nil, "ARTWORK")
@@ -260,18 +266,30 @@ local function Card()
 			tc.spill:SetAlpha(a * 0.3)
 		end
 	end)
-	c.title = Font(c, 15)
-	c.title:SetPoint("BOTTOM", c, "TOP", 0, 6)
-	c.title:SetTextColor(1, 0.92, 0.7)
-	c.event = Font(c, 12)
-	c.event:SetPoint("TOPLEFT", c.plaque, "TOPLEFT", 3, -2)
-	c.event:SetPoint("BOTTOMRIGHT", c.plaque, "BOTTOMRIGHT", -3, 2)
+	-- (0.69.0, #31 / #32) the plaque holds the dungeon's name: gold word art on a dark plate, as on the
+	-- Dungeons page's cards (the plain name when there's no word art); the event's name moves under the
+	-- card, over its rules
+	local W = A.Widgets
+	if W and W.NamePlate then
+		c.plate = W.NamePlate(c, "BORDER")
+		c.plate:SetPoint("TOPLEFT", c.plaque, "TOPLEFT", -2, 2)
+		c.plate:SetPoint("BOTTOMRIGHT", c.plaque, "BOTTOMRIGHT", 2, -2)
+	end
+	c.nameArt = c:CreateTexture(nil, "OVERLAY", nil, 1)
+	c.nameArt:SetPoint("CENTER", c.plaque, "CENTER")
+	c.nameArt:Hide()
+	c.title = Font(c, 13)
+	c.title:SetPoint("TOPLEFT", c.plaque, "TOPLEFT", 3, -2)
+	c.title:SetPoint("BOTTOMRIGHT", c.plaque, "BOTTOMRIGHT", -3, 2)
+	c.title:SetJustifyH("CENTER")
+	c.title:SetJustifyV("MIDDLE")
+	c.title:SetTextColor(1, 0.84, 0.45)
+	c.event = Font(c, 16)
+	c.event:SetPoint("TOP", c, "BOTTOM", 0, -6)
 	c.event:SetJustifyH("CENTER")
-	c.event:SetJustifyV("MIDDLE")
-	c.event:SetTextColor(0.24, 0.13, 0.04) -- (dark ink on the parchment, like the creature cards' names)
-	c.event:SetShadowOffset(0, 0)
+	c.event:SetTextColor(1, 0.92, 0.7)
 	c.rules = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	c.rules:SetPoint("TOP", c, "BOTTOM", 0, -6)
+	c.rules:SetPoint("TOP", c.event, "BOTTOM", 0, -4)
 	c.rules:SetWidth(CARD_W + 80)
 	c.rules:SetJustifyH("CENTER")
 	c.rules:SetShadowOffset(1, -1)
@@ -307,7 +325,7 @@ local function PlaceCard(c, mini)
 		c:SetPoint("CENTER", frame.board, "CENTER", 0, 24)
 		c:EnableMouse(false)
 	end
-	c.title:SetShown(not mini)
+	c.event:SetShown(not mini)
 	c.rules:SetShown(not mini)
 	c.owner:SetShown(not mini)
 	c.portal:SetShown(not mini)
@@ -335,6 +353,9 @@ local function Reveal(side, def, lasting)
 		c.art:SetTexCoord(0.14, 0.86, 0, 1)
 	end
 	c.title:SetText(def.dungeon)
+	local W = A.Widgets
+	local art = W and W.SetNameArt and W.SetNameArt(c.nameArt, def.dungeon, (ART_R - ART_L) * CARD_W - 6, (PLQ_B - PLQ_T) * CARD_H - 4)
+	c.title:SetShown(not art)
 	c.event:SetText(def.event)
 	c.rules:SetText(def.text)
 	local col = g.color[side] or d.GOLD

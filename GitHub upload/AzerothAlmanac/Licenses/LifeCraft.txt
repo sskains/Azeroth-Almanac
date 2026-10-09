@@ -1,0 +1,8 @@
+LifeCraft font
+by Eliot Truelove
+https://www.dafont.com/lifecraft.font
+Licence (as listed by dafont): donationware.
+
+Azeroth Almanac does not ship the font. tools/wordart.py renders the dungeon and raid names once, in
+LifeCraft, into Media\DungeonNames_1.tga (gold, bevelled); only those finished pictures are included.
+Thank you to the author.

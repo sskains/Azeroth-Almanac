@@ -553,10 +553,26 @@ local function Collect()
 			n = n + 1
 		end
 	end
+	-- (0.69.0, #38) quests found since you last looked: their own group at the top
+	local rows = {}
+	if ns.New then
+		local all = {}
+		for _, list in pairs(byHead) do for _, q in ipairs(list) do all[#all + 1] = q end end
+		local new = ns.New:Split("quests", all, function(q) return q.rec end, function(q) return q.qid end)
+		if #new > 0 then
+			for h, list in pairs(byHead) do
+				local keep = {}
+				for _, q in ipairs(list) do if not q.isNew then keep[#keep + 1] = q end end
+				byHead[h] = #keep > 0 and keep or nil
+			end
+			local head = ns.New:Header(#new)
+			rows[#rows + 1] = head
+			if not collapsed.new then for _, q in ipairs(new) do rows[#rows + 1] = q end end
+		end
+	end
 	local heads = {}
 	for h in pairs(byHead) do heads[#heads + 1] = h end
 	table.sort(heads)
-	local rows = {}
 	for _, h in ipairs(heads) do
 		rows[#rows + 1] = { header = h, count = #byHead[h] }
 		table.sort(byHead[h], function(a, b)
@@ -735,16 +751,17 @@ function page:Build(parent, header)
 	left:SetPoint("BOTTOMLEFT", 0, 0)
 	left:SetWidth(320)
 	list = W.List(left, {
-		collapse = { state = collapsed, key = function(r) return r.header end, refresh = function() page:Refresh() end },
+		collapse = { state = collapsed, key = function(r) return r.newHeader and "new" or r.header end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
 		spacers = false,   -- the quest log keeps its headings close
 		build = QuestRow,
 		emptyText = L["No quests yet. Every quest you're offered is recorded here, and the quests your characters have already done."],
 		update = function(row, r)
-			row:SetHeader(r.header ~= nil, r.header and collapsed[r.header])
+			row:SetHeader(r.header ~= nil, r.header and collapsed[r.newHeader and "new" or r.header])
+			if ns.New then ns.New:MarkRow(row, r.isNew, "quests", r.newKey) end
 			if r.header then
 				row.text:SetText(r.header)
-				row.right:SetText("|cff999999" .. r.count .. "|r")
+				row.right:SetText(r.newHeader and "" or ("|cff999999" .. r.count .. "|r"))
 			else
 				local s = Q():MyStatus(r.qid)
 				local mark = s == "d" and "done" or s == "x" and "abandoned" or s == "o" and "offered" or s == nil and "unknown"
@@ -758,9 +775,11 @@ function page:Build(parent, header)
 		end,
 		onClick = function(r)
 			if r.header then
-				collapsed[r.header] = not collapsed[r.header]
+				local k = r.newHeader and "new" or r.header
+				collapsed[k] = not collapsed[k]
 				page:Refresh()
 			elseif r.qid then
+				if ns.New and ns.New:Clicked("quests", r) then list:Refresh() end
 				Show(r.qid)
 			end
 		end,

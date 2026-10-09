@@ -343,7 +343,7 @@ local PAGE_ALIASES = {
 	places = "places", zones = "places", place = "places",
 	dungeons = "dungeons", dungeon = "dungeons", raids = "dungeons", raid = "dungeons", instances = "dungeons",
 	characters = "characters", chars = "characters", alts = "characters",
-	trainers = "townsfolk", trainer = "townsfolk", spells = "trainers", recipes = "trainers",
+	trainers = "townsfolk", trainer = "townsfolk", spells = "townsfolk", recipes = "trainers", recipe = "trainers", professions = "trainers",
 	gathering = "gathering", gather = "gathering", herbs = "gathering", ore = "gathering", fishing = "gathering",
 }
 
@@ -421,6 +421,9 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.Store:PrintStats()
 	elseif cmd == "minimap" then
 		ns.MinimapButton:SetShown(not ns.db.settings.minimap.show)
+	elseif cmd == "where" then
+		-- (0.69.1) what the game says about where you are (dungeons it won't name)
+		if ns.Dungeons and ns.Dungeons.Report then ns.Dungeons:Report() end
 	elseif cmd == "maptest" then
 		if ns.MapTest then ns.MapTest:Command(rest)
 		else ns.Print("The map test is a new file: exit and restart the game once to load it.") end

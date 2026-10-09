@@ -296,7 +296,8 @@ function T:ReadSkills()
 		local name, isHeader, rank, max = ns.SkillLine(i)
 		if isHeader then
 			header = name
-		elseif name and rank and (header == (TRADE_SKILLS or "Professions") or header == (SECONDARY_SKILLS and SECONDARY_SKILLS:gsub(":$", "") or "Secondary Skills") or header == "Secondary Skills") then
+		-- (0.69.0, #37) a rogue's Lockpicking too, whichever heading it sits under
+		elseif name and rank and (name == ns.L["Lockpicking"] or header == (TRADE_SKILLS or "Professions") or header == (SECONDARY_SKILLS and SECONDARY_SKILLS:gsub(":$", "") or "Secondary Skills") or header == "Secondary Skills") then
 			me.skills[name] = { rank = rank, max = max }
 		end
 	end

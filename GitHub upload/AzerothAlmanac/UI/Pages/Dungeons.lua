@@ -16,6 +16,7 @@ local filter = ""
 local countText, tabRow, pageTabs = nil, nil, {}
 local collection, scroll, content, cards = nil, nil, nil, {}
 local view, left, right, nameText, subText, subRow, subTabs = nil, nil, nil, nil, nil, nil, {}
+local nameArt -- (0.69.0, #31) the dungeon's name as word art over the header
 local maps = {} -- the floor map (one widget, the floor picker turns its pages)
 local artFrame -- the journal art, for a dungeon with no map art
 
@@ -146,11 +147,13 @@ local function Found()
 	for id, rec in pairs(ns.Store:Shown("instance")) do
 		if type(rec) == "table" and (filter == "" or (rec.name or ""):lower():find(filter, 1, true)) then
 			local lo = DG():Info(id, rec)
-			list[#list + 1] = { id = id, rec = rec, lo = lo or 99, raid = IsRaid(id, rec) }
+			list[#list + 1] = { id = id, rec = rec, lo = lo or 99, raid = IsRaid(id, rec),
+				isNew = ns.New and ns.New:IsNew("dungeons", rec) or nil }
 		end
 	end
-	-- dungeons first, then raids; each by level, then name
+	-- (0.69.0, #38) found since you last looked first; then dungeons, then raids; each by level, then name
 	table.sort(list, function(a, b)
+		if (a.isNew and 1 or 0) ~= (b.isNew and 1 or 0) then return a.isNew and true or false end
 		if (a.raid and 1 or 0) ~= (b.raid and 1 or 0) then return not a.raid end
 		if a.lo ~= b.lo then return a.lo < b.lo end
 		return (a.rec.name or "") < (b.rec.name or "")
@@ -175,10 +178,35 @@ local function LayoutCollection()
 			c.caption = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 			c.caption:SetWidth(cw + 10)
 			c.caption:SetJustifyH("CENTER")
-			c.onClick = function(self) page:ShowDungeon(self.id) end
+			c.onClick = function(self)
+				if self.isNew and ns.New then ns.New:Click("dungeons", self.id) end
+				page:ShowDungeon(self.id)
+			end
 			cards[i] = c
 		end
 		c:SetDungeon(it.id, it.rec)
+		-- (0.69.0) a gold "New" ribbon across the top of a card found since you last looked
+		if not c.newRibbon then
+			local rb = CreateFrame("Frame", nil, c)
+			rb:SetSize(cw * 0.56, 18)
+			rb:SetPoint("CENTER", c, "TOP", 0, -4)
+			rb:SetFrameLevel(c:GetFrameLevel() + 10)
+			rb.bg = rb:CreateTexture(nil, "BACKGROUND")
+			rb.bg:SetAllPoints()
+			rb.bg:SetColorTexture(0.55, 0.36, 0.06, 0.95)
+			rb.edge = rb:CreateTexture(nil, "BORDER")
+			rb.edge:SetPoint("TOPLEFT", 1, -1)
+			rb.edge:SetPoint("BOTTOMRIGHT", -1, 1)
+			rb.edge:SetColorTexture(0.86, 0.62, 0.12, 1)
+			rb.text = rb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+			rb.text:SetPoint("CENTER", 0, 0)
+			rb.text:SetText(L["New"])
+			rb.text:SetTextColor(1, 1, 1)
+			rb.text:SetShadowOffset(1, -1)
+			c.newRibbon = rb
+		end
+		c.newRibbon:SetShown(it.isNew and true or false)
+		c.isNew = it.isNew
 		local col, row = (i - 1) % COLS, math.floor((i - 1) / COLS)
 		local x = PAD + col * (cw + GAP) + cw / 2
 		local y = -(PAD + row * (ch + CAPTION + GAP) + ch / 2)
@@ -507,6 +535,8 @@ local function ShowView()
 		t:SetUsable(key == "overview" or e ~= nil)
 		t:SetActive(state.sub == key)
 	end
+	nameArt:Hide()
+	nameText:SetAlpha(1)
 	if e then
 		nameText:SetText(BossName(e))
 		local c = e.b.npc and ns.Store:Get("creature", e.b.npc)
@@ -520,6 +550,7 @@ local function ShowView()
 		subText:SetText(table.concat(bits, "  ·  "))
 	else
 		nameText:SetText(rec.name or "?")
+		if W.SetNameArt and W.SetNameArt(nameArt, rec.name, 420, 34) then nameText:SetAlpha(0) end
 		local sub = { DG():SizeText(id, rec) }
 		local lv = Levels(id, rec)
 		if lv then sub[#sub + 1] = (L["levels %s"]):format(lv) end
@@ -597,6 +628,20 @@ function page:Build(parent, header)
 	nameText:SetJustifyH("LEFT")
 	subText = right.top:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	subText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -5)
+	nameArt = right.top:CreateTexture(nil, "OVERLAY", nil, 2)
+	nameArt:SetPoint("LEFT", nameText, "LEFT", -4, 1)
+	nameArt:Hide()
+	-- (0.69.0, #45) the dungeon you're in: the portal swirls behind its name
+	local swirl = W.PortalSwirl(right.top, "BACKGROUND", 7)
+	swirl:SetSize(180, 180)   -- (0.69.1: 20% larger)
+	swirl:SetPoint("CENTER", nameText, "LEFT", 70, -6)
+	local swirlHost = CreateFrame("Frame", nil, right.top)
+	swirlHost:SetScript("OnUpdate", function(_, elapsed)
+		local rec = state.id and ns.Store:Get("instance", state.id)
+		local here = state.id and W.PortalOn() and W.IsCurrentDungeon(state.id, rec and rec.name) and state.boss == nil
+		swirl:SetWanted(here and 1 or 0)
+		swirl:Step(elapsed)
+	end)
 	-- the right pane's tabs, above it
 	subRow = CreateFrame("Frame", nil, view)
 	subRow:SetPoint("BOTTOMLEFT", right, "TOPLEFT", 10, -1)

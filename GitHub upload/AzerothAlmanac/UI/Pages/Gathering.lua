@@ -100,6 +100,14 @@ local function TopItem(rec)
 		if c > n then best, n = item, c end
 	end
 	if rec.kind == "chest" and kinds > 1 then return nil end
+	-- (#44) nothing gathered yet (a herb or vein you've only seen): what the hidden database says
+	-- comes out of it, as the map pins already do, so a sighted Peacebloom shows Peacebloom
+	if not best and rec.kind ~= "chest" and rec.ids and ns.ItemDB then
+		for id in pairs(rec.ids) do
+			local list = ns.ItemDB:ObjectLoot(id)
+			if list and list[1] then return list[1].item end
+		end
+	end
 	return best
 end
 
@@ -138,6 +146,26 @@ local function Describe(rec, isFish)
 	b[#b + 1] = { "stat", L["Kind"], k.label }
 	b[#b + 1] = { "stat", isFish and L["Catches"] or L["Gathered"], (G:Count(rec)) > 0 and ns.Times(G:Count(rec)) or L["not yet"] }
 	if (rec.sighted or 0) > 0 then b[#b + 1] = { "stat", L["Sighted"], ns.Times(rec.sighted) } end
+	-- (0.69.0, #36 / #37) the skill it needs, coloured for you (a lock: for your rogue)
+	if not isFish then
+		local need, skill, lo, rogue = G:NeedText(rec)
+		if need then
+			if rogue then
+				local r = G:CharSkill(1, rogue)
+				need = need .. "  |cff999999" .. (r and r >= lo and (L["%s can open this"]):format(ns.CharName(rogue, true)) or (L["too hard for %s yet"]):format(ns.CharName(rogue, true))) .. "|r"
+			end
+			b[#b + 1] = { "stat", skill == 1 and L["Pick the lock"] or L["Needs"], need }
+		end
+		-- picked by your rogues, and failed picks (too hard at the time)
+		if (G:PickCount(rec)) > 0 then
+			local s = rec.pickSkill and (rec.pickSkill[1] == rec.pickSkill[2] and tostring(rec.pickSkill[1]) or (rec.pickSkill[1] .. " - " .. rec.pickSkill[2]))
+			local pt = G:PickTier(rec)
+			b[#b + 1] = { "stat", L["Lock picked"], G:TierMarkup(pt, 14, "lock") .. " " .. ns.Times(G:PickCount(rec)) .. (s and ("  |cff999999" .. (L["skill %s"]):format(s) .. "|r") or "") }
+		end
+		for key, rank in pairs(rec.hard or {}) do
+			b[#b + 1] = { "stat", L["Too hard"], (L["for %s at %d"]):format(ns.CharName(key, true), rank) }
+		end
+	end
 	if rec.skill then
 		local s = rec.skill[1] == rec.skill[2] and tostring(rec.skill[1]) or (rec.skill[1] .. " - " .. rec.skill[2])
 		b[#b + 1] = { "stat", L["Your skill at the time"], s }
@@ -330,14 +358,16 @@ end
 local KINDS = {
 	{ key = nil, label = L["Everything"] },
 	{ key = "herb", label = L["Herbs"] }, { key = "ore", label = L["Ore and stone"] },
-	{ key = "chest", label = L["Chests and objects"] }, { key = "fish", label = L["Fishing"] },
-	{ key = "skin", label = L["Skinning"] },
+	{ key = "chest", label = L["Chests and objects"] }, { key = "lock", label = L["Locks"] },
+	{ key = "fish", label = L["Fishing"] }, { key = "skin", label = L["Skinning"] },
 }
 
 local function Collect()
 	local G = ns.Gathering
 	local rows, n = {}, 0
-	local groups = { herb = {}, ore = {}, chest = {}, fish = {}, skin = {} }
+	local groups = { herb = {}, ore = {}, chest = {}, lock = {}, fish = {}, skin = {} }
+	-- (0.69.0, #37) locks: shown when a rogue sees them (Almanac shows decides)
+	local locks = G.LockRogue and G:LockRogue() ~= nil
 	local function Hit(...)
 		if filter == "" then return true end
 		for i = 1, select("#", ...) do
@@ -347,7 +377,21 @@ local function Collect()
 	end
 	for name, rec in pairs(ns.Store:Shown("node")) do
 		local quest = rec.kind ~= "herb" and rec.kind ~= "ore" and ns.Gathering.OnlyQuestItems(rec.items)
-		if not quest and Hit(name) then table.insert(groups[rec.kind or "chest"] or groups.chest, { node = name, rec = rec, label = name }) end
+		if not quest and Hit(name) then
+			local key = rec.kind or "chest"
+			if locks and key == "chest" and G:Needs(rec) == 1 then key = "lock" end
+			table.insert(groups[key] or groups.chest, { node = name, rec = rec, label = name })
+		end
+	end
+	-- lockboxes you've come across (items), with the level each needs
+	if locks then
+		for item, rec in pairs(ns.Store:Shown("item")) do
+			if G:ItemLock(item) then
+				local name, q = ItemName(item)
+				local label = name or rec.name or (L["item %d"]):format(item)
+				if Hit(label) then table.insert(groups.lock, { lockbox = item, rec = rec, label = label, q = q }) end
+			end
+		end
 	end
 	for map, rec in pairs(ns.Store:Shown("fishing")) do
 		local label = rec.zone or ZoneName(map) or "?"
@@ -361,7 +405,29 @@ local function Collect()
 		if not hit then for _, src in ipairs(e.sources) do if Hit(src.rec.name) then hit = true break end end end
 		if hit then table.insert(groups.skin, { skin = item, data = e, label = label, q = q }) end
 	end
-	local order = { { "herb", L["Herbs"] }, { "ore", L["Ore and stone"] }, { "chest", L["Chests and objects"] }, { "fish", L["Fishing"] }, { "skin", L["Skinning"] } }
+	local order = { { "herb", L["Herbs"] }, { "ore", L["Ore and stone"] }, { "chest", L["Chests and objects"] }, { "lock", L["Locks"] }, { "fish", L["Fishing"] }, { "skin", L["Skinning"] } }
+	-- (0.69.0, #38) nodes and fishing waters found since you last looked: their own group at the top
+	if ns.New then
+		local all = {}
+		for _, o in ipairs(order) do
+			if o[1] ~= "skin" and (kindFilter == nil or kindFilter == o[1]) then
+				for _, e in ipairs(groups[o[1]]) do if not e.lockbox then all[#all + 1] = e end end
+			end
+		end
+		local new = ns.New:Split("gathering", all, function(e) return e.rec end, function(e) return e.node or ("fish:" .. tostring(e.fish)) end)
+		if #new > 0 then
+			for _, o in ipairs(order) do
+				local keep = {}
+				for _, e in ipairs(groups[o[1]]) do if not e.isNew then keep[#keep + 1] = e end end
+				groups[o[1]] = keep
+			end
+			rows[#rows + 1] = ns.New:Header(#new)
+			for _, e in ipairs(new) do
+				n = n + 1
+				if not collapsed.new then rows[#rows + 1] = e end
+			end
+		end
+	end
 	for _, o in ipairs(order) do
 		local key, label = o[1], o[2]
 		local g = groups[key]
@@ -417,19 +483,26 @@ function page:Build(parent, header)
 		update = function(row, r)
 			row.icon:ClearAllPoints()
 			row:SetHeader(r.header ~= nil, r.header and collapsed[r.key])
+			if ns.New then ns.New:MarkRow(row, r.isNew, "gathering", r.newKey) end
 			if r.header then
 				row.icon:SetPoint("LEFT", 4, 0)
 				row.icon:SetTexture(nil)
 				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
 				row.text:SetText(r.header)
-				row.right:SetText("|cff999999" .. r.count .. "|r")
+				row.right:SetText(r.newHeader and "" or ("|cff999999" .. r.count .. "|r"))
 				return
 			end
 			row.icon:SetPoint("LEFT", 22, 0)
 			row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 			row.text:SetFontObject(GameFontHighlight)
 			row.text:SetText(r.label)
-			if r.skin then
+			if r.lockbox then
+				row.icon:SetTexture(ItemIcon(r.lockbox) or W.FindIcon(ns.Gathering.KIND.lock.icon))
+				row.text:SetText(QualityHex(r.q) .. r.label .. "|r")
+				local G = ns.Gathering
+				local lvl, _, rank = G:ItemLock(r.lockbox), G:LockRogue()
+				row.right:SetText(G:NeedColor(lvl, rank) .. L["Lockpicking"] .. " " .. lvl .. "|r")
+			elseif r.skin then
 				row.icon:SetTexture(ItemIcon(r.skin) or W.FindIcon({ "INV_Misc_Pelt_Wolf_01" }))
 				row.text:SetText(QualityHex(r.q) .. r.label .. "|r")
 				row.right:SetText("|cff999999" .. ns.Times(r.data.n) .. "|r")
@@ -439,7 +512,8 @@ function page:Build(parent, header)
 				if icon then row.icon:SetTexture(icon) else W.SetIcon(row.icon, ns.Gathering.KIND[r.fish and "fish" or (r.rec.kind or "chest")].icon) end
 				local tier = ns.Gathering:Tier(r.rec)
 				local count = ns.Gathering:Count(r.rec) > 0 and ns.Times(ns.Gathering:Count(r.rec)) or L["sighted"]
-				row.right:SetText((tier > 1 and (ns.Gathering:TierMarkup(tier, 14, r.fish and "fish" or r.rec.kind) .. " ") or "") .. "|cff999999" .. count .. "|r")
+				local need = not r.fish and ns.Gathering:NeedText(r.rec)
+				row.right:SetText((need and (need .. "   ") or "") .. (tier > 1 and (ns.Gathering:TierMarkup(tier, 14, r.fish and "fish" or r.rec.kind) .. " ") or "") .. "|cff999999" .. count .. "|r")
 			end
 		end,
 		restore = function(r)
@@ -451,7 +525,11 @@ function page:Build(parent, header)
 				page:Refresh()
 			elseif r.skin then
 				Show({ skin = r.skin })
+			elseif r.lockbox then
+				local items = ns.UI:GetPage("items")
+				if items and items.ShowItem then items:ShowItem(r.lockbox) end
 			else
+				if ns.New and ns.New:Clicked("gathering", r) then list:Refresh() end
 				Show(r.node and { node = r.node } or { fish = r.fish })
 			end
 		end,
@@ -549,6 +627,17 @@ function page:Refresh()
 	list:Select(keep)
 	countText:SetText(ns.N(n, "entry", "entries"))
 	if shown then Show(shown) end
+end
+
+-- (0.69.0, #40) opened from a profession card: only that group open ("herb", "ore", "chest", "fish",
+-- "skin"), every kind shown, at the top
+function page:ShowOnly(key)
+	ns.UI:Open("gathering")
+	kindFilter = nil
+	if kindButton then kindButton:SetText(KindLabel()) end
+	for _, k in ipairs({ "new", "herb", "ore", "chest", "lock", "fish", "skin" }) do collapsed[k] = k ~= key or nil end
+	self:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
 end
 
 function page:ShowNode(name)

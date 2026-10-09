@@ -1,14 +1,16 @@
 -- Journal page: the adventurer's journal. Left: the timeline of everything discovered, newest
--- first, by day, across all characters (search; filters by character, kind and zone). Right: the
--- overview (what each catalogue holds, research, milestones, recent finds, who found what first),
--- for the account or one character, or the selected entry on parchment.
+-- first, by day, across all characters (search; filters by character, kind and zone). Top right
+-- (0.69.0, #35): the Journey, where you went (UI/Journey.lua). Bottom right: the overview (what each
+-- catalogue holds, research, milestones, recent finds, who found what first), for the account or one
+-- character, or the selected entry on parchment.
 
 local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
 local page = { key = "journal", title = L["Journal"], icon = ns.JOURNAL_ICON, order = 1 }
-local list, detail, search, countText, charButton, kindButton, zoneButton
+local list, detail, search, countText, charButton, kindButton, zoneButton, journey
+local large = false -- the Journey filling the right side (its Larger button)
 local filter = ""
 local charFilter, kindFilter, zoneFilter -- nil = all
 local collapsed = {}
@@ -49,44 +51,44 @@ local function Subject(e, rec)
 			note = tier and (B:TierMarkup(tier, 12) .. " " .. B.TIERS[tier]) or L["Creature"],
 			tip = L["Click to open in Creatures."], onClick = GoTo("bestiary", "ShowCreature", id) }
 	elseif k == "merchant" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("merchant"), note = rec and rec.title or L["Merchant"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("merchant"), note = rec and rec.title or L["Merchant"],
 			tip = L["Click to open in People."], onClick = GoTo("merchants", "ShowMerchant", id) }
 	elseif k == "quest" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("quest"), note = L["Quest"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("quest"), note = L["Quest"],
 			tip = L["Click to open in Quests."], onClick = GoTo("quests", "ShowQuest", id) }
 	elseif k == "zone" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("zone"), note = rec and rec.continent or L["Zone"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("zone"), note = rec and rec.continent or L["Zone"],
 			tip = L["Click to open in Places."], onClick = GoTo("places", "ShowZone", id) }
 	elseif k == "subzone" then
 		local map = rec and rec.map or tonumber(tostring(id):match("^(%d+):"))
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("subzone"), note = map and (MapName(map)) or L["Place"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("subzone"), note = map and (MapName(map)) or L["Place"],
 			tip = L["Click to open its zone in Places."], onClick = map and GoTo("places", "ShowZone", map) or nil }
 	elseif k == "instance" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("instance"), note = rec and rec.type == "raid" and L["Raid"] or L["Dungeon"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("instance"), note = rec and rec.type == "raid" and L["Raid"] or L["Dungeon"],
 			tip = L["Click to open in Dungeons."], onClick = GoTo("dungeons", "ShowDungeon", id) }
 	elseif k == "trainer" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("trainer"), note = rec and rec.title or L["Trainer"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("trainer"), note = rec and rec.title or L["Trainer"],
 			tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowPerson", id) }
 	elseif k == "spell" then
-		return { spell = id, note = L["Spell or recipe"], extra = L["Click to open in Spells & Recipes."], onClick = GoTo("trainers", "ShowSpell", id) }
+		return { spell = id, note = L["Spell or recipe"], extra = L["Click to open it: a recipe in Recipes, a class spell on its trainer's page in People."], onClick = GoTo("trainers", "ShowSpell", id) }
 	elseif k == "townsfolk" or k == "npc" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon(k), note = rec and rec.title or W.KIND[k].label,
+		return { name = rec and rec.name or e.s, icon = W.KindArt(k), note = rec and rec.title or W.KIND[k].label,
 			tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowPerson", id) }
 	elseif k == "flight" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("flight"), note = L["Flight path"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("flight"), note = L["Flight path"],
 			tip = L["Click to open in People."], onClick = GoTo("townsfolk", "ShowNode", id) }
 	elseif k == "milestone" then
 		local def = ns.Milestones and ns.Milestones.byId[id]
 		return { name = def and def.title or e.s, icon = W.FindIcon(def and def.icon or W.KIND.milestone.icon), note = L["Milestone"],
 			tip = def and def.text or nil, onClick = function() page:ShowMilestones() end }
 	elseif k == "node" then
-		return { name = rec and rec.name or e.s, icon = W.KindIcon("node"), note = L["Gathering"],
+		return { name = rec and rec.name or e.s, icon = W.KindArt("node"), note = L["Gathering"],
 			tip = L["Click to open in Gathering."], onClick = GoTo("gathering", "ShowNode", id) }
 	elseif k == "fishing" then
-		return { name = rec and (rec.zone or rec.name) or e.s, icon = W.KindIcon("fishing"), note = L["Fishing"],
+		return { name = rec and (rec.zone or rec.name) or e.s, icon = W.KindArt("fishing"), note = L["Fishing"],
 			tip = L["Click to open in Gathering."], onClick = GoTo("gathering", "ShowFishing", id) }
 	elseif k == "character" then
-		return { name = ns.CharName(id, true), icon = W.KindIcon("character"), note = L["Character"],
+		return { name = ns.CharName(id, true), icon = W.KindArt("character"), note = L["Character"],
 			tip = L["Click to open in Characters."], onClick = function() ns.UI:Open("characters") end }
 	end
 end
@@ -254,7 +256,7 @@ local function Overview()
 			end
 		end
 		if n > 0 then
-			slots[#slots + 1] = { name = c[2], icon = W.KindIcon(c[1]), count = nil,
+			slots[#slots + 1] = { name = c[2], icon = W.KindArt(c[1]), count = nil,
 				note = tostring(n) .. (new > 0 and ("  |cff1eff00+" .. new .. " " .. L["this session"] .. "|r") or ""),
 				tip = L["Click to open it."], onClick = GoTo(c[3], "Refresh") }
 		end
@@ -393,7 +395,7 @@ function page:Build(parent, header)
 	local left = W.Inset(parent)
 	left:SetPoint("TOPLEFT", 0, 0)
 	left:SetPoint("BOTTOMLEFT", 0, 0)
-	left:SetWidth(400)
+	left:SetWidth(300)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return r.header and r.day end, refresh = function() page:Refresh() end },
 		rowHeight = 26,
@@ -424,7 +426,9 @@ function page:Build(parent, header)
 				local def = ns.Milestones and ns.Milestones.byId[e.i]
 				icon = def and W.FindIcon(def.icon)
 			end
-			row.icon:SetTexture(icon or W.KindIcon(e.k))
+			icon = icon or W.KindArt(e.k)
+			row.icon:SetTexture(icon)
+			W.SetArtCoord(row.icon, icon)
 			row.text:SetText(e.s or "?")
 			row.right:SetText(ns.CharName(e.c) .. "  |cff999999" .. date("%H:%M", e.t or 0) .. "|r")
 		end,
@@ -439,6 +443,8 @@ function page:Build(parent, header)
 			if e.k == "item" and W.ItemModifiedClick(e.i) then return end
 			viewing = "entry"
 			detail:SetBlocks(Describe(e))
+			-- the Journey turns to where it happened and lights its marker
+			if journey then journey:Focus(e) end
 		end,
 	})
 	list:SetAllPoints(left)
@@ -447,9 +453,39 @@ function page:Build(parent, header)
 	detail = W.Detail(parent, nil, "painted")
 	detail:SetPainting({ "Profession-background-card-Blacksmithing", "Profession-background-card-Mining",
 		"Profession-background-card-Cooking", "Profession-background-card-Fishing", "Profession-background-card-FirstAid" }, 1)
-	detail:SetPoint("TOPLEFT", left, "TOPRIGHT", 6, 0)
-	detail:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+	-- (0.69.0, #35) the Journey on top, the details under it; Larger gives the Journey the whole side
+	journey = W.JourneyPane(parent, {
+		onPick = function(e)
+			if not e then return end
+			viewing = "entry"
+			list:Select(e)
+			detail:SetBlocks(Describe(e))
+			journey:Focus(e)
+		end,
+		onLarger = function() large = not large page:Layout() end,
+	})
+	journey:SetCharacter(charFilter)
+	page.left = left
+	page:Layout()
 	ShowView()
+end
+
+function page:Layout()
+	if not (journey and detail and self.left) then return end
+	journey:ClearAllPoints()
+	journey:SetPoint("TOPLEFT", self.left, "TOPRIGHT", 6, 0)
+	journey:SetPoint("RIGHT", journey:GetParent(), "RIGHT", 0, 0)
+	if large then
+		journey:SetPoint("BOTTOM", journey:GetParent(), "BOTTOM", 0, 0)
+		detail:Hide()
+	else
+		journey:SetHeight(360)
+		detail:ClearAllPoints()
+		detail:SetPoint("TOPLEFT", journey, "BOTTOMLEFT", 0, -6)
+		detail:SetPoint("BOTTOMRIGHT", detail:GetParent(), "BOTTOMRIGHT", 0, 0)
+		detail:Show()
+	end
+	journey:SetLarge(large)
 end
 
 function page:Refresh()
@@ -458,6 +494,7 @@ function page:Refresh()
 	list:SetData(data)
 	countText:SetText((L["%d entries"]):format(n))
 	local sel = list:Selected()
+	if journey and not journey:IsPlaying() then journey:Refresh(false) end
 	if viewing == "entry" and sel and not sel.header then detail:SetBlocks(Describe(sel)) else
 		if viewing == "entry" then viewing = "overview" end
 		ShowView()
@@ -468,6 +505,7 @@ function page:ShowOverview()
 	ns.UI:Open("journal")
 	viewing = "overview"
 	if list then list:Select(nil) end
+	if journey then journey:Focus(nil) end
 	self:Refresh()
 end
 
@@ -482,6 +520,7 @@ end
 function page:SetCharacter(key)
 	charFilter = key
 	if charButton then charButton:SetText(CharLabel()) end
+	if journey then journey:SetCharacter(key) end
 	if viewing == "entry" then viewing = "overview" end
 	if list then list:Select(nil) end
 	self:Refresh()

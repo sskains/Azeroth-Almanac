@@ -27,20 +27,26 @@ local function OnDrag()
 	UpdatePosition()
 end
 
+-- (0.69.0) "Creatures (3)": how many are new since you last looked at the page
+local function Named(text, page)
+	local n = ns.New and ns.New:Count(page) or 0
+	return n > 0 and (text .. "  |cffffd100(" .. n .. ")|r") or text
+end
+
 local function MenuItems()
 	return {
 		{ title = true, icon = ns.ICON, text = L["Azeroth Almanac"] },
 		{ icon = ns.JOURNAL_ICON, text = L["Journal"], run = function() ns.UI:Open("journal") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Places", text = L["Places"], run = function() ns.UI:Open("places") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Places", text = Named(L["Places"], "places"), run = function() ns.UI:Open("places") end },
 		{ icon = W.KIND.character.icon, portraitUnit = "player", text = L["Characters"], run = function() ns.UI:Open("characters") end },
 		-- (every page, 0.64.0)
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Creatures", text = L["Creatures"], run = function() ns.UI:Open("bestiary") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Items", text = L["Items"], run = function() ns.UI:Open("items") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Quests", text = L["Quests"], run = function() ns.UI:Open("quests") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Gathering", text = L["Gathering"], run = function() ns.UI:Open("gathering") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Dungeons", text = L["Dungeons"], run = function() ns.UI:Open("dungeons") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", text = L["People"], run = function() ns.UI:Open("townsfolk") end },
-		{ icon = { "INV_Misc_Book_08", "INV_Scroll_04" }, text = L["Spells & Recipes"], run = function() ns.UI:Open("trainers") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Creatures", text = Named(L["Creatures"], "bestiary"), run = function() ns.UI:Open("bestiary") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Items", text = Named(L["Items"], "items"), run = function() ns.UI:Open("items") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Quests", text = Named(L["Quests"], "quests"), run = function() ns.UI:Open("quests") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Gathering", text = Named(L["Gathering"], "gathering"), run = function() ns.UI:Open("gathering") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Dungeons", text = Named(L["Dungeons"], "dungeons"), run = function() ns.UI:Open("dungeons") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", text = Named(L["People"], "townsfolk"), run = function() ns.UI:Open("townsfolk") end },
+		{ icon = { "INV_Scroll_04", "INV_Misc_Book_08" }, text = Named(L["Recipes"], "trainers"), run = function() ns.UI:Open("trainers") end },
 		-- the mini games under their own plate, Z to A
 		{ section = true, text = L["Mini Games"] },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit", text = L["Wild Gambit"], run = function() ns.QoL.WildGambit:Toggle() end },

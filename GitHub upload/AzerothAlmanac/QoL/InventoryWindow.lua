@@ -48,7 +48,7 @@ local PROFESSION_ICONS = {
 	[171] = "Trade_Alchemy", [164] = "Trade_BlackSmithing", [333] = "Trade_Engraving", [202] = "Trade_Engineering",
 	[182] = "Trade_Herbalism", [165] = "Trade_LeatherWorking", [186] = "Trade_Mining", [393] = "INV_Misc_Pelt_Wolf_01",
 	[197] = "Trade_Tailoring", [185] = "INV_Misc_Food_15", [129] = "Spell_Holy_SealOfSacrifice", [356] = "Trade_Fishing",
-	[762] = "Ability_Mount_RidingHorse",
+	[762] = "Ability_Mount_RidingHorse", [633] = "Spell_Nature_MoonKey",
 }
 
 local pools = {}
@@ -673,7 +673,25 @@ local PROFESSION_ART = {
 	[197] = "Profession-overview-Card-Tailoring", [185] = "Profession-overview-card-generic-cooking",
 	[129] = "Profession-overview-card-generic-firstaid", [356] = "Profession-overview-card-generic-fishing",
 }
-local SECONDARY = { [185] = true, [129] = true, [356] = true, [762] = true }
+local SECONDARY = { [185] = true, [129] = true, [356] = true, [762] = true, [633] = true }
+-- (0.69.0, #40) where a card opens: the gathering skills their Gathering group, the rest their Recipes
+local GATHER_GROUP = { [182] = "herb", [186] = "ore", [393] = "skin", [356] = "fish", [633] = "lock" }   -- (633 Lockpicking, #37)
+local function OpenTarget(p)
+	local UI = ns.UI
+	if not (UI and p) then return end
+	if GATHER_GROUP[p.id] then
+		local g = UI:GetPage("gathering")
+		if g and g.ShowOnly then g:ShowOnly(GATHER_GROUP[p.id]) end
+	elseif p.id ~= 762 then -- (riding has no page)
+		local r = UI:GetPage("trainers")
+		if r and r.ShowOnly then r:ShowOnly("skill:" .. tostring(p.name)) end
+	end
+end
+local function CardTarget(p)
+	if not p then return nil end
+	if GATHER_GROUP[p.id] then return "Gathering" end
+	if p.id ~= 762 then return "Recipes" end
+end
 
 -- A painted card: icon, name, and the Skills window's blue rank bar along the bottom.
 local function ProfessionCard(content, p, x, y, width, height)
@@ -705,6 +723,24 @@ local function ProfessionCard(content, p, x, y, width, height)
 		f.sub:SetPoint("TOPLEFT", f.name, "BOTTOMLEFT", 0, -3)
 		f.bar = SkillBar(f, 24)
 		f.bar:SetPoint("BOTTOMLEFT", 12, 10)   -- width set per card, so the fill is right the first time
+		-- (0.69.0, #40) the card opens the profession's page: a soft highlight and a tooltip on hover
+		f.hl = f:CreateTexture(nil, "HIGHLIGHT")
+		f.hl:SetPoint("TOPLEFT", 1, -1)
+		f.hl:SetPoint("BOTTOMRIGHT", -1, 1)
+		f.hl:SetColorTexture(1, 0.82, 0.4, 0.08)
+		f:EnableMouse(true)
+		f:SetScript("OnEnter", function(self)
+			local where = CardTarget(self.prof)
+			if not where then return end
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(self.prof.name or "", 1, 0.82, 0)
+			GameTooltip:AddLine((ns.L and ns.L["Open in %s"] or "Open in %s"):format(where), 0.7, 0.7, 0.7)
+			GameTooltip:Show()
+		end)
+		f:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		f:SetScript("OnMouseUp", function(self, button)
+			if button == "LeftButton" and self:IsMouseOver() then GameTooltip:Hide() OpenTarget(self.prof) end
+		end)
 		return f
 	end))
 	card:ClearAllPoints()
@@ -715,8 +751,10 @@ local function ProfessionCard(content, p, x, y, width, height)
 	card.art:SetShown(painted and true or false)
 	card.shade:SetWidth(math.min(260, width - 2))
 	card.icon:SetTexture("Interface\\Icons\\" .. (PROFESSION_ICONS[p.id] or "INV_Misc_Book_09"))
+	card.prof = p
+	card.hl:SetShown(CardTarget(p) ~= nil)
 	card.name:SetText(p.name)
-	card.sub:SetText(SECONDARY[p.id] and "Secondary skill" or "Profession")
+	card.sub:SetText(p.id == 633 and "Class skill" or SECONDARY[p.id] and "Secondary skill" or "Profession")
 	card.bar:SetWidth(width - 24)
 	card.bar:SetRank(p.rank, p.max)
 end

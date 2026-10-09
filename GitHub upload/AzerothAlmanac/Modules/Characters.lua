@@ -52,7 +52,7 @@ ns:RegisterEvent("PLAYER_LEVEL_UP", function(_, level)
 	c.level = level
 	local text = (L["%s reached level %d in %s"]):format(c.name or "?", level, where.sub ~= "" and where.sub or where.zone or "?")
 	ns.Store:AddJournal("level", level, text, where)
-	ns:Fire("TOAST", "level", L["Level %d"]:format(level), where.zone or "", ns.Widgets and ns.Widgets.KIND.level.icon or nil,
+	ns:Fire("TOAST", "level", L["Level %d"]:format(level), where.zone or "", ns.Widgets and ns.Widgets.KindArt and ns.Widgets.KindArt("level") or nil,
 		level >= 60 and 5 or level % 10 == 0 and 3 or 2)
 	ns:Fire("CHANGED", "level")
 end)

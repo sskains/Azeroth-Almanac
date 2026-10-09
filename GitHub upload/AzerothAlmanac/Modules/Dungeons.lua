@@ -85,6 +85,75 @@ local function InstanceNow()
 	if ok and (itype == "party" or itype == "raid") and id then return id, R(name), type(maxPlayers) == "number" and maxPlayers or nil end
 end
 
+-- (0.69.0, #45) the instance you're in now (its ID), or nil
+function D:Current()
+	if run then return run.id end
+	return (InstanceNow())
+end
+
+-- a dungeon's name made comparable: lower case, no leading "the", letters and digits only
+-- ("The Hall of Thanes" and "Hall of Thanes" match)
+function D.NameKey(name)
+	if type(name) ~= "string" then return nil end
+	local k = name:lower():gsub("^the%s+", ""):gsub("[^%w]", "")
+	return k ~= "" and k or nil
+end
+
+local function Call(fn, ...)
+	if not fn then return nil end
+	local ok, a = pcall(fn, ...)
+	if ok then return ns.Readable(a) end
+end
+
+-- (0.69.1) where you are as a dungeon's name, for when the game won't give the instance ID (WoW
+-- Forever's own dungeons, such as the Hall of Thanes, come back without one): GetInstanceInfo's name
+-- while in any instance, else the zone's name; nil outside instances and dungeon zones
+function D:CurrentName()
+	local ok, name, itype = pcall(GetInstanceInfo)
+	name, itype = ok and ns.Readable(name) or nil, ok and ns.Readable(itype) or nil
+	local inside = Call(IsInInstance)
+	if (inside or (itype and itype ~= "none")) and type(name) == "string" and name ~= "" then return name end
+	-- (a dungeon the game treats as an ordinary zone: its zone name, if a known dungeon has it)
+	local zone = Call(GetRealZoneText) or Call(GetZoneText)
+	local key = D.NameKey(zone)
+	if not key then return nil end
+	for _, d in ipairs(ns.DB and ns.DB.dungeon or {}) do
+		if D.NameKey(d.name) == key then return zone end
+	end
+	for _, rec in pairs(ns.Store:All("instance")) do
+		if D.NameKey(rec.name) == key then return zone end
+	end
+end
+
+-- is this dungeon (ID, record) the one you're in? By ID, or by name when the game gives none
+function D:IsHere(id, rec)
+	local cur = self:Current()
+	if cur and id == cur then return true end
+	local key = D.NameKey(self:CurrentName())
+	return key ~= nil and key == D.NameKey(rec and rec.name)
+end
+
+-- /aa where: what the game says about where you are (for dungeons it won't name)
+function D:Report()
+	local out = {}
+	local function S(v) if v == nil then return "nil" end if ns.IsSecret(v) then return "(secret)" end return tostring(v) end
+	local r = { pcall(GetInstanceInfo) }
+	local parts = {}
+	for i = 2, 10 do parts[#parts + 1] = S(r[i]) end
+	out[#out + 1] = "GetInstanceInfo: " .. table.concat(parts, ", ")
+	local ok, a, b = pcall(IsInInstance)
+	out[#out + 1] = ("IsInInstance: %s, %s"):format(S(a), S(b))
+	out[#out + 1] = ("Zone: %s / %s / %s"):format(S(Call(GetRealZoneText)), S(Call(GetZoneText)), S(Call(GetMinimapZoneText)))
+	local map = C_Map and C_Map.GetBestMapForUnit and Call(C_Map.GetBestMapForUnit, "player")
+	local info = map and C_Map.GetMapInfo and select(2, pcall(C_Map.GetMapInfo, map))
+	out[#out + 1] = ("Map: %s (%s, type %s)"):format(S(map), type(info) == "table" and S(info.name) or "?", type(info) == "table" and S(info.mapType) or "?")
+	out[#out + 1] = ("Almanac: current instance %s, as a name %s"):format(S(self:Current()), S(self:CurrentName()))
+	local here = {}
+	for id, rec in pairs(ns.Store:Shown("instance")) do if self:IsHere(id, rec) then here[#here + 1] = (rec.name or "?") .. " (" .. tostring(id) .. ")" end end
+	out[#out + 1] = "Cards that swirl: " .. (#here > 0 and table.concat(here, ", ") or "none")
+	for _, l in ipairs(out) do ns.Print(l) end
+end
+
 function D:Check()
 	if not ns.db then return end
 	if not backfilled then pcall(D.Backfill, D) end

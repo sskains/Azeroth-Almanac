@@ -135,24 +135,24 @@ W.FONT_SMALL = function() return Font("QuestFontNormalSmall", "GameFontBlackSmal
 -- Icons are lists of candidates: some icon files don't exist on this client (INV_Misc_Map_01 shows a
 -- red X), so the first one the game can load is used, and the book icon is the last resort.
 W.KIND = {
-	zone = { label = L["Zone"], icon = { 4624629, "INV_Scroll_03", "INV_Misc_Map08" } },   -- 4624629 picked in game with /aa whatis
-	subzone = { label = L["Place"], icon = { "INV_Misc_Map02" } },
-	instance = { label = L["Dungeon"], icon = { 655958, "INV_Misc_Key_14", "INV_Misc_Key_03" } },   -- 655958 picked in game with /aa whatis
-	level = { label = L["Level"], icon = { "Spell_Holy_SurgeOfLight", "Spell_Holy_HolyBolt", "Spell_ChargePositive" } },
-	character = { label = L["Character"], icon = { "INV_Misc_GroupNeedMore", "Achievement_Character_Human_Male", "INV_Misc_Head_Human_01" } },
+	zone = { label = L["Zone"], icon = { 4624629, "INV_Scroll_03", "INV_Misc_Map08" }, art = "Tab_Places" },   -- 4624629 picked in game with /aa whatis
+	subzone = { label = L["Place"], icon = { "INV_Misc_Map02" }, art = "Tab_Places" },
+	instance = { label = L["Dungeon"], icon = { 655958, "INV_Misc_Key_14", "INV_Misc_Key_03" }, art = "Tab_Dungeons" },   -- 655958 picked in game with /aa whatis
+	level = { label = L["Level"], icon = { "Spell_Holy_SurgeOfLight", "Spell_Holy_HolyBolt", "Spell_ChargePositive" }, art = "Tab_Characters" },
+	character = { label = L["Character"], icon = { "INV_Misc_GroupNeedMore", "Achievement_Character_Human_Male", "INV_Misc_Head_Human_01" }, art = "Tab_Characters" },
 	item = { label = L["Item"], icon = { 515958, "INV_Chest_Chain_05", "INV_Misc_Bag_08" } },   -- 515958 picked in game with /aa whatis
-	merchant = { label = L["Merchant"], icon = { "INV_Misc_Coin_02", "INV_Misc_Coin_01" } },
-	creature = { label = L["Creature"], icon = { 656556, "INV_Misc_Head_Dragon_01", "Ability_Hunter_Pet_Wolf" } },   -- 656556 picked in game with /aa whatis
-	quest = { label = L["Quest"], icon = { 979575, "INV_Misc_Note_01", "INV_Letter_15" } },   -- 979575 picked in game with /aa whatis
-	npc = { label = L["Quest giver"], icon = { "INV_Misc_Head_Human_01", "Achievement_Character_Human_Male" } },
+	merchant = { label = L["Merchant"], icon = { "INV_Misc_Coin_02", "INV_Misc_Coin_01" }, art = "Tab_People" },
+	creature = { label = L["Creature"], icon = { 656556, "INV_Misc_Head_Dragon_01", "Ability_Hunter_Pet_Wolf" }, art = "Tab_Creatures" },   -- 656556 picked in game with /aa whatis
+	quest = { label = L["Quest"], icon = { 979575, "INV_Misc_Note_01", "INV_Letter_15" }, art = "Tab_Quests" },   -- 979575 picked in game with /aa whatis
+	npc = { label = L["Quest giver"], icon = { "INV_Misc_Head_Human_01", "Achievement_Character_Human_Male" }, art = "Tab_People" },
 	object = { label = L["Quest object"], icon = { "INV_Misc_Note_02", "INV_Scroll_03" } },
-	trainer = { label = L["Trainer"], icon = { "INV_Misc_Book_08", "INV_Scroll_04" } },
+	trainer = { label = L["Trainer"], icon = { "INV_Misc_Book_08", "INV_Scroll_04" }, art = "Tab_People" },
 	spell = { label = L["Spell or recipe"], icon = { "INV_Scroll_04", "INV_Misc_Book_08" } },
-	townsfolk = { label = L["People"], icon = { 8197123, "INV_Misc_Spyglass_03", "INV_Misc_Head_Human_01" } },   -- 8197123 picked in game with /aa whatis
+	townsfolk = { label = L["People"], icon = { 8197123, "INV_Misc_Spyglass_03", "INV_Misc_Head_Human_01" }, art = "Tab_People" },   -- 8197123 picked in game with /aa whatis
 	mailbox = { label = L["Mailbox"], icon = { "INV_Letter_15" } },
-	flight = { label = L["Flight path"], icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" } },
-	node = { label = L["Gathering"], icon = { 237271, "Trade_Herbalism", "INV_Misc_Herb_07" } },   -- 237271 picked in game with /aa whatis
-	fishing = { label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" } },
+	flight = { label = L["Flight path"], icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" }, art = "Tab_Places" },
+	node = { label = L["Gathering"], icon = { 237271, "Trade_Herbalism", "INV_Misc_Herb_07" }, art = "Tab_Gathering" },   -- 237271 picked in game with /aa whatis
+	fishing = { label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" }, art = "Tab_Gathering" },
 	milestone = { label = L["Milestone"], icon = { "INV_Misc_Ribbon_01", "Spell_Holy_ChampionsBond", "INV_Misc_Note_06" } },
 }
 -- creature types: the icon shown in Bestiary rows
@@ -195,6 +195,20 @@ end
 
 function W.SetIcon(texture, candidates)
 	texture:SetTexture(W.FindIcon(candidates))
+end
+
+-- the painted page art for a kind of record (toasts, journal entries, #34): its page's journal icon,
+-- or the game icon when the kind has none (items, milestones keep their own)
+function W.KindArt(kind)
+	local k = W.KIND[kind]
+	if k and k.art then return "Interface\\AddOns\\AzerothAlmanac\\Media\\" .. k.art end
+	return W.KindIcon(kind)
+end
+
+-- painted art fills its square (no game-icon border to trim): the full texture, or an icon's trimmed middle
+function W.SetArtCoord(texture, path)
+	if type(path) == "string" and path:find("AzerothAlmanac\\Media\\", 1, true) then texture:SetTexCoord(0, 1, 0, 1)
+	else texture:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 end
 
 function W.KindIcon(kind)
@@ -876,6 +890,12 @@ function W.List(parent, opts)
 		elseif opts.onClick then opts.onClick(match, nil, "LeftButton") end
 	end
 	function holder:Data() return data end
+	-- back to the first row (a page opened on one group, #40)
+	function holder:ScrollTop()
+		smoothing[scroll] = nil
+		scroll:SetVerticalScroll(0)
+		self:Refresh()
+	end
 	function holder:SetEmptyText(text) empty:SetText(text) end
 
 	scroll:HookScript("OnVerticalScroll", function() holder:Refresh() end)

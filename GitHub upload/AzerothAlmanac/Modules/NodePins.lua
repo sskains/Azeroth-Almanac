@@ -19,7 +19,7 @@ AzerothAlmanacNodePinMixin = AzerothAlmanacNodePinMixin or {}
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local RIM = { herb = { 0.35, 0.85, 0.35 }, ore = { 0.85, 0.6, 0.3 }, chest = { 1, 0.82, 0.25 } }
 local GATHER_ICON = 237271   -- the Gathering icon (picked with /aa whatis); the map and minimap buttons
-local KIND_ICON = { herb = "Interface\\Icons\\Trade_Herbalism", ore = "Interface\\Icons\\Trade_Mining", chest = 1450989 }   -- the chest icon picked with /aa whatis (file 1450989)
+local KIND_ICON = { herb = 133939, ore = "Interface\\Icons\\Trade_Mining", chest = 1450989 }   -- the chest icon picked with /aa whatis (file 1450989)
 
 local function S() return ns.db.settings.nodes end
 
@@ -107,6 +107,9 @@ local function Tooltip(owner, p)
 	GameTooltip:AddLine(p.name or "?", 1, 1, 1)
 	local k = G and G.KIND[rec.kind or "chest"]
 	if k then GameTooltip:AddLine(k.label, 0.8, 0.8, 0.8) end
+	-- (0.69.0, #36 / #37) the skill it needs, coloured for you
+	local need = ns.Gathering and ns.Gathering.NeedText and ns.Gathering:NeedText(rec)
+	if need then GameTooltip:AddLine(need) end
 	if (rec.gathered or 0) > 0 then GameTooltip:AddLine((L["Gathered %s"]):format(ns.Times(rec.gathered)), 0.6, 0.9, 0.6) end
 	if (rec.sighted or 0) > 0 then GameTooltip:AddLine((L["Sighted %s"]):format(ns.Times(rec.sighted)), 0.7, 0.7, 0.7) end
 	GameTooltip:AddLine(p.sighted and L["Sighted here."] or L["Gathered here."], 0.55, 0.55, 0.55)

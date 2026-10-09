@@ -29,17 +29,17 @@ local function TierOf(q) return math.max(1, math.min(tonumber(q) or 2, 5)) end
 
 -- what each kind of discovery says, and its icon
 local KINDS = {
-	zone = { title = L["New zone discovered"], icon = W.KIND.zone.icon },
-	subzone = { title = L["New place discovered"], icon = W.KIND.subzone.icon },
-	instance = { title = L["New dungeon discovered"], icon = W.KIND.instance.icon },
-	creature = { title = L["New creature discovered"], icon = W.KIND.creature.icon },
-	merchant = { title = L["New merchant met"], icon = W.KIND.merchant.icon },
+	zone = { title = L["New zone discovered"], icon = W.KindArt("zone") },
+	subzone = { title = L["New place discovered"], icon = W.KindArt("subzone") },
+	instance = { title = L["New dungeon discovered"], icon = W.KindArt("instance") },
+	creature = { title = L["New creature discovered"], icon = W.KindArt("creature") },
+	merchant = { title = L["New merchant met"], icon = W.KindArt("merchant") },
 	item = { title = L["Rare find"], icon = W.KIND.item.icon },
-	quest = { title = L["New quest found"], icon = W.KIND.quest.icon },
-	trainer = { title = L["New trainer met"], icon = W.KIND.trainer.icon },
-	flight = { title = L["New flight path"], icon = W.KIND.flight.icon },
-	node = { title = L["Gathered something new"], icon = W.KIND.node.icon },
-	fishing = { title = L["New fishing waters"], icon = W.KIND.fishing.icon },
+	quest = { title = L["New quest found"], icon = W.KindArt("quest") },
+	trainer = { title = L["New trainer met"], icon = W.KindArt("trainer") },
+	flight = { title = L["New flight path"], icon = W.KindArt("flight") },
+	node = { title = L["Gathered something new"], icon = W.KindArt("node") },
+	fishing = { title = L["New fishing waters"], icon = W.KindArt("fishing") },
 }
 
 -- the tier's sound: the first of its sounds the client has (PlaySound returns false when it can't)
@@ -244,7 +244,9 @@ local function Play(item)
 	ns.doing = "showing an alert"
 	local tier = TierOf(item.quality)
 	local T = TIER[tier]
-	frame.icon:SetTexture(W.FindIcon(item.icon or ns.ICON))
+	local path = W.FindIcon(item.icon or ns.ICON)
+	frame.icon:SetTexture(path)
+	W.SetArtCoord(frame.icon, path)
 	frame.seal:SetShown(item.journal and true or false)
 	frame.seal.since = item.journal and GetTime() or nil
 	SetBorder(tier)
@@ -415,11 +417,11 @@ end)
 -- /aa toast: a sample alert (and which game art it found)
 -- one of each tier
 function Toast:Test()
-	Toast:Show(L["New place discovered"], "The Dagger Hills of Westbrook Garrison", "Westfall", W.KIND.subzone.icon, 1, true, true)
-	Toast:Show(L["New zone discovered"], "Westfall", L["Eastern Kingdoms"], W.KIND.zone.icon, 2, true, true)
+	Toast:Show(L["New place discovered"], "The Dagger Hills of Westbrook Garrison", "Westfall", W.KindArt("subzone"), 1, true, true)
+	Toast:Show(L["New zone discovered"], "Westfall", L["Eastern Kingdoms"], W.KindArt("zone"), 2, true, true)
 	Toast:Show(ns.Bestiary and ns.Bestiary.TIERS[4] or L["Master Hunter"], "Riverpaw Outrunner", nil, ns.Bestiary and ns.Bestiary:TierIcon(4), 3, true)
 	Toast:Show(L["Milestone reached"], L["First elite"], nil, { "Ability_Warrior_BattleShout" }, 4, true, true)
-	Toast:Show(L["Level %d"]:format(60), "Westfall", nil, W.KIND.level.icon, 5, true, true)
+	Toast:Show(L["Level %d"]:format(60), "Westfall", nil, W.KindArt("level"), 5, true, true)
 	if frame then
 		local a = LootArt()
 		ns.Print(("toast art: background %s, border %s"):format(tostring(frame.bgAtlas), tostring(a.border or "loottoast-itemborder-*")))

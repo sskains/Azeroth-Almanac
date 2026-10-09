@@ -6,7 +6,12 @@ chance), the merchants that sell it, the quests that reward it and the objects (
 veins) that hold it. Only IDs and numbers: the game names everything once the player has met it,
 and the Almanac shows a source only after the player has met that source.
 
-Usage: python build_items.py <mangos.sqlite> <output Items.lua>
+Usage: python build_items.py <mangos.sqlite> <output Items.lua> [Lock.dbc]
+
+Lock.dbc (optional, the client's lock table; the 3.3.5 file from github.com/Torrer/TrinityCore-3.3.5-data
+holds the same Classic locks and levels) adds the skill each lock needs (0.69.0, #36 / #37):
+  ns.DB.objectLock[objectID] = { skill, level }   skill 1 Lockpicking, 2 Herbalism, 3 Mining
+  ns.DB.itemLock[itemID] = level                    lockboxes: the Lockpicking level
 
 Output:
   ns.DB.item[itemID] = { droppers, "npc:chance,npc:chance", "npc,npc", "quest,quest", "object:chance,..." }
@@ -18,7 +23,31 @@ import sqlite3, sys, datetime, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_creatures import best_rows, loot_table, lua, PATCH
 
-def main(db_path, out_path):
+# lock types (LockType.dbc) the Almanac shows: Lockpicking, Herbalism, Mining
+LOCK_SKILLS = (2, 3, 1)
+
+def read_locks(path):
+    """Lock.dbc (WDBC): id, 8 types, 8 indexes, 8 skills, 8 actions -> { lockID: { lockType: skill } }"""
+    import struct
+    b = open(path, 'rb').read()
+    magic, n, fields, size, _ = struct.unpack('<4s4I', b[:20])
+    assert magic == b'WDBC' and fields == 33, 'not a 3.3.5 / 1.12 Lock.dbc'
+    locks = {}
+    for i in range(n):
+        r = struct.unpack('<33I', b[20 + i * size:20 + i * size + 132])
+        for k in range(8):
+            if r[1 + k] == 2:   # a lock type (1 would be a key item)
+                locks.setdefault(r[0], {})[r[9 + k]] = r[17 + k]
+    return locks
+
+def lock_need(locks, lock_id):
+    req = locks.get(lock_id, {})
+    for t in LOCK_SKILLS:
+        if t in req:
+            return t, max(1, req[t])
+    return None
+
+def main(db_path, out_path, lock_path=None):
     c = sqlite3.connect(db_path)
     ct = best_rows(c, 'creature_template')
     gt = best_rows(c, 'gameobject_template')
@@ -85,10 +114,27 @@ def main(db_path, out_path):
     for obj, t in sorted(gt.items()):
         if t['type'] in (3, 25) and t['data1'] and oloot.get(t['data1']) and t['name']:
             olines.append(f"[{obj}]={lua(t['name'])},")
+    llines, ilines = [], []
+    if lock_path:
+        locks = read_locks(lock_path)
+        for obj, t in sorted(gt.items()):
+            if t['type'] == 3 and t['data1'] and oloot.get(t['data1']) and t['name']:
+                need = lock_need(locks, t['data0'])
+                if need:
+                    llines.append(f"[{obj}]={{{need[0]},{need[1]}}},")
+        for item, lock_id in c.execute("select entry, lock_id from item_template where lock_id > 0 and patch <= ? group by entry", (PATCH,)):
+            need = lock_need(locks, lock_id)
+            if need and need[0] == 1:
+                ilines.append(f"[{item}]={need[1]},")
     with open(out_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write("\n".join(header) + "\n" + "\n".join(lines) + "\n}\n")
         f.write("ns.DB.object = {\n" + "\n".join(olines) + "\n}\n")
-    print(f"{len(lines)} items written to {out_path}")
+        if llines:
+            f.write("-- the skill each lootable object needs (1 Lockpicking, 2 Herbalism, 3 Mining) and its level;\n")
+            f.write("-- lockboxes' Lockpicking level (Lock.dbc)\n")
+            f.write("ns.DB.objectLock = {\n" + "\n".join(llines) + "\n}\n")
+            f.write("ns.DB.itemLock = {\n" + "\n".join(ilines) + "\n}\n")
+    print(f"{len(lines)} items written to {out_path}" + (f"; {len(llines)} object locks, {len(ilines)} lockboxes" if llines else ""))
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)

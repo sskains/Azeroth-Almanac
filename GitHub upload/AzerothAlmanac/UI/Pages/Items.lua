@@ -104,6 +104,18 @@ local function Describe(id, rec)
 	if (i.ilvl or 0) > 0 then b[#b + 1] = { "stat", L["Item level"], tostring(i.ilvl) } end
 	if (i.minLevel or 0) > 1 then b[#b + 1] = { "stat", L["Requires level"], tostring(i.minLevel) } end
 	if (i.sell or 0) > 0 then b[#b + 1] = { "stat", L["Sells for"], ns.MoneyText(i.sell) } end
+	-- (0.69.0, #37) a lockbox: the Lockpicking it needs, for your rogue (Almanac shows decides who sees it)
+	local G = ns.Gathering
+	local lock = G and G.ItemLock and G:ItemLock(id)
+	local rogue, rank
+	if lock then rogue, rank = G:LockRogue() end
+	if rogue then
+		local text = G:NeedColor(lock, rank) .. L["Lockpicking"] .. " " .. lock .. "|r"
+		if rogue ~= ns.CharKey() then
+			text = text .. "  |cff999999" .. (rank and rank >= lock and (L["%s can open this"]):format(ns.CharName(rogue, true)) or (L["too hard for %s yet"]):format(ns.CharName(rogue, true))) .. "|r"
+		end
+		b[#b + 1] = { "stat", L["Pick the lock"], text }
+	end
 	b[#b + 1] = { "stat", L["First found"], (HOW[rec.how or ""] or L["found"]) .. ", " .. ns.CharName(rec.b) .. ", " .. ns.DateText(rec.f) }
 	local owners = ns.Items:Owners(id)
 	local parts = {}
@@ -197,7 +209,7 @@ local function Describe(id, rec)
 	local makers, uses = {}, {}
 	for sid, sp in pairs(ns.Store:Shown("spell")) do
 		local entry = function(note)
-			return { name = sp.name or "?", icon = sp.icon, note = note, tip = L["Click to open in Spells & Recipes."],
+			return { name = sp.name or "?", icon = sp.icon, note = note, tip = L["Click to open in Recipes."],
 				onClick = function() local p = ns.UI:GetPage("trainers") if p then p:ShowSpell(sid) end end }
 		end
 		if sp.made == id then makers[#makers + 1] = entry(ns.Trainers:GroupName(sp.group)) end
@@ -285,7 +297,18 @@ local function Collect()
 		if (a.rec.q or 1) ~= (b.rec.q or 1) then return (a.rec.q or 1) > (b.rec.q or 1) end
 		return (a.rec.name or "") < (b.rec.name or "")
 	end)
-	return rows, total
+	-- (0.69.0, #38) items found since you last looked come first
+	local listed = #rows
+	if ns.New then
+		local new, rest = ns.New:Split("items", rows, function(r) return r.rec end, function(r) return r.id end)
+		if #new > 0 then
+			rows = { ns.New:Header(#new) }
+			for _, r in ipairs(new) do rows[#rows + 1] = r end
+			rows[#rows + 1] = { header = (L["All items (%d)"]):format(#rest), key = "all" }
+			for _, r in ipairs(rest) do rows[#rows + 1] = r end
+		end
+	end
+	return rows, total, listed
 end
 
 local function QualityMenu(anchor)
@@ -327,6 +350,15 @@ function page:Build(parent, header)
 		rowHeight = 26,
 		emptyText = L["No items yet. Everything you loot, buy, carry or are offered is recorded here."],
 		update = function(row, r)
+			if r.header then
+				row:SetHeader(true)
+				row.icon:SetTexture(nil)
+				row.text:SetText(r.header)
+				row.right:SetText("")
+				if ns.New then ns.New:MarkRow(row, false) end
+				return
+			end
+			if ns.New then ns.New:MarkRow(row, r.isNew, "items", r.newKey) end
 			local i = Info(r.id)
 			if i.name and not r.rec.name then r.rec.name = i.name end   -- names arrive later for some items
 			if i.quality and not r.rec.q then r.rec.q = i.quality end
@@ -336,7 +368,12 @@ function page:Build(parent, header)
 			row.right:SetText("|cff999999" .. (HOW[r.rec.how or ""] or "") .. "|r")
 		end,
 		itemOf = function(r) return r.id end,
-		onClick = function(r) W.ItemModifiedClick(r.id) Show(r.id) end,
+		onClick = function(r)
+			if r.header then return end
+			W.ItemModifiedClick(r.id)
+			if ns.New and ns.New:Clicked("items", r) then list:Refresh() end
+			Show(r.id)
+		end,
 	})
 	list:SetAllPoints(left)
 
@@ -388,12 +425,12 @@ end
 
 function page:Refresh()
 	if not list then return end
-	local rows, total = Collect()
+	local rows, total, listed = Collect()
 	local keep
-	for _, r in ipairs(rows) do if r.id == shown then keep = r end end
+	for _, r in ipairs(rows) do if r.id and r.id == shown then keep = r end end
 	list:SetData(rows)
 	list:Select(keep)
-	countText:SetText((L["%d of %d items"]):format(#rows, total))
+	countText:SetText((L["%d of %d items"]):format(listed or #rows, total))
 	if shown then Show(shown) end
 end
 

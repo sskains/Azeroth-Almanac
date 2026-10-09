@@ -86,6 +86,9 @@ About 65 images in all (35 without scene variants). Minimum set: 1, 2, 5, 6, 7, 
 - [x] VS plaque and class rings (Media\Plaque_VS.tga, Ring_Class.tga, 0.37.1). [x] Board Ruin (Media\Board_Ruin.tga, 0.37.2; Settings > Board). [x] Board Tavern (Media\Board_Tavern.tga, 0.37.3).
 - [x] Logo and turn banner (Media\Logo_WildGambit.tga, Banner_Turn.tga, 0.37.8).
 - [?] Icon (docs/art_source/Icon_WildGambit.png, Gemini on magenta, 2026-10-08): three glowing cards, a gold coin, purple-flowered vines. Media\Icon_WildGambit.tga, 256 x 256: magenta keyed, the magenta-stained halo replaced by a fresh glow coloured from each card's edge, squared and centred. Replaces the 64 px logo crop.
+- [?] Dungeon names as word art (#31, 2026-10-08): Media\DungeonNames_1.tga (1024 x 1024, 31 names), made by tools/wordart.py from the LifeCraft font (not shipped; Licenses\LifeCraft.txt): gold, bevelled, dark bronze outline and shadow; raids red-gold; names over 14 letters on two lines. Coordinates in Data\DungeonNames.lua. Used on the Dungeons page's cards and header and Wild Gambit's event card.
+- [?] Card parchment border (#33, 2026-10-08): Media\Card_Parchment.tga (256 x 512), cut from docs/art_source/Frame_2_Common.png with `art_convert.py parchment` (the creature card's painted parchment edge, the inside clear, the gem's gap filled from beside it). Round the Dungeons page's cards and Wild Gambit's event card.
+- [ ] Dungeon name plate (#32): Plate_DungeonName (prompt in docs/PLANS_2026-10-08.md). Until it arrives the plaque is a drawn dark panel with a bronze rim (W.NamePlate).
 - [x] Scene variants: Beast, Humanoid, Undead, Critter _2 (0.37.9).
 
 ## Hero and companion cards (0.41.0)

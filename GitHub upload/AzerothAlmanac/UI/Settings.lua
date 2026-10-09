@@ -413,6 +413,10 @@ local function BuildGeneral(P)
 		function(v) Opt().window.scroll = v end)
 	P:Check(L["Smooth scrolling"], L["The mouse wheel glides lists and pages a few lines per notch. Shift + wheel jumps half a page."],
 		function() return Opt().window.smooth ~= false end, function(v) Opt().window.smooth = v end)
+	P:Check(L["Glow on new entries"], L["Entries found since you last looked at a page glow softly at the top of its list. Off: they're still listed under New, with the count on the tab, just without the glow."],
+		function() return Opt().window.newGlow ~= false end, function(v) Opt().window.newGlow = v end)
+	P:Check(L["Portal swirl on dungeons"], L["A portal opens in a dungeon card's doorway while you hover it, and swirls on the dungeon you're in (its card and its page)."],
+		function() return Opt().window.portalSwirl ~= false end, function(v) Opt().window.portalSwirl = v end)
 	P:Buttons({
 		{ L["Open the Almanac"], 160, function() ns.UI:Open() end },
 		{ L["Reset window positions"], 190, function()

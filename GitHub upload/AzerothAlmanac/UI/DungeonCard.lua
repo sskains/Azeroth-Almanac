@@ -5,6 +5,9 @@
 --   local c = ns.Widgets.DungeonCard(parent, width)
 --   c:SetDungeon(instanceID, rec)        -- art and name from the Almanac's record
 --   c.onClick = function(c) end; hovering grows it (c.grow = 1.12)
+-- (0.69.0, #45) the portal swirl (Media\FX_DungeonPortal) opens in the arch while you hover a card, and
+-- stays on the card of the dungeon you're in. W.PortalSwirl(frame) is the same swirl for anywhere else
+-- (the Dungeons page's header). Settings > General > "Portal swirl on dungeons" turns it off.
 
 local _, ns = ...
 local L = ns.L
@@ -45,8 +48,95 @@ end
 -- (0.68.4) the card's face: the Almanac's parchment, a soft drop shadow and a thin dark edge, the stone
 -- arch inside it; 0.68.5: the arch fills the card, the parchment only a thin rim round it (as the
 -- creature cards' art fills theirs), the same width on the sides and foot, a sliver at the top
-local RIM = 0.035                 -- the parchment rim, of the card's width
+local RIM = 0.05                  -- the parchment rim, of the card's width (0.69.0: the creature cards' painted
+                                  -- border, Media\Card_Parchment, cut from Frame_2_Common: 4.9% of the width)
 local RIM_TOP = 0.008             -- (0.68.6) thinner over the arch's keystone
+
+-- (0.69.0, #45) the swirl: a turning, gently pulsing portal of light (added, so the black of the art
+-- vanishes). sw:SetWanted(level): 0 hidden, 1 a hover, 1.25 brighter (you're inside); it fades there
+-- over about 0.2 s. One turn every 6 s.
+local PORTAL = MEDIA .. "FX_DungeonPortal"
+function W.PortalOn() return not (ns.db and ns.db.settings.window.portalSwirl == false) end
+
+-- the dungeon you're in, as the Dungeons module knows it: its ID, and its name as a key (0.69.1: the
+-- name too, since WoW Forever's own dungeons come back without an ID); nil outside
+local curAt, cur, curKey = -1, nil, nil
+function W.CurrentDungeon()
+	-- (asked every frame by every card: read twice a second)
+	local now = GetTime()
+	if now - curAt > 0.5 then
+		curAt = now
+		local D = ns.Dungeons
+		cur = D and D.Current and D:Current() or nil
+		curKey = D and D.CurrentName and D.NameKey(D:CurrentName()) or nil
+	end
+	return cur, curKey
+end
+
+-- is this dungeon (ID, name) the one you're in?
+function W.IsCurrentDungeon(id, name)
+	local cid, key = W.CurrentDungeon()
+	if id and cid and id == cid then return true end
+	local D = ns.Dungeons
+	return key ~= nil and D and D.NameKey and D.NameKey(name) == key or false
+end
+
+function W.PortalSwirl(parent, layer, sublevel)
+	local t = parent:CreateTexture(nil, layer or "BORDER", nil, sublevel or 3)
+	t:SetTexture(PORTAL)
+	t:SetBlendMode("ADD")
+	t:SetAlpha(0)
+	t:Hide()
+	local level, want, clock = 0, 0, math.random() * 6
+	function t:SetWanted(v) want = v or 0 if want > 0 then self:Show() end end
+	function t:Step(elapsed)
+		if level == 0 and want == 0 then return end
+		local d = want - level
+		level = math.abs(d) < 0.01 and want or level + d * math.min(1, elapsed * 10)
+		clock = clock + elapsed
+		if self.SetRotation then self:SetRotation(-clock * math.pi / 3) end
+		local pulse = 0.88 + 0.12 * math.sin(clock * 2.2)
+		self:SetAlpha(math.min(1, level * 0.8 * pulse))
+		if level == 0 then self:Hide() end
+	end
+	return t
+end
+
+-- (0.69.0, #31) a dungeon's name as word art (Data\DungeonNames.lua, made by tools/wordart.py): the
+-- texture fitted inside maxW x maxH, keeping its shape. False when that name has none (then the plain
+-- text shows).
+function W.NameArt(name) return type(name) == "string" and ns.DungeonNames and ns.DungeonNames[name:lower()] or nil end
+function W.SetNameArt(tex, name, maxW, maxH)
+	local d = W.NameArt(name)
+	if not d then tex:Hide() return false end
+	tex:SetTexture(MEDIA .. "DungeonNames_" .. d[1])
+	tex:SetTexCoord(d[2], d[3], d[4], d[5])
+	local s = math.min(maxW / d[6], maxH / d[7])
+	tex:SetSize(d[6] * s, d[7] * s)
+	tex:Show()
+	return true
+end
+
+-- (0.69.0, #32) the name plate in the plaque: a dark recessed panel with a bronze rim, so the gold
+-- word art stands out (stands in until the painted Plate_DungeonName art arrives). Returns the panel;
+-- anchor it and the rim follows.
+function W.NamePlate(parent, layer)
+	local fill = parent:CreateTexture(nil, layer or "BORDER", nil, 4)
+	fill:SetColorTexture(0.11, 0.09, 0.07, 1)
+	local shade = parent:CreateTexture(nil, layer or "BORDER", nil, 5)
+	shade:SetColorTexture(1, 1, 1, 1)
+	shade:SetGradient("VERTICAL", CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, 0.55))
+	shade:SetPoint("TOPLEFT", fill, "TOPLEFT")
+	shade:SetPoint("BOTTOMRIGHT", fill, "RIGHT")
+	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local t = parent:CreateTexture(nil, layer or "BORDER", nil, 6)
+		t:SetColorTexture(0.5, 0.37, 0.17, 1)
+		t:SetPoint(e[1], fill, e[1])
+		t:SetPoint(e[2], fill, e[2])
+		if e[3] then t:SetHeight(2) else t:SetWidth(2) end
+	end
+	return fill
+end
 
 -- a card's height for its width (the arch's shape plus the rim)
 function W.DungeonCardHeight(width)
@@ -76,6 +166,11 @@ function W.DungeonCard(parent, width)
 		c.parch:SetTexCoord(0, 0.586, 0, 0.655)
 	end
 	c.parch:SetVertexColor(0.95, 0.92, 0.88)
+	-- (0.69.0, #33) the creature cards' painted parchment border round the edge (torn, stained); the flat
+	-- parchment only fills behind the arch's top corners. Its own dark edge replaces the drawn lines.
+	c.border = c:CreateTexture(nil, "BORDER", nil, 2)
+	c.border:SetTexture(MEDIA .. "Card_Parchment")
+	c.border:SetAllPoints()
 	c.edge = {}
 	for i, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
 		local t = c:CreateTexture(nil, "BORDER", nil, 0)
@@ -83,6 +178,7 @@ function W.DungeonCard(parent, width)
 		t:SetPoint(e[1], c, e[1])
 		t:SetPoint(e[2], c, e[2])
 		if e[3] then t:SetHeight(2) else t:SetWidth(2) end
+		t:Hide() -- (0.69.0: the painted border has its own edge)
 		c.edge[i] = t
 	end
 	-- the arch, filling the card inside the rim
@@ -98,12 +194,25 @@ function W.DungeonCard(parent, width)
 	c.art:SetPoint("TOPLEFT", arch, "TOPLEFT", (ART_L - BLEED) * w, -(ART_T - BLEED) * h)
 	c.art:SetPoint("BOTTOMRIGHT", arch, "TOPLEFT", (ART_R + BLEED) * w, -(ART_B + BLEED * 0.5) * h)
 	c.artBack:SetAllPoints(c.art)
+	-- (0.69.0, #45) the portal, over the scene and under the stone, in the middle of the doorway
+	c.portal = W.PortalSwirl(arch, "BORDER", 3)
+	c.portal:SetSize(w * 0.744, w * 0.744)   -- (0.69.1: 20% larger)
+	c.portal:SetPoint("CENTER", arch, "TOPLEFT", (ART_L + ART_R) / 2 * w, -(ART_T + ART_B) / 2 * h)
 	c.frameArt = arch:CreateTexture(nil, "ARTWORK")
 	c.frameArt:SetTexture(MEDIA .. "Frame_Dungeon")
 	c.frameArt:SetAllPoints()
+	-- (0.69.0, #32) the dark name plate in the plaque's hole, under the stone
+	c.plate = W.NamePlate(arch, "BORDER")
+	c.plate:SetPoint("TOPLEFT", arch, "TOPLEFT", ART_L * w - 2, -PLQ_T * h + 2)
+	c.plate:SetPoint("BOTTOMRIGHT", arch, "TOPLEFT", ART_R * w + 2, -PLQ_B * h - 2)
+	-- (0.69.0, #31) the name as gold word art on it; the plain text when there's none
+	c.nameArt = arch:CreateTexture(nil, "OVERLAY", nil, 1)
+	c.nameArt:SetPoint("CENTER", arch, "TOPLEFT", (ART_L + ART_R) / 2 * w, -(PLQ_T + PLQ_B) / 2 * h)
+	c.nameArt:Hide()
+	c.nameBox = { (ART_R - ART_L) * w - 6, (PLQ_B - PLQ_T) * h - 4 }
 	c.name = arch:CreateFontString(nil, "OVERLAY")
 	c.name:SetFont("Fonts\\MORPHEUS.TTF", math.max(9, math.floor(w / 13)), "")
-	c.name:SetTextColor(0.24, 0.13, 0.04)
+	c.name:SetTextColor(1, 0.84, 0.45)
 	c.name:SetPoint("TOPLEFT", arch, "TOPLEFT", ART_L * w + 2, -PLQ_T * h - 1)
 	c.name:SetPoint("BOTTOMRIGHT", arch, "TOPLEFT", ART_R * w - 2, -PLQ_B * h + 1)
 	c.name:SetJustifyH("CENTER")
@@ -134,6 +243,10 @@ function W.DungeonCard(parent, width)
 			tc.spill:SetSize(size * 2.3, size * 2.3)
 			tc.spill:SetAlpha(a * 0.3)
 		end
+		-- the portal: open while hovered, always (brighter) on the dungeon you're in
+		local here = self.id and W.PortalOn() and W.IsCurrentDungeon(self.id, self.dname)
+		self.portal:SetWanted(not W.PortalOn() and 0 or here and 1.25 or self.hover and 1 or 0)
+		self.portal:Step(elapsed)
 		-- the hover grow, eased
 		if self.scaleNow ~= self.scaleWant then
 			local d = self.scaleWant - self.scaleNow
@@ -147,6 +260,7 @@ function W.DungeonCard(parent, width)
 	end)
 	c:SetScript("OnEnter", function(self)
 		self.scaleWant = self.grow
+		self.hover = true
 		self:SetFrameLevel((self.baseLevel or self:GetFrameLevel()) + 20)
 		if self.tip then
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -160,6 +274,7 @@ function W.DungeonCard(parent, width)
 	end)
 	c:SetScript("OnLeave", function(self)
 		self.scaleWant = 1
+		self.hover = false
 		if self.baseLevel then self:SetFrameLevel(self.baseLevel) end
 		GameTooltip_Hide()
 	end)
@@ -177,6 +292,9 @@ function W.DungeonCard(parent, width)
 		self.art:SetTexture(art)
 		self.art:SetTexCoord(W.DungeonArtCoords(art))
 		self.name:SetText(rec and rec.name or "?")
+		self.dname = rec and rec.name
+		local art = W.SetNameArt(self.nameArt, rec and rec.name, self.nameBox[1], self.nameBox[2])
+		self.name:SetShown(not art)
 		self.id = id
 	end
 	return c

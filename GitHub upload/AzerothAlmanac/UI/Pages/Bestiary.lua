@@ -519,7 +519,18 @@ local function Collect()
 		end
 	end
 	table.sort(rows, function(a, b) return (a.rec.name or "") < (b.rec.name or "") end)
-	return rows, total
+	-- (0.69.0, #38) creatures met since you last looked come first, then the alphabetical list
+	local listed = #rows
+	if ns.New then
+		local new, rest = ns.New:Split("bestiary", rows, function(r) return r.rec end, function(r) return r.npc end)
+		if #new > 0 then
+			rows = { ns.New:Header(#new) }
+			for _, r in ipairs(new) do rows[#rows + 1] = r end
+			rows[#rows + 1] = { header = (L["All creatures (%d)"]):format(#rest), key = "all" }
+			for _, r in ipairs(rest) do rows[#rows + 1] = r end
+		end
+	end
+	return rows, total, listed
 end
 
 local function FilterLabel()
@@ -624,6 +635,19 @@ function page:Build(parent, header)
 		round = true,
 		emptyText = L["No creatures yet. Every creature you meet is recorded here."],
 		update = function(row, r)
+			if r.header then
+				-- (0.69.0) the New group's heading, and the one over the rest of the list
+				row:SetHeader(true)
+				row.icon:SetTexture(nil)
+				row.text:SetText(r.header)
+				row.right:SetText("")
+				if type(row.tierTex) == "table" then row.tierTex:Hide() end
+				if type(row.dragon) == "table" then row.dragon:Hide() end
+				if type(row.faction) == "table" then row.faction:Hide() end
+				if ns.New then ns.New:MarkRow(row, false) end
+				return
+			end
+			if ns.New then ns.New:MarkRow(row, r.isNew, "bestiary", r.newKey) end
 			-- the creature's face once known, else its type's icon (critters and no type in grey)
 			if not B:SetFace(row.icon, r.npc, r.rec) then
 				W.SetIcon(row.icon, W.TYPE_ICON[r.rec.type or ""] or W.KIND.creature.icon)
@@ -663,7 +687,11 @@ function page:Build(parent, header)
 			row.right:SetPoint("RIGHT", row.tierTex, "LEFT", -6, 0)
 			row.right:SetText("|cff999999" .. LevelText(r.rec) .. "|r")
 		end,
-		onClick = function(r, _, mouse) if mouse and mouse ~= "LeftButton" then return end Show(r.npc) end,
+		onClick = function(r, row, mouse)
+			if r.header or (mouse and mouse ~= "LeftButton") then return end
+			if ns.New and ns.New:Clicked("bestiary", r) then list:Refresh() end
+			Show(r.npc)
+		end,
 	})
 	list:SetAllPoints(left)
 
@@ -948,12 +976,12 @@ end
 
 function page:Refresh()
 	if not list then return end
-	local rows, total = Collect()
+	local rows, total, listed = Collect()
 	local keep
-	for _, r in ipairs(rows) do if r.npc == shown then keep = r end end
+	for _, r in ipairs(rows) do if r.npc and r.npc == shown then keep = r end end
 	list:SetData(rows)
 	list:Select(keep)
-	countText:SetText((L["%d of %d"]):format(#rows, total))
+	countText:SetText((L["%d of %d"]):format(listed or #rows, total))
 	if shown then Show(shown, true) end
 end
 

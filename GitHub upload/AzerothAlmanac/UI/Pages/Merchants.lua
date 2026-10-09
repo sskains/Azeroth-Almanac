@@ -45,18 +45,31 @@ local function Describe(npc, rec)
 	return b
 end
 
--- a merchant's own blocks for their People page: your standing, the stock and its prices
+-- (0.69.0, #42) a merchant's facts for the portrait's tooltip on their People page
+function ns.MerchantFacts(npc)
+	local rec = npc and ns.Store:Get("merchant", npc)
+	if not rec then return {} end
+	return {
+		{ L["Your standing"], STANDING[rec.reaction or 0] or "?" },
+		{ L["Visits"], tostring(rec.n or 1) },
+		{ L["Stock checked"], ns.AgoText(rec.checked) },
+	}
+end
+
+-- a merchant's own blocks for their People page: the stock with its prices, under a "For sale"
+-- heading that also says your standing, your visits and when the stock was checked
 function ns.MerchantBlocks(npc)
 	local rec = npc and ns.Store:Get("merchant", npc)
 	if not rec then return nil end
 	local b = {}
 	for i, block in ipairs(Describe(npc, rec)) do
-		-- (People already has the general facts; keep standing, stock checked, visits, the stock)
-		local keep = block[1] ~= "banner" or i > 1
-		if block[1] == "stat" then
-			keep = block[2] == L["Your standing"] or block[2] == L["Stock checked"] or block[2] == L["Visits"]
+		if block[1] == "banner" and i > 1 then
+			b[#b + 1] = block
+			b[#b + 1] = { "small", NOTE .. (STANDING[rec.reaction or 0] or "?") .. "  ·  " .. ns.N(rec.n or 1, "visit", "visits")
+				.. "  ·  " .. (L["stock checked %s"]):format(ns.AgoText(rec.checked)) .. "|r" }
+		elseif block[1] ~= "stat" and block[1] ~= "banner" then
+			b[#b + 1] = block
 		end
-		if keep then b[#b + 1] = block end
 	end
 	return b
 end

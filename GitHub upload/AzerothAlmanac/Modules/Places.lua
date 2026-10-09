@@ -248,7 +248,7 @@ function Places:CheckZoneExplored(zoneName, map)
 	c.zoneDone = c.zoneDone or {}
 	if c.zoneDone[zoneName] then return end
 	c.zoneDone[zoneName] = time()
-	ns:Fire("TOAST", "milestone", L["Fully explored"], zoneName, ns.Widgets and ns.Widgets.KindIcon and ns.Widgets.KindIcon("zone") or nil, 4)
+	ns:Fire("TOAST", "milestone", L["Fully explored"], zoneName, ns.Widgets and ns.Widgets.KindArt and ns.Widgets.KindArt("zone") or nil, 4)
 	ns.Store:AddJournal("zone", map, (L["%s fully explored (%d areas)."]):format(zoneName, total), ns.Where())
 end
 

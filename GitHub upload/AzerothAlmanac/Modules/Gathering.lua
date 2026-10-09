@@ -43,13 +43,17 @@ local SPELLS = {
 }
 local SKILL = { herb = L["Herbalism"], ore = L["Mining"], fish = L["Fishing"] }
 G.KINDS = {
-	{ key = "herb", label = L["Herbs"], icon = { "Trade_Herbalism", "INV_Misc_Herb_07" }, flavor = "Herbalism" },
+	{ key = "herb", label = L["Herbs"], icon = { 133939, "Trade_Herbalism", "INV_Misc_Herb_07" }, flavor = "Herbalism" },
 	{ key = "ore", label = L["Ore and stone"], icon = { "Trade_Mining", "INV_Ore_Copper_01" }, flavor = "Mining" },
 	{ key = "chest", label = L["Chests and objects"], icon = { 1450989, 132594, "INV_Box_02" }, flavor = "Blacksmithing" },
 	{ key = "fish", label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" }, flavor = "Fishing" },
 }
 G.KIND = {}
 for _, k in ipairs(G.KINDS) do G.KIND[k.key] = k end
+-- (0.69.0, #37) locks: a group on the Gathering page and their own ranks, not a kind of node (a locked
+-- chest is still a chest)
+G.KIND.lock = { key = "lock", label = L["Locks"], icon = { 136058, "Spell_Nature_MoonKey", "INV_Misc_Key_03" }, flavor = "Lockpicking" }
+G.TRADE.lock = L["Lockpick"]
 
 local lastCast, lastKind = 0, nil
 local opened = {} -- loot already counted: [guid or "fish"] = time
@@ -293,6 +297,227 @@ function G:Contents(rec)
 	table.sort(out, function(a, b) return a.chance > b.chance end)
 	return out
 end
+
+---------------------------------------------------------------------------
+-- The skill a node needs (0.69.0, #36 / #37): from the hidden database's locks (Lock.dbc, by object
+-- ID), corrected by the game's own tooltip when it names a level (rec.need = { skill, level }: the
+-- game wins). skill: 1 Lockpicking, 2 Herbalism, 3 Mining.
+---------------------------------------------------------------------------
+
+G.NEED_SKILL = { [1] = L["Lockpicking"], [2] = L["Herbalism"], [3] = L["Mining"] }
+local byName -- [object name] = { skill, lo, hi } over every object ID with that name
+
+local function NameIndex()
+	if byName then return byName end
+	byName = {}
+	local names, locks = ns.DB and ns.DB.object or {}, ns.DB and ns.DB.objectLock or {}
+	for id, need in pairs(locks) do
+		local name = names[id]
+		if name then
+			local e = byName[name]
+			if not e then byName[name] = { need[1], need[2], need[2] }
+			elseif e[1] == need[1] then e[2], e[3] = math.min(e[2], need[2]), math.max(e[3], need[2]) end
+		end
+	end
+	return byName
+end
+
+-- the skill and level a node needs: skill, lo, hi (lo ~= hi when objects of that name differ), or nil
+function G:Needs(rec)
+	if type(rec) ~= "table" then return nil end
+	if rec.need then return rec.need[1], rec.need[2], rec.need[2] end
+	local locks = ns.DB and ns.DB.objectLock
+	local skill, lo, hi
+	if locks then
+		for id in pairs(rec.ids or {}) do
+			local need = locks[id]
+			if need and (not skill or need[1] == skill) then
+				skill = need[1]
+				lo, hi = math.min(lo or need[2], need[2]), math.max(hi or need[2], need[2])
+			end
+		end
+	end
+	if not skill and rec.name then
+		local e = NameIndex()[rec.name]
+		if e then skill, lo, hi = e[1], e[2], e[3] end
+	end
+	return skill, lo, hi
+end
+
+-- a lockbox (item): its Lockpicking level, or nil
+function G:ItemLock(item) return ns.DB and ns.DB.itemLock and ns.DB.itemLock[item] end
+
+-- a character's rank in a skill (1 Lockpicking, 2 Herbalism, 3 Mining); nil if they don't have it.
+-- key: a character key (default the one you're playing)
+function G:CharSkill(skill, key)
+	local c = ns.db and ns.db.chars[key or ns.CharKey()]
+	local s = c and c.skills and c.skills[self.NEED_SKILL[skill] or ""]
+	return s and s.rank or nil
+end
+
+-- the game's gathering colours for a level against a rank: red too low, then orange, yellow, green,
+-- grey (no more skill-ups); white when the character hasn't the skill
+function G:NeedColor(level, rank)
+	if not rank then return "|cffd9d9d9" end
+	if rank < level then return "|cffff2020" end
+	if rank < level + 25 then return "|cffff8040" end
+	if rank < level + 50 then return "|cffffff00" end
+	if rank < level + 100 then return "|cff40c040" end
+	return "|cff808080"
+end
+
+-- Lock levels follow Almanac shows (#37): in character mode only a rogue sees them; for the account,
+-- any rogue on it. The rogue whose skill colours them: you if you're one, else the account's best.
+-- Returns key, rank (rank nil: a rogue who hasn't the skill read yet), or nil when locks stay hidden.
+function G:LockRogue()
+	local me = ns.CharKey()
+	local chars = ns.db and ns.db.chars or {}
+	local c = chars[me]
+	if c and c.classFile == "ROGUE" then return me, self:CharSkill(1, me) end
+	if ns.ScopeChar() then return nil end
+	local best, bestRank
+	for key, ch in pairs(chars) do
+		if ch.classFile == "ROGUE" then
+			local r = self:CharSkill(1, key)
+			if not best or (r or -1) > (bestRank or -1) then best, bestRank = key, r end
+		end
+	end
+	return best, bestRank
+end
+
+-- "Herbalism 125" (or "Lockpicking 70-150"), coloured for the character you're playing (a lock: for
+-- the rogue above); nil if unknown or a lock this character doesn't see. Also returns skill, lo and,
+-- for a lock seen through another character, that rogue's key.
+function G:NeedText(rec, plain)
+	local skill, lo, hi = self:Needs(rec)
+	if not skill then return nil end
+	local rank, rogue = nil, nil
+	if skill == 1 then
+		rogue, rank = self:LockRogue()
+		if not rogue then return nil end
+		if rogue == ns.CharKey() then rogue = nil end
+	else
+		rank = self:CharSkill(skill)
+	end
+	local text = (self.NEED_SKILL[skill] or "?") .. " " .. (lo == hi and tostring(lo) or (lo .. "-" .. hi))
+	if plain then return text, skill, lo, rogue end
+	return self:NeedColor(lo, rank) .. text .. "|r", skill, lo, rogue
+end
+
+-- the game's tooltip on a node: "Requires Herbalism (125)" and the like corrects the database
+local function ReadTooltip(tip)
+	if not (ns.db and tip and tip.NumLines) or (tip.GetUnit and tip:GetUnit()) or (tip.GetItem and tip:GetItem()) then return end
+	local first = _G[tip:GetName() .. "TextLeft1"]
+	local name = first and R(first:GetText())
+	if type(name) ~= "string" then return end
+	local rec = ns.Store:Get("node", name)
+	if not rec then return end
+	for i = 2, math.min(tip:NumLines(), 6) do
+		local line = _G[tip:GetName() .. "TextLeft" .. i]
+		local text = line and R(line:GetText())
+		if type(text) == "string" then
+			for skill, sname in pairs(G.NEED_SKILL) do
+				if text:find(sname, 1, true) then
+					local level = tonumber(text:match("%((%d+)%)") or text:match(sname .. "%s+(%d+)"))
+					if level then
+						if not (rec.need and rec.need[1] == skill and rec.need[2] == level) then
+							rec.need = { skill, level }
+							ns:Fire("CHANGED", "node", name)
+						end
+						return
+					end
+				end
+			end
+		end
+	end
+end
+if GameTooltip and GameTooltip.HookScript then
+	GameTooltip:HookScript("OnShow", function(self) pcall(ReadTooltip, self) end)
+end
+
+---------------------------------------------------------------------------
+-- Pick Lock (0.69.0, #37): each chest in the world a rogue picks (times, by whom, the skill at the
+-- time), its own ranks and toasts ("Expert Lockpick"), and a failed pick when the skill is too low.
+-- Lockboxes (items) aren't counted here: what came out of one is on its item page, as containers are.
+---------------------------------------------------------------------------
+
+local PICK = L["Pick Lock"]
+
+function G:PickCount(rec)
+	if not rec then return 0 end
+	local me = ns.ScopeChar()
+	if me then return rec.pc and rec.pc[me] or 0 end
+	return rec.picked or 0
+end
+
+function G:PickTier(rec)
+	local n = self:PickCount(rec)
+	for t = #self.AT, 2, -1 do
+		if n >= self.AT[t] then return t, self.AT[t + 1] and (self.AT[t + 1] - n) or nil end
+	end
+	return 1, self.AT[2] - n
+end
+
+-- the chest in front of you (the soft interact target): its record, made if it's new
+local function PickedChest()
+	local guid = R(UnitGUID("softinteract"))
+	if type(guid) ~= "string" or not guid:match("^GameObject") then return nil end
+	local _, id = ns.ParseGuid(guid)
+	local name = (id and ns.DB and ns.DB.object and ns.DB.object[id]) or R(UnitName("softinteract"))
+	if type(name) ~= "string" or name == "" then return nil end
+	local rec = ns.Store:Get("node", name)
+	if not rec then
+		rec = ns.Store:Discover("node", name, { name = name }, (L["%s (%s)"]):format(name, G.KIND.chest.label:lower()), ns.Where())
+		if not rec then return nil end
+		rec.kind = rec.kind or "chest"
+	end
+	if id then rec.ids = rec.ids or {} rec.ids[id] = true end
+	return rec, name
+end
+
+local function OnPick(failed)
+	if not ns.db then return end
+	local rec, name = PickedChest()
+	if not rec then return end
+	local me = ns.CharKey()
+	local rank = G:SkillRank(L["Lockpicking"])
+	if failed then
+		local _, lo = G:Needs(rec)
+		if rank and lo and rank < lo then
+			rec.hard = rec.hard or {}
+			rec.hard[me] = rank
+			ns:Fire("CHANGED", "node", name)
+		end
+		return
+	end
+	local before = G:PickTier(rec)
+	rec.picked = (rec.picked or 0) + 1
+	rec.pc = rec.pc or {}
+	rec.pc[me] = (rec.pc[me] or 0) + 1
+	if rec.hard then rec.hard[me] = nil end
+	if rank then
+		rec.pickSkill = rec.pickSkill or { rank, rank }
+		if rank < rec.pickSkill[1] then rec.pickSkill[1] = rank end
+		if rank > rec.pickSkill[2] then rec.pickSkill[2] = rank end
+	end
+	local after = G:PickTier(rec)
+	if after > before and after >= 3 then
+		ns:Fire("TOAST", "tier", G:Title(after, "lock"), name, G:TierIcon(after, "lock"), after - 1)
+	end
+	ns:Fire("CHANGED", "node", name)
+end
+
+local function PickEvent(failed)
+	return function(_, unit, _, spellID)
+		if unit ~= "player" then return end
+		spellID = R(spellID)
+		if type(spellID) ~= "number" or SpellName(spellID) ~= PICK then return end
+		local ok, err = pcall(OnPick, failed)
+		if not ok then ns.Debug("pick lock: " .. tostring(err)) end
+	end
+end
+ns:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", PickEvent(false))
+ns:RegisterEvent("UNIT_SPELLCAST_FAILED", PickEvent(true))
 
 ---------------------------------------------------------------------------
 -- Sighted: nodes in front of you, gathered or not

@@ -361,7 +361,8 @@ local function ScanProfessions()
 		if info then
 			if info.isHeader then
 				inProfessions = PROFESSION_HEADERS[info.name] or false
-			elseif inProfessions and info.skillID then
+			-- (0.69.0, #37) a rogue's Lockpicking (633) too, from whichever heading it sits under
+			elseif info.skillID and (inProfessions or info.skillID == 633) then
 				tinsert(list, { id = info.skillID, name = info.name, rank = info.rank or 0, max = info.maxRank or 0 })
 			end
 		end

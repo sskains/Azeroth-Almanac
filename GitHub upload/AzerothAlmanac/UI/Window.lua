@@ -115,6 +115,8 @@ function UI:ShowPage(key)
 	if current and current ~= def and not UI.restoring then
 		previous = { key = current.key, item = current.list and current.list:Selected() }
 	end
+	-- (0.69.0) and you've now seen what was new on it
+	if current and current ~= def and ns.New then ns.New:Stamp(current.key) end
 	for _, d in ipairs(order) do
 		if d.container then d.container:Hide() end
 		if d.header then d.header:Hide() end
@@ -144,6 +146,20 @@ function UI:ShowPage(key)
 	if def.Refresh then
 		local ok, err = pcall(def.Refresh, def)
 		if not ok then ns.Debug("refresh " .. def.key .. ": " .. tostring(err)) end
+	end
+	UI:UpdateBadges()
+end
+
+-- (0.69.0, #38) each side tab's count of entries new since you last looked at that page
+function UI:UpdateBadges()
+	if not (frame and frame.tabs and ns.New) then return end
+	for _, tab in ipairs(frame.tabs) do
+		local n = tab.badge and ns.New.KINDS[tab.def.key] and ns.New:Count(tab.def.key) or 0
+		if tab.badge then
+			tab.badge:SetShown(n > 0)
+			tab.badge.text:SetText(n > 99 and "99+" or tostring(n))
+			tab.badge:SetWidth(math.max(20, tab.badge.text:GetStringWidth() + 10))
+		end
 	end
 end
 
@@ -186,6 +202,7 @@ local function Build()
 	frame:SetScript("OnHide", function()
 		if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_CLOSE then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_CLOSE) end
 		if W.CloseMenu then W.CloseMenu() end -- a dropdown left open would swallow the next click
+		if current and ns.New then ns.New:Stamp(current.key) end -- (0.69.0) closing counts as having looked
 	end)
 
 	-- Back: the game's red panel button (it glows on hover, greys out with nowhere to go back to)
@@ -262,6 +279,31 @@ local function Build()
 			hover:SetBlendMode("ADD")
 		end
 		tab.glow:Hide()
+		-- (0.69.0) the count of new entries: a small gold coin with the number, at the tab's top right
+		if ns.New and ns.New.KINDS[def.key] then
+			local badge = CreateFrame("Frame", nil, tab)
+			badge:SetSize(20, 20)
+			badge:SetPoint("CENTER", tab, "TOPRIGHT", tab.native and -12 or -4, tab.native and -12 or -4)
+			badge:SetFrameLevel(tab:GetFrameLevel() + 5)
+			badge.rim = badge:CreateTexture(nil, "BACKGROUND")
+			badge.rim:SetPoint("TOPLEFT", -1, 1)
+			badge.rim:SetPoint("BOTTOMRIGHT", 1, -1)
+			badge.rim:SetColorTexture(0.25, 0.14, 0.02, 1)
+			badge.bg = badge:CreateTexture(nil, "BORDER")
+			badge.bg:SetAllPoints()
+			badge.bg:SetColorTexture(0.86, 0.62, 0.12, 1)
+			for _, t in ipairs({ badge.rim, badge.bg }) do
+				local mask = badge:CreateMaskTexture()
+				mask:SetTexture("Interface\CharacterFrame\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+				mask:SetAllPoints(t)
+				if t.AddMaskTexture then t:AddMaskTexture(mask) end
+			end
+			badge.text = badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			badge.text:SetPoint("CENTER", 0, 0)
+			badge.text:SetShadowOffset(1, -1)
+			badge:Hide()
+			tab.badge = badge
+		end
 		if i == 1 then
 			tab:SetPoint("TOPLEFT", frame, "TOPRIGHT", tab.native and -2 or 0, tab.native and -40 or -48)
 		else
@@ -280,6 +322,8 @@ local function Build()
 		tab:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			GameTooltip:SetText(def.title, 1, 0.82, 0)
+			local n = self.badge and self.badge:IsShown() and ns.New:Count(def.key) or 0
+			if n > 0 then GameTooltip:AddLine((L["%d new since you last looked"]):format(n), 1, 1, 1) end
 			GameTooltip:Show()
 		end)
 		tab:SetScript("OnLeave", GameTooltip_Hide)
@@ -361,6 +405,7 @@ ns:On("CHANGED", function(kind)
 		if not hit then for k in pairs(changedKinds) do if want[k] then hit = true break end end end
 		wipe(changedKinds)
 		changedAll = false
+		UI:UpdateBadges()
 		if hit and frame:IsShown() and current and current.Refresh then
 			UI.refreshing = true
 			pcall(current.Refresh, current)

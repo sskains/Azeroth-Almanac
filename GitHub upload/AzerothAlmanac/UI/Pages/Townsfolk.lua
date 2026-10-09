@@ -1,8 +1,10 @@
 -- Townsfolk page: the people of Azeroth this account has met - trainers, innkeepers, bankers, flight
 -- masters, vendors and quest givers - listed by what they do, and every flight path your characters
--- know. A person's page shows their face, what they do (with links to their stock, their training
--- and their quests), where they stand (Show on map / Set waypoint) and who met them. A flight
--- path's page shows who knows it, its flight master, and the flights timed from and to it.
+-- know. A person's page (0.69.0, #42): the name plate carries their title and roles, where they stand
+-- and a faction crest on the portrait (hover it for who met them first, and a merchant's standing and
+-- visits); below it, what they teach you (Training: name, level, cost, the spell's own tooltip), what
+-- they sell (For sale), their quests and their flight path. A flight path's page shows who knows it,
+-- its flight master, and the flights timed from and to it.
 
 local _, ns = ...
 local L = ns.L
@@ -140,43 +142,116 @@ local function QuestSlot(qid)
 		note = lvl and (L["Level %d"]):format(lvl) or nil, tip = L["Click to open in Quests."], onClick = GoTo("quests", "ShowQuest", qid) }
 end
 
+-- (0.69.0) the name plate's title line: their title, then their other roles ("<Innkeeper>  ·  Food & drink");
+-- a role the title already says ("Innkeepers" under <Innkeeper>) isn't repeated
+local function TitleLine(p)
+	local TF = ns.Townsfolk
+	local parts = {}
+	local tl = p.title and p.title:lower()
+	if p.title then parts[1] = "<" .. p.title .. ">" end
+	for _, g in ipairs(TF and TF:GroupsOf(p.npc) or {}) do
+		local stem = (g.label or ""):lower():gsub("s$", "")
+		if stem ~= "" and not (tl and (tl:find(stem, 1, true) or stem:find(tl, 1, true))) then parts[#parts + 1] = g.label end
+	end
+	if #parts == 0 then parts[1] = p.group.label end
+	return table.concat(parts, "  ·  ")
+end
+
+-- the portrait's tooltip: who met them, which side they serve, and (merchants) standing and visits
+local function PortraitTip(p)
+	local lines = {}
+	local first, firstT, others = Who(p.recs)
+	if first then lines[#lines + 1] = { L["First met"], ns.CharName(first) .. ", " .. ns.DateText(firstT) } end
+	if #others > 0 then lines[#lines + 1] = { L["Also met by"], table.concat(others, ", ") } end
+	local e = ns.Townsfolk and ns.Townsfolk:Get(p.npc)
+	if e and SIDE[e.faction] then lines[#lines + 1] = { L["Serves"], SIDE[e.faction] } end
+	for _, ln in ipairs(ns.MerchantFacts and ns.MerchantFacts(p.npc) or {}) do lines[#lines + 1] = ln end
+	return lines
+end
+
+-- a trainer's training, as the merchants' stock: name (and rank), the level (or skill) it needs and
+-- what it costs from this trainer, coloured for the character you're playing; hover for the spell's
+-- own tooltip, Shift-click to link it, click a recipe to open it in Recipes
+local TRAIN_COLOR = { now = "|cff40c040", later = "|cffe03030", known = "|cff999999", other = "|cffffffff" }
+local function SpellLink(id)
+	if C_Spell and C_Spell.GetSpellLink then
+		local ok, link = pcall(C_Spell.GetSpellLink, id)
+		if ok and link then return link end
+	end
+	if GetSpellLink then
+		local ok, link = pcall(GetSpellLink, id)
+		if ok then return link end
+	end
+end
+
+local function TrainingSlots(npc, t)
+	local TR = ns.Trainers
+	local me = ns.CharKey and ns.CharKey()
+	local prof = TR and TR:IsProfession(t.group)
+	local rows = {}
+	for _, id in ipairs(t.teaches or {}) do
+		local rec = ns.Store:Get("spell", id)
+		if rec then rows[#rows + 1] = { id = id, rec = rec } end
+	end
+	table.sort(rows, function(a, c)
+		local x, y = a.rec, c.rec
+		-- (recipes by the skill they need, spells by level)
+		if prof and (x.skill or 0) ~= (y.skill or 0) then return (x.skill or 0) < (y.skill or 0) end
+		if (x.lvl or 0) ~= (y.lvl or 0) then return (x.lvl or 0) < (y.lvl or 0) end
+		if (x.skill or 0) ~= (y.skill or 0) then return (x.skill or 0) < (y.skill or 0) end
+		if (x.name or "") ~= (y.name or "") then return (x.name or "") < (y.name or "") end
+		return (tonumber((x.rank or ""):match("%d+")) or 0) < (tonumber((y.rank or ""):match("%d+")) or 0)
+	end)
+	local slots = {}
+	for _, r in ipairs(rows) do
+		local id, rec = r.id, r.rec
+		local st = (TR and me and TR:StatusFor(me, rec, id)) or "other"
+		local cost = rec.trainers and rec.trainers[npc]
+		if cost == nil then cost = rec.cost end
+		local need = (prof and rec.skill and (L["Skill %d"]):format(rec.skill)) or (rec.lvl and (L["Level %d"]):format(rec.lvl)) or nil
+		local price = cost and (cost > 0 and ns.MoneyText(cost) or L["free"]) or nil
+		slots[#slots + 1] = {
+			spell = id, icon = rec.icon, color = TRAIN_COLOR[st],
+			name = (rec.name or "?") .. (rec.rank and ("  |cff999999" .. rec.rank .. "|r") or ""),
+			note = (need and price) and (need .. "   " .. price) or need or price,
+			extra = prof and L["Click to open in Recipes. Shift-click to link it."] or L["Shift-click to link it."],
+			onClick = function()
+				if IsShiftKeyDown and IsShiftKeyDown() then
+					local link = SpellLink(id)
+					if link and ChatEdit_InsertLink then ChatEdit_InsertLink(link) end
+					return
+				end
+				if prof then
+					local recipes = ns.UI:GetPage("trainers")
+					if recipes and recipes.ShowSpell then recipes:ShowSpell(id) end
+				end
+			end,
+		}
+	end
+	return slots
+end
+
 local function DescribePerson(p)
 	local b = {}
-	local TF = ns.Townsfolk
-	b[#b + 1] = { "banner", L["General"] }
-	local groups = TF and TF:GroupsOf(p.npc) or {}
-	local labels = {}
-	for _, g in ipairs(groups) do labels[#labels + 1] = g.label end
-	if #labels == 0 then labels[1] = p.group.label end
-	b[#b + 1] = { "stat", L["Does"], table.concat(labels, ", ") }
-	b[#b + 1] = { "stat", L["Where"], (p.sub and (p.sub .. ", ") or "") .. (p.zone or "?") }
-	if p.x then b[#b + 1] = { "stat", L["Coordinates"], ("%.1f, %.1f"):format(p.x, p.y) } end
-	local e = TF and TF:Get(p.npc)
-	if e and SIDE[e.faction] then b[#b + 1] = { "stat", L["Serves"], SIDE[e.faction] } end
-	local first, firstT, others = Who(p.recs)
-	if first then b[#b + 1] = { "stat", L["First met"], ns.CharName(first) .. ", " .. ns.DateText(firstT) } end
-	if #others > 0 then b[#b + 1] = { "stat", L["Also met by"], table.concat(others, ", ") } end
-
-	-- what they do for you: their stock, their training, their flight point
-	local links = {}
 	local m = p.recs.merchant
 	local t = p.recs.trainer
+
+	-- what they teach you (class spells, weapon skills, riding, recipes): only what they've shown you
 	if t then
-		links[#links + 1] = { name = L["What they teach"], icon = W.FindIcon(W.KIND.trainer.icon),
-			note = (L["%d spells and recipes"]):format(#(t.teaches or {})),
-			tip = L["Click to open in Spells & Recipes."], onClick = t.group and GoTo("trainers", "ShowGroup", t.group) or GoTo("trainers", "Refresh") }
+		local slots = TrainingSlots(p.npc, t)
+		b[#b + 1] = { "banner", (L["Training (%d)"]):format(#slots) }
+		if #slots > 0 then
+			b[#b + 1] = { "slots", slots }
+			b[#b + 1] = { "small", "|cff40c040" .. L["green"] .. "|r " .. L["can learn now"] .. "   |cffe03030" .. L["red"] .. "|r "
+				.. L["not yet"] .. "   |cff999999" .. L["grey"] .. "|r " .. L["learned"] .. "  " .. L["(for the character you're playing)"] }
+		else
+			b[#b + 1] = { "small", L["Open their training window to record what they teach."] }
+		end
 	end
-	local node = p.recs.townsfolk and p.recs.townsfolk.node
-	if not node then
-		for name, rec in pairs(ns.Store:Shown("flight")) do if rec.master == p.npc then node = name break end end
-	end
-	if node then
-		links[#links + 1] = { name = node, icon = W.FindIcon(FLIGHT_ICON), note = L["Flight path"],
-			tip = L["Click to open this flight path."], onClick = function() page:ShowNode(node) end }
-	end
-	if #links > 0 then
-		b[#b + 1] = { "banner", L["Their trade"] }
-		b[#b + 1] = { "slots", links }
+
+	-- what they sell, with your standing and visits on its heading (Merchants is part of People)
+	if m and ns.MerchantBlocks then
+		for _, block in ipairs(ns.MerchantBlocks(p.npc) or {}) do b[#b + 1] = block end
 	end
 
 	-- quests they give and take in
@@ -195,14 +270,17 @@ local function DescribePerson(p)
 			b[#b + 1] = { "slots", slots }
 		end
 	end
-	-- a merchant's stock, right here (Merchants is part of People)
-	if m and ns.MerchantBlocks then
-		local stock = ns.MerchantBlocks(p.npc)
-		if stock and #stock > 0 then
-			b[#b + 1] = { "banner", L["As a merchant"] }
-			for _, block in ipairs(stock) do b[#b + 1] = block end
-		end
+	-- their flight point
+	local node = p.recs.townsfolk and p.recs.townsfolk.node
+	if not node then
+		for name, rec in pairs(ns.Store:Shown("flight")) do if rec.master == p.npc then node = name break end end
 	end
+	if node then
+		b[#b + 1] = { "banner", L["Flight path"] }
+		b[#b + 1] = { "slots", { { name = node, icon = W.FindIcon(FLIGHT_ICON), note = L["Flight master here"],
+			tip = L["Click to open this flight path."], onClick = function() page:ShowNode(node) end } } }
+	end
+	if #b == 0 then b[#b + 1] = { "small", L["Nothing more recorded for them yet: what they teach, sell or ask of you shows here once you've seen it."] } end
 	if not p.x then b[#b + 1] = { "small", L["Talk to them to record exactly where they stand."] } end
 	return b
 end
@@ -302,11 +380,17 @@ local function Show(sel)
 			portrait.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		end
 		nameText:SetText(p.name or "?")
-		titleText:SetText(p.title and ("<" .. p.title .. ">") or "")
+		titleText:SetText(TitleLine(p))
 		placeText:SetText(NOTE .. (p.sub and (p.sub .. ", ") or "") .. (p.zone or "?") .. "|r")
+		local e = ns.Townsfolk and ns.Townsfolk:Get(p.npc)
+		local side = e and (e.faction == "A" and "Alliance" or e.faction == "H" and "Horde") or nil
+		W.SetFactionBadge(portrait.crest, side)
+		portrait.tip = { title = p.name, lines = PortraitTip(p) }
 		detail:SetBlocks(DescribePerson(p))
 	else
 		portrait:SetRing(0.62, 0.5, 0.24)
+		portrait.crest:Hide()
+		portrait.tip = nil
 		W.SetIcon(portrait.art, FLIGHT_ICON)
 		portrait.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		nameText:SetText((node.name or "?"):gsub(",.*$", ""))
@@ -337,16 +421,29 @@ local function Matches(p)
 	return false
 end
 
+-- (0.69.0, #38) a person as one record for "new": first met (by anyone, or by this character) in any role
+local function PersonRec(p)
+	local f, c = nil, {}
+	for _, r in pairs(p.recs) do
+		if r.f and (not f or r.f < f) then f = r.f end
+		for key, t in pairs(r.c or {}) do if not c[key] or t < c[key] then c[key] = t end end
+	end
+	return { f = f, c = c }
+end
+
 local function Collect()
 	local rows, n, total = {}, 0, 0
 	local byGroup, groups = {}, {}
+	local new = {}
 	local order = {}
 	for i, g in ipairs(ns.Townsfolk and ns.Townsfolk.groups or {}) do if g.key then order[g.key] = i end end
 	order.quest = 1000
 	if kindFilter ~= "flight" then
 		for _, p in pairs(People()) do
 			total = total + 1
-			if Matches(p) then
+			if Matches(p) and ns.New and ns.New:IsNew("townsfolk", PersonRec(p)) then
+				new[#new + 1] = { npc = p.npc, p = p, isNew = true, newKey = "npc:" .. p.npc, newAt = ns.New:FoundAt(PersonRec(p)) or 0 }
+			elseif Matches(p) then
 				local g = p.group
 				if not byGroup[g.key] then
 					byGroup[g.key] = {}
@@ -372,7 +469,13 @@ local function Collect()
 		for name, rec in pairs(ns.Store:Shown("flight")) do
 			total = total + 1
 			local hay = (name .. " " .. (rec.zone or "")):lower()
-			if filter == "" or hay:find(filter, 1, true) then nodes[#nodes + 1] = { node = name, rec = rec } end
+			if filter == "" or hay:find(filter, 1, true) then
+				if ns.New and ns.New:IsNew("townsfolk", rec) then
+					new[#new + 1] = { node = name, rec = rec, isNew = true, newKey = "flight:" .. name, newAt = ns.New:FoundAt(rec) or 0 }
+				else
+					nodes[#nodes + 1] = { node = name, rec = rec }
+				end
+			end
 		end
 		if #nodes > 0 then
 			table.sort(nodes, function(a, b) return a.node < b.node end)
@@ -382,6 +485,15 @@ local function Collect()
 				if not collapsed.flight then rows[#rows + 1] = e end
 			end
 		end
+	end
+	-- the New group goes first
+	if #new > 0 then
+		table.sort(new, function(a, b) return a.newAt > b.newAt end)
+		local head = { ns.New:Header(#new) }
+		if not collapsed.new then for _, r in ipairs(new) do head[#head + 1] = r end end
+		for _, r in ipairs(rows) do head[#head + 1] = r end
+		rows = head
+		n = n + #new
 	end
 	return rows, n, total
 end
@@ -430,12 +542,13 @@ function page:Build(parent, header)
 		update = function(row, r)
 			row.icon:ClearAllPoints()
 			row:SetHeader(r.header ~= nil, r.header and collapsed[r.key])
+			if ns.New then ns.New:MarkRow(row, r.isNew, "townsfolk", r.newKey) end
 			if r.header then
 				row.icon:SetPoint("LEFT", 4, 0)
 				row.icon:SetTexture(nil)
 				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
 				row.text:SetText(r.header)
-				row.right:SetText("|cff999999" .. r.count .. "|r")
+				row.right:SetText(r.newHeader and "" or ("|cff999999" .. r.count .. "|r"))
 			elseif r.npc then
 				row.icon:SetPoint("LEFT", 22, 0)
 				local faced = false
@@ -466,8 +579,10 @@ function page:Build(parent, header)
 				collapsed[r.key] = not collapsed[r.key]
 				page:Refresh()
 			elseif r.npc then
+				if ns.New and ns.New:Clicked("townsfolk", r) then list:Refresh() end
 				Show({ npc = r.npc })
 			elseif r.node then
+				if ns.New and ns.New:Clicked("townsfolk", r) then list:Refresh() end
 				Show({ node = r.node })
 			end
 		end,
@@ -480,6 +595,21 @@ function page:Build(parent, header)
 	detail:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
 	portrait = W.Portrait(detail.top, 60)
 	portrait:SetPoint("TOPLEFT", 0, 2)
+	-- (0.69.0) the side they serve, as a crest on the ring; hover the portrait for who met them
+	portrait.crest = portrait:CreateTexture(nil, "OVERLAY")
+	portrait.crest:SetSize(24, 24)
+	portrait.crest:SetPoint("CENTER", portrait, "BOTTOMRIGHT", -7, 7)
+	portrait.crest:Hide()
+	portrait:EnableMouse(true)
+	portrait:SetScript("OnEnter", function(self)
+		local tip = self.tip
+		if not tip or #tip.lines == 0 then return end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(tip.title or "", 1, 0.82, 0)
+		for _, ln in ipairs(tip.lines) do GameTooltip:AddDoubleLine(ln[1], ln[2], 1, 0.82, 0, 1, 1, 1) end
+		GameTooltip:Show()
+	end)
+	portrait:SetScript("OnLeave", GameTooltip_Hide)
 	nameText = detail.top:CreateFontString(nil, "OVERLAY")
 	W.HeroFont(nameText, 26)
 	nameText:SetPoint("TOPLEFT", portrait, "TOPRIGHT", 10, -2)
