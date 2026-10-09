@@ -374,10 +374,10 @@ local function ZoneBanner(row)
 	b.count = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	b.count:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", 1, -3)
 	b.count:SetShadowOffset(1, -1)
-	-- the button at the card's foot: "+ Show areas (12)" / "- Hide areas" (and "> Open" on the dungeons card)
+	-- the fold sign in front of the name: a small gold-edged box with + (folded) or - (open); > on the dungeons card
 	local pill = CreateFrame("Button", nil, b)
-	pill:SetHeight(22)
-	pill:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -8, 8)
+	pill:SetSize(20, 20)
+	pill:SetPoint("LEFT", b, "LEFT", 9, 8)
 	pill.bg = pill:CreateTexture(nil, "BACKGROUND")
 	pill.bg:SetAllPoints()
 	pill.bg:SetColorTexture(0.04, 0.025, 0.01, 0.85)
@@ -390,15 +390,20 @@ local function ZoneBanner(row)
 	end
 	pill.glow = pill:CreateTexture(nil, "HIGHLIGHT")
 	pill.glow:SetAllPoints()
-	pill.glow:SetColorTexture(1, 0.85, 0.4, 0.2)
+	pill.glow:SetColorTexture(1, 0.85, 0.4, 0.25)
 	pill.sign = pill:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-	pill.sign:SetPoint("LEFT", 8, 1)
-	pill.label = pill:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	pill.label:SetPoint("LEFT", pill.sign, "RIGHT", 6, -1)
+	pill.sign:SetPoint("CENTER", 0, 1)
 	pill:SetScript("OnClick", function(self)
 		if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
 		if self.action then self.action() end
 	end)
+	pill:SetScript("OnEnter", function(self)
+		if not self.tip then return end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(self.tip, 1, 0.82, 0)
+		GameTooltip:Show()
+	end)
+	pill:SetScript("OnLeave", GameTooltip_Hide)
 	b.pill = pill
 	-- the picture shows its right side when the card is wider than the picture (4 : 1)
 	b:SetScript("OnSizeChanged", function(self, w, h)
@@ -447,13 +452,16 @@ local function FillBanner(row, o)
 	b.count:SetText(o.count or "")
 	if o.pill then
 		b.pill.sign:SetText("|cffffd100" .. o.pill.sign .. "|r")
-		b.pill.label:SetText("|cffffd100" .. o.pill.label .. "|r")
+		b.pill.tip = o.pill.label
 		b.pill.action = o.pill.action
-		b.pill:SetWidth(b.pill.label:GetStringWidth() + 40)
 		b.pill:Show()
 	else
 		b.pill:Hide()
 	end
+	-- (the name starts after the sign when there is one)
+	b.name:ClearAllPoints()
+	b.name:SetPoint("LEFT", b, "LEFT", o.pill and 38 or 12, 8)
+	b.name:SetPoint("RIGHT", b, "RIGHT", -10, 8)
 	b:SetSelected(false)
 	b:Show()
 end
