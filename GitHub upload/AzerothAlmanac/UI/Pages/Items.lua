@@ -267,6 +267,13 @@ local function Show(id)
 	iconButton:Show()
 	iconButton.id = id
 	iconButton.icon:SetTexture(i.icon or W.FindIcon({ "INV_Misc_QuestionMark" }))
+	-- the edge shows the item's quality: its colour and a thicker line from uncommon up, else the plain thin gold
+	local q = i.quality or rec.q
+	local qc = type(q) == "number" and q >= 2 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] or nil
+	for k, t in ipairs(iconButton.edges) do
+		if qc then t:SetColorTexture(qc.r, qc.g, qc.b, 1) else t:SetColorTexture(0.62, 0.5, 0.24, 1) end
+		if k <= 2 then t:SetHeight(qc and 2 or 1) else t:SetWidth(qc and 2 or 1) end
+	end
 	nameText:SetText(QualityHex(i.quality or rec.q) .. (i.name or rec.name or (L["item %d"]):format(id)) .. "|r")
 	local parts = {}
 	if i.type then parts[#parts + 1] = i.type end
@@ -390,12 +397,14 @@ function page:Build(parent, header)
 	iconButton.icon:SetAllPoints()
 	-- (0.69.2) the icon without its rim, a thin gold edge round it (as on the Recipes page) instead of the black quick-slot square
 	iconButton.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	iconButton.edges = {}
 	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
 		local t = iconButton:CreateTexture(nil, "OVERLAY")
 		t:SetColorTexture(0.62, 0.5, 0.24, 1)
 		t:SetPoint(e[1])
 		t:SetPoint(e[2])
 		if e[3] then t:SetHeight(1) else t:SetWidth(1) end
+		iconButton.edges[#iconButton.edges + 1] = t
 	end
 	iconButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	iconButton:SetScript("OnEnter", function(self)
