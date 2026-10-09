@@ -499,3 +499,108 @@ function Q:DoneCount(key)
 	for _, st in pairs(c and c.q or {}) do if st.s == "d" then n = n + 1 end end
 	return n
 end
+
+---------------------------------------------------------------------------
+-- (#57) Quest givers' tooltips: "! Quest name" for each quest the Almanac has seen them offer
+-- (on any of your characters) that the character you're playing could take now; "?" for one
+-- already in your log. Quests done, or for another race / class, or still behind a quest you
+-- haven't done, are left out; one you're not yet level for is greyed with its level.
+-- Settings > General: "Quests on quest givers' tooltips" (window.questGivers).
+---------------------------------------------------------------------------
+
+local GIVER_MAX = 6
+
+-- the game's own quest marks, the glossy ones first (atlases on clients that have them), else the
+-- classic gossip icons; grey = tinted (r, g, b 0-255) for one you can't take yet / is in your log
+local MARK = {
+	avail = { atlases = { "QuestNormal", "Crosshair_Quest_48" }, file = "Interface\\GossipFrame\\AvailableQuestIcon" },
+	log = { atlases = { "QuestTurnin", "Crosshair_Questturnin_48" }, file = "Interface\\GossipFrame\\ActiveQuestIcon" },
+}
+local markCache = {}
+local function Mark(kind, grey)
+	local key = kind .. (grey and "g" or "")
+	if markCache[key] then return markCache[key] end
+	local m, size = MARK[kind], 16
+	local tint = grey and ":128:128:128" or ""
+	local out
+	for _, a in ipairs(m.atlases) do
+		if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(a) then
+			out = ("|A:%s:%d:%d:0:0%s|a"):format(a, size, size, tint)
+			break
+		end
+	end
+	out = out or ("|T%s:%d:%d:0:0:32:32:0:32:0:32%s|t"):format(m.file, size, size, tint)
+	markCache[key] = out
+	return out
+end
+
+local function DifficultyHex(lvl)
+	if not (lvl and GetQuestDifficultyColor) then return "|cffffd100" end
+	local ok, c = pcall(GetQuestDifficultyColor, lvl)
+	if not (ok and type(c) == "table" and c.r) then return "|cffffd100" end
+	return ("|cff%02x%02x%02x"):format(c.r * 255, c.g * 255, c.b * 255)
+end
+
+-- a quest that follows on from others: open once any one of them (for your race / class) is done
+-- (the database's chains: alternatives and class versions lead to the same follow-up)
+local function PrereqsDone(qid)
+	local QDB = ns.QuestDB
+	local before = QDB and QDB.Before and QDB:Before(qid) or {}
+	local any = false
+	for _, p in ipairs(before) do
+		if QDB:ForMe(p) then
+			any = true
+			if Q:MyStatus(p) == "d" then return true end
+		end
+	end
+	return not any
+end
+
+-- the lines for a giver: { text, sort }
+function Q:GiverLines(npc)
+	local giver = ns.Store:Get("npc", npc)
+	if not (giver and giver.gives) then return {} end
+	local QDB = ns.QuestDB
+	local myLevel = R(UnitLevel("player")) or 1
+	local out = {}
+	for qid in pairs(giver.gives) do
+		local rec = ns.Store:Get("quest", qid)
+		local s = self:MyStatus(qid)
+		if rec and s ~= "d" and (not QDB or QDB:ForMe(qid)) then
+			local name = rec.name or ("#" .. qid)
+			local lvl = self:Level(qid, rec)
+			local db = QDB and QDB:Get(qid)
+			local minLevel = db and db.minLevel or nil
+			if s == "a" then
+				out[#out + 1] = { Mark("log", true) .. " |cff999999" .. name .. "  " .. L["(in your log)"] .. "|r", 2, name }
+			elseif minLevel and minLevel > myLevel then
+				out[#out + 1] = { Mark("avail", true) .. " |cff808080" .. name .. "  " .. (L["(level %d)"]):format(minLevel) .. "|r", 3, name }
+			elseif PrereqsDone(qid) then
+				out[#out + 1] = { Mark("avail") .. " " .. DifficultyHex(lvl) .. name .. "|r", 1, name }
+			end
+		end
+	end
+	table.sort(out, function(a, b) if a[2] ~= b[2] then return a[2] < b[2] end return a[3] < b[3] end)
+	return out
+end
+
+local function GiverTooltip(tooltip)
+	if not (ns.db and ns.db.settings and ns.db.settings.window and ns.db.settings.window.questGivers ~= false) then return end
+	local npc = ns.NpcFromGuid(R(UnitGUID("mouseover")))
+	if not npc then return end
+	local lines = Q:GiverLines(npc)
+	if #lines == 0 then return end
+	for i = 1, math.min(#lines, GIVER_MAX) do tooltip:AddLine(lines[i][1], 1, 1, 1) end
+	if #lines > GIVER_MAX then tooltip:AddLine("|cff999999" .. (L["+%d more"]):format(#lines - GIVER_MAX) .. "|r", 1, 1, 1) end
+	tooltip:Show() -- (resize to the new lines)
+end
+
+function Q:OnLogin()
+	if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+		TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
+			if tooltip == GameTooltip then pcall(GiverTooltip, tooltip) end
+		end)
+	elseif GameTooltip and GameTooltip.HookScript then
+		pcall(GameTooltip.HookScript, GameTooltip, "OnTooltipSetUnit", function(tooltip) pcall(GiverTooltip, tooltip) end)
+	end
+end

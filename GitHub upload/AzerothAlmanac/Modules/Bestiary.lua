@@ -878,6 +878,9 @@ local function TooltipLine(tooltip)
 	if not npc then return end
 	local rec = ns.Store:Get("creature", npc)
 	if not rec then
+		-- (friendly NPCs belong to People, not the Creatures page: no "not yet" line for them)
+		local reaction = R(UnitReaction("mouseover", "player"))
+		if type(reaction) == "number" and reaction >= 5 then return end
 		tooltip:AddLine("|cff66ccff" .. L["Almanac:"] .. "|r " .. L["not yet in your Almanac"], 0.7, 0.7, 0.7)
 		return
 	end

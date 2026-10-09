@@ -18,6 +18,11 @@ local SWAP_TIME = 0.14
 local CLEAR_TIME = 0.22
 local FALL_ACCEL = 70          -- cells per second squared
 local PREFIX = "AzAlmGame"
+-- (#59, DESIGN 81) Gem Match only shares best scores ("Q", "B|mode|score"): protocol 1. A later
+-- protocol adds fields after the score; this copy reads the first three and ignores the rest, and
+-- shares its range in the Almanac's hello. Release rule: the number goes up only when messages change.
+A.GAME_PROTOCOLS = A.GAME_PROTOCOLS or {}
+A.GAME_PROTOCOLS.gem = { 1, 1 }
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 -- the painted board: its picture is shown FRAME_SIZE square, and the gems' grid starts INSET_X / INSET_Y
@@ -794,7 +799,7 @@ local function OnMessage(text, sender, channel)
 		end
 		return
 	end
-	local mode, score = text:match("^B|(%a+)|(%d+)$")
+	local mode, score = text:match("^B|(%a+)|(%d+)") -- (#59: later fields, if any, are ignored)
 	score = tonumber(score)
 	if not (mode and score and score < 10000000) then return end
 	if channel == "GUILD" then

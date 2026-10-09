@@ -3,8 +3,10 @@
 -- tooltip ("Almanac", in red, with the Almanac's icon) is all that shows.
 --
 -- Hidden addon messages (prefix AzAlmHi), one line each:
---   H|version   "hello, who's here?"  answered once, by whisper, with I
---   I|version   "I'm here"            never answered
+--   H|version|g   "hello, who's here?"  answered once, by whisper, with I
+--   I|version|g   "I'm here"            never answered
+--   (#59, DESIGN 81) g: the mini games' protocol ranges, "wg:12-12,mtt:1-1,gem:1-1" (older copies
+--   send no g and ignore it). Each game lists its range in ns.GAME_PROTOCOLS[key] = { min, max }.
 -- Who gets a hello: the guild at login, the group when it changes, online friends (spaced out), and
 -- a player you target or mouse over (once in a while each). No realm-wide channel.
 -- A newer version seen on someone else's copy brings up the "New Version Available" quest
@@ -100,8 +102,23 @@ local function Send(text, channel, target)
 	end
 end
 
+-- (#59) the games' protocol ranges, for the hello: "wg:12-12,mtt:1-1"
+local function GamesField()
+	local parts = {}
+	for key, r in pairs(ns.GAME_PROTOCOLS or {}) do parts[#parts + 1] = ("%s:%d-%d"):format(key, r[1], r[2]) end
+	table.sort(parts)
+	return table.concat(parts, ",")
+end
+
+local function ParseGames(g)
+	if type(g) ~= "string" or g == "" then return nil end
+	local out = {}
+	for key, lo, hi in g:gmatch("(%a+):(%d+)%-(%d+)") do out[key] = { tonumber(lo), tonumber(hi) } end
+	return next(out) and out or nil
+end
+
 local function Hello(channel, target)
-	Send("H|" .. ns.VERSION, channel, target)
+	Send("H|" .. ns.VERSION .. "|" .. GamesField(), channel, target)
 end
 
 local function HelloTo(name)
@@ -125,13 +142,15 @@ end
 -- Hearing
 ---------------------------------------------------------------------------
 
-local function Remember(sender, version, via)
+local function Remember(sender, version, via, games)
 	local key = Key(sender)
 	if not key then return end
 	local rec = known[key] or {}
 	known[key] = rec
 	rec.n = Ambiguate and Ambiguate(sender, "none") or sender
+	if rec.v ~= version then rec.g = nil end -- (a new version: its games are re-learned)
 	rec.v = version
+	rec.g = games or rec.g
 	rec.t = time()
 	-- the closest tie wins: guild and friends over group over a passer-by
 	local rank = { guild = 4, friend = 3, group = 2, seen = 1 }
@@ -164,14 +183,14 @@ local function OnMessage(text, channel, sender)
 		return
 	end
 	if (kind ~= "H" and kind ~= "I") or not version or version == "" then return end
-	Remember(sender, version, ViaOf(channel, sender))
+	Remember(sender, version, ViaOf(channel, sender), ParseGames(extra))
 	if kind == "H" and S().share then
 		local key = Key(sender)
 		local now = GetTime()
 		if not lastReply[key] or now - lastReply[key] >= REPLY_GAP then
 			lastReply[key] = now
 			-- spread the answers out, so a guild doesn't all answer in the same instant
-			C_Timer.After(0.5 + math.random() * 3, function() Send("I|" .. ns.VERSION, "WHISPER", sender) end)
+			C_Timer.After(0.5 + math.random() * 3, function() Send("I|" .. ns.VERSION .. "|" .. GamesField(), "WHISPER", sender) end)
 		end
 	end
 end
@@ -221,6 +240,36 @@ function P:Get(nameOrUnit)
 	if type(nameOrUnit) == "string" and UnitExists(nameOrUnit) and UnitIsPlayer(nameOrUnit) then name = UnitFull(nameOrUnit) end
 	local rec = known and known[Key(name) or ""]
 	if rec and time() - (rec.t or 0) <= TOOLTIP_DAYS * 86400 then return rec end
+end
+
+-- (#59, DESIGN 81) can we play this game with them, as far as we know?
+--   "same"    the same newest protocol: everything works
+--   "limited" a protocol in common, but not the newest on one side: plays, some features off
+--   "theyOld" no protocol in common, theirs is older: they need to update
+--   "weOld"   no protocol in common, ours is older: we need to update
+--   nil       not known (no hello heard, or a copy too old to say)
+function P:GameCompat(nameOrUnit, game)
+	local rec = self:Get(nameOrUnit)
+	local theirs = rec and rec.g and rec.g[game]
+	local mine = ns.GAME_PROTOCOLS and ns.GAME_PROTOCOLS[game]
+	if not (theirs and mine) then return nil, rec end
+	local lo, hi = math.max(mine[1], theirs[1]), math.min(mine[2], theirs[2])
+	if lo > hi then return (theirs[2] < mine[1]) and "theyOld" or "weOld", rec end
+	if mine[2] == theirs[2] then return "same", rec end
+	return "limited", rec
+end
+
+-- the mark for it: a coloured dot and a few words (for lobbies and challenge forms)
+local function Dot(colour) return "|TInterface\\COMMON\\Indicator-" .. colour .. ":14:14:0:0|t" end
+P.COMPAT_TEXT = {
+	same = Dot("Green") .. " " .. L["same version"],
+	limited = Dot("Yellow") .. " " .. L["plays, with limits"],
+	theyOld = Dot("Red") .. " " .. L["their Almanac is too old"],
+	weOld = Dot("Red") .. " " .. L["your Almanac is too old"],
+}
+function P:CompatText(nameOrUnit, game)
+	local c = self:GameCompat(nameOrUnit, game)
+	return c and P.COMPAT_TEXT[c] or nil, c
 end
 
 local function TooltipBadge(tooltip)

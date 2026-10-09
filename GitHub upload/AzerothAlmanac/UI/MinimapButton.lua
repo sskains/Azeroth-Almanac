@@ -19,11 +19,24 @@ local button
 local OPEN_ACTION = "AZEROTHALMANAC_TOGGLE"
 local OPEN_KEYS = { "SHIFT-J", "ALT-A" }
 
--- the key that opens the Almanac now, as the game writes it ("Shift-J"), or nil
+-- the key that opens the Almanac now, written out in full ("Shift+J", "Ctrl+Alt+F5"), or nil
+-- (the game's own GetBindingText shortens modifiers to "s-J")
+local MODS = { SHIFT = "Shift", CTRL = "Ctrl", ALT = "Alt", META = "Cmd" }
 function MB.OpenKeyText()
 	local key = GetBindingKey and GetBindingKey(OPEN_ACTION)
 	if not key then return nil end
-	return (GetBindingText and GetBindingText(key, "KEY_")) or key
+	local parts = {}
+	for part in key:gmatch("[^-]+") do parts[#parts + 1] = part end
+	if key:sub(-1) == "-" then parts[#parts + 1] = "-" end -- (the minus key itself)
+	for i, part in ipairs(parts) do
+		if i < #parts then
+			parts[i] = MODS[part] or part
+		else
+			local name = _G["KEY_" .. part]
+			parts[i] = (type(name) == "string" and name ~= "" and name) or part
+		end
+	end
+	return table.concat(parts, "+")
 end
 
 local function GiveOpenKey()
@@ -138,7 +151,7 @@ local function Build()
 		GameTooltip:AddLine("|cffffd100" .. L["Right-click:"] .. "|r " .. L["quick menu"], 1, 1, 1)
 		GameTooltip:AddLine("|cffffd100" .. L["Drag:"] .. "|r " .. L["move around the minimap"], 1, 1, 1)
 		local key = MB.OpenKeyText()
-		if key then GameTooltip:AddLine("|cffffd100" .. L["Open:"] .. "|r " .. key, 1, 1, 1) end
+		if key then GameTooltip:AddLine("|cffffd100" .. key .. ":|r " .. L["open or close the Almanac"], 1, 1, 1) end
 		GameTooltip:Show()
 	end)
 	button:SetScript("OnLeave", GameTooltip_Hide)

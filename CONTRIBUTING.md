@@ -42,6 +42,7 @@ Say which area you're in before starting, and avoid the other person's files unt
 - Every change adds a line to `CHANGELOG.md` under an **Unreleased** heading at the top; Shannon turns that heading into the version number when releasing.
 - Anything that needs checking in game goes in `docs/TEST_CHECKLIST.md` under its area.
 - Design decisions go in `docs/DESIGN.md` (the old `docs/TASKS.md`; its checkboxes are historical).
+- **Mini game protocols** (#59, DESIGN 81): Wild Gambit's `PROTO`, Murloc Tac Toe's `PROTO` and Gem Match's range go up only when the messages between players change, with a CHANGELOG line saying so. When Wild Gambit's goes up, keep `WG.PROTO_MIN` at the oldest protocol whose behaviour is still in the code and tested; list new features in `WG.FEATURE_PROTO`.
 
 ## 5b. Tracking work
 

@@ -3070,10 +3070,15 @@ local function Build()
 	local hint = box:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	hint:SetPoint("LEFT", 2, 0)
 	hint:SetText("Name or Name-Realm")
-	box:SetScript("OnTextChanged", function(self) hint:SetShown(self:GetText() == "") end)
+	box:SetScript("OnTextChanged", function(self) hint:SetShown(self:GetText() == "") WG.PaintCompat() end)
 	tc.box = box
 	local target = WoodButton(A.Widgets.Button(tc, "My target", 110, function() WG:Challenge("target") end))
 	target:SetPoint("TOP", box, "BOTTOM", -4, -6)
+	-- (#59) can we play them? green: same version; yellow: plays, some features off; red: one of you
+	-- needs to update (the name typed, else your target; nothing when their Almanac hasn't said)
+	tc.compat = tc:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	tc.compat:SetPoint("TOP", target, "BOTTOM", 4, -4)
+	tc.compat:SetWidth(TW - 20)
 	tc.go:SetText("Challenge")
 	tc.go:SetScript("OnClick", function()
 		box:ClearFocus()
@@ -3087,6 +3092,16 @@ local function Build()
 	tf.go:SetScript("OnClick", function() WG:FindMatch() end)
 	frame.find = tf.go
 	lobby.tiles = { practice = tp, challenge = tc, match = tf }
+	function WG.PaintCompat()
+		local fs = tc.compat
+		if not fs then return end
+		local Peers = A.Peers
+		local who = strtrim(box:GetText() or "")
+		if who == "" and UnitExists("target") and A.Readable(UnitIsPlayer("target")) == true then who = "target" end
+		local text = (who ~= "" and Peers and Peers.CompatText) and Peers:CompatText(who, "wg") or nil
+		fs:SetText(text or "")
+	end
+	tc:HookScript("OnShow", WG.PaintCompat)
 	lobby.record = lobby:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	lobby.record:SetPoint("TOP", lobby, "TOP", 0, -178 - TH - 12)
 	lobby.record:SetTextColor(0.85, 0.8, 0.68)
@@ -4995,7 +5010,8 @@ end
 --   X|gid|why           leave / cancel (why: card, step, gone, timeout = called off, not counted)
 --   P|gid|0/1           in combat (the game waits)    H|gid   still here (every 15 s in a game)
 --   R|gid               "send your setup again" (S and K once more; the setup's missing pieces)
---   V|-|version         the reply to a challenge from another protocol (any protocol reads it)
+--   V|-|version|min|max the reply to a challenge from a protocol we can't play (any protocol reads it;
+--                        min / max: the protocols this copy can play, #59)
 -- Every whisper goes out through one queue, in order, paced under the game's allowance (0.62.0).
 -- Fair hands: the spike budget is four fifths of the lower of the two bests (room for a random
 -- draw to reach it), then whichever hand is still over the other plays its strongest supporting
@@ -5009,6 +5025,50 @@ end
 
 local PREFIX, PROTO = "AzAlmWG", "12" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends; 12: Pick Pocket trades hand cards)
 local POPUP = "AZEROTHALMANAC_WG_CHALLENGE"
+
+-- (#59, DESIGN 81) Playing across versions. Each copy plays a range of protocols; two players use
+-- the newest one both can play (a challenge goes out at our newest; a copy that can't read it answers V
+-- with its range, and the challenger asks again at the newest protocol in common). A feature newer
+-- than the match's protocol is switched off for that match (WG:Feature). Stability first: the range
+-- only reaches back as far as the old behaviour is still in this code and tested; anything older is
+-- refused, both sides are told who needs to update, and the older side is offered the update quest.
+-- Release rule: PROTO goes up only when the messages change (a line in CHANGELOG.md says so).
+WG.PROTO_MIN, WG.PROTO_MAX = tonumber(PROTO), tonumber(PROTO)
+A.GAME_PROTOCOLS = A.GAME_PROTOCOLS or {}
+A.GAME_PROTOCOLS.wg = { WG.PROTO_MIN, WG.PROTO_MAX }
+-- the protocol each feature first came in (a match on an older protocol plays without it)
+WG.FEATURE_PROTO = { pickpocket = 12 }
+function WG:Feature(name)
+	local need = self.FEATURE_PROTO[name]
+	local p = (self.net and self.net.proto) or self.PROTO_MAX
+	return not need or p >= need
+end
+function WG.Accepts(p)
+	p = tonumber(p)
+	return p ~= nil and p >= WG.PROTO_MIN and p <= WG.PROTO_MAX
+end
+-- the protocol to write to this player: the match's, else the one they last wrote to us in, else our newest
+WG.heardProto = {}
+function WG.ProtoFor(target)
+	local net = WG.net
+	if net and net.proto and target and net.opp and SameName(target, net.opp) then return tostring(net.proto) end
+	local heard = target and WG.heardProto[Key(target)]
+	return heard and tostring(heard) or PROTO
+end
+-- a game we can't play together: say who needs to update; the older side gets the update quest
+function WG.VersionClash(sender, theirMax, theirVersion)
+	local who = Short(sender)
+	local Peers = A.Peers
+	theirVersion = theirVersion or (Peers and Peers.Get and Peers:Get(sender) and Peers:Get(sender).v) or nil
+	local vText = theirVersion and theirVersion ~= "?" and (" (Azeroth Almanac %s)"):format(theirVersion) or ""
+	theirMax = tonumber(theirMax)
+	if theirMax and theirMax > WG.PROTO_MAX then
+		Tell(("%s has a newer Wild Gambit%s. Update your Almanac to play them (you have %s)."):format(who, vText, A.VERSION or "?"))
+		if Peers and Peers.Nudge and theirVersion and Peers.Newer and Peers.Newer(theirVersion, A.VERSION) then Peers:Nudge(theirVersion, who) end
+	else
+		Tell(("%s has an older Wild Gambit%s. They need to update their Almanac to play you."):format(who, vText))
+	end
+end
 
 -- the outgoing queue: one whisper at a time, a short gap between them; one the game turns away
 -- (over its allowance) is tried again a second later, up to 8 times
@@ -5032,7 +5092,7 @@ end
 local function SendTo(target, ...)
 	if not (target and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
 	local box = WG.outbox
-	box[#box + 1] = { to = target, text = PROTO .. "|" .. table.concat({ ... }, "|") }
+	box[#box + 1] = { to = target, text = WG.ProtoFor(target) .. "|" .. table.concat({ ... }, "|") }
 	if not WG.pumping then WG.Pump() end
 end
 
@@ -5148,7 +5208,7 @@ function WG:Challenge(name)
 	C_Timer.After(32, function()
 		if self.net == net and net.state == "inviting" then
 			self.net = nil
-			Tell(("no answer from %s. They need the same Azeroth Almanac version."):format(Short(name)))
+			Tell(("no answer from %s. They may be offline or busy, or their Almanac is too old for Wild Gambit."):format(Short(name)))
 			if frame:IsShown() and not (game and not game.over) then self:ShowLobby() end
 		end
 	end)
@@ -5442,7 +5502,7 @@ local function AcceptChallenge()
 	if game and not game.over and not game.result then
 		if game.tutorial then WG:LeaveGameFirst() else WG:Forfeit() end
 	end
-	WG.net = { gid = p.gid, opp = p.from, state = "picking" }
+	WG.net = { gid = p.gid, opp = p.from, state = "picking", proto = p.proto }
 	SendTo(p.from, "A", p.gid)
 	WG:ShowPick()
 end
@@ -5456,29 +5516,37 @@ end
 local function OnMessage(text, sender)
 	local f = { strsplit("|", text) }
 	if f[2] == "V" then
-		-- (any protocol) the player we challenged has another version
+		-- (any protocol) the player we challenged can't read our protocol: ask again at the newest
+		-- one we share (#59), or say who needs to update
 		local net = WG.net
-		if net and SameName(sender, net.opp) then
+		if net and SameName(sender, net.opp) and net.state == "inviting" then
+			local lo, hi = tonumber(f[5]), tonumber(f[6])
+			local common = lo and hi and math.min(hi, WG.PROTO_MAX)
+			if common and common >= math.max(lo, WG.PROTO_MIN) and not net.retried then
+				net.retried = true
+				net.proto = common
+				SendTo(net.opp, "C", net.gid, net.auto and "q" or nil)
+				return
+			end
 			WG.net = nil
-			Tell(("%s has Azeroth Almanac %s, and Wild Gambit needs the same version on both sides (you have %s)."):format(Short(sender), f[4] or "?", A.VERSION or "?"))
+			WG.VersionClash(sender, hi or tonumber(f[1]), f[4])
 			if frame:IsShown() and not (game and not game.over) then WG:ShowLobby() end
 		end
 		return
 	end
-	if f[1] ~= PROTO then
-		-- another version of the game: say so instead of leaving the challenge hanging, and tell them
-		-- which version we have
+	if not WG.Accepts(f[1]) then
+		-- a protocol we can't play: say so instead of leaving the challenge hanging, and send our
+		-- range so their copy can ask again at one we share (#59)
 		if f[2] == "C" then
-			SendTo(sender, "V", "-", A.VERSION or "?")
-			if f[4] ~= "q" then
-				Tell(("%s challenged you, but has a different version of Wild Gambit. You both need the same Azeroth Almanac version to play."):format(Short(sender)))
-			end
+			SendTo(sender, "V", "-", A.VERSION or "?", WG.PROTO_MIN, WG.PROTO_MAX)
+			if f[4] ~= "q" then WG.VersionClash(sender, tonumber(f[1])) end
 		elseif f[2] == "A" and WG.net and SameName(sender, WG.net.opp) then
-			Tell(("%s has a different version of Wild Gambit. You both need the same Azeroth Almanac version to play."):format(Short(sender)))
+			WG.VersionClash(sender, tonumber(f[1]))
 			WG.net = nil
 		end
 		return
 	end
+	WG.heardProto[Key(sender)] = tonumber(f[1]) -- (#59: answers go back in their protocol)
 	local kind, gid = f[2], f[3]
 	local net = WG.net
 	local fromOpp = net and SameName(sender, net.opp) and gid == net.gid
@@ -5490,7 +5558,7 @@ local function OnMessage(text, sender)
 		-- a match-making challenge: only for someone still looking
 		if not WG.queue or WG.net or (game and game.pvp and not game.over) then SendTo(sender, "D", gid, "busy") return end
 		WG:StopLooking(true)
-		WG.net = { gid = gid, opp = sender, state = "picking", auto = true }
+		WG.net = { gid = gid, opp = sender, state = "picking", auto = true, proto = tonumber(f[1]) }
 		SendTo(sender, "A", gid)
 		Play(SND.challenge)
 		WG:ShowPick()
@@ -5499,10 +5567,13 @@ local function OnMessage(text, sender)
 	if kind == "C" then
 		if db.allow == false then SendTo(sender, "D", gid, "off") return end
 		if Busy() or WG.pending then SendTo(sender, "D", gid, "busy") return end
-		WG.pending = { from = sender, gid = gid }
+		WG.pending = { from = sender, gid = gid, proto = tonumber(f[1]) }
 		Play(SND.challenge)
 		local note = (game and not game.over and not game.result and not game.tutorial)
 			and "\n\n|cffff8060Accepting forfeits the practice game you're in.|r" or ""
+		-- (#59) their version, as far as we know
+		local compat = A.Peers and A.Peers.CompatText and A.Peers:CompatText(sender, "wg")
+		if compat then note = note .. "\n\n" .. compat end
 		if not StaticPopup_Show(POPUP, Short(sender), note) then DeclineChallenge() end
 		C_Timer.After(30, function() if WG.pending and WG.pending.gid == gid then StaticPopup_Hide(POPUP) DeclineChallenge() end end)
 	elseif kind == "X" and WG.pending and WG.pending.gid == gid then
@@ -5592,6 +5663,7 @@ local function OnMessage(text, sender)
 	elseif kind == "A" and net.state == "inviting" then
 		-- accepted: Ready once you've chosen (their full name from here on, realm and all)
 		net.opp = sender
+		net.proto = tonumber(f[1]) -- (#59: the protocol the match is played in)
 		net.state = "accepted"
 		Play(SND.challenge)
 		if frame.prep:IsVisible() then WG:PaintPick() else WG:ShowPick() end
@@ -6179,6 +6251,12 @@ function WG:OnLogin()
 	if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
 	pcall(WG.HookPetMenu)
 	pcall(WG.HookPlayMenu)
+	-- (#59) the lobby's version mark follows your target
+	do
+		local tf = CreateFrame("Frame")
+		tf:RegisterEvent("PLAYER_TARGET_CHANGED")
+		tf:SetScript("OnEvent", function() if WG.PaintCompat and frame and frame:IsShown() then WG.PaintCompat() end end)
+	end
 	-- your companion's card follows it: its level when it levels or is called, its face once seen
 	local petEvents = CreateFrame("Frame")
 	petEvents:RegisterEvent("UNIT_PET")

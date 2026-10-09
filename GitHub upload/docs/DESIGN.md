@@ -965,6 +965,13 @@ Applies to Wild Gambit, Murloc Tac Toe and Gem Match.
 6. **Release rule.** The protocol is bumped only when the messages change, with a changelog line saying so.
 7. **Tests.** The offline tests (Python + lupa) also play an old-protocol client against the new one.
 
+**Built, part 1 (Unreleased, 2026-10-09)** [?]
+- `Modules/Peers.lua`: the hello and its answer carry `g` = each game's range ("gem:1-1,mtt:1-1,wg:12-12", from `ns.GAME_PROTOCOLS`, which each game fills in); `P:GameCompat(name, game)` -> same / limited / theyOld / weOld / nil, `P:CompatText` with the game's indicator dots.
+- Wild Gambit: `WG.PROTO_MIN` / `PROTO_MAX`, `WG.Accepts`, `WG.ProtoFor` (the match's protocol, else the one they last used), `WG.FEATURE_PROTO` + `WG:Feature(name)`; `V` carries our range and the challenger re-sends `C` once at the newest shared protocol; `WG.VersionClash` tells who must update and offers the update quest; marks on the Challenge tile and the challenge pop-up.
+- Murloc Tac Toe: answers a challenge it can't play with `V|-|version|min|max` (read whatever the protocol), tells both sides, offers the update quest.
+- Gem Match: range registered; score messages read with later fields ignored.
+- **Not yet (part 2):** the board checksum after every move, and the old-against-new tests. The offline Wild Gambit tests named in CONTRIBUTING.md aren't in the repo (they lived in an earlier session's workspace), so part 2 starts by rebuilding a test harness under `dev/tests/`.
+
 ## 82. Auction House: bag to auction (agreed with Shannon 2026-10-09) [ ]
 - **Alt+Right-click** a bag item while the Auction House's Auctions tab is open: it goes into the sell slot, with the stack size and a price filled in from Auction Prices (`QoL/AuctionPrices.lua`: the last scan, slightly undercut).
 - **Enter**, or Alt+Right-click the same item again, posts it (the click is the hardware event posting needs).

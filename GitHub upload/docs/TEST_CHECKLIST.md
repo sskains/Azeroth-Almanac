@@ -8,6 +8,11 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Version marks (#59)** (needs Asia on this version too, or two accounts): after a minute in the same guild / group, open Wild Gambit > Challenge and type her name (or target her): a green dot and "same version". Her challenge pop-up on your screen shows the same. With someone on an older copy (no mark known): no line, as before.
+- [ ] **Version clash messages (#59):** (only testable with an older copy, e.g. the zip from before 0.69) challenge them in Wild Gambit: you are told they have an older Wild Gambit and need to update; in Murloc Tac Toe too. Nothing else changes in a normal game: play one Wild Gambit match and one Murloc Tac Toe game with Asia start to finish.
+
+- [ ] **Quest givers' tooltips (#57):** hover a quest giver you've been offered quests by: each quest you can still take shows as "! Name" (name in the quest's difficulty colour), one in your log as grey "? Name (in your log)", one above your level as grey "! Name (level N)". Done quests don't show. On an alt, quests seen on another character show too. Turn the setting off in Settings > General: the lines go.
+
 - [ ] **Follow button (#56):** target a party member or a friendly player: the footsteps show (grey when far away). Target an NPC, an enemy, yourself, a corpse, nothing: no button, and clicking where it would be selects / right-clicks the target frame as normal. In combat, switch from a player to an NPC: the button disappears (clicks there may still go to it until combat ends).
 - [ ] **Healer Assist beside frames (#56):** the first icon's top is level with the top of the health bar (player frame and party frames); with aggro on someone, the skull badge and count sit in the gap between the frame and the icons, clear of the health numbers. Pets' icons still line up under their owner's.
 - [ ] **Healer Assist greying (#56):** a cure with nothing to cure, a buff they already have, a resurrection on someone alive: grey. Out of mana, out of range, a spell on cooldown (not just the global cooldown): grey. Usable heals keep their normal look and flashing.

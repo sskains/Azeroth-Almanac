@@ -19,6 +19,11 @@ local MT = ns:NewModule("MurlocTacToe")
 
 local PREFIX = "AzAlmMTT"
 local PROTO = "1"
+-- (#59, DESIGN 81) the protocols this copy plays (only 1 so far); shared in the Almanac's hello so
+-- other players see a version mark before challenging. Release rule: PROTO goes up only when the
+-- messages change.
+A.GAME_PROTOCOLS = A.GAME_PROTOCOLS or {}
+A.GAME_PROTOCOLS.mtt = { tonumber(PROTO), tonumber(PROTO) }
 local INVITE_TIMEOUT = 30      -- seconds a challenge waits for an answer
 local STALE = 60               -- seconds waiting on the other player before leaving costs nothing
 local CELL = 90
@@ -716,11 +721,33 @@ local function OnMessage(text, sender)
 		end
 		return
 	end
-	if v ~= PROTO then
-		if tonumber(v) and tonumber(v) > tonumber(PROTO) and not warnedNewer[sender] then
+	-- (#59) V|-|version|min|max: "I can't play your protocol" (read whatever its protocol)
+	if kind == "V" then
+		local hi = tonumber(c) -- (V|-|version|min|max: c is their newest)
+		if not warnedNewer[sender] then
 			warnedNewer[sender] = true
-			Say(Short(sender) .. " has a newer Murloc Tac Toe. Update Azeroth Almanac to play them.")
+			if hi and hi > tonumber(PROTO) then
+				Say(("%s has a newer Murloc Tac Toe (Azeroth Almanac %s). Update your Almanac to play them."):format(Short(sender), a or "?"))
+				if A.Peers and A.Peers.Nudge and a and A.Peers.Newer and A.Peers.Newer(a, A.VERSION) then A.Peers:Nudge(a, Short(sender)) end
+			else
+				Say(("%s has an older Murloc Tac Toe (Azeroth Almanac %s). They need to update their Almanac to play you."):format(Short(sender), a or "?"))
+			end
 		end
+		return
+	end
+	if v ~= PROTO then
+		-- both sides are told (#59): we say who needs to update, and answer a challenge with our range
+		if not warnedNewer[sender] then
+			warnedNewer[sender] = true
+			if tonumber(v) and tonumber(v) > tonumber(PROTO) then
+				Say(Short(sender) .. " has a newer Murloc Tac Toe. Update Azeroth Almanac to play them.")
+				local rec = A.Peers and A.Peers.Get and A.Peers:Get(sender)
+				if rec and rec.v and A.Peers.Newer and A.Peers.Newer(rec.v, A.VERSION) then A.Peers:Nudge(rec.v, Short(sender)) end
+			else
+				Say(Short(sender) .. " has an older Murloc Tac Toe. They need to update their Almanac to play you.")
+			end
+		end
+		if kind == "C" then Send(sender, "V", "-", A.VERSION or "?", PROTO, PROTO) end
 		return
 	end
 	local fromOpp = game and game.opp and SameName(sender, game.opp)

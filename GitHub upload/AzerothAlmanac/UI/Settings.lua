@@ -405,6 +405,8 @@ local function BuildGeneral(P)
 	end, nil, nil, L["Account: everything any of your characters has found, with creature tiers from everyone's kills. This character only: just what the character you're playing has found and killed (its Wild Gambit cards too). Recording is the same either way; switch back any time. Prices, flight times and other characters' bags stay account-wide."])
 	P:Check(L["Minimap button"], L["Left-click opens the Almanac, right-click a menu. Drag it around the minimap."],
 		function() return Opt().minimap.show end, function(v) ns.MinimapButton:SetShown(v) end)
+	P:Check(L["Quests on quest givers' tooltips"], L["\"! Quest name\" for each quest you've seen them offer (on any of your characters) that this character can take; \"?\" for one in your log; greyed with its level when you're not high enough yet."],
+		function() return Opt().window.questGivers ~= false end, function(v) Opt().window.questGivers = v end)
 	P:Check(L["Almanac line on creature tooltips"], L["What you know of a creature: how often it was met and killed, and its research tier."],
 		function() return Opt().bestiary.tooltip end, function(v) Opt().bestiary.tooltip = v end)
 	P:Stepper(L["Window size %"], 70, 130, 5, function() return math.floor((Opt().window.scale or 1) * 100 + 0.5) end,
