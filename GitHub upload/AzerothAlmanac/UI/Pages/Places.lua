@@ -687,7 +687,7 @@ function page:Build(parent, header)
 			row.text:SetText("")
 			row.right:SetText("")
 			FillBanner(row, {
-				name = L["Dungeons and raids"], icon = W.KindIcon("instance"),
+				name = L["Dungeons and raids"], art = "Zone_Dungeons", icon = W.KindIcon("instance"),
 				count = "|cffcccccc" .. (L["%d entered"]):format(r.count) .. "|r",
 				pill = { sign = ">", label = L["Open Dungeons"], action = GoTo("dungeons") },
 			})
