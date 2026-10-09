@@ -7,6 +7,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 ## Unreleased
 
 - **A new Wild Gambit icon** (`Media\Icon_WildGambit.tga`, 256 x 256): three glowing cards fanned out with a gold coin and purple-flowered vines, painted for the job, replacing the blurry 64 px crop of the logo. Shows in the minimap button's menu. A replaced texture: `/reload` is enough.
+- **Follow button: footsteps** (Asia): the button is now a pair of gold footprints with no frame, a small press nudge, and a gold aura (two soft rings of light) behind them that breathes the whole time you are following someone (it starts when the game says you follow and stops when you stop; the tooltip names who you follow); it greys when the target can't be followed. The button sits on the MEDIUM strata, above the target frame (which took clicks wherever it overlapped the button, so the prints themselves didn't respond), and under the windows; its click area is the prints plus a small margin (about 1.3 times their size each way). New texture `Follow_Footsteps.tga` (full game restart). The footsteps are the new default icon: once, a saved winged boot (the old default) switches to them, and the Settings picker shows the right name; the boot stays a choice in Settings > Follow button > Icon and then sticks.
 
 ## 0.68.9
 

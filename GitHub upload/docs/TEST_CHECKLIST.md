@@ -6,6 +6,12 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased (/reload)
+
+- [ ] Follow button, footsteps (full game restart): target a friendly player: a pair of gold footprints at the target frame's top right, no glow until you click: then the game prints "Following <name>.", a gold aura glows and breathes behind the prints and stays lit the whole time you follow, and the tooltip says "Following <name>"; move (or stop another way) and the game prints "You stop following <name>." and the aura goes out; target someone else while following: the aura stays (you are still following) and the tooltip names who you follow; it clears when you zone; clicking right on the prints follows (and shows the tooltip), a click just outside them (about a sixth of their size) does too, and the portrait next to them still targets as usual (the margin is FB.HIT_GROW, 0.15); windows opened over the button (Almanac, a mini game, the bags) still cover it; the mouse-over highlight is the prints' shape; a far-off or enemy target greys them; Settings > Follow button > Icon shows "Footsteps" while the prints are on the button (also after a /reload), and picking Winged boot sticks across a /reload; Footsteps, Winged boot and Running cat all work and switch back and forth cleanly (the framed ones get their frame back), Size changes the footsteps too; Reset position works.
+- [ ] Follow button: target a friendly player, then open the Almanac, a mini game or your bags over the target frame: the window covers the button (it doesn't float on top); with the windows closed it still shows, greys out and follows as before, also in combat.
+- [ ] Minimap button menu: Wild Gambit shows the new painted icon (three cards, coin, vines), crisp, with no pink fringe (/reload).
+
 ## 0.68.9 (full game restart: new textures)
 
 - [ ] AddOns list: the crimson journal logo beside Azeroth Almanac.

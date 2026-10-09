@@ -16,14 +16,27 @@ local FOLLOW_RANGE = 4        -- CheckInteractDistance index: follow distance (a
 local DRIVER = "[@target,exists] show; hide"
 
 -- icons that exist in the game's spell art; the first is the default
+FB.HIT_GROW = 0.15 -- how far the click area reaches past the footsteps, as a fraction of their size, on every side
+FB.FOOT = "Footsteps" -- (custom art, Media\Follow_Footsteps: no frame, a soft gold glow drawn in code)
 FB.icons = {
+	{ key = FB.FOOT, name = "Footsteps" },
 	{ key = "Ability_Rogue_Sprint", name = "Winged boot" },
 	{ key = "Ability_Druid_Dash", name = "Running cat" },
 }
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 
 local db
 local button
 local pending = false
+local following -- the name the game says we are following, or nil
+
+-- is the current target the one we follow? (names only: GUIDs can be secret)
+local function FollowingTarget()
+	if not following then return false end
+	local n = R(UnitName("target"))
+	if type(n) ~= "string" then return false end
+	return n == following or n == following:match("^[^-]+")
+end
 
 ---------------------------------------------------------------------------
 -- Can the target be followed?
@@ -52,6 +65,12 @@ local function Refresh()
 		button.icon:SetDesaturated(not ok)
 		button:SetAlpha(ok and 1 or 0.5)
 	end
+	-- the aura: lit the whole time you are following someone
+	local lit = (button.foot and following) and true or false
+	if button.glow:IsShown() ~= lit then
+		button.glow:SetShown(lit)
+		button.aura:SetShown(lit)
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -62,11 +81,32 @@ local function HasAtlas(name)
 	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
 end
 
+-- the mouse-over and pressed looks that go with a framed spell icon (the footsteps change them)
+local function SkinFramed(b)
+	b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	b:GetHighlightTexture():SetAlpha(1)
+	if b:GetPushedTexture() then b:GetPushedTexture():SetAlpha(1) end
+	b:GetHighlightTexture():SetTexCoord(0, 1, 0, 1)
+	b:GetHighlightTexture():ClearAllPoints()
+	b:GetHighlightTexture():SetAllPoints()
+	if HasAtlas("UI-HUD-ActionBar-IconFrame") then
+		if HasAtlas("UI-HUD-ActionBar-IconFrame-Down") then
+			b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+			b:GetPushedTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Down")
+		end
+		if HasAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") then b:GetHighlightTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") end
+	else
+		b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+	end
+end
+
 local function Build()
 	if button then return end
 	local b = CreateFrame("Button", "AzerothAlmanacFollowButton", UIParent, "SecureActionButtonTemplate")
-	b:SetFrameStrata("HIGH")
-	b:SetFrameLevel(50)
+	-- MEDIUM strata, low level: above the target frame (LOW), which otherwise takes the clicks wherever it
+	-- overlaps the button, but under the windows (the Almanac, the games, the bags), which cover it
+	b:SetFrameStrata("MEDIUM")
+	b:SetFrameLevel(2)
 	b:RegisterForClicks("AnyUp", "AnyDown")   -- the game picks press or release, per its "cast on key down" option
 	b:SetAttribute("type", "macro")
 	b:SetAttribute("macrotext", "/follow")
@@ -75,22 +115,16 @@ local function Build()
 	b.icon:SetAllPoints()
 	b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
-	-- the game's action-button art round it, like the Healer Assist icons
-	b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	-- the game's action-button art round a spell icon, like the Healer Assist icons
 	if HasAtlas("UI-HUD-ActionBar-IconFrame") then
 		b.frameArt = b:CreateTexture(nil, "OVERLAY")
 		b.frameArt:SetAtlas("UI-HUD-ActionBar-IconFrame")
 		b.frameArt:SetAllPoints()
-		if HasAtlas("UI-HUD-ActionBar-IconFrame-Down") then
-			b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
-			b:GetPushedTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Down")
-		end
-		if HasAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") then b:GetHighlightTexture():SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover") end
 	else
 		b:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
 		b.normalArt = b:GetNormalTexture()
-		b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
 	end
+	SkinFramed(b)
 	b:SetScript("OnSizeChanged", function(self, w)
 		if self.normalArt then
 			self.normalArt:ClearAllPoints()
@@ -99,13 +133,48 @@ local function Build()
 		end
 	end)
 
+	-- the footsteps' aura: a gold light behind them that breathes slowly, on the whole time you are following someone
+	b.glow = b:CreateTexture(nil, "BACKGROUND")
+	b.glow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	b.glow:SetBlendMode("ADD")
+	b.glow:SetVertexColor(1, 0.8, 0.3)
+	b.glow:SetPoint("CENTER")
+	b.glow:Hide()
+	-- (a second, wider and softer ring of light round it: together the aura behind the prints)
+	b.aura = b:CreateTexture(nil, "BACKGROUND", nil, -1)
+	b.aura:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	b.aura:SetBlendMode("ADD")
+	b.aura:SetVertexColor(1, 0.65, 0.15)
+	b.aura:SetPoint("CENTER")
+	b.aura:Hide()
+	local t = 0
+	b:HookScript("OnUpdate", function(self, dt)
+		if not self.foot then return end
+		t = t + dt
+		local w = self.iconSide or self:GetWidth()
+		local pulse = 0.5 + 0.5 * math.sin(t * 2.2)
+		self.glow:SetSize(w * (1.7 + pulse * 0.2), w * (1.7 + pulse * 0.2))
+		self.glow:SetAlpha(0.9 + pulse * 0.1)
+		self.aura:SetSize(w * (2.7 + pulse * 0.3), w * (2.7 + pulse * 0.3))
+		self.aura:SetAlpha(0.55 + pulse * 0.25)
+	end)
+	b:HookScript("OnMouseDown", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, -1) end end)
+	b:HookScript("OnMouseUp", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, 0) end end)
+
 	b:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
 		local ok, why = Followable()
 		if ok then
-			GameTooltip:AddLine("Follow " .. (R(UnitName("target")) or "target"), 1, 0.82, 0)
-			GameTooltip:AddLine("Click to follow. Move to stop.", 0.8, 0.8, 0.8)
+			if FollowingTarget() then
+				GameTooltip:AddLine("Following " .. (R(UnitName("target")) or "target"), 0.5, 1, 0.5)
+				GameTooltip:AddLine("Move to stop.", 0.8, 0.8, 0.8)
+			else
+				GameTooltip:AddLine("Follow " .. (R(UnitName("target")) or "target"), 1, 0.82, 0)
+				GameTooltip:AddLine("Click to follow. Move to stop.", 0.8, 0.8, 0.8)
+				if following then GameTooltip:AddLine("(You are following " .. following .. " now.)", 0.5, 1, 0.5) end
+			end
 		else
+			if following then GameTooltip:AddLine("You are following " .. following, 0.5, 1, 0.5) end
 			GameTooltip:AddLine("Follow", 0.6, 0.6, 0.6)
 			GameTooltip:AddLine(why or "Can't follow", 1, 0.4, 0.4)
 		end
@@ -121,10 +190,44 @@ local function Apply()
 	if InCombatLockdown() then pending = true return end
 	pending = false
 	Build()
-	button:SetSize(db.size, db.size)
+	local foot = (db.icon or FB.FOOT) == FB.FOOT
+	local side = foot and db.size * 1.3 or db.size -- (the picture's size)
+	-- the footsteps get a genuinely larger button round them (the game gave the middle of a button with stretched hit
+	-- insets to the target frame), about 1.7 times the prints each way; the prints stay where they were
+	local hit = foot and side * (1 + 2 * FB.HIT_GROW) or side
+	button.iconSide = side
+	button:SetSize(hit, hit)
 	button:ClearAllPoints()
-	button:SetPoint("TOPRIGHT", TargetFrame or UIParent, "TOPRIGHT", db.x, db.y)
-	button.icon:SetTexture("Interface\\Icons\\" .. (db.icon or FB.icons[1].key))
+	local lift = (hit - side) / 2
+	button:SetPoint("TOPRIGHT", TargetFrame or UIParent, "TOPRIGHT", db.x + lift, db.y + lift)
+	local key = db.icon or FB.FOOT
+	button.foot = key == FB.FOOT
+	button.icon:ClearAllPoints()
+	if button.foot then
+		-- no frame: the prints themselves, a little larger than the framed icons so they read
+		button.icon:SetTexture(MEDIA .. "Follow_Footsteps")
+		button.icon:SetTexCoord(0, 1, 0, 1)
+		button.icon:SetSize(side, side)
+		button.icon:SetPoint("CENTER")
+		button:SetHitRectInsets(0, 0, 0, 0)
+		if button.frameArt then button.frameArt:Hide() end
+		if button.normalArt then button.normalArt:Hide() end
+		button:SetHighlightTexture(MEDIA .. "Follow_Footsteps", "ADD")
+		button:GetHighlightTexture():SetAlpha(0.35)
+		button:GetHighlightTexture():ClearAllPoints() -- (the highlight is the prints' size, not the whole click area)
+		button:GetHighlightTexture():SetPoint("CENTER")
+		button:GetHighlightTexture():SetSize(side, side)
+		button:SetPushedTexture(MEDIA .. "Follow_Footsteps")
+		button:GetPushedTexture():SetAlpha(0) -- (pressing nudges the prints instead)
+	else
+		button.icon:SetTexture("Interface\\Icons\\" .. key)
+		button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		button.icon:SetAllPoints()
+		button:SetHitRectInsets(0, 0, 0, 0)
+		if button.frameArt then button.frameArt:Show() end
+		if button.normalArt then button.normalArt:Show() end
+		SkinFramed(button)
+	end
 	if db.enabled then
 		RegisterStateDriver(button, "visibility", DRIVER)
 	else
@@ -150,15 +253,26 @@ end
 
 function FB:OnInitialize(saved)
 	db = saved.follow
+	-- once: the old default icon (the winged boot) gives way to the footsteps; picking the boot again later sticks
+	if not db.iconV then
+		db.iconV = 2
+		if db.icon == nil or db.icon == "Ability_Rogue_Sprint" then db.icon = FB.FOOT end
+	end
 end
 
 function FB:OnLogin()
 	Apply()
 	local events = CreateFrame("Frame")
-	for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "UNIT_FLAGS", "PLAYER_DEAD", "PLAYER_ALIVE" }) do
+	for _, e in ipairs({ "AUTOFOLLOW_BEGIN", "AUTOFOLLOW_END", "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "UNIT_FLAGS", "PLAYER_DEAD", "PLAYER_ALIVE" }) do
 		pcall(events.RegisterEvent, events, e)
 	end
-	events:SetScript("OnEvent", function(_, event)
+	events:SetScript("OnEvent", function(_, event, who)
+		if event == "AUTOFOLLOW_BEGIN" then
+			-- (the game names who; if it doesn't, it is the target, which /follow follows)
+			following = (type(who) == "string" and who ~= "" and who) or R(UnitName("target"))
+		elseif event == "AUTOFOLLOW_END" or event == "PLAYER_ENTERING_WORLD" then
+			following = nil
+		end
 		if event == "PLAYER_REGEN_ENABLED" and pending then Apply() end
 		Refresh()
 	end)
