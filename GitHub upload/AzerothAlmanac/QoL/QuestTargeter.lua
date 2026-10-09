@@ -930,6 +930,9 @@ function QT:OnLogin()
 			RememberUnit("mouseover")
 		elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
 			LearnFromLoot()
+		elseif event == "NAME_PLATE_UNIT_ADDED" then
+			-- (0.67.4) a frame later: on WoW Forever the event comes before the plate's unit is filled in
+			C_Timer.After(0, UpdateCounts)
 		elseif event == "QUEST_TURNED_IN" then
 			-- Remember who took the quest back, for quests the database doesn't know.
 			local questID = ...

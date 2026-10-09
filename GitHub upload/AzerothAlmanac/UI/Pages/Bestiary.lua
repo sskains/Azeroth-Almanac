@@ -305,8 +305,16 @@ local function Describe(npc, rec)
 			tip = z.known and L["Click to open in Places, with where it was seen and killed on the map."] or nil,
 			onClick = z.known and function() local p = ns.UI:GetPage("places") if p then p:ShowZone(z.map, npc) end end or nil }
 	end
+	-- (0.68.3) a dungeon boss: its dungeon (inside one, the game doesn't say which map you're on)
+	local dungeon, instID
+	if ns.Dungeons and ns.Dungeons.DungeonOf then dungeon, instID = ns.Dungeons:DungeonOf(npc) end
+	if dungeon and instID then
+		zs[#zs + 1] = { name = dungeon.name, icon = W.KindIcon("instance"), note = ns.Dungeons:SizeText(instID, ns.Store:Get("instance", instID)),
+			tip = L["Click to open it in Dungeons."],
+			onClick = function() local p = ns.UI:GetPage("dungeons") if p and p.ShowDungeon then p:ShowDungeon(instID) end end }
+	end
 	if #zs > 0 then b[#b + 1] = { "slots", zs } end
-	if #zones == 0 then b[#b + 1] = { "small", "?" } end
+	if #zs == 0 then b[#b + 1] = { "small", "?" } end
 
 	-- quests you've found that ask for it
 	local qs = {}
@@ -417,7 +425,7 @@ local function Show(npc, keepModel)
 	if favButton then favButton:SetCreature(npc) end
 	firstText:SetText(NOTE .. (L["First met by %s on %s."]):format(ns.CharName(rec.b), ns.DateText(rec.f)) .. "|r")
 	killPin.rec = rec
-	killPin:SetShown(rec.lastKill ~= nil)
+	killPin:SetShown(type(rec.lastKill) == "table" and rec.lastKill.map ~= nil)
 	detail:SetBlocks(Describe(npc, rec))
 end
 
@@ -857,12 +865,12 @@ function page:Build(parent, header)
 	local pinIcon = W.PinMarkup(18)
 	killPin = W.Button(detail.top, pinIcon .. " " .. L["Pin last kill"], 150, function(self)
 		local k = self.rec and self.rec.lastKill
-		if k then W.Waypoint(k.map, k.x, k.y, (self.rec.name or "?") .. " - " .. L["last kill"]) end
+		if type(k) == "table" and k.map then W.Waypoint(k.map, k.x, k.y, (self.rec.name or "?") .. " - " .. L["last kill"]) end
 	end)
 	killPin:SetPoint("TOPLEFT", firstText, "BOTTOMLEFT", 0, -10)
 	killPin:SetScript("OnEnter", function(self)
 		local k = self.rec and self.rec.lastKill
-		if not k then return end
+		if type(k) ~= "table" or not k.map then return end
 		local zone = ns.Store:Get("zone", k.map)
 		local name = zone and zone.name
 		if not name and C_Map and C_Map.GetMapInfo then
@@ -961,6 +969,15 @@ end)
 ns:On("RESET", function() shown = nil if list then list:Select(nil) Show(nil) end end)
 
 -- open the Bestiary on one creature
+-- (0.68.0) a creature's detail blocks (General, Health, Abilities, Defenses, Loot, Where ...), for
+-- other pages to show (the Dungeons page splits them into its boss tabs)
+function page:CreatureBlocks(npc)
+	local rec = npc and ns.Store:Get("creature", npc)
+	if not rec then return nil end
+	local ok, b = pcall(Describe, npc, rec)
+	return ok and b or nil
+end
+
 function page:ShowCreature(npc)
 	ns.UI:Open("bestiary")
 	shown = npc

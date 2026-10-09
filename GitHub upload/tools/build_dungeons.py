@@ -1,10 +1,12 @@
-"""
+r"""
 Azeroth Almanac - build the hidden dungeon database (Data/Dungeons.lua).
 
 Source: Plus Everything's Data/DungeonData.lua (generated from AtlasLoot Revival, MIT License,
 credited in Licenses/AtlasLootRevival-LICENSE.txt) and Data/ForeverDungeons.lua (WoW Forever's new
 dungeons, boss names only). Kept: each dungeon's map ID, level range, raid or not, the zone of its
-entrance, and its bosses (NPC ID, kind, loot with drop chances). Boss names are kept only where
+entrance, its map art (folder under Interface\WorldMap, floors as {name, art number}, tio = tiles
+numbered without a floor) and its bosses (NPC ID, kind, loot with drop chances, and the boss
+marker's floor index f and x/y from 0 to 1 on that floor's 4 x 3 tile map). Boss names are kept only where
 there is no NPC ID (Forever's own dungeons), so a boss can be recognised when it's met; the
 Almanac shows a boss only once it has been met, and counts the rest.
 
@@ -39,12 +41,20 @@ def main(data_path, forever_path, out_path):
             if e.npc: parts.append(f"npc={int(e.npc)}")
             elif kind != 'trash': parts.append(f"name={q(e.name)}")
             if items: parts.append(f"items={q(','.join(items))}")
+            if e.x and e.y:
+                parts.append(f"f={int(e.floor or 1)},x={round(float(e.x), 3)},y={round(float(e.y), 3)}")
             bosses.append("{" + ",".join(parts) + "}")
         fields = [f"key={q(d.key)}", f"name={q(d.name)}"]
         if d.id: fields.append(f"id={int(d.id)}")
         fields += [f"min={int(d.min or 0)}", f"max={int(d.max or 0)}", f"zone={q(d.zone or '')}"]
         if d.raid: fields.append("raid=true")
         if d.forever: fields.append("forever=true")
+        if d.folder:
+            fl = d.floors
+            names = ",".join("{" + q(fl[n][1]) + "," + str(int(fl[n][2])) + "}" for n in range(1, len(fl) + 1))
+            fields.append(f"folder={q(d.folder)}")
+            if d.tileIndexOnly: fields.append("tio=true")
+            fields.append("floors={" + names + "}")
         fields.append("bosses={" + ",".join(bosses) + "}")
         out.append("{" + ",".join(fields) + "},")
     header = [
@@ -52,6 +62,8 @@ def main(data_path, forever_path, out_path):
         "-- Copyright (c) 2026 AtlasLoot Revival contributors; see Licenses\\AtlasLootRevival-LICENSE.txt) and WoW Forever's",
         "-- new dungeons. Hidden: the Almanac shows a dungeon once entered and a boss once met. Do not edit by hand.",
         "-- k = kind (b boss, r rare, e event, t trash), items = \"itemID:chance in hundredths of a percent\"",
+        "-- folder/floors/tio = Blizzard's dungeon map tiles (Interface\\WorldMap\\<folder>\\<folder><floor>_<1..12>);",
+        "-- f, x, y = a boss marker's floor (index into floors) and spot (0-1) on that map.",
         "local _, ns = ...",
         "ns.DB = ns.DB or {}",
         "ns.DB.dungeon = {",

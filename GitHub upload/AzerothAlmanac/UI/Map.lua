@@ -55,8 +55,13 @@ function W.ZoneMap(parent)
 		return s
 	end
 
+	local back -- (the dark ground under a dungeon floor's tiles; see DrawTiles)
+
 	function f:Draw(map, width)
 		used = 0
+		if back then back:Hide() end
+		self.gridW, self.gridH = nil, nil
+		if self.SetClipsChildren then self:SetClipsChildren(false) end
 		local layers = C_Map and Call(C_Map.GetMapArtLayers, map)
 		local layer = type(layers) == "table" and layers[1]
 		local art = layer and Call(C_Map.GetMapArtLayerTextures, map, 1)
@@ -126,6 +131,43 @@ function W.ZoneMap(parent)
 		self.map = map
 		self:Show()
 		return lh * scale
+	end
+
+	-- (0.68.2) a dungeon floor from Blizzard's own dungeon map art, which this client keeps even though
+	-- C_Map has no dungeon maps: 12 files of 256 x 256 in a 4 x 3 grid, named <prefix>1 .. <prefix>12
+	-- (e.g. "Interface\\WorldMap\\Ragefire\\Ragefire1_"). Pins use percent of the whole grid.
+	-- (0.68.3) The picture fills only the grid's top left 1002 x 668 (the rest is black): only that shows.
+	local ART_W, ART_H = 1002, 668
+	function f:DrawTiles(prefix, width)
+		used = 0
+		for _, t in ipairs(tiles) do t:Hide() end
+		if not back then
+			back = canvas:CreateTexture(nil, "BACKGROUND")
+			back:SetAllPoints(canvas)
+			back:SetColorTexture(0.03, 0.025, 0.02, 1)
+		end
+		back:Show()
+		canvas:SetSize(1024, 768)
+		local scale = width / ART_W
+		canvas:SetScale(scale)
+		self:SetSize(width, ART_H * scale)
+		self.gridW, self.gridH = 1024 * scale, 768 * scale
+		if self.SetClipsChildren then self:SetClipsChildren(true) end
+		for i = 1, 12 do
+			local t = Tile()
+			t:SetDrawLayer("ARTWORK", 0)
+			t:SetTexture(prefix .. i, nil, nil, "TRILINEAR")
+			t:SetTexCoord(0, 1, 0, 1)
+			t:SetSize(256, 256)
+			t:ClearAllPoints()
+			t:SetPoint("TOPLEFT", canvas, "TOPLEFT", ((i - 1) % 4) * 256, -math.floor((i - 1) / 4) * 256)
+		end
+		self.areas, self.layerW, self.layerH = {}, 1024, 768
+		self:ClearHighlight()
+		if self.ClearPreviewPin then self:ClearPreviewPin() end
+		self.map = nil
+		self:Show()
+		return ART_H * scale
 	end
 
 	-- A place inside the zone, outlined the way the world map shows an area: its own uncovered-area
@@ -216,7 +258,7 @@ function W.ZoneMap(parent)
 	function f:SetPins(list)
 		-- (a pin left over from a longer list keeps nothing: ShowPlacePins mustn't bring it back)
 		for _, p in ipairs(pins) do p:Hide() p.entry, p.isPlace = nil, nil end
-		local w, h = self:GetWidth(), self:GetHeight()
+		local w, h = self.gridW or self:GetWidth(), self.gridH or self:GetHeight()
 		for i, e in ipairs(list or {}) do
 			local p = pins[i]
 			if not p then

@@ -623,7 +623,7 @@ Ported from Plus Everything (`TalentPlanner.lua`, `TalentPlannerLogic.lua`, data
 - [?] Shared helpers in `UI\Widgets.lua`: `W.ItemModifiedClick(item)` (the game's DRESSUP binding, Ctrl by default: `DressUpItemLink` for wearable items; CHATLINK / Shift: chat link, only swallowing the click when a chat box took it), `W.IsDressable(item)`, `W.ItemCursor(frame, getItem)` (the inspect magnifier while Ctrl is held over a wearable, follows `MODIFIER_STATE_CHANGED`).
 - [?] Used by every item slot (loot, rewards, merchant stock, gathering, trainers, journal blocks ...; runs before the slot's own click, so Ctrl-click no longer opens the Items page), the Items list rows and detail icon, Journal item entries, and lists via `W.List{ itemOf = fn }`. My Characters, bag / bank and the vendor window already use the game's `HandleModifiedItemClick`.
 
-## 34. Travels: your trail on the map (proposed 2026-10-04, draw test passed) [~]
+## 34. Travels: your trail on the map (proposed 2026-10-04, draw test passed) [~] (superseded by section 74, Journey)
 A spaghetti map of where your characters have been: every position over time drawn as a line on the continent / zone map, so you can see your movement over a play session or your whole history.
 - **Data now:** every journal entry has time, character, map, x, y (334 positioned entries on 2026-10-04: Zaphenat 85 Barrens, 57 Stranglethorn, 34 Ashenvale ...). Dense at discoveries, sparse while grinding or travelling known roads, so it gives a rough trail only.
 - **34a Trail recorder:** a point every 5 s once you've moved ~15 yards (standing / AFK adds nothing): time, map, x, y. Grouped per character and session. Segments break on loading screens, continent change, hearth / portal, death, any jump over ~200 yards; flights recorded as their own (dotted) segments. Thinned at session end (drop points that don't change the shape), per-character cap, oldest thinned first (~20 KB per 4 h).
@@ -657,52 +657,110 @@ Enemy players you meet, fight, beat or die to. Same rules as everything else: on
   - [ ] Bug check, then in-game test.
 - Open: final name (Rivals / Adversaries); whether Forever has the honor system and battlegrounds at launch.
 
-## 72. Wild Gambit dungeon cards (designed 2026-10-07) [ ]
-Decided with Shannon 2026-10-07:
-- [ ] **Dealt by chance.** Each time a card leaves a player's hand (played, or a board card removed and replaced), 5% chance the card dealt in its place is a dungeon card. At most one dungeon card per player per match. The hand never goes past 5: the dungeon card *is* the replacement, never an extra card. Rolled with the match's seeded random generator, so both players' games agree (player matches: protocol 12; older versions can't play against it).
-- [ ] **Only dungeons you've entered.** A player is dealt only dungeons and raids in their Almanac (found.instance).
-- [ ] **Played onto the board, no skipped turn.** Playing it is your placement for the turn: it goes on an empty square and becomes a neutral dungeon square: nobody's card, out of play, not scored (like a frozen trap square), carrying the dungeon's effect. Optional: a player may keep it and never play it. It can't be the last card placed on the board (it would end the match with no effect).
-- [ ] **No spikes, one design for all.** Dungeons and raids share one card design and one strength; the card never improves (no tiers, no "Conquered" upgrade). Scenery: the game's own dungeon journal art (EJ background, cropped to the card's portrait shape; e.g. Interface/EncounterJournal/UI-EJ-BACKGROUND-RagefireChasm). A stone-archway frame (not the creature card's), no spike badge, the effect's name and one line of rules.
-- [ ] **Each dungeon its own effect,** from something true of the dungeon. "Enemy" = the other player; effects that remove a card deal its owner a replacement (as Banish does); shielded cards (Divine Shield) are immune to removal, swaps and captures as now.
-- [ ] **Dev command** (asked 2026-10-07): `/aa wgdungeon [dungeon]` (with `/aa debug` on) puts a dungeon card in *your* hand (never the opponent's) during a practice match: the named one, or a random one; it replaces the card in your last hand slot (the hand stays at 5) and ignores the one-per-match cap and the Almanac check, for testing every effect. Refused in player matches (it would desync the two games).
-- [ ] Code mostly in a new file (QoL/WildGambitDungeons.lua: the dungeon list, art, effects, bot scores) with small hooks in WildGambit.lua / WildGambitLogic.lua, to keep clear of the 200-locals limit and of Asia's work on the same files.
-- [ ] **Live torches** (asked 2026-10-07): the frame's two torches glow and flicker like real fire. Media/FX_TorchGlow.tga (soft orange radial glow, made by Claude), added as light over each flame (flames at 24,258 and 232,258 of the 256x512 frame: x 0.094 / 0.906, y 0.505 of the texture), alpha and size wobbling on uneven random timings (each torch on its own, never in step); a faint warm glow on the stone beside each; quieter on the small hand cards, full on the board and the zoomed card.
-- [ ] Bot: a score for each effect, as for its class spell; the art scan picks which dungeons have journal art (the two Forever dungeons likely need their floor map or custom art).
-- [x] Art scan (0.66.2 `/aa ejscan`, run 2026-10-07): 27 of 29 have the journal background `Interface/EncounterJournal/UI-EJ-BACKGROUND-<Name>`, and nearly all also have LOREBG, DUNGEONBUTTON, the group-finder background and icon and a loading screen. Names that differ from the dungeon's: Deadmines, TheStockade, SunkenTemple (Atal'Hakkar), BlackrockSpire (Lower), OnyxiasLair (button: Onyxia), RuinsOfAhnQiraj, TempleOfAhnQiraj. No background: Ruins of Lordaeron (only `Interface/LFGFrame/LFGIcon-RuinsOfLordaeron`) and Hall of Thanes (nothing): these two need custom scenery (Gemini, as the other card art) or their floor map art.
-- [ ] Decided 2026-10-07: Hall of Thanes and Ruins of Lordaeron are built with the rest but switched off (never dealt) until their custom scenery is delivered (Scene_Dungeon_HallOfThanes, Scene_Dungeon_RuinsOfLordaeron). Scenery delivered the same day, so both can be on from the start.
+## 72. Wild Gambit dungeon cards (designed 2026-10-07, reworked 2026-10-08) [?] (practice: built 0.67.0; debug panel 0.67.1; player matches: 0.69.0)
+Decided with Shannon (2026-10-08 rework: dungeon cards are events that hit both players, not cards you play):
+- [ ] **Triggered, not played.** Each time a card leaves a player's hand, 5% chance a dungeon event fires at once (no warning), at most one per match. It's drawn only from the *triggering* player's entered dungeons (found.instance); the card appears showing that player as its owner ("Triggered by <name>", their colour), and they get the credit. Rolled with a seeded generator of its own (both screens agree in player matches).
+- [ ] **Only if it does something.** A dungeon whose event would change nothing right now (no Undead on the board for Purge, fewer than 3 moves left for Nightmare...) is passed over for another from that player's list.
+- [ ] **Running out of new cards:** a player whose 3 reserves are spent draws from their whole collection for the rest of the match. New cards are never spell cards.
+- [ ] **Card look:** the stone-arch frame (Frame_Dungeon) with the dungeon's journal art, flickering torches (FX_TorchGlow), the event's name and rules on the plaque, the owner's name; the portal swirl (FX_DungeonPortal) as it appears. Lasting events keep the card beside the board while they hold.
+- [ ] Dev: `/aa wgdungeon [dungeon]` fires that event (or a random one) as yours in a practice match. Code mostly in QoL/WildGambitDungeons.lua.
 
-Effects (draft, for review):
-| Dungeon | Effect | Rules |
-|---|---|---|
-| Ragefire Chasm | Molten Floor | Enemy cards next to the square lose 1 spike on every side. |
-| Wailing Caverns | Nightmare Sleep | The enemy's next card captures nothing. |
-| The Deadmines | Cannon Fire | Removes the first enemy card in the square's row. |
-| Shadowfang Keep | Worgen Curse | No class spells for the rest of the match (Shannon's idea). |
-| The Stockade | Lockdown | Cards next to the square can't be captured. |
-| Blackfathom Deeps | Rising Tide | Every card on the board turns 90 degrees clockwise. |
-| Scarlet Monastery | Crusade | Undead and Demon cards lose 2 spikes on every side. |
-| Gnomeregan | Malfunction | Cards next to the square have their spikes evened out round all four sides. |
-| Razorfen Kraul | Thorns | Your cards next to the square get +1 spike on every side. |
-| Razorfen Downs | Death's Head | Undead cards get +2 spikes on every side. |
-| Uldaman | Stone Ward | Your cards next to the square can't be removed or swapped. |
-| Zul'Farrak | Gahz'rilla | The enemy card with the most spikes loses 2 on every side. |
-| Maraudon | Corrupted Earth | Enemy cards in the square's column lose 1 spike on every side. |
-| Temple of Atal'Hakkar | Dreamer's Call | Dragonkin cards get +2 spikes on every side. |
-| Blackrock Depths | Dark Iron Forge | Every card of yours on the board gets +1 spike on every side. |
-| Lower Blackrock Spire | Warchief's Call | Your next card gets +2 spikes on every side. |
-| Upper Blackrock Spire | Rend's Ambush | Removes up to two enemy cards next to the square. |
-| Dire Maul | Gordok Tribute | Take the enemy card on the board with the fewest spikes. |
-| Scholomance | Raise Dead | The last card of yours taken or removed comes back to your hand. |
-| Stratholme | Plagued Streets | Every non-Undead card next to the square loses 1 spike on every side. |
-| Hall of Thanes (Forever) | Anvil Oath | Your cards in the square's row get +1 spike on every side. |
-| Ruins of Lordaeron (Forever) | Fallen Crown | The next enemy card placed next to the square becomes yours. |
-| Molten Core | Lava Waves | Every card except Elementals loses 1 spike on every side. |
-| Onyxia's Lair | Deep Breath | Wipes the square's row: every card there is removed. |
-| Blackwing Lair | Suppression Room | The enemy's next card captures nothing, and can't be captured until your next turn. |
-| Zul'Gurub | Blood of Hakkar | Take an enemy card next to the square. |
-| Ruins of Ahn'Qiraj | Sandstorm | Every card on the board turns 180 degrees. |
-| Temple of Ahn'Qiraj | Eye of C'Thun | Removes the enemy card with the most spikes. |
-| Naxxramas | Plague Wing | Every enemy card on the board loses 1 spike on every side. |
+Events ("each player" = both; replaced cards come from reserves, then the collection):
+| # | Dungeon | Event | Kind | What happens | Effect art |
+|---|---|---|---|---|---|
+| 1 | Ragefire Chasm | Uppercut | Instant | The board is slammed: the cards in the top row are shuffled among the top row's squares (owners unchanged). | board shake (code) + dust |
+| 2 | Wailing Caverns | Nightmare Sleep | 1 turn | One random card in each player's hand falls asleep and can't be played on that player's next turn. Not with fewer than 3 moves left. | game's sleep icon (Spell_Nature_Sleep), card greyed, gentle bob |
+| 3 | The Deadmines | Van Cleef's Plunder | Instant | One random card is pirated from each player's hand (decided: the hand); a fresh, weaker card is dealt in its place. | FX_PickPocket (existing) |
+| 4 | Shadowfang Keep | Worgen Curse | Lasting | No magic: both players' spell cards are removed for the rest of the match. | NEW: anti-magic bubble over the board |
+| 5 | The Stockade | Prison Riot | Instant | Two random cards, one from each player, swap sides. | FX_MindControl / pick-pocket swap (existing) |
+| 6 | Blackfathom Deeps | Rising Tide | Instant | The top row floats away (owners get new cards), the middle row rises to the top, the bottom row to the middle; the bottom row is left empty. | NEW: bubbles, floating cards |
+| 7 | Gnomeregan | Backfire | Lasting | Every card placed has a 25% chance to self-destruct; its player gets a new card and plays again (no limit). | NEW: explosion with smoke |
+| 8 | Razorfen Kraul | Thorns | Lasting | Equal sides capture too. | thorn glow (Spike_Thorn, existing) |
+| 9 | Scarlet Monastery | Purge | Instant | Every Undead and Demon card on the board is banished; owners get new cards. | FX_Banish (existing) |
+| 10 | Razorfen Downs | Death's Head | Instant | Every Undead card on the board gets +2 spikes on every side. | spike gain (existing) |
+| 11 | Uldaman | Petrify | Lasting | Every card now on the board turns to stone and can never be captured. | greyed card + stone texture, rock sound |
+| 12 | Zul'Farrak | Gahz'rilla | Instant | Each player's strongest card on the board loses 2 spikes on every side. | spike loss (existing) |
+| 13 | Maraudon | Earthquake | Instant | The cards on the board are shuffled between their squares (owners unchanged); the whole board shakes violently. | board shake (code) + dust |
+| 14 | Temple of Atal'Hakkar | Dreamer's Call | Instant | Every Dragonkin card on the board gets +2 spikes on every side. | spike gain (existing) |
+| 15 | Blackrock Depths | Dark Iron Forge | Instant | Every card on the board gets +1 spike on every side. | spike gain (existing) |
+| 16 | Lower Blackrock Spire | Rallying Cry | Next card | Each player's next card gets +2 spikes on every side. | glow on hands |
+| 17 | Upper Blackrock Spire | Rend's Rampage | Instant | Rend executes each player's strongest card on the board (decided 2026-10-08); each player draws a new card. | FX_Execute (existing) |
+| 18 | Dire Maul | Gordok Tribute | Instant | Each player's strongest card on the board is taken as tribute (removed); each gets a new card. | FX_Banish (existing) |
+| 19 | Scholomance | Raise Dead | Instant | Each player takes back the last card the other captured from them. | ankh (Mark_Ankh / FX_Reincarnation, existing) |
+| 20 | Stratholme | The Plague | Instant | Every non-Undead card on the board loses 1 spike on every side. | spike loss (existing) |
+| 21 | Molten Core | By Fire Be Purged! | Instant | Fire engulfs the board and meteors fall: the board is wiped and both players get a new shuffle and a full hand of 5 (matched as at the start; no new spell cards). Play goes on from whoever's turn it is. | NEW: fire wall, meteors |
+| 22 | Onyxia's Lair | Deep Breath | Instant | Onyxia breathes fire along a random row: every card there is removed; owners get new cards. | NEW: fire breath across a row |
+| 23 | Blackwing Lair | Chromatic Mutation | Instant | Every card on the board swaps its strongest and weakest sides. | sparkles (Interface/Cooldown/star4, in game) |
+| 24 | Zul'Gurub | Corrupted Blood | Instant | The last card placed and every card touching it lose 1 spike on every side. | spike loss (existing) |
+| 25 | Ruins of Ahn'Qiraj | Sandstorm | Instant | Every card on the board turns 180 degrees. | sand swirl (optional) |
+| 26 | Temple of Ahn'Qiraj | Executioner Gore | Instant | One board card and one hand card of each player are sacrificed; each is replaced (decided 2026-10-08). | FX_Execute (existing) |
+| 27 | Naxxramas | Frost Breath | Lasting | A random empty square freezes over: out of play for the rest of the match. | NEW: frost breath, ice-covered square |
+| 28 | Hall of Thanes | Anvil Oath | Instant | Every card's weakest side gets +2 spikes. | spike gain (existing) |
+| 29 | Ruins of Lordaeron | Betrayal | Instant | Every card on the board changes sides. | FX_MindControl (existing) |
+
+## 73. Dungeons page redesign (built 0.68.0) [?]
+Asked by Shannon 2026-10-08; replaces the page from section 8. Two tabs:
+- [ ] **Collection** (landing): a card per dungeon / raid found (the Wild Gambit dungeon card's look: stone arch, parchment, journal art, torches), 4 per row, scrolling; hover enlarges like the creature cards; under each: name, levels, bosses killed (x of y met), dungeon or raid. Only found dungeons show (hidden until earned); a counter says how many are found. Clicking one opens tab 2 on it.
+- [ ] **Dungeon** (detail): header (name, levels, entrance zone, size, first entered and by whom, visits, time inside, quickest run with a kill). Left pane: the floor map (floor buttons when there are several) with each boss you've met as a round portrait pin where you met it; hover = name and kills, click = select. Bosses met without a position are listed under the map. Right pane, tabs:
+  - with no boss chosen, **Overview**: bosses met / still to find (counts only), other creatures recorded inside (from loot, 0.66.0), loot you've had here, your characters' runs, the dungeon's Wild Gambit event card.
+  - with a boss chosen, **Abilities** (seen, plus what its research tier unlocks from the hidden data), **Loot** (your drops with rates; the database's table as the tier allows; "N more items" otherwise), **Other** (kills, wipes, first kill by whom and when, research tier and the next step, health observed, immunities / resistances when unlocked, its Wild Gambit card, open in Creatures).
+- [?] (0.68.2) The floor map is Blizzard's dungeon map art (`Interface\WorldMap\<folder>\<folder><floor>_1..12`, 4 × 3 tiles; C_Map has no dungeon maps on this client and no map ID inside), one floor at a time with a picker; boss spots come from AtlasLoot Revival's data (`f`, `x`, `y` in `Data\Dungeons.lua`), not from where you met them.
+- [ ] Fallbacks: a dungeon with no map art shows its journal art in the left pane with the boss list; a boss with no face yet shows its creature-type icon.
+- [x] Decided 2026-10-08: unfound dungeons hidden (a "found x of 29" counter only); unmet bosses stay off the map until discovered; built before the Wild Gambit player matches (now 0.69.0).
+- [ ] Discovery of a boss (inside, names and GUIDs are hidden): the game's encounter starting (ENCOUNTER_START, the pin where you stood at the pull), its corpse looted (the corpse's spot), or, outside instances, seeing it as now. Walking past an unfought boss doesn't count.
+
+## 74. Journey: where your hero has walked (noted 2026-10-08, details being settled) [ ]
+Supersedes section 34 (Travels). Keeps its recorder (34a) and its draw test (lines and dots draw on the world map canvas, verified 2026-10-04).
+
+**Concept (Shannon, 2026-10-08)**
+- A **time lapse** on the map: the journey draws itself as a **gold, sparkling line**, following the order you walked it, through every place the character went in the chosen time frame.
+- **Time frames:** today's journey, this week's, this month's, all time.
+- **Character mode** (default): the character you're playing only, in gold.
+- **Account mode:** all your characters at once, each line in its **class colour** (paladin pink, mage light blue ...) instead of gold.
+- **Jumps** (the character is suddenly somewhere else): work out what happened.
+  - **Boat or zeppelin:** a pin on the map showing a boat or a zeppelin was taken (at the dock you left from and the one you arrived at).
+  - **Can't tell:** a portal on the map at both ends, using the dungeon cards' swirl (Media\FX_DungeonPortal).
+
+**What we already have**
+- Positions: each journal entry has time, character, map, x, y (too sparse for a line: dense at discoveries, empty while grinding or on known roads). A trail recorder (34a) is needed.
+- Boats and zeppelins: QoL\Travel.lua already notices a ride (you're carried while standing still), with the port you left and the port you arrived at, and knows the classic and Forever routes (Boat / Zeppelin).
+- Flight paths: Travel.lua knows when you're on a taxi and the from / to nodes.
+- Art: FX_DungeonPortal (the swirl), the map line and dot test (/aa maptest).
+
+**Proposed details (to confirm)**
+- **Recorder:** a point every 5 s once you've moved about 15 yards (standing / AFK adds nothing); time, map, x, y. Thinned when you log out (points that don't change the shape are dropped). About 20 KB per 4 hours; oldest days thinned further, never deleted.
+- **Telling jumps apart** (the gap between two points, in order of certainty):
+  1. Flight path (on a taxi): the flight drawn as a dotted line from node to node, a gryphon / wyvern pin at each end.
+  2. Boat / zeppelin (Travel.lua's ride): a boat or zeppelin pin at both docks, a dashed line across the water.
+  3. Hearthstone (your own cast, if the game lets us read it): a hearth pin where you arrived.
+  4. Dungeon in / out (an instance starts or ends): the dungeon swirl at its entrance.
+  5. Death (ghost to the graveyard): a skull where you died; the run back drawn faint.
+  6. Anything else (mage portal, summon, teleport, unknown): the portal swirl at both ends.
+- **Time lapse:** the same length whatever the time frame (about 20 seconds for today, 30 for longer), idle time skipped, a glowing head on the line with the time and zone; play / pause, a slider to scrub, speed 1x / 2x / 4x. The line stays drawn when it ends.
+- **Map:** the world map. The time lapse turns to the continent the line is on (it follows a boat across); a zone map shows that zone's part.
+- **Account mode:** all characters play back together on one shared clock, so you see who was where at the same time; a legend of names in class colours; click a name to show or hide that character.
+- **Where it lives:** a Journey tab on the Characters page, and a footprints button on the world map (left-click: today, right-click: the options).
+- **Rules kept:** only your own characters; nothing is shared with other players; no "% of the world walked".
+
+**Open questions**
+- Flight paths: drawn as their own dotted line (as above), or pins only?
+- Hearthstone: its own pin, or the portal like any unknown jump?
+- Week and month: the calendar ones (week from Monday, month from the 1st), or the last 7 / 30 days?
+- Account mode: one shared clock (above), or each character's journey played from its own start?
+- Markers on the line from the journal (first visits, level-ups, deaths): keep, or the line and jump pins only?
+
+## 75. Requests of 2026-10-08 (plans for approval) [ ]
+Fifteen requests (issues 31 to 45); each one's plan, art prompts and open questions are in `docs/PLANS_2026-10-08.md`. Decided with Shannon 2026-10-08:
+- [x] The Journal's new top-right pane shows the Journey (section 74, issue 30).
+- [x] The People tab for trainers is called **Training**; it replaces the "What they teach" badge.
+- [x] Dungeon names in the **LifeCraft** font (dafont, donationware, Eliot Truelove), rendered gold and bevelled to textures by `tools/wordart.py`; the font file is not shipped; credit in `Licenses/LifeCraft.txt`. Sample: `docs/art_source/WordArt_Sample.png`.
+- [x] **New** = found since you last opened that tab (stamped when you leave it); a count badge on each side tab.
+- [x] No separate class-spell list: class, weapon and riding spells show only on each trainer's Training tab, only what that trainer teaches. Spells & Recipes becomes Recipes.
+- [x] Lockpicking follows **Almanac shows** (character: rogues only; account: everyone when a rogue is on the account).
+- [x] Raids' word-art names in a deeper red-gold; dungeons in bright gold.
+- [x] Lockpicking gets research tiers and toasts, counted like gathering.
+- [x] People: no tabs. The General block goes: roles join the title line, place without coordinates, faction as a crest on the portrait ring, first met / also met by (and merchant standing, visits, stock checked) in the portrait's tooltip. Below: Training, then For sale, in the same two-column slots.
+- [x] Toasts: item, research-tier and milestone toasts keep their own icons; the rest use the painted page art.
 
 ## What comes from Plus Everything
 

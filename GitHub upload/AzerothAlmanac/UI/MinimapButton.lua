@@ -30,7 +30,7 @@ end
 local function MenuItems()
 	return {
 		{ title = true, icon = ns.ICON, text = L["Azeroth Almanac"] },
-		{ icon = 133742, text = L["Journal"], run = function() ns.UI:Open("journal") end },
+		{ icon = ns.JOURNAL_ICON, text = L["Journal"], run = function() ns.UI:Open("journal") end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Places", text = L["Places"], run = function() ns.UI:Open("places") end },
 		{ icon = W.KIND.character.icon, portraitUnit = "player", text = L["Characters"], run = function() ns.UI:Open("characters") end },
 		-- (every page, 0.64.0)
@@ -67,18 +67,11 @@ local function Build()
 	bg:SetSize(20, 20)
 	bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
 	bg:SetPoint("TOPLEFT", 7, -5)
+	-- (0.69.0) the Almanac's logo, whole (not cut round: the book's corners tuck under the ring)
 	local icon = button:CreateTexture(nil, "ARTWORK")
-	icon:SetSize(18, 18)
-	icon:SetPoint("TOPLEFT", 7, -6)
+	icon:SetSize(20, 20)
+	icon:SetPoint("CENTER", bg, "CENTER", 0, 0)
 	icon:SetTexture(ns.ICON)
-	if button.CreateMaskTexture and icon.AddMaskTexture then
-		local mask = button:CreateMaskTexture()
-		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-		mask:SetAllPoints(icon)
-		icon:AddMaskTexture(mask)
-	else
-		icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	end
 	local border = button:CreateTexture(nil, "OVERLAY")
 	border:SetSize(53, 53)
 	border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")

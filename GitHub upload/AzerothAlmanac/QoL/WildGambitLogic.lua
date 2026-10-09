@@ -440,7 +440,7 @@ local function CaptureFrom(board, cell, owner, opts, captured)
 		local fc = board[from].card
 		for _, nb in ipairs(WL.Neighbours(from)) do
 			local other = board[nb[1]]
-			if other and not other.frozen and other.owner ~= owner and not WL.Safe(board, nb[1]) then
+			if other and not other.frozen and not other.stone and other.owner ~= owner and not WL.Safe(board, nb[1]) then
 				local mine, theirs = fc.s[nb[2]], other.card.s[nb[3]]
 				if mine > theirs or (first and opts.ties and mine == theirs and mine > 0) then
 					if board.ankh and board.ankh == other.owner then
@@ -448,6 +448,9 @@ local function CaptureFrom(board, cell, owner, opts, captured)
 						board.ankh = nil
 						captured[#captured + 1] = { cell = nb[1], side = nb[2], margin = mine - theirs, from = from, saved = true }
 					else
+						-- (the last card each player lost, for Scholomance's Raise Dead)
+						board.lastTaken = board.lastTaken or {}
+						if other.owner then board.lastTaken[other.owner] = nb[1] end
 						other.owner = owner
 						captured[#captured + 1] = { cell = nb[1], side = nb[2], margin = mine - theirs, from = from }
 						if opts.chain then queue[#queue + 1] = nb[1] end
@@ -463,6 +466,25 @@ end
 -- plays `card` for `owner` on `cell`: returns the captured cells ({ cell, side, margin, from }).
 -- A Freezing Trap on the square takes the card for the trap's owner instead ({ cell, trap = owner }).
 function WL.Place(board, cell, card, owner, opts)
+	-- (0.67.0) dungeon events' lasting rules: Thorns (ties win), Rend... chain captures, Rallying Cry
+	local rules = board.rules
+	if rules then
+		if rules.ties or rules.chain then
+			local o = {}
+			for k, v in pairs(opts or {}) do o[k] = v end
+			o.ties = o.ties or rules.ties
+			o.chain = o.chain or rules.chain
+			opts = o
+		end
+		if rules.rally and rules.rally[owner] then
+			rules.rally[owner] = nil
+			local c = WL.CopyCard(card)
+			for d = 1, 4 do c.s[d] = c.s[d] + 2 end
+			c.total = c.s[1] + c.s[2] + c.s[3] + c.s[4]
+			c.rallied = true
+			card = c
+		end
+	end
 	local traps = board.traps
 	if traps and traps[cell] and traps[cell] ~= owner then
 		local by = traps[cell]
@@ -495,8 +517,15 @@ end
 
 local function Copy(board)
 	local b = {}
-	for i = 1, 9 do if board[i] then b[i] = { card = board[i].card, owner = board[i].owner, shield = board[i].shield, frozen = board[i].frozen } end end
+	for i = 1, 9 do if board[i] then b[i] = { card = board[i].card, owner = board[i].owner, shield = board[i].shield, frozen = board[i].frozen, stone = board[i].stone, ice = board[i].ice } end end
 	b.ankh = board.ankh
+	if board.rules then
+		b.rules = {}
+		for k, v in pairs(board.rules) do
+			if type(v) == "table" then local t = {} for k2, v2 in pairs(v) do t[k2] = v2 end b.rules[k] = t else b.rules[k] = v end
+		end
+	end
+	if board.lastTaken then b.lastTaken = { me = board.lastTaken.me, bot = board.lastTaken.bot } end
 	if board.traps then
 		b.traps = {}
 		for k, v in pairs(board.traps) do b.traps[k] = v end
@@ -682,6 +711,8 @@ function WL.Use(board, ability, cell, me, cell2)
 		board[cell].card = c
 		out.changed[1] = cell
 	elseif key == "mc" then
+		board.lastTaken = board.lastTaken or {}
+		if board[cell].owner then board.lastTaken[board[cell].owner] = cell end
 		board[cell].owner = me
 		out.captured[1] = { cell = cell, side = 1, margin = 0, from = cell, mc = true }
 	elseif key == "pickpocket" then

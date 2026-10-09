@@ -542,6 +542,12 @@ local function OnEvent(_, event, unit, ...)
 	if event == "PLAYER_SOFT_INTERACT_CHANGED" then
 		Update()
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
+		-- (0.67.4) checked now and again a frame later: on WoW Forever the event comes before the
+		-- plate's unit is filled in
+		if not (...) then
+			local u = unit
+			C_Timer.After(0, function() OnEvent(nil, event, u, true) end)
+		end
 		-- (a secret answer, possible on this client, counts as "not the interact target")
 		local ok, same = pcall(function() return ns.Readable(UnitIsUnit(unit, "softinteract")) == true end)
 		if ok and same then

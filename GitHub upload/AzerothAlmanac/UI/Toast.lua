@@ -140,27 +140,28 @@ local function Build()
 	frame.text:SetPoint("RIGHT", -26, -14)
 	frame.text:SetJustifyH("LEFT")
 	frame.text:SetWordWrap(false)
-	-- the Almanac's own mark, top right on the frame's edge: its icon (a quarter of the big icon's
-	-- size) and "Almanac" in red beside it, on a small dark tag so it reads over the rim
-	frame.badge = CreateFrame("Frame", nil, frame)
-	frame.badge:SetFrameLevel(frame:GetFrameLevel() + 6)
-	frame.badge:SetSize(70, 16)
-	frame.badge:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -24, -5)
-	frame.badge.bg = frame.badge:CreateTexture(nil, "BACKGROUND")
-	frame.badge.bg:SetPoint("TOPLEFT", -3, 1)
-	frame.badge.bg:SetPoint("BOTTOMRIGHT", 3, -1)
-	frame.badge.bg:SetColorTexture(0, 0, 0, 0.55)
-	frame.badge.icon = frame.badge:CreateTexture(nil, "ARTWORK")
-	frame.badge.icon:SetSize(13, 13)
-	frame.badge.icon:SetPoint("RIGHT", frame.badge, "RIGHT", 0, 0)
-	frame.badge.icon:SetTexture(W.FindIcon(ns.ICON))
-	frame.badge.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	frame.badge.text = frame.badge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	frame.badge.text:SetPoint("RIGHT", frame.badge.icon, "LEFT", -3, 0)
-	frame.badge.text:SetText(L["Almanac"])
-	frame.badge.text:SetTextColor(1, 0.22, 0.18)
-	frame.badge.text:SetShadowOffset(1, -1)
-	frame.badge:SetWidth(13 + 3 + math.ceil(tonumber(frame.badge.text:GetStringWidth()) or 44))
+	-- (0.69.0) the journal seal: the open journal with its burning page, over the top right corner
+	-- (half over the gold frame), on toasts that also write a journal entry; its page glows as the
+	-- toast arrives
+	frame.seal = CreateFrame("Frame", nil, frame)
+	frame.seal:SetFrameLevel(frame:GetFrameLevel() + 8)
+	frame.seal:SetSize(34, 34)
+	frame.seal:SetPoint("CENTER", frame, "TOPRIGHT", -20, -4)
+	frame.seal.art = frame.seal:CreateTexture(nil, "ARTWORK")
+	frame.seal.art:SetAllPoints()
+	frame.seal.art:SetTexture(ns.JOURNAL_ICON)
+	frame.seal.glow = frame.seal:CreateTexture(nil, "OVERLAY")
+	frame.seal.glow:SetAllPoints()
+	frame.seal.glow:SetTexture(ns.JOURNAL_ICON)
+	frame.seal.glow:SetBlendMode("ADD")
+	frame.seal.glow:SetAlpha(0)
+	frame.seal:SetScript("OnUpdate", function(self)
+		if not self.since then return end
+		local t = GetTime() - self.since
+		if t > 1.6 then self.since = nil self.glow:SetAlpha(0) return end
+		self.glow:SetAlpha(0.7 * math.sin(math.min(1, t / 1.6) * math.pi))
+	end)
+	frame.seal:Hide()
 	-- a soft gold flash as it arrives
 	frame.flash = frame:CreateTexture(nil, "OVERLAY", nil, 2)
 	frame.flash:SetAllPoints()
@@ -244,6 +245,8 @@ local function Play(item)
 	local tier = TierOf(item.quality)
 	local T = TIER[tier]
 	frame.icon:SetTexture(W.FindIcon(item.icon or ns.ICON))
+	frame.seal:SetShown(item.journal and true or false)
+	frame.seal.since = item.journal and GetTime() or nil
 	SetBorder(tier)
 	-- below Rare: the smaller loot toast's frame, where the client has it
 	if frame.native and frame.bg then
@@ -335,16 +338,17 @@ local function FlushBatch()
 		return
 	end
 	Enqueue({ title = L["New discoveries"], text = (L["%s and %d more"]):format(list[1].text or "?", #list - 1),
-		sub = nil, icon = { 133742, "INV_Misc_Book_09" }, quality = 1 })
+		sub = nil, icon = ns.JOURNAL_ICON, quality = 1, journal = true })
 end
 
 -- quality = the tier (1 Common ... 5 Legendary). force: shown even when alerts are off (tests)
-function Toast:Show(title, text, sub, icon, quality, force)
+-- journal: it also wrote a journal entry (the toast wears the journal seal)
+function Toast:Show(title, text, sub, icon, quality, force, journal)
 	local t = ns.db.settings.toasts
 	if not force and not t.enabled then return end
 	local tier = TierOf(quality)
 	if not force and tier < (t.minTier or 1) then return end -- below the chosen tier: the journal only
-	local item = { title = title, text = text, sub = sub, icon = icon, quality = tier }
+	local item = { title = title, text = text, sub = sub, icon = icon, quality = tier, journal = journal }
 	if tier == 1 and not force then
 		batch[#batch + 1] = item
 		if not batchTimer then
@@ -384,7 +388,7 @@ ns:On("DISCOVERY", function(kind, id, rec, journalText, quiet)
 	if kind == "item" then
 		local instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 		icon = (instant and select(5, instant(id))) or icon
-		Toast:Show(k.title, rec.name or journalText or "?", nil, icon, rec.q or 3)
+		Toast:Show(k.title, rec.name or journalText or "?", nil, icon, rec.q or 3, nil, true)
 		return
 	elseif kind == "merchant" then
 		sub = rec.title or rec.sub
@@ -397,23 +401,25 @@ ns:On("DISCOVERY", function(kind, id, rec, journalText, quiet)
 		sub = (rec.lo and (L["Level %s"]):format(rec.lo == -1 and "??" or tostring(rec.lo)) or "") .. (rec.type and (" " .. rec.type) or "")
 		tier = CreatureTier(rec)
 	end
-	Toast:Show(k.title, rec.name or journalText, sub, k.icon, tier)
+	Toast:Show(k.title, rec.name or journalText, sub, k.icon, tier, nil, true)
 end)
 
--- tier ups, level ups and milestones: each sender gives its tier
+-- tier ups, level ups and milestones: each sender gives its tier (levels and milestones, fully explored
+-- among them, also write a journal entry; tier ups don't)
+local JOURNALED = { level = true, milestone = true }
 ns:On("TOAST", function(kind, title, text, icon, tier)
 	if ns.db.settings.toasts[kind] == false then return end
-	Toast:Show(title, text, nil, icon, tier or 2)
+	Toast:Show(title, text, nil, icon, tier or 2, nil, JOURNALED[kind])
 end)
 
 -- /aa toast: a sample alert (and which game art it found)
 -- one of each tier
 function Toast:Test()
-	Toast:Show(L["New place discovered"], "The Dagger Hills of Westbrook Garrison", "Westfall", W.KIND.subzone.icon, 1, true)
-	Toast:Show(L["New zone discovered"], "Westfall", L["Eastern Kingdoms"], W.KIND.zone.icon, 2, true)
+	Toast:Show(L["New place discovered"], "The Dagger Hills of Westbrook Garrison", "Westfall", W.KIND.subzone.icon, 1, true, true)
+	Toast:Show(L["New zone discovered"], "Westfall", L["Eastern Kingdoms"], W.KIND.zone.icon, 2, true, true)
 	Toast:Show(ns.Bestiary and ns.Bestiary.TIERS[4] or L["Master Hunter"], "Riverpaw Outrunner", nil, ns.Bestiary and ns.Bestiary:TierIcon(4), 3, true)
-	Toast:Show(L["Milestone reached"], L["First elite"], nil, { "Ability_Warrior_BattleShout" }, 4, true)
-	Toast:Show(L["Level %d"]:format(60), "Westfall", nil, W.KIND.level.icon, 5, true)
+	Toast:Show(L["Milestone reached"], L["First elite"], nil, { "Ability_Warrior_BattleShout" }, 4, true, true)
+	Toast:Show(L["Level %d"]:format(60), "Westfall", nil, W.KIND.level.icon, 5, true, true)
 	if frame then
 		local a = LootArt()
 		ns.Print(("toast art: background %s, border %s"):format(tostring(frame.bgAtlas), tostring(a.border or "loottoast-itemborder-*")))

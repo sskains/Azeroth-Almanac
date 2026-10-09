@@ -290,10 +290,10 @@ ns:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE", function(_, id) id = R(id) if ns
 
 function T:ReadSkills()
 	local me = Me()
-	if not (me and GetNumSkillLines and GetSkillLineInfo) then return end
+	if not me then return end
 	local header
-	for i = 1, (Call(GetNumSkillLines) or 0) do
-		local name, isHeader, _, rank, _, _, max = Call(GetSkillLineInfo, i)
+	for i = 1, ns.NumSkillLines() do -- (0.67.4: C_SkillInfo on WoW Forever; the old globals are gone)
+		local name, isHeader, rank, max = ns.SkillLine(i)
 		if isHeader then
 			header = name
 		elseif name and rank and (header == (TRADE_SKILLS or "Professions") or header == (SECONDARY_SKILLS and SECONDARY_SKILLS:gsub(":$", "") or "Secondary Skills") or header == "Secondary Skills") then

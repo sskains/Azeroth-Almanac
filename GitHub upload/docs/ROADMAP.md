@@ -52,6 +52,9 @@ Rules:
 
 ## Next
 
+- **Dungeons page redesign** (added 2026-10-08, DESIGN section 73): a collection of dungeon cards, then each dungeon's map with clickable boss portraits and tabs for abilities, loot and more (issue 29).
+- **Healer Assist with hidden health** (added 2026-10-08): probe whether health is secret on WoW Forever; if so, base the danger edge and greying on what the client allows (issue 28).
+
 - **Wild Gambit dungeon cards** (designed 2026-10-07, DESIGN section 72): a rare dungeon card dealt in place of a card, played onto the board as a neutral square with the dungeon's own effect (issue 27). First: the journal art scan and the effects review.
 
 - **Quest kill credit for dungeon kills** (added 2026-10-07): a quest's kill progress counts the kill for its target creature, so kills nobody's Almanac looted still count (issue 26).

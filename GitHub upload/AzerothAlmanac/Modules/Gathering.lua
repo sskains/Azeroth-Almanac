@@ -62,9 +62,9 @@ end
 
 -- your rank in a skill (Herbalism, Mining, Fishing), or nil
 function G:SkillRank(name)
-	if not (name and GetNumSkillLines and GetSkillLineInfo) then return nil end
-	for i = 1, (Call(GetNumSkillLines) or 0) do
-		local n, isHeader, _, rank = Call(GetSkillLineInfo, i)
+	if not name then return nil end
+	for i = 1, ns.NumSkillLines() do -- (0.67.4: C_SkillInfo on WoW Forever)
+		local n, isHeader, rank = ns.SkillLine(i)
 		if n == name and not isHeader then return rank end
 	end
 end

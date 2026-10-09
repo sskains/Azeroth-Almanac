@@ -2508,7 +2508,7 @@ local function Build()
 		WG.aimCursor = cur
 	end
 	frame.cards = {}
-	for i = 1, 12 do -- (two more: a removed card's owner is dealt another)
+	for i = 1, 30 do -- (more than ten: removed cards' owners are dealt others, and dungeon events deal whole hands, 0.67.0)
 		local c = NewCard(frame)
 		c:SetScript("OnClick", function(self) WG:ClickCard(self) end)
 		-- a hand card grows on hover so its spikes can be read
@@ -3737,6 +3737,7 @@ end
 -- `forfeit`: "me" (you gave up) or "bot" (they did): that side loses whatever the board says
 local function EndGame(forfeit)
 	if game.over then return end
+	if WG.DungeonEnd then pcall(WG.DungeonEnd, WG) end -- (0.67.0: a lasting dungeon card leaves the table)
 	local r = WG.RecordResult(forfeit)
 	forfeit = r.forfeit
 	game.over = true
@@ -3813,6 +3814,8 @@ local function Play1(side, h, cell)
 	if game.pvp and side == "me" then WG:SendMove(h, cell) end
 	local entry = table.remove(game.hands[side], h)
 	local card = entry.card
+	-- (0.67.0) Gnomeregan's Backfire: the card blows up on its square, and its player goes again
+	if WG.DungeonBackfire and WG:DungeonBackfire(side, entry, cell) then return end
 	local got = WL.Place(game.board, cell, card, side)
 	game.frames[cell] = entry.frame
 	local hidden = entry.frame.hidden
@@ -3875,6 +3878,9 @@ local function Play1(side, h, cell)
 		C_Timer.After(FLY_TIME + 1.6, function() if game == g and not g.over then EndGame() end end)
 		game.flying = (game.flying or 0) + 1 ShowHands() Refresh() return
 	end
+	-- (0.67.0) a card left the hand: a dungeon event may fire (it shows once the card has landed)
+	game.last = cell
+	if WG.DungeonAfterPlay then WG:DungeonAfterPlay(side) end
 	game.turn = side == "me" and "bot" or "me"
 	PaintEffects()
 	ShowHands()
@@ -3905,15 +3911,17 @@ function WG:BotTurn()
 	end
 	local diff = g.tutorial and self.TUTOR_DIFF or self:Difficulty()
 	local function Hands()
-		local hand, theirs = {}, {}
-		for i, e in ipairs(g.hands.bot) do hand[i] = e.card end
+		local hand, theirs, map = {}, {}, {}
+		-- (a card asleep from Wailing Caverns can't be played: map = its place in the real hand, 0.67.0)
+		for i, e in ipairs(g.hands.bot) do if not e.sleep then hand[#hand + 1] = e.card map[#hand] = i end end
 		-- (your chosen card is hidden from it, as from a player)
 		for _, e in ipairs(g.hands.me) do if not e.card.picked then theirs[#theirs + 1] = e.card end end
-		return hand, theirs
+		return hand, theirs, map
 	end
 	C_Timer.After(0.7 + math.random() * 0.6, function()
 		if game ~= g or g.over or g.turn ~= "bot" then return end
 		if WG:Paused() then WG:BotTurn() return end -- (combat came first: it waits)
+		if g.eventBusy then WG:BotTurn() return end -- (a dungeon event still playing out; not `flying`: a hidden window never lands its cards)
 		local delay = 0
 		if not g.used.bot and g.rng() < diff.spell then
 			local placed = 0
@@ -3928,9 +3936,10 @@ function WG:BotTurn()
 		C_Timer.After(delay, function()
 			if game ~= g or g.over or g.turn ~= "bot" then return end
 		if WG:Paused() then WG:BotTurn() return end -- (combat came first: it waits)
-			local hand, theirs = Hands()
+			if g.eventBusy then WG:BotTurn() return end
+			local hand, theirs, map = Hands()
 			local h, cell = WL.BotMove(g.board, hand, "bot", diff.threat and theirs or {}, g.rng, diff.slip, diff.pool)
-			if h then Play1("bot", h, cell) end
+			if h then Play1("bot", map[h] or h, cell) end
 		end)
 	end)
 end
@@ -3939,8 +3948,10 @@ function WG:ClickCard(f)
 	if not game or game.over or game.turn ~= "me" or (game.flying or 0) > 0 then return end
 	if not self:TutorialAllows("card", f) then return end
 	if self:Paused() then Note(self:PausedNote()) return end
+	if game.eventBusy then return end
 	for _, e in ipairs(game.hands.me) do
 		if e.frame == f then
+			if e.sleep then Note("That card is asleep (Nightmare Sleep): it wakes after your next turn.") return end
 			-- (a spell's target is on the board, never in your hand: picking a card from your hand
 			-- instead puts the spell back, and takes that card)
 			if game.targeting then
@@ -4035,18 +4046,48 @@ function WG:AbilityButton()
 	Refresh()
 end
 
--- a removed card's owner is dealt another: the reserve card closest in spikes, face down, turned over
-local function Deal(owner, total)
+-- a removed card's owner is dealt another: the reserve card closest in spikes, face down, turned over.
+-- (0.67.0) `below`: it must have fewer spikes than this (dungeon events deal weaker cards). With the
+-- reserves spent, it comes from the player's whole collection (practice; game.collection).
+local function Deal(owner, total, below)
 	local res = game.reserves and game.reserves[owner]
 	if not res then return end
-	local card, i = WL.Replacement(res, total)
+	local card, i = WL.Replacement(res, below and math.max(0, below - 2) or total)
+	if card then
+		res[i].spent = true
+	elseif game.collection and game.collection[owner] and #game.collection[owner] > 0 then
+		local pool = {}
+		for _, c in ipairs(game.collection[owner]) do pool[#pool + 1] = c end
+		card = WL.Replacement(pool, below and math.max(0, below - 2) or total)
+	end
 	if not card then return end
-	res[i].spent = true
-	game.dealt = game.dealt + 1
-	local f = frame.cards[game.dealt]
+	if below then
+		while card.total >= below do
+			local lower = WL.Lower(card, true, true)
+			if not lower or lower.total >= card.total then break end
+			card = lower
+		end
+	end
+	return WG.GiveCard(owner, card)
+end
+
+-- (0.67.0) `card` goes into `owner`'s hand, face down, then turns over (a field, not a local: the file
+-- is at Lua's 200-locals limit)
+function WG.GiveCard(owner, card)
+	card.picked = nil
+	-- a card frame nobody is using (not in a hand, not on the board, not leaving it)
+	local f
+	local used = {}
+	for _, side in ipairs({ "me", "bot" }) do for _, e in ipairs(game.hands[side]) do used[e.frame] = true end end
+	for _, bf in pairs(game.frames) do used[bf] = true end
+	for _, c in ipairs(frame.cards) do
+		if not used[c] and not c.vanishing then f = c break end
+	end
 	if not f then return end
+	game.dealt = game.dealt + 1
 	f.index = game.dealt
 	f.vanishing = nil
+	f.hidden = nil
 	f:SetAlpha(1)
 	f.aim:Hide()
 	f.bubble:Hide()
@@ -4178,7 +4219,9 @@ function WG:ApplyAbility(side, cell, cell2)
 	PaintEffects()
 	ShowHands()
 	Refresh()
-	if WL.Full(game.board) then EndGame() end
+	if WL.Full(game.board) then EndGame() return end
+	-- (0.67.0) the spell card left the hand: a dungeon event may fire
+	if WG.DungeonAfterPlay then WG:DungeonAfterPlay(side, true) end
 end
 
 function WG:PlaceSelected(cell)
@@ -4762,6 +4805,7 @@ function WG:Begin(o)
 			Note(("Your %s was downgraded to keep the hands even."):format(c.name or "card"))
 		end
 	end
+	if WG.DungeonBegin then pcall(WG.DungeonBegin, WG, o) end -- (0.67.0: dungeon events for this match)
 	if game.turn == "bot" and not game.pvp then self:BotTurn() end
 end
 
@@ -6127,4 +6171,16 @@ function WG:Command(rest)
 		if not frame then Build() end
 		self:Challenge(rest)
 	end
+end
+
+-- (0.67.0) what the dungeon events' table side (WildGambitDungeonsUI.lua) needs from this file
+do
+	WG.D = {
+		Game = function() return game end, Frame = function() return frame end, DB = function() return db end,
+		SetCard = SetCard, SetOwner = SetOwner, Deal = Deal, Vanish = Vanish, Flash = Flash,
+		PutOnBoard = PutOnBoard, BoardPlace = BoardPlace, SlotCenter = SlotCenter, Note = Note, Tell = Tell,
+		Play = Play, ShowHands = ShowHands, PaintEffects = PaintEffects, EndGame = EndGame, Reborn = Reborn,
+		Refresh = function() Refresh() end, Short = function(n) return Short(n) end,
+		CW = CW, CH = CH, BW = BW, BH = BH, BOARD_TOP = BOARD_TOP, ART_X = ART_X, ART_Y = ART_Y, GOLD = GOLD,
+	}
 end

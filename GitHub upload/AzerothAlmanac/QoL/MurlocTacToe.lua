@@ -96,6 +96,9 @@ local CHAMPS = {
 	bombay = {
 		name = "Bombay Cats", one = "Bombay Cat", item = 8485, -- Cat Carrier (Bombay)
 		companion = { "Bombay", "Bombay Cat" }, season = "HallowsEnd",
+		-- (0.66.4) the Bombay Cat's own creature (Classic NPC 7385), so it's offered without owning the pet: this
+		-- client's companion lookup didn't find it (the old companion functions)
+		npc = 7385,
 		place = { 3598605, 3598607, 3598609 }, -- Mon_90_CatMount_CatSounds_01 / 02 / 03
 		win = 3598611,                         -- ..._04
 		lose = 3598623,                        -- ..._10
@@ -1043,8 +1046,12 @@ local function SetCard(card, side, name, sub, active)
 		Ring(card.ring, side, 22, card.face)
 	end
 	card.name:SetText(name)
-	card.sideText:SetText(Colored(side, SIDES[side].name))
-	card.sub:SetText(sub or "")
+	-- (0.66.4) the champion and the record on one centred line that fits the card (a long name like
+	-- "Plagued Cockroaches" used to run off the card's left edge); too long, it ends in "..."
+	local line = Colored(side, SIDES[side].name)
+	if sub and sub ~= "" then line = line .. "   |cff8c8c8c" .. sub .. "|r" end
+	card.sideText:SetText(line)
+	card.sub:SetText("")
 	card.active = active
 	card.glow:SetVertexColor(ROLE_TINT[side][1], ROLE_TINT[side][2], ROLE_TINT[side][3])
 	card.glow:SetShown(active or (card.cheer and card.cheer > 0) or false)
@@ -1190,7 +1197,7 @@ end
 local function Build()
 	frame = CreateFrame("Frame", "AzerothAlmanacMurlocTacToe", UIParent, "BackdropTemplate")
 	local W = 16 + FRAME_SIZE + 14 + SIDE_W + 16
-	local H = 62 + CARD_H + 44 + FRAME_SIZE + 16
+	local H = 62 + CARD_H + 56 + FRAME_SIZE + 16 -- (0.66.4: 12 px more between the cards and the board, for the ribbon)
 	frame:SetSize(W, H)
 	frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
 	frame:SetBackdropColor(0.035, 0.03, 0.025, 0.97)
@@ -1301,7 +1308,10 @@ local function Build()
 		card.turnGem:Hide()
 		-- under the plate: the champion's name and the record, on one line
 		card.sideText = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		card.sideText:SetPoint("BOTTOMRIGHT", card, "BOTTOM", -4, 1)
+		card.sideText:SetPoint("BOTTOM", card, "BOTTOM", 0, 1)
+		card.sideText:SetWidth(cardW - 10)
+		card.sideText:SetJustifyH("CENTER")
+		card.sideText:SetWordWrap(false)
 		card.sub = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 		card.sub:SetPoint("BOTTOMLEFT", card, "BOTTOM", 4, 1)
 		card.sub:SetJustifyH("LEFT")
@@ -1350,7 +1360,7 @@ local function Build()
 	local statusRibbon = frame:CreateTexture(nil, "ARTWORK")
 	statusRibbon:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Banner_Turn")
 	statusRibbon:SetSize(cardsW - 20, (cardsW - 20) / 8)
-	statusRibbon:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - CARD_H - 22)
+	statusRibbon:SetPoint("CENTER", frame, "TOPLEFT", 16 + cardsW / 2, -62 - CARD_H - 31) -- (0.66.4: lower, clear of the line under the cards)
 	frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	frame.status:SetPoint("CENTER", statusRibbon, "CENTER", 0, 1)
 	frame.status:SetWidth(300)
@@ -1360,7 +1370,7 @@ local function Build()
 
 	-- the board: the painted swamp board, with the nine sockets in its picture
 	local boardFrame = CreateFrame("Frame", nil, frame)
-	boardFrame:SetPoint("TOPLEFT", 16, -62 - CARD_H - 44)
+	boardFrame:SetPoint("TOPLEFT", 16, -62 - CARD_H - 56)
 	boardFrame:SetSize(FRAME_SIZE, FRAME_SIZE)
 	local boardArt = boardFrame:CreateTexture(nil, "BACKGROUND")
 	boardArt:SetAllPoints()

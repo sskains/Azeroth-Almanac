@@ -8,8 +8,11 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "0.66.3"
-ns.ICON = 133742   -- the Almanac's icon (picked with /aa whatis; was INV_Misc_Book_09)
+ns.VERSION = "0.68.9"
+-- (0.69.0) the Almanac's own art: the logo (a closed crimson journal, its gold compass) and the journal
+-- badge (the open journal, a page burning with gold writing), for journal entries
+ns.ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_Almanac"
+ns.JOURNAL_ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Badge_Journal"
 
 BINDING_HEADER_AZEROTHALMANAC = "Azeroth Almanac"
 BINDING_NAME_AZEROTHALMANAC_TOGGLE = L["Open or close the Almanac"]
@@ -191,6 +194,31 @@ function ns.AgoText(t)
 end
 
 -- Where the player is: map, x and y in percent (one decimal), zone and subzone names.
+-- (0.67.4) the skill list (professions, weapon skills): WoW Forever has C_SkillInfo; the old globals
+-- (GetNumSkillLines / GetSkillLineInfo) are gone there (wowforeverguides.com, build 69913).
+-- ns.NumSkillLines() and ns.SkillLine(i) -> name, isHeader, rank, maxRank (readable values only)
+function ns.NumSkillLines()
+	if C_SkillInfo and C_SkillInfo.GetNumSkillLines then
+		local ok, n = pcall(C_SkillInfo.GetNumSkillLines)
+		return ok and ns.Readable(n) or 0
+	elseif GetNumSkillLines then
+		local ok, n = pcall(GetNumSkillLines)
+		return ok and ns.Readable(n) or 0
+	end
+	return 0
+end
+function ns.SkillLine(i)
+	local R = ns.Readable
+	if C_SkillInfo and C_SkillInfo.GetSkillLineInfo then
+		local ok, info = pcall(C_SkillInfo.GetSkillLineInfo, i)
+		if ok and type(info) == "table" then return R(info.name), R(info.isHeader), R(info.rank), R(info.maxRank) end
+		return nil
+	elseif GetSkillLineInfo then
+		local ok, name, isHeader, _, rank, _, _, max = pcall(GetSkillLineInfo, i)
+		if ok then return R(name), R(isHeader), R(rank), R(max) end
+	end
+end
+
 function ns.Where()
 	local map = ns.Readable(C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player"))
 	local x, y
@@ -329,7 +357,7 @@ StaticPopupDialogs.AZEROTHALMANAC_RESET = {
 	timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
 }
 
-local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, ejscan = true, whatis = true, cards = true }
+local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, ejscan = true, wgdungeon = true, wgdebug = true, seeddungeons = true, whatis = true, cards = true }
 
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
@@ -417,6 +445,12 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		if ns.Toast then ns.Toast:Test() end
 	elseif cmd == "atlascheck" then
 		ns.ArtScan:AtlasCheck()
+	elseif cmd == "seeddungeons" then
+		if ns.DevSeed then ns.DevSeed:Command(rest) end
+	elseif cmd == "wgdebug" then
+		if ns.WildGambit and ns.WildGambit.DebugPanel then ns.WildGambit:DebugPanel() end
+	elseif cmd == "wgdungeon" then
+		if ns.WildGambit and ns.WildGambit.DebugDungeon then ns.WildGambit:DebugDungeon(rest) end
 	elseif cmd == "ejscan" then
 		ns.ArtScan:EJScan()
 	elseif cmd == "whatis" then

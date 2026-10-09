@@ -42,6 +42,19 @@ function D:IsBoss(npc)
 	return npc and bossOf[npc] ~= nil
 end
 
+-- (0.68.3) the dungeon a boss belongs to: its records entry, and the instance key you found it under (nil if not found)
+function D:DungeonOf(npc)
+	Index()
+	local d = npc and bossOf[npc]
+	if not d then return nil end
+	local shown = ns.Store:Shown("instance")
+	if d.id and shown[d.id] then return d, d.id end
+	for id, rec in pairs(shown) do
+		if type(rec) == "table" and rec.name == d.name then return d, id end
+	end
+	return d, nil
+end
+
 local function Items(s)
 	local out = {}
 	for part in (s or ""):gmatch("[^,]+") do
@@ -67,15 +80,15 @@ local function Me()
 end
 
 local function InstanceNow()
-	local ok, name, itype, _, _, _, _, _, id = pcall(GetInstanceInfo)
-	itype, id = R(itype), R(id)
-	if ok and (itype == "party" or itype == "raid") and id then return id, R(name) end
+	local ok, name, itype, _, _, maxPlayers, _, _, id = pcall(GetInstanceInfo)
+	itype, id, maxPlayers = R(itype), R(id), R(maxPlayers)
+	if ok and (itype == "party" or itype == "raid") and id then return id, R(name), type(maxPlayers) == "number" and maxPlayers or nil end
 end
 
 function D:Check()
 	if not ns.db then return end
 	if not backfilled then pcall(D.Backfill, D) end
-	local id, name = InstanceNow()
+	local id, name, size = InstanceNow()
 	if run and run.id ~= id then
 		-- left (or moved to another instance): close the run
 		local c = Me()
@@ -101,6 +114,11 @@ function D:Check()
 			r.last = time()
 			c.runs[id] = r
 		end
+	end
+	-- (0.68.4) its group size, as the game says inside
+	if id and size and size > 0 then
+		local rec = ns.Store:Get("instance", id)
+		if rec then rec.size = size end
 	end
 	-- the floors' maps, as the game names them
 	if id then
@@ -342,6 +360,67 @@ function D:Bosses(id, rec)
 		return (a.b.name or "") < (b.b.name or "")
 	end)
 	return met, unmet
+end
+
+-- (0.68.2) a dungeon's floors on Blizzard's own dungeon map art. C_Map has no dungeon maps on this
+-- client, but the art is still in it: Interface\WorldMap\<folder>\<folder><floor>_<1..12> (4 x 3 tiles;
+-- a few dungeons number the tiles without a floor). The floors and each boss's spot come from the
+-- records (AtlasLoot Revival's data). Returns the floors in order, { name, prefix }, and the spot of each
+-- record boss (keyed by its record table): { floor = index into floors, x, y in percent }.
+local artFound = {}
+local function HasArt(path)
+	if not GetFileIDFromPath then return true end
+	if artFound[path] == nil then
+		local ok, file = pcall(GetFileIDFromPath, path)
+		artFound[path] = ok and type(file) == "number" and not ns.IsSecret(file) and file > 0 or false
+	end
+	return artFound[path]
+end
+function D:MapFloors(id, name)
+	local floors, spots, index = {}, {}, {}
+	for _, d in ipairs(self:Entries(id, name)) do
+		if d.folder then
+			local mine = {}
+			for n, fl in ipairs(d.floors or {}) do
+				local prefix = "Interface\\WorldMap\\" .. d.folder .. "\\" .. d.folder .. (d.tio and "" or (fl[2] .. "_"))
+				-- (Upper and Lower Blackrock Spire share one instance and one floor: listed once)
+				if not index[prefix] and HasArt(prefix .. "1") then
+					floors[#floors + 1] = { name = fl[1], prefix = prefix }
+					index[prefix] = #floors
+				end
+				mine[n] = index[prefix]
+			end
+			for _, b in ipairs(d.bosses or {}) do
+				local floor = b.x and mine[b.f or 1]
+				if floor then spots[b] = { floor = floor, x = b.x * 100, y = b.y * 100 } end
+			end
+		end
+	end
+	return floors, spots
+end
+
+-- (0.68.4) a dungeon's group size: what the game said inside, else the usual Classic size
+local SIZE = { zulgurub = 20, ruins_of_ahnqiraj = 20, lower_blackrock_spire = 10, upper_blackrock_spire = 10 }
+function D:Size(id, rec)
+	if rec and type(rec.size) == "number" and rec.size > 0 then return rec.size end
+	local size
+	for _, d in ipairs(self:Entries(id, rec and rec.name)) do
+		local s = SIZE[d.key] or (d.raid and 40) or 5
+		size = math.max(size or 0, s)
+	end
+	return size or 5
+end
+-- (0.68.5) its tier colour, as item quality: 5 green, 10 blue, 20 purple, 40 orange
+local SIZE_COLOR = { { 40, "ffff8000" }, { 20, "ffa335ee" }, { 10, "ff0070dd" }, { 0, "ff1eff00" } }
+function D:SizeColor(size)
+	for _, e in ipairs(SIZE_COLOR) do if (size or 5) >= e[1] then return e[2] end end
+end
+-- "5-man", "40-man", in its tier colour unless plain
+function D:SizeText(id, rec, plain)
+	local size = self:Size(id, rec)
+	local text = (L["%d-man"]):format(size)
+	if plain then return text end
+	return "|c" .. self:SizeColor(size) .. text .. "|r"
 end
 
 -- the level range and entrance zone from the records (shown once the dungeon has been entered)

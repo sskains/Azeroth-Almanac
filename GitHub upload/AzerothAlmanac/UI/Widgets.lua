@@ -2138,7 +2138,8 @@ function W.Waypoint(map, x, y, name)
 		ns.Print(L["A waypoint can't be placed on that map."])
 		return
 	end
-	local ok = pcall(C_Map.SetUserWaypoint, UiMapPoint.CreateFromCoordinates(map, x / 100, y / 100))
-	if ok and C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, true) end
+	-- (0.67.4) no C_SuperTrack.SetSuperTrackedUserWaypoint: it's protected on WoW Forever, so it only
+	-- counted an "Interface action failed because of an AddOn" (pcall can't catch that)
+	pcall(C_Map.SetUserWaypoint, UiMapPoint.CreateFromCoordinates(map, x / 100, y / 100))
 	ns.Print((L["Waypoint set on %s."]):format(name or "?"))
 end

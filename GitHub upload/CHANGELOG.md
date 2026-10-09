@@ -4,6 +4,126 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **A new Wild Gambit icon** (`Media\Icon_WildGambit.tga`, 256 x 256): three glowing cards fanned out with a gold coin and purple-flowered vines, painted for the job, replacing the blurry 64 px crop of the logo. Shows in the minimap button's menu. A replaced texture: `/reload` is enough.
+
+## 0.68.9
+
+- **The Almanac's new logo** (the closed crimson journal with its gold compass, `Media\Logo_Almanac`) replaces the game's red book everywhere: the AddOns list, the minimap button (whole, not cut round) and its menu title, the addon compartment, the window's fallback portrait, Settings > General, the "Almanac" line in other players' tooltips, the update quest's portrait, and any icon the game can't find.
+- **The journal badge** (the open journal, a page burning with gold writing, `Media\Badge_Journal`):
+  - the Journal page's icon (tab, window portrait, the minimap menu's Journal row);
+  - toasts: the old "Almanac" tag (red word on a dark strip) is gone; toasts that write a journal entry (discoveries, levels, milestones, fully explored) wear the badge as a seal over the top right corner, half over the gold frame, its page glowing as the toast arrives. Tier ups don't write an entry, so they don't wear it;
+  - every entry on the Journal page has a small seal on its icon's corner (the icon still shows what the entry is about).
+- Issues 24 and 25.
+
+## 0.68.8
+
+- Fixed: a Lua error hovering "Pin last kill" on a creature from `/aa seeddungeons` (the seeder stored the last kill as a time, not a spot). The seeder no longer sets it, and the button only shows for a kill with a spot.
+
+## 0.68.7
+
+- **Boss names on the Dungeons page** come from the creature's own record once the game has named it; the dungeon's entry for a boss could still say "Boss #1696" from before (pins, lists, the boss's header, loot notes).
+
+## 0.68.6
+
+- Dungeon cards: the parchment rim over the arch's top is a sliver now (the sides and foot unchanged).
+
+## 0.68.5
+
+- **Dungeon cards: the arch fills the card**, the parchment only a thin rim round it, the same width on every side (as the creature cards' art fills theirs). The dungeon's name stays on the arch's plaque; nothing else is written on the card.
+- **Under the card:** "5-man · levels 13-20", then "Bosses killed: 3 of 4 met".
+- **Group size in its tier colour** (item quality): 5-man green, 10-man blue, 20-man purple, 40-man orange; under the cards, in the dungeon's header, its Overview and a boss's Where.
+
+## 0.68.4
+
+- **Dungeon cards look like cards.** A parchment face edge to edge (as on the creature cards) with a drop shadow and a thin dark edge; the stone arch is smaller, inside it, and the group size and levels are inked on the parchment under it ("5-man · levels 13-20"). Under the card: bosses killed of those met.
+- **Group size instead of "Dungeon" / "Raid"**: on the cards, the dungeon's header, its Overview (Group size) and a boss's Where. The size is what the game says inside (recorded each time you enter), else the usual one: 5 for dungeons, 10 for Blackrock Spire, 20 for Zul'Gurub and Ruins of Ahn'Qiraj, 40 for the other raids.
+
+## 0.68.3
+
+- **Dungeon maps: no black band.** Blizzard's map picture fills only the top left 1002 × 668 of its 1024 × 768 tile grid; only that part shows now (boss spots unchanged).
+- **A boss's "Where"** names its dungeon (click to open it there), since inside a dungeon the game doesn't say which map you're on; it used to say "?".
+- **`/aa seeddungeons` fills everything** (development only): real boss names (a new dev file, `Modules\DevSeedNames.lua`, from AtlasLoot Revival's data), every boss at Master Hunter or beyond (3 to 200 kills), and the facts a fight would record: health samples, a self-heal on some, abilities that hit you with damage figures, a debuff, casts, every drop with counts, money and skinning. Running it again refills the seeded bosses; your own records are left alone.
+
+## 0.68.2
+
+- **Dungeon floor maps.** This client's `C_Map` has no dungeon maps (and inside one, the game doesn't say which map you're on), but Blizzard's own dungeon map art is still in the game files. The Dungeons page now draws each floor from those pictures (`Interface\WorldMap\<dungeon>\`, 12 tiles in a 4 × 3 grid), as Plus Everything's dungeon journal did.
+  - Bosses you've met stand on the map as round portraits at their spot from AtlasLoot Revival's data (MIT, already credited in `Licenses\`). Unmet bosses still aren't drawn.
+  - Dungeons with several floors get a floor picker (arrows and the floor's name); choosing a boss turns to its floor, and bosses met on the other floors are listed under the map.
+  - 27 dungeons and raids have maps; Hall of Thanes and Ruins of Lordaeron keep their journal art and a boss list.
+- `tools/build_dungeons.py` now keeps each dungeon's map folder and floors and each boss's floor and spot; the loot and boss data are unchanged.
+- The 0.68.1 "floors found by name" lookup is gone (it found nothing on this client), and `/aa seeddungeons` no longer makes up boss spots.
+
+## 0.68.1
+
+- **Dungeon cards: the scene fills the arch.** The game's journal backgrounds only fill the top left of their texture (the rest fades to nothing), so the cards showed a dark band; now only the picture's own part is used, reaching under the stone. The same fix is on Wild Gambit's dungeon event cards.
+- **Back** on a dungeon returns to the collection.
+- **Floors found by name:** a dungeon with no floors recorded (inside, the game may not say which map you're on) now looks its floors up by its name among the client's maps.
+- Polish:
+  - the bosses are listed once, on the left (the Overview now shows met / defeated / mastered);
+  - shorter notes ("3 kills");
+  - a chosen boss's subtitle shows its level, type, research tier and kills;
+  - the count is out of 28 (Lower and Upper Blackrock Spire are one instance).
+
+## 0.68.0
+
+- **The Dungeons page, redesigned** (design: `docs/DESIGN.md` section 73).
+  - **Collection:** every dungeon and raid you've found is a card (the stone arch, its journal art, flickering torches), four to a row, dungeons then raids by level. Hovering grows a card; under each are its levels and the bosses killed of those met; the header counts how many of the 29 you've found.
+  - **The dungeon** (click a card):
+    - its floors on the game's map art, with a round portrait where you met each boss. Click a portrait to choose the boss; bosses with no spot are listed under the map.
+    - on the right, the dungeon's **Overview**: facts, bosses met (unmet ones only counted), other creatures recorded inside, loot from its bosses, your characters' runs and its Wild Gambit event.
+    - for the chosen boss, **Abilities**, **Loot** and **Other**, as far as its research tier unlocks them: 1 kill for every ability, 3 for the full loot table, immunities and resistances.
+  - A dungeon whose floors can't be drawn shows its journal art.
+- **Developer: `/aa seeddungeons`** (with `/aa debug` on) fills your Almanac with every dungeon and raid, their bosses at assorted kill counts, loot and runs, for testing; `/aa seeddungeons clear` takes it all out again. Nothing you recorded yourself is changed. Bosses still called "Boss #…" get their names the next time you change zone outside an instance.
+- New files: **full game restart**.
+
+## 0.67.4
+
+Fixes from the WoW Forever addon developer guide (wowforeverguides.com/addons, beta build 69913):
+- **Profession skill levels are read again.** The skill list now comes from `C_SkillInfo`; the old `GetNumSkillLines` / `GetSkillLineInfo` don't exist on WoW Forever, so the Trainers page's profession bars and gathering's skill check had nothing to read. Shared helpers: `ns.NumSkillLines()`, `ns.SkillLine(i)`.
+- **Waypoints no longer trip "Interface action failed because of an AddOn".** The extra `C_SuperTrack.SetSuperTrackedUserWaypoint` call is protected on WoW Forever and is gone; the waypoint itself is set as before.
+- **Nameplates are read a frame later** (Creatures, Townsfolk, Quest Targeter, the hidden interact nameplate): the event comes before the plate's unit is filled in, so creatures and NPCs seen only on nameplates were sometimes missed. Party Plates already did this.
+
+## 0.67.3
+
+- **Dungeon cards: no washed-out scenes.** Some journal pictures fade out toward their edges, and the parchment showed through them (Maraudon looked pale and misty). The scene now sits on a dark backing.
+
+## 0.67.2
+
+- **Dungeon cards look like the other cards:** the Almanac's parchment sits behind the stone frame, and the event's name is in dark ink on it.
+- **A bigger scene in the arch:** the journal art is closer in and reaches under the stone.
+- **More drama:** the card holds the stage longer, then steps aside, and the event plays out in full view (every effect runs about 60% slower).
+
+## 0.67.1
+
+- **Developer: a dungeon events debug panel** (removed once the events are done; `QoL/WildGambitDebug.lua`). With `/aa debug` on, `/aa wgdebug` or the **Dungeons** button on the Wild Gambit table opens it:
+  - one button per event (raids in orange, WoW Forever's in blue), each with the rules in its tooltip, greyed while it would change nothing;
+  - **Random event**, **New practice game** and **Show the table**;
+  - a status line: whose turn it is and which event has fired.
+
+## 0.67.0
+
+- **Wild Gambit dungeon events** (practice games; design: `docs/DESIGN.md` section 72). Each time a card leaves your hand (a card played or your spell cast) there's a 5% chance, once a match, that a dungeon you've entered sets off its event at once. The dungeon's card rises over the board on a violet portal, with flickering torches, its journal art and "Triggered by" whoever set it off, and the event hits both players. All 29 dungeons and raids have one, among them:
+  - **Shadowfang Keep:** no magic, both spell cards gone under an anti-magic dome.
+  - **Gnomeregan:** every card placed may blow up (1 in 4); its player gets a new card and goes again.
+  - **Molten Core:** fire and meteors wipe the board, and both players get a new hand.
+  - **Onyxia:** a row is breathed away.
+  - **Naxxramas:** a square freezes over.
+  - **Uldaman:** the board's cards turn to stone.
+  - **Ruins of Lordaeron:** every card changes sides.
+
+  Lasting events keep their card small at the board's corner (hover it for the rules). An event that would change nothing is never chosen.
+- New cards come from your whole collection once the three reserve cards are spent.
+- Developer: `/aa wgdungeon [dungeon]` (with `/aa debug` on) fires an event now in a practice game; `/aa wgdungeon list` lists them.
+- New textures and new files: **full game restart** (not /reload).
+
+## 0.66.4
+
+- **Murloc Tac Toe: the Bombay Cat is offered in the Hallow's End line-up.** It was looked for only among your companions, and this client's companion lookup never found it; it now loads from its own creature (NPC 7385), so you don't need to own the pet.
+- **Murloc Tac Toe: the line under each player card fits.** The champion and the record ("Plagued Cockroaches   Mudfin") are now one centred line the width of the card, ending in "..." if too long (a long champion name used to run off the card's left edge).
+- **Murloc Tac Toe: the "Your turn" ribbon sits lower,** clear of that line, with the board 12 px further down to make room (the window is 837 x 699).
+
 ## 0.66.3
 
 Asia's work, merged 2026-10-07: the wg-spell-cursor and murloc-tactoe-restyle branches. (Also: the dungeon cards' design moved to DESIGN section 72, since 70 was already Gem Match's board.)

@@ -31,7 +31,7 @@ Also included, ported from Plus Everything (same author): quest targeter, gather
 ## Data rules
 
 - **Natural discovery.** Nothing is shown before you've met it in your own game.
-- **Hidden databases.** Classic records built from VMaNGOS (and AtlasLoot Revival for dungeon loot) ship with the addon, but a record only fills in once evidence or a research tier unlocks it.
+- **Hidden databases.** Classic records built from VMaNGOS (and AtlasLoot Revival for dungeon loot and boss map spots) ship with the addon, but a record only fills in once evidence or a research tier unlocks it.
 - No Wowhead or Questie data.
 
 ## Repository layout

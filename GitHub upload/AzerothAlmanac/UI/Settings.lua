@@ -1387,7 +1387,7 @@ end
 -- Sidebar order. id is what S:Open(name) accepts (the label and aliases work too).
 local PAGE_LIST = {
 	{ cat = L["Azeroth Almanac"] },
-	{ id = "general", label = L["General"], icon = 133742, build = BuildGeneral, aliases = { "options", "almanac" },
+	{ id = "general", label = L["General"], icon = ns.ICON, build = BuildGeneral, aliases = { "options", "almanac" },
 		desc = L["The minimap button, the window, key bindings and slash commands."] },
 	{ id = "alerts", label = L["Discovery alerts"], icon = "INV_Misc_Note_01", build = BuildAlerts, aliases = { "toasts" },
 		desc = L["Which discoveries get an alert."] },

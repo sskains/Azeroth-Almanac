@@ -295,7 +295,8 @@ end
 
 ns:RegisterEvent("UPDATE_MOUSEOVER_UNIT", function() MeetSafely("mouseover") end)
 ns:RegisterEvent("PLAYER_TARGET_CHANGED", function() MeetSafely("target") end)
-ns:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) if unit then MeetSafely(unit) end end)
+-- (0.67.4) a frame later: on WoW Forever the event comes before the plate's unit is filled in
+ns:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) if unit then C_Timer.After(0, function() MeetSafely(unit) end) end end)
 for _, event in ipairs({ "GOSSIP_SHOW", "MERCHANT_SHOW", "TRAINER_SHOW", "BANKFRAME_OPENED", "AUCTION_HOUSE_SHOW",
 	"TAXIMAP_OPENED", "PET_STABLE_SHOW", "GUILD_REGISTRAR_SHOW", "TABARD_FRAME_OPENED", "BATTLEFIELDS_SHOW",
 	"CONFIRM_XP_LOSS", "QUEST_GREETING", "QUEST_DETAIL" }) do

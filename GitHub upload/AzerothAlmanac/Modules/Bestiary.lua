@@ -792,8 +792,9 @@ end)
 ns:RegisterEvent("UPDATE_MOUSEOVER_UNIT", function()
 	if ns.db then B:Seen("mouseover") end
 end)
+-- (0.67.4) a frame later: on WoW Forever the event comes before the plate's unit is filled in
 ns:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit)
-	if ns.db then B:Seen(unit) end
+	C_Timer.After(0, function() if ns.db and unit then B:Seen(unit) end end)
 end)
 ns:RegisterEvent("NAME_PLATE_UNIT_REMOVED", function(_, unit)
 	if ns.db then B:CheckDead(unit) end

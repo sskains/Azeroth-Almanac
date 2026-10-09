@@ -7,7 +7,7 @@ local _, ns = ...
 local L = ns.L
 local W = ns.Widgets
 
-local page = { key = "journal", title = L["Journal"], icon = { 133742, "INV_Misc_Book_09" }, order = 1 }
+local page = { key = "journal", title = L["Journal"], icon = ns.JOURNAL_ICON, order = 1 }
 local list, detail, search, countText, charButton, kindButton, zoneButton
 local filter = ""
 local charFilter, kindFilter, zoneFilter -- nil = all
@@ -400,6 +400,14 @@ function page:Build(parent, header)
 		emptyText = L["Nothing discovered yet. Go explore!"],
 		update = function(row, e)
 			row:SetHeader(e.header ~= nil, e.header and collapsed[e.day])
+			-- (0.69.0) the journal seal on the corner of each entry's icon (the open journal, its burning page)
+			if not row.seal then
+				row.seal = row.icon:GetParent():CreateTexture(nil, "OVERLAY", nil, 7)
+				row.seal:SetSize(14, 14)
+				row.seal:SetPoint("CENTER", row.icon, "BOTTOMRIGHT", -1, 2)
+				row.seal:SetTexture(ns.JOURNAL_ICON)
+			end
+			row.seal:SetShown(not e.header)
 			if e.header then
 				row.icon:SetTexture(nil)
 				row.text:SetFontObject(W.Font("GameFontNormal", "GameFontNormalSmall"))

@@ -6,6 +6,99 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## 0.68.9 (full game restart: new textures)
+
+- [ ] AddOns list: the crimson journal logo beside Azeroth Almanac.
+- [ ] Minimap button: the whole logo inside the ring; right-click menu: the logo on the title row, the open journal on the Journal row.
+- [ ] Window: the Journal page's portrait is the open journal; Settings > General's tab shows the logo.
+- [ ] `/aa toast`: the four journal toasts wear the open-journal seal over the top right corner, its page glowing as each arrives; the old red "Almanac" tag is gone. A creature tier up (Master Hunter) has no seal.
+- [ ] Journal page: each entry's icon has a small seal on its corner; day headers have none.
+- [ ] Another Almanac user's tooltip: the logo beside the red "Almanac".
+
+## 0.68.8 (/reload)
+
+- [ ] Creatures page on a seeded boss: no error; no "Pin last kill" button (seeded kills have no spot). A creature you killed yourself still has it.
+
+## 0.68.7 (/reload)
+
+- [ ] The Stockade: the pins and the boss header read Targorr the Dread, Bruegal Ironknuckle and so on, not "Boss #...".
+
+## 0.68.6 (/reload)
+
+- [ ] Dungeon cards: the arch's keystone nearly touches the card's top edge; sides and foot keep their rim.
+
+## 0.68.5 (/reload)
+
+- [ ] Dungeon cards: the arch fills the card with a thin, even parchment rim; the name on the plaque; nothing else on the card.
+- [ ] Under each card: the size in colour (5-man green, 10-man blue, 20-man purple, 40-man orange) · levels, then bosses killed.
+
+## 0.68.4 (/reload)
+
+- [ ] Dungeon cards: parchment card with shadow and edge, the arch smaller inside, "5-man · levels 13-20" on the parchment under it; hover still grows it; torches still flicker.
+- [ ] Raids read 40-man (Molten Core), 20-man (Zul'Gurub); Blackrock Spire 10-man. Enter a dungeon: its size is the game's own afterwards.
+- [ ] The dungeon header and Overview show the group size; a boss's Where shows it beside the dungeon.
+
+## 0.68.3 (full game restart: new file)
+
+- [ ] Dungeon maps end at the picture's edge, no black band under it; portraits in the same spots.
+- [ ] `/aa seeddungeons` again: bosses have their names (Kresh, Deviate Faerie Dragon), and a boss's Abilities, Loot and Other tabs are full (health, defenses, drops with counts, money, skinning where it applies).
+- [ ] A boss's Where (Other tab, or the Creatures page) shows its dungeon; clicking it opens the dungeon.
+
+## 0.68.2 (/reload)
+
+- [ ] Dungeons page, Ragefire Chasm: the floor map shows (the cave, not a blank or green square), with Taragaman and Jergosh as round portraits at their spots.
+- [ ] A dungeon with floors (The Deadmines, Scarlet Monastery, Blackrock Depths): the arrows turn the floors and the name changes; clicking a boss under "On other floors" turns to its floor with its portrait larger.
+- [ ] Zul'Farrak (tiles numbered without a floor) and Upper Blackrock Spire (floor 7 of Blackrock Spire's art) draw their maps.
+- [ ] Hall of Thanes and Ruins of Lordaeron: journal art with the boss list, no empty map.
+- [ ] Boss portraits sit roughly where the bosses are (12 spots in the data are known to be approximate: note any that are far off).
+
+## 0.68.1 (/reload)
+
+- [ ] Dungeon cards: the scene fills the arch, no dark band at its foot (also on Wild Gambit's event cards).
+- [ ] In a dungeon, Back returns to the collection; from the collection, Back works as before.
+- [ ] Bosses listed once (left); Overview shows Met / Defeated / Mastered; a boss's subtitle reads "Level 20 Boss Beast · Mastered · 3 kills".
+
+## 0.68.0 (full game restart: new files)
+
+- [ ] `/aa debug`, `/aa seeddungeons`: the Dungeons page's Collection shows every dungeon and raid as cards, four to a row; hover grows one; captions show levels and bosses killed; the header says found of 29.
+- [ ] Click a card: the dungeon tab opens on it; its floors with boss portraits (or its journal art when no floor draws); click a portrait: Abilities, Loot, Other fill (bosses at 0, 1, 3, 10, 40 kills show different amounts); Overview goes back to the dungeon.
+- [ ] Your own records (Ragefire Chasm, Oggleflint) unchanged; `/aa seeddungeons clear` removes the test data and the page shows only what you really found.
+
+## 0.67.4 (/reload)
+
+- [ ] Trainers page: your professions show their skill bars (rank / max); a gathering node shows whether your skill is high enough.
+- [ ] Set a waypoint from any page: the pin appears, and no "Interface action failed because of an AddOn" message.
+- [ ] Creatures and townsfolk seen only on nameplates (never targeted) still get recorded; the interact nameplate hiding still works.
+
+## 0.67.3 (/reload)
+
+- [ ] Maraudon's card (and the others): the scene is rich, not pale; where a picture fades, it fades to dark, not parchment.
+
+## 0.67.2 (/reload)
+
+- [ ] The dungeon card has parchment behind its frame (in the plaque, round the arch); the event name reads in dark ink; the scene fills the arch, larger.
+- [ ] The card holds about 2.5 s, steps aside, and only then the event plays, slower (Molten Core, Onyxia, Earthquake read clearly); the opponent still waits.
+
+## 0.67.1 (full game restart: a new file)
+
+- [ ] `/aa debug`, then `/aa wgdebug` (or the Dungeons button at the table's top right): the panel opens and can be dragged; Escape closes it.
+- [ ] In a practice game, each button fires its event; buttons grey out while the board is busy or the event would do nothing; the status line names the fired event.
+
+## 0.67.0 (full game restart: new files and textures)
+
+- [ ] `/aa debug`, start a practice game, `/aa wgdungeon list`; then fire a few with `/aa wgdungeon <name>`: the card rises over the board on the portal, journal art in the arch, event name on the plaque, rules and "Triggered by <you>" under it, torches flickering (never in step).
+- [ ] Big ones look right: Molten Core (fire wall, meteors, board wiped, new hands of 5), Onyxia (fire across one row), Naxxramas (frost breath, ice square stays), Shadowfang Keep (dome, both spell cards fade, spells unusable), Gnomeregan (later cards sometimes explode with smoke; you get a new card and go again), Rising Tide (bubbles, top row floats off, rows rise), Earthquake / Uppercut (dust and shake, cards slide), Uldaman (stone over the cards; they can't be captured).
+- [ ] Nightmare Sleep: a card in each hand shows the sleep icon, can't be played on that player's next turn, then wakes.
+- [ ] A lasting event's card sits small at the board's top-left corner; hovering it shows the rules; it goes when the match ends.
+- [ ] Without the command, events happen rarely on their own (about 4 matches in 10), only for dungeons you've entered; never in player matches.
+- [ ] No Lua errors; the opponent waits while an event plays out; the game always ends.
+
+## 0.66.4 (/reload)
+
+- [ ] Murloc Tac Toe in Hallow's End (`/aa mtt season` before 18 Oct): the Bombay Cat is among the champions (arrows and the Champions block), with its 3D model.
+- [ ] The line under each card ("Plagued Cockroaches   Mudfin", "Excitable Slimes   Practice") is centred and stays inside the card.
+- [ ] The green "Your turn" ribbon no longer covers that line, and doesn't cover the board's top edge.
+
 ## 0.66.3 (/reload; the Murloc Tac Toe items marked "full game restart" need one)
 
 - [ ] Murloc Tac Toe, new look (`/reload`): the dark window background; the wooden buttons (text fits: "Challenge", "My target", "Practice game", "Resign", "Sound: on"); the corner icon in the gold dragon frame with a murloc head, not a black circle, and the byline beside it; the VS shield.

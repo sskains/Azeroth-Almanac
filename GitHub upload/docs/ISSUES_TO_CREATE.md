@@ -199,8 +199,136 @@ Designed 2026-10-07: docs/DESIGN.md section 72.
 Steps: 1) scan which dungeons have journal art; 2) review the effects table; 3) card art and frame (Media/), new texture = full restart; 4) rules in WildGambitLogic (seeded deal, neutral square, effects, bot scoring, offline tests); 5) UI (hand, board square, tooltip, sounds); 6) player matches: protocol 12.
 ```
 
+### 28. Healer Assist with hidden health values
+**Labels:** `healer-assist` `bug` `wow-forever`
+```
+Added 2026-10-08 (wowforeverguides.com pitfalls, build 69913): UnitHealth / UnitHealthMax can be secret values on WoW Forever. The health bars are safe (they pass the raw values to StatusBar:SetMinMaxValues / SetValue), but the "in danger" edge, greying and other health maths read them through Readable, which turns a secret into nil, so they may quietly stop working.
+Step 1, probe in a group:
+/run local s=issecretvalue for _,u in ipairs({"player","party1","partypet1"}) do local h=UnitHealth(u) print(u, h==nil and "none" or (s and s(h)) and "hidden" or "readable") end
+Step 2 if hidden: drive danger and greying from what the client allows (the bar's own fill, UnitHealthPercent / curve APIs if present, or threat and debuff state), never maths on the secret.
+```
+
+### 29. Dungeons page redesign: a card collection, then the dungeon's map and bosses
+**Labels:** `almanac` `ui` `enhancement`
+```
+Asked 2026-10-08; plan in docs/DESIGN.md section 73.
+Tab 1 Collection: a card for each dungeon found (the stone-arch dungeon card), 4 per row, hover to enlarge like the creature cards; click opens it in tab 2.
+Tab 2 Dungeon: the floor map on the left with each spotted boss as a clickable portrait pin; on the right a pane with tabs for the dungeon (Overview) or the chosen boss (Abilities, Loot, Other).
+```
+
+### 30. Journey: a time lapse of where your characters have walked
+**Labels:** `almanac` `feature` `ui`
+```
+Designed 2026-10-08: docs/DESIGN.md section 74 (supersedes section 34, Travels).
+The journey draws itself on the world map as a gold, sparkling line, in the order you walked it. Time frames: today, this week (from Monday), this month (from the 1st), all time. Character mode: the character you're playing, gold. Account mode: every character at once in its class colour, on one shared clock, with a legend to show / hide each.
+Jumps: flight path = dotted line + gryphon / wyvern pins; boat / zeppelin = pins at both docks + dashed line (Travel.lua's ride detection); hearthstone = hearth pin; dungeon in / out = the swirl at the entrance; death = skull, ghost run faint; anything else = the portal swirl (Media/FX_DungeonPortal) at both ends. Journal moments (first visits, level-ups, dungeons) as markers with hover.
+Steps:
+1) Probe: is the hearthstone / teleport cast readable (UNIT_SPELLCAST_SUCCEEDED for the player)?
+2) Recorder (ship early on its own): a point every 5 s after ~15 yd of movement; time, map, x, y; jump events tagged; thinned at logout (~20 KB per 4 h).
+3) Drawing: line segments and pins on the world map canvas (as /aa maptest), continent and zone maps.
+4) Time lapse: ~20-30 s whatever the range, idle skipped, glowing head with time and zone, play / pause, slider, 1x / 2x / 4x; follows the line across continents.
+5) Where: a Journey tab on the Characters page; a footprints button on the world map (left: today, right: options).
+6) Account mode and legend; settings (recorder on / off, markers, forget a day / all).
+```
+
 ### 20. Remove dev/AlmanacProbe
 **Labels:** `chore`
 ```
 The probe addon in dev/AlmanacProbe can go once the probe leftovers issue is done.
+```
+
+---
+
+## Added 2026-10-08 (plans for approval in docs/PLANS_2026-10-08.md)
+
+Each issue's plan, art prompts and open questions are in `docs/PLANS_2026-10-08.md` under the same number. Copy the summary below as the body and add "Plan: docs/PLANS_2026-10-08.md #NN".
+
+### 31. Dungeon card: word-art dungeon names
+**Labels:** `wild-gambit` `art` `feature`
+```
+Show each dungeon's name in WoW-logo-style word art (gold gradient, bronze outline, bevel, shadow) instead of plain text. The logo lettering isn't a game font, so names are pre-rendered in the LifeCraft font (dafont, donationware; the font file is not shipped) to textures by tools/wordart.py; long names on two lines. Shows on the Dungeons page cards, Wild Gambit's event card and the dungeon's header. Plan: docs/PLANS_2026-10-08.md #31.
+```
+
+### 32. Dungeon card: a carved name plate
+**Labels:** `wild-gambit` `art`
+```
+The box the dungeon name sits in looks plain. New carved stone name plate with gold filigree and a dark recessed centre for the gold word art (Media/Plate_DungeonName.tga), over the arch's plaque; Gemini prompt in the plan. New texture: full game restart. Plan: docs/PLANS_2026-10-08.md #32.
+```
+
+### 33. Dungeon card: parchment background
+**Labels:** `wild-gambit`
+```
+The creature cards' parchment is the worn, torn-edged border painted into their frames; the dungeon cards use the game's flat quest parchment. Cut the painted border from Frame_2_Common as a nine-slice (Media/Card_Parchment.tga) and draw it round the arch on UI/DungeonCard.lua and the event card; Gemini fallback prompt in the plan. Plan: docs/PLANS_2026-10-08.md #33.
+```
+
+### 34. Toasts use our own art
+**Labels:** `almanac` `art` `feature`
+```
+Each toast uses the matching painted icon (new herb -> Tab_Gathering, new creature -> Tab_Creatures ...), with the game icon as a fallback; item, tier and milestone toasts keep their own icons (decided). Mapping table in the plan. Goes with issues 24 and 25. Plan: docs/PLANS_2026-10-08.md #34.
+```
+
+### 35. Journal landing page: three panes and the Journey
+**Labels:** `almanac` `feature`
+```
+Left list narrower (400 -> 300 px); new large top-right pane showing the Journey (issue 30) for today, with its own controls and a button to open it large; details move to the bottom-right pane. Until the Journey recorder exists it draws from the journal's points. Plan: docs/PLANS_2026-10-08.md #35.
+```
+
+### 36. Gathering: skill needed to gather
+**Labels:** `almanac` `data` `feature`
+```
+Show the Herbalism / Mining level each node needs (list rows, node page, map pins), coloured by the current character's skill. Data from the hidden database's lock table, corrected from the game's node tooltip. Plan: docs/PLANS_2026-10-08.md #36.
+```
+
+### 37. Rogues: lockpicking
+**Labels:** `almanac` `data` `feature`
+```
+Follows the Almanac shows setting (character: rogues only; account: everyone when a rogue is on the account). The Lockpicking level for locked chests and lockboxes; record Lockpicking skill, Pick Lock casts (what was inside) and "too low" failures; a Locks group on Gathering. Plan: docs/PLANS_2026-10-08.md #37.
+```
+
+### 38. "New" entries on every page, with counts on the tabs
+**Labels:** `almanac` `feature`
+```
+Entries found since you last looked at a page show in a "New" group at the top with a breathing gold glow and a separator; a gold count badge on each side tab. New = since you last opened that tab (stamped when you leave it). Plan: docs/PLANS_2026-10-08.md #38.
+```
+
+### 39. Journal entry icons match the new art
+**Labels:** `almanac` `art`
+```
+Journal rows, the Overview and entry details use the same painted icons as the toasts. Full list of every log icon, with matches and missing art, in the plan. Plan: docs/PLANS_2026-10-08.md #39.
+```
+
+### 40. Characters > Professions: icons open the right page
+**Labels:** `almanac` `feature`
+```
+Clicking a profession opens its page with only its category expanded (Mining -> Gathering, Ore and stone; Enchanting -> Recipes, Enchanting). New page helper ShowOnly(group). Plan: docs/PLANS_2026-10-08.md #40.
+```
+
+### 41. Spells & Recipes becomes Recipes; blue bars
+**Labels:** `almanac` `feature`
+```
+The page keeps only profession recipes and is renamed Recipes; class spells, weapon skills and riding move to the trainer's Training tab on People (only what that trainer teaches; no separate class-spell list); links and slash commands redirected. One standard blue progress bar (the Characters page one) used here and everywhere. Builds toward issue 22. Plan: docs/PLANS_2026-10-08.md #41.
+```
+
+### 42. People page: a condensed name plate, then Training and For sale
+**Labels:** `almanac` `feature`
+```
+Replaces issue 21. No tabs. The General block goes: roles on the title line, place without coordinates, faction crest on the portrait ring, first met / also met by (and merchant standing, visits, stock checked) in the portrait's tooltip. Below the plate: Training (name, level, cost with coins, coloured for this character, spell tooltip on hover; replaces the "What they teach" badge), then For sale as today. Plan: docs/PLANS_2026-10-08.md #42.
+```
+
+### 43. New art: Recipes, Training and Wild Gambit icons (and the missing set)
+**Labels:** `art`
+```
+Gemini prompts in the plan for Tab_Recipes, Icon_Training and a new painted Icon_WildGambit (replacing the blurry 64 px crop of the logo), plus optional Merchant, Flight path, Fishing and Level up icons for toasts and the journal. Plan: docs/PLANS_2026-10-08.md #43.
+```
+
+### 44. Bug: herbs show no icon on the Gathering page
+**Labels:** `almanac` `bug`
+```
+Seen-only herbs have no loot, so the row falls back to "Trade_Herbalism", which draws blank. Fix: use the node's loot from the hidden database (as the map pins do) and a file ID first for the Herbs icon (also fixes the herb Apprentice badge). Plan: docs/PLANS_2026-10-08.md #44.
+```
+
+### 45. Dungeons page: the portal swirl
+**Labels:** `almanac` `feature`
+```
+FX_DungeonPortal swirls over a dungeon card's arch on the Dungeons page on hover, and stays on the card of the dungeon you're in until you leave (plus one behind the name in its header). Built into UI/DungeonCard.lua. Setting to turn it off. Plan: docs/PLANS_2026-10-08.md #45.
 ```

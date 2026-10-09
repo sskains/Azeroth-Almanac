@@ -85,6 +85,7 @@ About 65 images in all (35 without scene variants). Minimum set: 1, 2, 5, 6, 7, 
 - [x] 11 Owner tab (Media\Tab_Owner.tga, greyscale, tinted per owner) and wooden button skin (Media\Button_Wood.tga) (0.37.0). 4 Type emblems dropped (the name fills the panel).
 - [x] VS plaque and class rings (Media\Plaque_VS.tga, Ring_Class.tga, 0.37.1). [x] Board Ruin (Media\Board_Ruin.tga, 0.37.2; Settings > Board). [x] Board Tavern (Media\Board_Tavern.tga, 0.37.3).
 - [x] Logo and turn banner (Media\Logo_WildGambit.tga, Banner_Turn.tga, 0.37.8).
+- [?] Icon (docs/art_source/Icon_WildGambit.png, Gemini on magenta, 2026-10-08): three glowing cards, a gold coin, purple-flowered vines. Media\Icon_WildGambit.tga, 256 x 256: magenta keyed, the magenta-stained halo replaced by a fresh glow coloured from each card's edge, squared and centred. Replaces the 64 px logo crop.
 - [x] Scene variants: Beast, Humanoid, Undead, Critter _2 (0.37.9).
 
 ## Hero and companion cards (0.41.0)
@@ -107,8 +108,8 @@ Switched on in QoL/WildGambit.lua `HERO_ART`. [x] All 17 delivered (0.41.1): cre
 - [x] Frozen card: FX_FrozenCard (256x512, glow on black), Mark_IceShackles (512x256, keyed) (0.45.0).
 - [x] Mark_Trap redone as a frost-rimed freezing trap (0.45.2).
 - [x] Badge_Favorite re-keyed (0.45.3): the magenta glow in the filigree gaps removed (kept only the gold frame and the gem, the frame's largest hole).
-- [ ] Journal-entry badge (docs/art_source/Badge_Journal.png, 2026-10-07): open crimson journal with molten-gold writing; to become Media/Badge_Journal.tga on the Almanac toasts (issue 24). Not converted yet.
-- [ ] Almanac logo (docs/art_source/Logo_Almanac.png, 2026-10-07): closed crimson journal with a gold compass rose; to become Media/Logo_Almanac.tga and replace ns.ICON (133742) everywhere (issue 25). Not converted yet.
+- [?] Journal-entry badge (docs/art_source/Badge_Journal.png, 2026-10-07): open crimson journal with molten-gold writing. Media/Badge_Journal.tga (128 x 128, magenta keyed, sparks kept; 0.68.9): the Journal page's icon, the toasts' seal, the seal on Journal entries (issue 24).
+- [?] Almanac logo (docs/art_source/Logo_Almanac.png, 2026-10-07): closed crimson journal with a gold compass rose. Media/Logo_Almanac.tga (128 x 128, magenta keyed; 0.68.9): ns.ICON and the .toc IconTexture, replacing 133742 everywhere (issue 25).
 
 ## Dungeon cards (designed 2026-10-07, DESIGN section 72)
 
@@ -118,3 +119,4 @@ Scenery for 27 dungeons and raids comes from the game's journal art (UI-EJ-BACKG
 - [x] FX_DungeonPortal (512x512, glow on black, added as light; delivered 2026-10-07): violet and gold swirl.
 - [x] Scene_Dungeon_HallOfThanes (512x512 from 1024x765, stretched; show at 4:3; delivered 2026-10-07): dwarf-king statues, molten channels.
 - [x] Scene_Dungeon_RuinsOfLordaeron (512x512 from 1024x765, stretched; show at 4:3; delivered 2026-10-07): ruined capital under a green sky.
+- [x] Event effects (delivered 2026-10-08, sources in docs/art_source/): FX_AntiMagicDome, FX_Bubbles, FX_Explosion, FX_FireWall, FX_Meteor (512x512, glow on black; the meteor is drawn turned round to fall down-left), FX_FireBreath, FX_FrostBreath (512x256, glow), Tile_Ice (256x256), FX_Smoke (512x512, keyed by its magenta tint), Mark_Stone (256x512, keyed), FX_Dust (512x256, keyed on its darker magenta).

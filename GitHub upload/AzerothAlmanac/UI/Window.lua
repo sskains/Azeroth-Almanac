@@ -78,11 +78,20 @@ function UI:Current() return current and current.key end
 -- uses it up (it never walks further back than the screen before).
 local previous
 
+-- (0.68.1) a page can take a Back step of its own first (the Dungeons page: from a dungeon back to the
+-- collection): page:CanGoBack() / page:GoBack()
+local function PageBack() return current and current.CanGoBack and current:CanGoBack() end
 local function UpdateBack()
-	if frame and frame.back then frame.back:SetEnabled(previous ~= nil) end
+	if frame and frame.back then frame.back:SetEnabled(previous ~= nil or PageBack() and true or false) end
 end
+function UI:UpdateBack() UpdateBack() end
 
 function UI:GoBack()
+	if PageBack() then
+		current:GoBack()
+		UpdateBack()
+		return
+	end
 	local p = previous
 	if not p then return end
 	previous = nil
@@ -188,7 +197,9 @@ local function Build()
 	frame.back:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
 		GameTooltip:AddLine(L["Back"], 1, 0.82, 0)
-		if previous then
+		if PageBack() then
+			GameTooltip:AddLine(current.backText or L["Back a step on this page."], 1, 1, 1)
+		elseif previous then
 			local def = pages[previous.key]
 			GameTooltip:AddLine((L["To %s, where you left off."]):format(def and def.title or previous.key), 1, 1, 1)
 		else
