@@ -640,7 +640,7 @@ function page:Build(parent, header)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return (r.newHeader and "new") or (r.kind == "zone" and r.z and r.z.id) or (r.kind == "continent" and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
-		heightOf = function(r) if r.kind == "continent" then return CONT_H elseif r.kind == "zone" or r.kind == "dungeoncard" then return ZONE_H end end,
+		heightOf = function(r) if r.kind == "continent" or r.kind == "dungeoncard" then return CONT_H elseif r.kind == "zone" then return ZONE_H end end,
 		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No places yet. Every zone and place you enter is recorded here."],
@@ -689,7 +689,7 @@ function page:Build(parent, header)
 			row.text:SetText("")
 			row.right:SetText("")
 			FillBanner(row, {
-				name = L["Dungeons and raids"], art = "Zone_Dungeons", icon = W.KindIcon("instance"),
+				name = L["Dungeons and raids"], art = "Zone_Dungeons", icon = W.KindIcon("instance"), big = true,
 				count = "|cffcccccc" .. (L["%d entered"]):format(r.count) .. "|r",
 				pill = { sign = ">", label = L["Open Dungeons"], action = GoTo("dungeons") },
 			})
