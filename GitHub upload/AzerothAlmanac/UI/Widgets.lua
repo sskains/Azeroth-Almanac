@@ -625,6 +625,45 @@ local function LogGlow(row, layer, alpha)
 	return g
 end
 
+-- (0.69.1) a folding heading under the mouse: the log's yellow glow over its box (on `top`, the layer
+-- above the box, added so it brightens rather than covers), its words turn white and its - / + gold.
+-- Only while the row is a heading (row.isHeader); entries keep their own hover.
+function W.HeaderHover(row, top, bar)
+	local g = top:CreateTexture(nil, "BACKGROUND", nil, 2)
+	g:SetPoint("TOPLEFT", bar or row, "TOPLEFT", 1, -1)
+	g:SetPoint("BOTTOMRIGHT", bar or row, "BOTTOMRIGHT", -1, 1)
+	if not TryAtlas(g, "QuestLog-quest-glow-yellow") then g:SetColorTexture(1, 0.82, 0.2, 0.16) end
+	g:SetBlendMode("ADD")
+	g:SetAlpha(0.7)
+	g:Hide()
+	row.headerGlow = g
+	local was
+	-- (also after a refresh under the mouse, e.g. the click that folded it: the glow stays)
+	function row:HeaderHoverOn()
+		if not self.isHeader or self.spacer then return end
+		g:Show()
+		was = was or { self.text:GetTextColor() }
+		self.text:SetTextColor(1, 1, 1)
+		if self.state then
+			if self.state.SetDesaturated then self.state:SetDesaturated(false) end
+			self.state:SetVertexColor(1, 0.86, 0.2)
+		end
+	end
+	function row:HeaderHoverOff()
+		g:Hide()
+		if was and self.isHeader then self.text:SetTextColor(was[1], was[2], was[3]) end
+		was = nil
+		if self.restoreState then self:restoreState() end
+	end
+	row:HookScript("OnEnter", function(self) self:HeaderHoverOn() end)
+	row:HookScript("OnLeave", function(self) self:HeaderHoverOff() end)
+end
+-- (a list refresh: the heading now in this row lights if the mouse is on it)
+function W.HeaderRehover(row)
+	if not row.HeaderHoverOn then return end
+	if row.isHeader and row:IsVisible() and row:IsMouseOver() then row:HeaderHoverOn() end
+end
+
 local function DefaultRow(parent, height, round, style)
 	local row = CreateFrame("Button", nil, parent)
 	row:SetHeight(height)
@@ -713,6 +752,11 @@ local function DefaultRow(parent, height, round, style)
 	row.state:SetVertexColor(0.6, 0.6, 0.6)
 	if row.state.SetDesaturated then row.state:SetDesaturated(not log) end
 	if log then row.state:SetVertexColor(1, 1, 1) row.state:SetPoint("RIGHT", -10, 0) end
+	function row:restoreState()
+		if self.state.SetDesaturated then self.state:SetDesaturated(not log) end
+		if log then self.state:SetVertexColor(1, 1, 1) else self.state:SetVertexColor(0.6, 0.6, 0.6) end
+	end
+	W.HeaderHover(row, layer, row.bar)
 	function row:SetHeader(on, collapsed)
 		self.isHeader = on
 		hover:SetShown(not on)   -- headings have their own look; no row glow on them
@@ -832,8 +876,9 @@ function W.List(parent, opts)
 			toggle.rule:SetColorTexture(1, 1, 1, 1)
 			Fade(toggle.rule, "HORIZONTAL", 0.6, 0.5, 0.3, 0, 0.6)
 		end
-		toggle:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 0.82, 0) end)
-		toggle:SetScript("OnLeave", function(self) self.text:SetTextColor(0.75, 0.75, 0.75) end)
+		-- (0.69.1) its - / + lights gold with the words, as the headings do
+		toggle:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 0.82, 0) self.icon:SetVertexColor(1, 0.86, 0.2) end)
+		toggle:SetScript("OnLeave", function(self) self.text:SetTextColor(0.75, 0.75, 0.75) self.icon:SetVertexColor(0.75, 0.75, 0.75) end)
 		toggle:SetScript("OnClick", function(self)
 			local target = not self.allCollapsed
 			for _, k in ipairs(self.keys or {}) do opts.collapse.state[k] = target or nil end
@@ -897,6 +942,7 @@ function W.List(parent, opts)
 				row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -(index - 1) * rh)
 				row:SetPoint("RIGHT", child, "RIGHT", 0, 0)
 				row:Show()
+				if row.HeaderHoverOff then row:HeaderHoverOff() end
 				if data[index].spacer then
 					row.item, row.index = nil, index
 					if row.SetSpacer then row:SetSpacer(true) end
@@ -911,6 +957,7 @@ function W.List(parent, opts)
 					-- (0.69.1) the New group's header row: its "Mark all seen" link
 					if ns.New and ns.New.HeaderButton then ns.New:HeaderButton(row, data[index]) end
 					if row.selected then row.selected:SetShown(data[index] == selected) end
+					W.HeaderRehover(row)
 				end
 			elseif row then
 				row.item = nil
@@ -1491,6 +1538,51 @@ local function Slot(parent)
 	f.count = f:CreateFontString(nil, "OVERLAY", nil, 2)
 	f.count:SetFontObject(W.Font("NumberFontNormalSmall", "NumberFontNormal", "GameFontHighlightSmall"))
 	f.count:SetPoint("BOTTOMRIGHT", f.icon, "BOTTOMRIGHT", -1, 1)
+	-- (0.69.1) a character's slot (e.ring / e.faction): the icon round, the carved class ring over its
+	-- edge (Media\Ring_Class, tinted), the faction banner tucked on the bottom right; made on first use
+	function f:Character(ring, faction)
+		if not (ring or faction) and not self.charArt then return end
+		if not self.charArt then
+			local art = CreateFrame("Frame", nil, self)
+			art:SetAllPoints(self.icon)
+			art:SetFrameLevel(self:GetFrameLevel() + 2)
+			art.ring = art:CreateTexture(nil, "OVERLAY", nil, 1)
+			art.ring:SetPoint("CENTER", self.icon, "CENTER")
+			art.ring:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Ring_Class")
+			art.badge = art:CreateTexture(nil, "OVERLAY", nil, 2)
+			art.badge:SetPoint("BOTTOMRIGHT", self.icon, "BOTTOMRIGHT", 9, -7)
+			if self.CreateMaskTexture and self.icon.AddMaskTexture then
+				art.mask = self:CreateMaskTexture()
+				art.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+				art.mask:SetAllPoints(self.icon)
+			end
+			self.charArt = art
+		end
+		local art = self.charArt
+		local s = self.icon:GetWidth()
+		art.ring:SetSize(s / 0.766, s / 0.766) -- (the ring's hole: 49 of its 64 px radius)
+		if ring then
+			local r, g, b = ring[1] or 1, ring[2] or 1, ring[3] or 1
+			art.ring:SetVertexColor(r * 0.6 + 0.4, g * 0.6 + 0.4, b * 0.6 + 0.4)
+		end
+		art.ring:SetShown(ring and true or false)
+		if art.mask then
+			if ring and not art.masked then self.icon:AddMaskTexture(art.mask) art.masked = true
+			elseif not ring and art.masked then self.icon:RemoveMaskTexture(art.mask) art.masked = false end
+		end
+		if faction == "Alliance" or faction == "Horde" then
+			art.badge:SetSize(s * 0.62, s * 0.62)
+			art.badge:SetTexture("Interface\\TargetingFrame\\UI-PVP-" .. faction)
+			art.badge:SetTexCoord(0, 0.625, 0, 0.625)
+			art.badge:Show()
+		else
+			art.badge:Hide()
+		end
+		self.border:SetShown(false)
+		-- (the bag slot's square behind a round crest would show at the corners)
+		if ring then self.slotBg:Hide() self.iconBorder:Hide()
+		else self.slotBg:SetShown(self.look ~= "box") end
+	end
 	-- "fade" (dark panes) now draws as My Characters' items: the bag's empty-slot art behind a square
 	-- icon, the quality edge round it, name and note beside it
 	f.slotBg = f:CreateTexture(nil, "BACKGROUND", nil, 1)
@@ -1607,7 +1699,8 @@ local function FillSlot(f, e)
 	if W.IsSpec(icon) then W.SetTex(f.icon, icon) -- (0.69.1: the game's own art, e.g. the gryphon)
 	else
 		f.icon:SetTexture(icon or W.FindIcon({ "INV_Misc_QuestionMark" }))
-		f.icon:SetTexCoord(0, 1, 0, 1)
+		local c = e.crop or 0 -- (a share cut from each edge: a crest's own painted rim, under the ring)
+		f.icon:SetTexCoord(c, 1 - c, c, 1 - c)
 	end
 	local boxed = f.look == "box"
 	local q = e.item and select(4, pcall((C_Item and C_Item.GetItemInfo) or GetItemInfo, e.item))
@@ -1626,6 +1719,7 @@ local function FillSlot(f, e)
 	else
 		f.stripe:Hide()
 	end
+	f:Character(e.ring, e.faction)
 	if f.useCard then f.card:SetDesaturated(e.grey and true or false) f.card:SetAlpha(e.grey and 0.6 or 1) end
 	f.count:SetText(e.count and e.count > 1 and tostring(e.count) or "")
 	f.name:SetFontObject(e.number and W.Font("NumberFontNormal", "GameFontHighlight") or GameFontHighlightSmall)

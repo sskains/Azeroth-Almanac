@@ -657,7 +657,10 @@ local function QuestRow(parent, height)
 	row.text:SetWordWrap(false)
 	row.right = top:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	row.right:SetJustifyH("RIGHT")
-	row.selected = { SetShown = function(_, on) row.glow:SetShown(on and not row.isHeader and true or false) end, Hide = function() row.glow:Hide() end }
+	-- (0.69.1) a heading under the mouse glows, its words white, its - / + gold (shared with every list)
+	function row:restoreState() self.state:SetVertexColor(1, 1, 1) end
+	W.HeaderHover(row, top, row.bar)
+	row.selected ={ SetShown = function(_, on) row.glow:SetShown(on and not row.isHeader and true or false) end, Hide = function() row.glow:Hide() end }
 	-- the mark on the round button: "?" / "..." / tick / "!" / cross
 	function row:SetMark(kind)
 		self.dots:SetShown(kind == "progress")

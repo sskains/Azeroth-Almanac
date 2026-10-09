@@ -228,7 +228,8 @@ local function TooltipBadge(tooltip)
 	local _, unit = tooltip:GetUnit()
 	if not unit or not UnitIsPlayer(unit) or UnitIsUnit(unit, "player") then return end
 	if P:Get(unit) then
-		tooltip:AddLine(("|T%s:16:16|t |cffff2020%s|r"):format(ns.ICON, L["Almanac"]))
+		-- (0.69.1) "Fellow Almanac Adventurer", in the Almanac's red, after its logo
+		tooltip:AddLine(("|T%s:16:16|t |cffd8342b%s|r"):format(ns.ICON, L["Fellow Almanac Adventurer"]))
 		tooltip:Show()
 	end
 end

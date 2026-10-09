@@ -591,7 +591,8 @@ end
 -- short: the rules on the spell card (text, the full rules, in tooltips)
 -- target: "theirs" (any enemy card), "small" (an enemy card of `max` spikes or fewer), "execute"
 -- (an enemy card next to one of yours with more spikes), "mine" (one of your cards), "empty" (a
--- square), "none" (no target), "pocket" (one of yours, then one of theirs: target2)
+-- square), "none" (no target), "hands" (Pick Pocket, 0.69.1: a card in your hand, then one in
+-- theirs with at most `up` spikes more; never a hidden card or the spell card)
 WL.ABILITIES = {
 	WARLOCK = { key = "banish", short = "Remove any enemy card. Its owner draws a new one.", kind = "remove", name = "Banish", icon = "Spell_Shadow_Cripple", target = "theirs",
 		sound = 1487165, sound2 = 567950, text = "Banish any enemy card from the board. Its owner is dealt a new card." },
@@ -607,8 +608,8 @@ WL.ABILITIES = {
 		sound = 1965217, sound2 = 568648, text = "The next time one of your cards is taken or removed, it comes straight back to you." },
 	PRIEST = { key = "mc", short = "Take an enemy card of 8 spikes or fewer.", kind = "swap", name = "Mind Control", icon = "Spell_Shadow_ShadowWordDominate", target = "small", max = 8,
 		sound = 1713567, sound2 = 568399, text = "Take an enemy card on the board with 8 spikes or fewer." },
-	ROGUE = { key = "pickpocket", short = "Trade one of your cards on the board for one of theirs.", kind = "swap", name = "Pick Pocket", icon = "INV_Misc_Bag_11", target = "pocket",
-		sound = 567428, text = "Trade one of your cards on the board for one of theirs." },
+	ROGUE = { key = "pickpocket", short = "Swap a card in your hand for one in theirs, at most 2 spikes bigger.", kind = "swap", name = "Pick Pocket", icon = "INV_Misc_Bag_11", target = "hands", up = 2,
+		sound = 567428, text = "Swap a card in your hand for one in your opponent's hand with no more than 2 spikes more than yours. Not their hidden card, and not a spell card." },
 	HUNTER = { key = "trap", short = "Trap an empty square. The next enemy card there freezes: nobody's, out of play.", kind = "swap", name = "Freezing Trap", icon = "Spell_Frost_ChainsOfIce", target = "empty",
 		sound = 1454156, sound2 = 568053, text = "Hide a trap on an empty square. The next enemy card played there is frozen solid: nobody's card, and its square is out of the game." },
 }
@@ -655,10 +656,6 @@ function WL.CanTarget(board, ability, cell, me, stage)
 	-- (only your own traps rule a square out: the other player's are hidden from you)
 	if t == "empty" then return not slot and not (board.traps and board.traps[cell] == me) end
 	if not slot or slot.frozen then return false end -- (a frozen card can't be touched)
-	if t == "pocket" then
-		if stage == 2 then return Open(board, cell, me) end
-		return slot.owner == me and not slot.shield and AnyOpen(board, me)
-	end
 	if t == "mine" then
 		if slot.owner ~= me then return false end
 		if ability.key == "shield" then return not slot.shield end
@@ -672,9 +669,26 @@ function WL.CanTarget(board, ability, cell, me, stage)
 	return false
 end
 
--- can it be used at all right now?
-function WL.Usable(board, ability, me)
+-- (0.69.1) Pick Pocket: may your hand card `mine` be traded for their hand card `theirs`? Neither
+-- hidden (the card each player chose to keep secret), theirs at most `up` spikes more than yours
+function WL.PocketOK(ability, mine, theirs)
+	if not (mine and theirs) or mine.picked or theirs.picked then return false end
+	return (theirs.total or Sum(theirs)) <= (mine.total or Sum(mine)) + (ability.up or 2)
+end
+-- any trade at all between two hands (lists of cards); with `only`, for that card of yours
+function WL.PocketAny(ability, myCards, theirCards, only)
+	for _, a in ipairs(myCards or {}) do
+		if not only or a == only then
+			for _, b in ipairs(theirCards or {}) do if WL.PocketOK(ability, a, b) then return true end end
+		end
+	end
+	return false
+end
+
+-- can it be used at all right now? (Pick Pocket: with both hands, lists of cards)
+function WL.Usable(board, ability, me, myCards, theirCards)
 	if ability.target == "none" then return true end
+	if ability.target == "hands" then return WL.PocketAny(ability, myCards, theirCards) end
 	for cell = 1, 9 do if WL.CanTarget(board, ability, cell, me) then return true end end
 	return false
 end
@@ -691,7 +705,9 @@ function WL.Use(board, ability, cell, me, cell2)
 		return out
 	end
 	-- the card it would take or remove belongs to a player whose ankh is waiting: it stays theirs
-	local victim = (key == "pickpocket" and cell2) or ((key == "mc" or ability.kind == "remove") and cell) or nil
+	-- (Pick Pocket trades hand cards, nothing on the board: the screen does it, not here)
+	if key == "pickpocket" then return out end
+	local victim = ((key == "mc" or ability.kind == "remove") and cell) or nil
 	if victim and board[victim] and board.ankh and board.ankh == board[victim].owner then
 		board.ankh = nil
 		out.saved = victim
@@ -715,10 +731,6 @@ function WL.Use(board, ability, cell, me, cell2)
 		if board[cell].owner then board.lastTaken[board[cell].owner] = cell end
 		board[cell].owner = me
 		out.captured[1] = { cell = cell, side = 1, margin = 0, from = cell, mc = true }
-	elseif key == "pickpocket" then
-		if not cell2 then return out end
-		board[cell].owner, board[cell2].owner = board[cell2].owner, me
-		out.swapped = { cell, cell2 }
 	elseif ability.kind == "remove" then
 		local slot = board[cell]
 		out.removed = { cell = cell, owner = slot.owner, card = slot.card,
@@ -841,19 +853,17 @@ function WL.BotAbility(board, ability, me, hand, theirHand, rng, turnNo)
 		end
 		return best
 	elseif key == "pickpocket" then
-		-- your weakest for their strongest, when the gap is worth it
+		-- (0.69.1) the biggest step up its hand can take from theirs (places in `hand` and `theirHand`)
 		local best, best2, gain
-		for a = 1, 9 do
-			if WL.CanTarget(board, ability, a, me) then
-				for b = 1, 9 do
-					if WL.CanTarget(board, ability, b, me, 2) then
-						local g = board[b].card.total - board[a].card.total
-						if not gain or g > gain then best, best2, gain = a, b, g end
-					end
+		for a, mine in ipairs(hand or {}) do
+			for b, theirs in ipairs(theirHand or {}) do
+				if WL.PocketOK(ability, mine, theirs) then
+					local g = (theirs.total or Sum(theirs)) - (mine.total or Sum(mine)) + rng() * 0.2
+					if not gain or g > gain then best, best2, gain = a, b, g end
 				end
 			end
 		end
-		if best and gain >= 3 then return best, best2 end
+		if best and gain >= 1 then return best, best2 end
 		return nil
 	else
 		-- removal and Mind Control: the biggest card it can reach

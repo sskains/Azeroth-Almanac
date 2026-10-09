@@ -1325,7 +1325,7 @@ local function NewCard(parent)
 			self.flipAt = nil
 			self.backFrame:Hide()
 			self.over:SetAlpha(1)
-			self.model:SetAlpha(1)
+			self.model:SetAlpha(self.learning and 0 or 1) -- (0.69.1: still learning its face: unseen)
 			self.icon:SetAlpha(1)
 			self.glow:SetAlpha(self.glowBase or 0)
 		end
@@ -1440,7 +1440,7 @@ function CardBling(c, elapsed, clock)
 		c.cframe:SetVertexColor(1, 1, 1)
 		local t1 = c.card and c.card.tier == 1 -- (as SetCard paints it)
 		c.face:SetVertexColor(t1 and 0.7 or 0.95, t1 and 0.7 or 0.92, t1 and 0.7 or 0.88)
-		if not c.backFrame:IsShown() then c.model:SetAlpha(1) c.icon:SetAlpha(1) end
+		if not c.backFrame:IsShown() then c.model:SetAlpha(c.learning and 0 or 1) c.icon:SetAlpha(1) end
 	end
 	if c.aim:IsShown() then
 		local p = 0.5 + 0.5 * math.sin(clock * 4)
@@ -1835,7 +1835,56 @@ function FitName(f)
 	f.name:SetFont(file, size, flags)
 end
 
-local function SetCard(f, card)
+-- (0.69.1) a card dealt without a face (a creature fought before faces were kept, or never targeted):
+-- its NPC ID loaded on the card's own model, invisible, read back a few times as the game answers.
+-- Found: the face goes on the card, on the creature's record (and this session's list, for creatures
+-- you haven't a record of), and the card redraws with the creature. Three tries per creature a session.
+local SetCard -- forward
+-- the model's alpha when it isn't being used to learn a face: hidden while the card is face down
+local function ModelAlpha(f) return (f.backFrame and f.backFrame:IsShown()) and 0 or 1 end
+local faceTries, faceSeen = {}, {}
+function WG.LearnCardFace(f, card)
+	local npc = card and card.npc
+	if card.sheep or card.hero or card.unit or type(npc) ~= "number" or npc <= 0 then return end
+	if faceSeen[npc] then
+		if card.display == faceSeen[npc] then return end -- (known, but the model wouldn't take it)
+		card.display = faceSeen[npc]
+		if f.card == card then SetCard(f, card) end
+		return
+	end
+	if (faceTries[npc] or 0) >= 3 or not f.model.SetCreature then return end
+	faceTries[npc] = (faceTries[npc] or 0) + 1
+	if f.model.ClearModel then pcall(f.model.ClearModel, f.model) end
+	if not pcall(f.model.SetCreature, f.model, npc) then return end
+	f.model:SetAlpha(0)
+	f.model:Show()
+	f.learning = card
+	local n = 0
+	local function Read()
+		if f.learning ~= card or f.card ~= card then return end
+		n = n + 1
+		local ok, d = pcall(f.model.GetDisplayInfo, f.model)
+		d = ok and A.Readable(d) or nil
+		if type(d) == "number" and d > 0 then
+			-- (f.learning stays set: SetCard clears it and gives the model back its alpha)
+			faceSeen[npc] = d
+			card.display = d
+			local rec = A.Store and A.Store:Get("creature", npc)
+			if type(rec) == "table" and not rec.display then rec.display = d end
+			SetCard(f, card)
+		elseif n < 8 then
+			C_Timer.After(0.4, Read)
+		else
+			-- the game doesn't know it yet: the type icon stays (tried again next time it's drawn)
+			f.learning = nil
+			f.model:Hide()
+			f.model:SetAlpha(ModelAlpha(f))
+		end
+	end
+	C_Timer.After(0.3, Read)
+end
+
+function SetCard(f, card)
 	f.card = card
 	-- (a card frame used again: any frost from a trap comes off)
 	if f.frozen then
@@ -1859,6 +1908,12 @@ local function SetCard(f, card)
 	f.face:SetVertexColor(tier == 1 and 0.7 or 0.95, tier == 1 and 0.7 or 0.92, tier == 1 and 0.7 or 0.88)
 	-- creature
 	f.model:ClearModel()
+	if f.learning then f.learning = nil f.model:SetAlpha(ModelAlpha(f)) end
+	-- (0.69.1) a face learnt since the card was dealt (the Bestiary's record, or the match's lookup)
+	if not card.display and not card.hero and type(card.npc) == "number" and card.npc > 0 and A.Store then
+		local rec = A.Store:Get("creature", card.npc)
+		if type(rec) == "table" and rec.display then card.display = rec.display end
+	end
 	local display = card.sheep and SHEEP_DISPLAY or card.display
 	if not card.sheep and card.unit and UnitExists and UnitExists(card.unit) and f.model.SetUnit and pcall(f.model.SetUnit, f.model, card.unit) then
 		-- your hero card: you (or your companion, out now)
@@ -1895,6 +1950,10 @@ local function SetCard(f, card)
 		f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		f.icon:SetDesaturated(tier == 1)
 		f.icon:Show()
+		-- (0.69.1) no face known: load the creature by its NPC ID on the card's own model (unseen
+		-- until it answers); if the game knows it, the creature replaces the type icon and its face
+		-- is kept on the record for next time
+		WG.LearnCardFace(f, card)
 	end
 	-- frame by tier
 	f.sparkle:SetShown(tier >= 5 and not f.sparkle.missing)
@@ -2328,7 +2387,8 @@ local function Build()
 	statusBar:Hide()
 	-- give up the match (practice or against a player): it counts as a loss
 	frame.leave = WoodButton(A.Widgets.Button(frame, "Forfeit", 90, function() WG:AskForfeit() end))
-	frame.leave:SetPoint("BOTTOMRIGHT", -16, 12)
+	-- (0.69.1) centred under the right-hand card tray, at the window's foot
+	frame.leave:SetPoint("BOTTOM", frame, "BOTTOMLEFT", 16 + COL + 12 + ART_X + BW + ART_X + 12 + COL / 2, 12)
 	frame.leave:Hide()
 
 	-- the board: a forest clearing (the druid's talent painting), the talent tree's dividers between the slots
@@ -2544,7 +2604,7 @@ local function Build()
 		g:SetTexture(GLOW_TEX)
 		g:SetBlendMode("ADD")
 		g:SetVertexColor(spec[3], spec[4], spec[5])
-		g:SetPoint("CENTER", felt, "TOPRIGHT", -112, -62)
+		g:SetPoint("CENTER", felt, "TOPRIGHT", -95, -55) -- (0.69.1: on the flame itself, measured from the painting)
 		g:SetSize(spec[1], spec[1])
 		g.size, g.base = spec[1], spec[2]
 		frame.candle[k] = g
@@ -2821,7 +2881,7 @@ local function Build()
 	-- the client has it, else the spellbook's page arrow, either one made red)
 	local back = CreateFrame("Button", nil, prep)
 	back:SetSize(60, 60)
-	back:SetPoint("CENTER", prep, "TOPLEFT", 50, -26)
+	back:SetPoint("CENTER", prep, "TOPLEFT", 50, 26) -- (0.69.1: up off the board's edge, in the clear)
 	back:SetFrameLevel(prep:GetFrameLevel() + 50)
 	-- (just the painted arrow, no ring or socket)
 	back.arrow = back:CreateTexture(nil, "ARTWORK")
@@ -3570,9 +3630,23 @@ function Refresh()
 	-- (Pick Pocket: your card first, then theirs; the card you're trading stays lit)
 	local ab = game.ability.me
 	local aim = AIM[ab.kind] or AIM.swap
+	-- (0.69.1) Pick Pocket works on the hands: your cards that could trade, then the chosen one
+	-- (lit) and the cards of theirs it may take
+	local pocketing = game.targeting and not game.over and ab.target == "hands"
+	local mineE = pocketing and game.pocket and game.hands.me[game.pocket]
+	local theirCards = pocketing and WG.PocketCards("bot")
+	for i, e in ipairs(game.hands.me) do
+		local ok = pocketing and ((mineE and game.pocket == i) or (not mineE and WL.PocketAny(ab, { e.card }, theirCards))) or false
+		e.frame.aim:SetVertexColor(aim[1], aim[2], aim[3])
+		e.frame.aim:SetShown(ok and true or false)
+	end
+	for _, e in ipairs(game.hands.bot) do
+		local ok = mineE and WL.PocketOK(ab, mineE.card, e.card) or false
+		e.frame.aim:SetVertexColor(aim[1], aim[2], aim[3])
+		e.frame.aim:SetShown(ok and true or false)
+	end
 	for cell = 1, 9 do
-		local ok = game.targeting and not game.over and WL.CanTarget(game.board, ab, cell, "me", game.pocket and 2 or nil) or false
-		if game.pocket == cell and game.targeting then ok = true end
+		local ok = game.targeting and not game.over and WL.CanTarget(game.board, ab, cell, "me") or false
 		local bf = game.frames[cell]
 		if game.board[cell] and bf then
 			bf.aim:SetVertexColor(aim[1], aim[2], aim[3])
@@ -3657,10 +3731,10 @@ end
 TARGET_HINT = {
 	mine = "click one of your cards on the board", theirs = "click an enemy card on the board",
 	small = "click an enemy card with %d spikes or fewer", execute = "click an enemy card next to a bigger card of yours",
-	empty = "click an empty square", pocket = "click one of your cards on the board",
+	empty = "click an empty square", hands = "click a card in your hand to trade",
 }
 function Hint(ab)
-	if ab.target == "pocket" and game and game.pocket then return "now click the enemy card to take" end
+	if ab.target == "hands" and game and game.pocket then return ("now click their card to take (up to +%d)"):format(ab.up or 2) end
 	return (TARGET_HINT[ab.target] or ""):format(ab.max or 8)
 end
 
@@ -3913,12 +3987,12 @@ function WG:BotTurn()
 	end
 	local diff = g.tutorial and self.TUTOR_DIFF or self:Difficulty()
 	local function Hands()
-		local hand, theirs, map = {}, {}, {}
+		local hand, theirs, map, theirMap = {}, {}, {}, {}
 		-- (a card asleep from Wailing Caverns can't be played: map = its place in the real hand, 0.67.0)
 		for i, e in ipairs(g.hands.bot) do if not e.sleep then hand[#hand + 1] = e.card map[#hand] = i end end
 		-- (your chosen card is hidden from it, as from a player)
-		for _, e in ipairs(g.hands.me) do if not e.card.picked then theirs[#theirs + 1] = e.card end end
-		return hand, theirs, map
+		for i, e in ipairs(g.hands.me) do if not e.card.picked then theirs[#theirs + 1] = e.card theirMap[#theirs] = i end end
+		return hand, theirs, map, theirMap
 	end
 	C_Timer.After(0.7 + math.random() * 0.6, function()
 		if game ~= g or g.over or g.turn ~= "bot" then return end
@@ -3928,8 +4002,10 @@ function WG:BotTurn()
 		if not g.used.bot and g.rng() < diff.spell then
 			local placed = 0
 			for i = 1, 9 do if g.board[i] then placed = placed + 1 end end
-			local hand, theirs = Hands()
+			local hand, theirs, map, theirMap = Hands()
 			local target, target2 = WL.BotAbility(g.board, g.ability.bot, "bot", hand, theirs, g.rng, placed)
+			-- (Pick Pocket answers with places in those lists: back to places in the real hands)
+			if target and g.ability.bot.key == "pickpocket" then target, target2 = map[target], theirMap[target2] end
 			if target then
 				WG:ApplyAbility("bot", target ~= true and target or nil, target2)
 				delay = 1.3
@@ -3951,6 +4027,32 @@ function WG:ClickCard(f)
 	if not self:TutorialAllows("card", f) then return end
 	if self:Paused() then Note(self:PausedNote()) return end
 	if game.eventBusy then return end
+	-- (0.69.1) Pick Pocket: a card of yours from your hand, then one of theirs from their hand
+	if game.targeting and game.ability.me.target == "hands" then
+		local ab = game.ability.me
+		for i, e in ipairs(game.hands.me) do
+			if e.frame == f then
+				if game.pocket == i then game.pocket = nil
+				elseif e.card.picked then Note("Not your hidden card: pick another to trade.")
+				elseif WL.PocketAny(ab, { e.card }, WG.PocketCards("bot")) then game.pocket = i
+				else Note(("Nothing of theirs within %d spikes of that card."):format(ab.up or 2)) end
+				Refresh()
+				return
+			end
+		end
+		for j, e in ipairs(game.hands.bot) do
+			if e.frame == f then
+				local mine = game.pocket and game.hands.me[game.pocket]
+				if not mine then Note("First click a card in your hand to trade.")
+				elseif e.card.picked then Note("Not their hidden card.")
+				elseif WL.PocketOK(ab, mine.card, e.card) then self:ApplyAbility("me", game.pocket, j)
+				else Note(("Too big a step: at most %d spikes more than yours."):format(ab.up or 2)) end
+				Refresh()
+				return
+			end
+		end
+		return
+	end
 	for _, e in ipairs(game.hands.me) do
 		if e.frame == f then
 			if e.sleep then Note("That card is asleep (Nightmare Sleep): it wakes after your next turn.") return end
@@ -4004,23 +4106,6 @@ function WG:ClickSquare(cell)
 	if self:Paused() then Note(self:PausedNote()) return end
 	if game.targeting then
 		local ab = game.ability.me
-		if ab.target == "pocket" then
-			-- your card first, then theirs (your card again: choose another)
-			if game.pocket == cell then game.pocket = nil Refresh() return end
-			if not game.pocket then
-				if WL.CanTarget(game.board, ab, cell, "me") then game.pocket = cell Refresh()
-				else Note("Not there: " .. Hint(ab) .. ".") end
-				return
-			end
-			if WL.CanTarget(game.board, ab, cell, "me", 2) then
-				local mine = game.pocket
-				game.targeting, game.pocket = nil, nil
-				self:ApplyAbility("me", mine, cell)
-			else
-				Note("Not there: " .. Hint(ab) .. ".")
-			end
-			return
-		end
 		if WL.CanTarget(game.board, ab, cell, "me") then
 			game.targeting = nil
 			self:ApplyAbility("me", cell)
@@ -4040,7 +4125,7 @@ function WG:AbilityButton()
 	local ab = game.ability.me
 	if game.targeting then game.targeting, game.pocket = nil, nil Refresh() return end
 	if ab.target == "none" then self:ApplyAbility("me", nil) return end
-	if not WL.Usable(game.board, ab, "me") then Note(ab.name .. ": nothing to use it on yet.") return end
+	if not WL.Usable(game.board, ab, "me", WG.PocketCards("me"), WG.PocketCards("bot")) then Note(ab.name .. ": nothing to use it on yet.") return end
 	game.targeting = true
 	game.pocket = nil
 	game.selected = nil
@@ -4113,6 +4198,39 @@ local REMOVED = {
 	banish = "%s banished %s.", polymorph = "%s polymorphed %s. It wanders off.", execute = "%s executed %s.",
 }
 
+-- (0.69.1) Pick Pocket: the cards of a hand it may trade (every card; WL.PocketOK leaves out the
+-- hidden one), in hand order
+function WG.PocketCards(side)
+	local out = {}
+	for i, e in ipairs(game and game.hands[side] or {}) do out[i] = e.card end
+	return out
+end
+
+-- (0.69.1) Pick Pocket: `side`'s hand card `mine` (its place in their hand) trades places with the
+-- other hand's card `theirs`; each hand keeps its frames and colours, the cards change over
+function WG.PickPocket(side, mine, theirs, who)
+	local other = side == "me" and "bot" or "me"
+	local a, b = game.hands[side][mine], game.hands[other][theirs]
+	if not (a and b) then return end
+	local took, gave = b.card, a.card
+	a.card, b.card = b.card, a.card
+	a.sleep, b.sleep = b.sleep, a.sleep
+	if game.selected == a or game.selected == b then game.selected = nil end
+	for _, e in ipairs({ a, b }) do
+		local f, card, owner = e.frame, e.card, e == a and side or other
+		WG:FX("pickpocket", f, 0, 1.4)
+		C_Timer.After(0.25, function()
+			SetCard(f, card)
+			Flash(f, game.color[owner])
+		end)
+	end
+	if side == "me" then
+		Note(("You picked a pocket: your %s for their %s."):format(gave.name or "card", took.name or "card"))
+	else
+		Note(("%s picked your pocket: your %s for their %s."):format(who, took.name or "card", gave.name or "card"))
+	end
+end
+
 -- carries out a class ability for `side` (on `cell`, and Pick Pocket's `cell2`)
 function WG:ApplyAbility(side, cell, cell2)
 	if game.pvp and side == "me" then WG:SendAbility(cell, cell2) end
@@ -4124,7 +4242,9 @@ function WG:ApplyAbility(side, cell, cell2)
 	if sc and sc:IsShown() then
 		sc.used = true sc.aim:Hide() sc.fadeT = 0
 		-- it glides toward its target as it fades
-		local tc = cell2 or cell
+		-- (0.69.1) Pick Pocket's targets are in the hands; their Freezing Trap's square stays a secret
+		local tc = cell
+		if ab.key == "pickpocket" or (ab.key == "trap" and side ~= "me") then tc = nil end
 		if tc and sc.hx then
 			local bx, by = SlotCenter(tc)
 			sc.flyFrom = { sc.hx, sc.hy }
@@ -4137,6 +4257,14 @@ function WG:ApplyAbility(side, cell, cell2)
 	WG:SpellZoom(nil)
 	game.targeting, game.pocket = nil, nil
 	Play(ab.sound, ab.sound2)
+	if ab.key == "pickpocket" then
+		WG.PickPocket(side, cell, cell2, who)
+		PaintEffects()
+		ShowHands()
+		Refresh()
+		if WG.DungeonAfterPlay then WG:DungeonAfterPlay(side, true) end
+		return
+	end
 	local out = WL.Use(game.board, ab, cell, side, cell2)
 	local tf = cell and game.frames[cell]
 	if ab.key == "trap" then
@@ -4187,18 +4315,6 @@ function WG:ApplyAbility(side, cell, cell2)
 		end
 		Deal(rem.owner, rem.card.total)
 		Note((REMOVED[ab.key] or "%s removed %s."):format(who, name) .. (rem.owner == "me" and " You're dealt a new card." or " They're dealt a new card."))
-	elseif out.swapped then
-		for _, c in ipairs(out.swapped) do
-			local f, owner = game.frames[c], game.board[c].owner
-			if f then
-				WG:FX("pickpocket", f, 0, 1.4)
-				C_Timer.After(0.2, function()
-					SetOwner(f, game.color[owner], owner == "bot")
-					Flash(f, game.color[owner])
-				end)
-			end
-		end
-		Note(("%s picked a pocket: two cards traded sides."):format(who))
 	else
 		for _, c in ipairs(out.changed or {}) do
 			local f = game.frames[c]
@@ -4875,7 +4991,7 @@ end
 --   S|gid|best|class|nonce   ready: your best five's spikes, the round's class, your half of the dice
 --   K|gid|i|npc|level|tier|class|n,e,s,w|display|type|kills|lowered|name   one card of your hand (i = 1..5),
 --                        or a reserve held back for a replacement (i = 6..8)
---   M|gid|seq|hand|cell  a card played    U|gid|seq|cell|cell2   your ability (0 = none; cell2: Pick Pocket)
+--   M|gid|seq|hand|cell  a card played    U|gid|seq|cell|cell2   your ability (0 = none; Pick Pocket: your hand place, then theirs)
 --   X|gid|why           leave / cancel (why: card, step, gone, timeout = called off, not counted)
 --   P|gid|0/1           in combat (the game waits)    H|gid   still here (every 15 s in a game)
 --   R|gid               "send your setup again" (S and K once more; the setup's missing pieces)
@@ -4891,7 +5007,7 @@ end
 -- checked against the rules (and the creature's real level); a wrong one ends the game.
 ---------------------------------------------------------------------------
 
-local PREFIX, PROTO = "AzAlmWG", "11" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends)
+local PREFIX, PROTO = "AzAlmWG", "12" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends; 12: Pick Pocket trades hand cards)
 local POPUP = "AZEROTHALMANAC_WG_CHALLENGE"
 
 -- the outgoing queue: one whisper at a time, a short gap between them; one the game turns away
@@ -5451,8 +5567,10 @@ local function OnMessage(text, sender)
 					-- a target the rules allow (on this screen too), or the two have drifted apart
 					local ok
 					if ab.target == "none" then ok = true
-					elseif ab.target == "pocket" then
-						ok = cell and cell2 and WL.CanTarget(game.board, ab, cell, "bot") and WL.CanTarget(game.board, ab, cell2, "bot", 2)
+					elseif ab.target == "hands" then
+						-- (their hand card, then one of yours: places in each hand)
+						local a, b = cell and game.hands.bot[cell], cell2 and game.hands.me[cell2]
+						ok = a and b and WL.PocketOK(ab, a.card, b.card)
 					else ok = cell and WL.CanTarget(game.board, ab, cell, "bot") end
 					if ok then
 						WG:ApplyAbility("bot", cell, cell2)

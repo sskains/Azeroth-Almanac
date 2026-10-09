@@ -16,6 +16,11 @@ local filter = ""
 local charFilter, kindFilter, zoneFilter -- nil = all
 local collapsed = {}
 local LEFT_W = 330 -- the overview's width (its cards two to a row)
+-- the classes with a painted crest (Media\Crest_<CLASS>), for First to find
+local CREST_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true,
+	ROGUE = true, SHAMAN = true, WARLOCK = true, WARRIOR = true }
+local FACTION_BY_RACE = { Human = "Alliance", Dwarf = "Alliance", NightElf = "Alliance", Gnome = "Alliance",
+	Orc = "Horde", Scourge = "Horde", Tauren = "Horde", Troll = "Horde" }
 
 -- opens another page on something: GoTo("items", "ShowItem", id)
 local function GoTo(pageKey, method, ...)
@@ -296,7 +301,10 @@ local function Overview()
 		for _, g in ipairs({ { "herb", L["Herbs picked"] }, { "ore", L["Veins mined"] }, { "fish", L["Fish caught"] }, { "skin", L["Skinned"] } }) do
 			if (s[g[1]] or 0) > 0 then
 				-- (0.69.1) Gathering opens on that group alone (Herbs, Ore and stone, Fishing, Skinning)
-				research[#research + 1] = { name = g[2], icon = W.FindIcon(ns.Gathering.KIND[g[1]] and ns.Gathering.KIND[g[1]].icon or { "INV_Misc_Pelt_Wolf_01" }),
+				-- (0.69.1) Fish caught wears the painted fishing art; the others their gathering icons
+				local icon = g[1] == "fish" and W.KindArt("fishing")
+					or W.FindIcon(ns.Gathering.KIND[g[1]] and ns.Gathering.KIND[g[1]].icon or { "INV_Misc_Pelt_Wolf_01" })
+				research[#research + 1] = { name = g[2], icon = icon,
 					note = tostring(s[g[1]]), tip = (L["Click: only %s, in Gathering."]):format(g[2]:lower()), onClick = GoTo("gathering", "ShowOnly", g[1]) }
 			end
 		end
@@ -334,8 +342,16 @@ local function Overview()
 		end
 		local who = {}
 		for key, n in pairs(firsts) do
-			if ns.db.chars[key] then
-				who[#who + 1] = { name = ns.CharName(key), icon = W.KindIcon("character"), n = n,
+			local ch = ns.db.chars[key]
+			if ch then
+				-- (0.69.1) the character's class crest in the class-tinted ring, the faction banner beside it
+				local cc = ch.classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[ch.classFile]
+				local crest = ch.classFile and CREST_CLASSES[ch.classFile]
+				who[#who + 1] = { name = ns.CharName(key), n = n,
+					icon = crest and ("Interface\\AddOns\\AzerothAlmanac\\Media\\Crest_" .. ch.classFile) or W.KindIcon("character"),
+					crop = crest and 0.13 or nil,
+					ring = cc and { cc.r, cc.g, cc.b } or { 0.62, 0.5, 0.24 },
+					faction = ch.faction or FACTION_BY_RACE[ch.raceFile or ""],
 					note = (L["first to find %d"]):format(n), tip = L["Click to see this character's journal."],
 					onClick = function() page:SetCharacter(key) end }
 			end
