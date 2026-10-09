@@ -847,6 +847,8 @@ function W.List(parent, opts)
 	scroll:SetScrollChild(child)
 	holder.scroll, holder.child = scroll, child
 	local rows, data, selected = {}, {}, nil
+	-- (opts.heightOf(item): rows of different heights, e.g. a zone's banner among one-line rows; nil: every row is rh)
+	local tops, heights, totalH
 
 	local empty = holder:CreateFontString(nil, "OVERLAY", "GameFontDisable")
 	empty:SetPoint("CENTER")
@@ -915,10 +917,20 @@ function W.List(parent, opts)
 	function holder:Refresh()
 		local width = scroll:GetWidth()
 		child:SetWidth(width > 0 and width or 1)
-		child:SetHeight(math.max(#data * rh, 1))
+		child:SetHeight(math.max(tops and totalH or #data * rh, 1))
 		local offset = scroll:GetVerticalScroll() or 0
-		local first = math.floor(offset / rh) + 1
-		local visible = math.ceil((scroll:GetHeight() or 0) / rh) + 1
+		local first, visible
+		if tops then
+			first = 1
+			while first < #data and tops[first] + heights[first] <= offset do first = first + 1 end
+			visible = 1
+			local bottom = offset + (scroll:GetHeight() or 0)
+			while first + visible - 1 < #data and tops[first + visible] < bottom do visible = visible + 1 end
+			visible = visible + 1
+		else
+			first = math.floor(offset / rh) + 1
+			visible = math.ceil((scroll:GetHeight() or 0) / rh) + 1
+		end
 		for i = 1, math.max(visible, #rows) do
 			local index = first + i - 1
 			local row = rows[i]
@@ -939,8 +951,9 @@ function W.List(parent, opts)
 					rows[i] = row
 				end
 				row:ClearAllPoints()
-				row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -(index - 1) * rh)
+				row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -(tops and tops[index] or (index - 1) * rh))
 				row:SetPoint("RIGHT", child, "RIGHT", 0, 0)
+				if tops then row:SetHeight(heights[index]) end
 				row:Show()
 				if row.HeaderHoverOff then row:HeaderHoverOff() end
 				if data[index].spacer then
@@ -965,7 +978,7 @@ function W.List(parent, opts)
 			end
 		end
 		empty:SetShown(#data == 0)
-		W.FitScrollBar(scroll, #data * rh)
+		W.FitScrollBar(scroll, tops and totalH or #data * rh)
 	end
 
 	-- a little space above each heading after the first, as in the profession window
@@ -975,7 +988,17 @@ function W.List(parent, opts)
 			if opts.spacers ~= false and opts.style ~= "log" and i > 1 and (it.header ~= nil or it.kind == "zone" or it.kind == "header") then data[#data + 1] = { spacer = true } end
 			data[#data + 1] = it
 		end
-		local maxScroll = math.max(#data * rh - (scroll:GetHeight() or 0), 0)
+		tops, heights, totalH = nil, nil, 0
+		if opts.heightOf then
+			tops, heights = {}, {}
+			local y = 0
+			for i, it in ipairs(data) do
+				local h = (not it.spacer and opts.heightOf(it)) or rh
+				tops[i], heights[i], y = y, h, y + h
+			end
+			totalH = y
+		end
+		local maxScroll = math.max((tops and totalH or #data * rh) - (scroll:GetHeight() or 0), 0)
 		if (scroll:GetVerticalScroll() or 0) > maxScroll then scroll:SetVerticalScroll(maxScroll) end
 		UpdateToggle()
 		self:Refresh()
