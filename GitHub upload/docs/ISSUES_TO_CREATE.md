@@ -332,3 +332,45 @@ Seen-only herbs have no loot, so the row falls back to "Trade_Herbalism", which 
 ```
 FX_DungeonPortal swirls over a dungeon card's arch on the Dungeons page on hover, and stays on the card of the dungeon you're in until you leave (plus one behind the name in its header). Built into UI/DungeonCard.lua. Setting to turn it off. Plan: docs/PLANS_2026-10-08.md #45.
 ```
+
+---
+
+## Next up (added 2026-10-08, end of session)
+
+Issues #31 to #45 are built in 0.69.0 (commit 23a4a83) and need the in-game test pass (`docs/TEST_CHECKLIST.md`).
+
+### 46. Journey: a full-size Journey tab on Characters
+**Labels:** `almanac` `feature`
+```
+The Journal's Journey pane at full size as its own tab on the Characters page, for the selected character (or everyone).
+```
+
+### 47. Journey: scrub slider and playback speed
+**Labels:** `almanac` `feature`
+```
+A slider to scrub through the time lapse, 1x / 2x / 4x speed, and the time and zone shown at the line's head.
+```
+
+### 48. Journey: Everyone-mode name legend
+**Labels:** `almanac` `feature`
+```
+In Everyone mode, a legend of character names in their colours; click a name to hide or show that character's line.
+```
+
+### 49. Journey: flight and boat lines
+**Labels:** `almanac` `feature`
+```
+Flights drawn as dotted lines, boats and zeppelins as dashed lines (the recorder already marks F/f take-off and landing and b for rides).
+```
+
+### 50. Wild Gambit: a game in progress survives /reload
+**Labels:** `wild-gambit` `feature`
+```
+Today a /reload drops the match (not counted); a PvP opponent waits up to 5 minutes before it cancels. Quick fix: answer moves for an unknown game with "gone" so their side cancels at once. Full fix: save the match as it's played and resume it on login (PvP asks for missed moves with the existing resend).
+```
+
+### 51. More painted art (optional)
+**Labels:** `art` `parked`
+```
+Painted icons for the remaining milestones (merchants, flights, fishing, level, creatures); hippogryph and bat flight mounts; painted cards for Herbs picked, Veins mined and Skinned.
+```
