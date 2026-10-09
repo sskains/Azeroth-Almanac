@@ -6,7 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
-- **Places: nine more zone pictures** (Asia): Burning Steppes, Dun Morogh, Duskwood, Ironforge, Orgrimmar, Searing Gorge, Stranglethorn Vale, The Barrens and Thunder Bluff now have their paintings on their zone cards (`Media/Zone_<Name>.tga`, 512 x 128; sources in `docs/art_source/`). This batch had a dark vignette painted into its edges, so the converter trims a twentieth off every side (`art_convert.py banner ... edge=0.05`). New textures: full game restart. Ashenvale and the other Night Elf zones are still to come (the first try drew human houses).
+- **Places: fifteen more zone pictures** (Asia): Burning Steppes, Dun Morogh, Duskwood, Ironforge, Orgrimmar, Searing Gorge, Stranglethorn Vale, The Barrens and Thunder Bluff now have their paintings on their zone cards (`Media/Zone_<Name>.tga`, 512 x 128; sources in `docs/art_source/`). This batch had a dark vignette painted into its edges, so the converter trims a twentieth off every side (`art_convert.py banner ... edge=0.05`). New textures: full game restart. The Night Elf and Kalimdor forest zones follow in the same batch: Ashenvale, Azshara, Darkshore, Felwood, Moonglade and Teldrassil (trimmed a thirtieth off every side).
 
 - **Mini games across versions, part 1** (#59, DESIGN 81). The Almanac's hello now carries each mini game's protocol range (Wild Gambit 12, Murloc Tac Toe 1, Gem Match 1), so:
   - **Before you challenge:** Wild Gambit's Challenge tile shows a mark for the name typed (or your target): green "same version", yellow "plays, with limits", red "their Almanac is too old" / "your Almanac is too old". The challenge pop-up shows the challenger's mark too.
