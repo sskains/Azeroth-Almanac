@@ -357,10 +357,12 @@ A slider to scrub through the time lapse, 1x / 2x / 4x speed, and the time and z
 In Everyone mode, a legend of character names in their colours; click a name to hide or show that character's line.
 ```
 
-### 49. Journey: flight and boat lines
+### 49. Journey: flight and boat lines, the line's head, effects and sounds
 **Labels:** `almanac` `feature`
 ```
-Flights drawn as dotted lines, boats and zeppelins as dashed lines (the recorder already marks F/f take-off and landing and b for rides).
+Flights drawn as dotted lines, boats and zeppelins as dashed lines (the recorder already marks F/f take-off and landing and b for rides; z added for zeppelins).
+The line's head: the live face of the character you're on, else the round class icon (Almanac logo as last fallback). Every portrait, icon and pin round with a circle mask: smooth edges, no blocky corners.
+Effects, icons and sounds for every trigger (travel marks, discoveries by toast tier, playback controls), a sound limit, Journey sounds / effects settings and /aa journey sounds to audition them. Full table: DESIGN.md section 74, "Effects, sounds and icons" (approved 2026-10-09).
 ```
 
 ### 50. Wild Gambit: a game in progress survives /reload
@@ -373,4 +375,16 @@ Today a /reload drops the match (not counted); a PvP opponent waits up to 5 minu
 **Labels:** `art` `parked`
 ```
 Painted icons for the remaining milestones (merchants, flights, fishing, level, creatures); hippogryph and bat flight mounts; painted cards for Herbs picked, Veins mined and Skinned.
+```
+
+### 52. Creatures: category cards
+**Labels:** `almanac` `feature`
+```
+The Creatures page's left pane as cards (default) or the list, switched at the top. Show all (full list, searchable), Creature Mastery (tier icon and name), Creature Types (painted Wild Gambit scenes), Zones (map-art banners with the name in Morpheus, grouped by continent, current zone first, dungeons apart). A card opens the list filtered, with a back arrow; the Tier / Type / Zone dropdowns are removed. DESIGN.md section 78.
+```
+
+### 53. Bug: detail pane scrolls back to the top
+**Labels:** `almanac` `bug`
+```
+Creatures (and likely Quests, Dungeons, Trainers): the right-hand detail pane jumps to the top while item names load. Keep the scroll when the same entry is redrawn (W.Detail SetBlocks). DESIGN.md section 78.
 ```

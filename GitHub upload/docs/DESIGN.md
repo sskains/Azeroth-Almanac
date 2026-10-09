@@ -707,6 +707,12 @@ Asked by Shannon 2026-10-08; replaces the page from section 8. Two tabs:
 - [?] (0.68.2) The floor map is Blizzard's dungeon map art (`Interface\WorldMap\<folder>\<folder><floor>_1..12`, 4 × 3 tiles; C_Map has no dungeon maps on this client and no map ID inside), one floor at a time with a picker; boss spots come from AtlasLoot Revival's data (`f`, `x`, `y` in `Data\Dungeons.lua`), not from where you met them.
 - [ ] Fallbacks: a dungeon with no map art shows its journal art in the left pane with the boss list; a boss with no face yet shows its creature-type icon.
 - [x] Decided 2026-10-08: unfound dungeons hidden (a "found x of 29" counter only); unmet bosses stay off the map until discovered; built before the Wild Gambit player matches (now 0.69.0).
+- [ ] **Cobweb placement (Shannon, 2026-10-09, from the in-game look at the abandoned cards):** the webs stay, but no longer sit in the same two spots on every card. Today they are baked into `Card_Ruin` (`art_convert.py ruin`), so every card has them halfway down both sides of the doorway.
+  - Always inside the arch's doorway, in one of its four corners: top left, top right, bottom left, bottom right (the top ones tucked into the curve where the arch meets the pillar).
+  - **1 to 3 webs per card**, in different corners, staggered so it looks organic: each a different size (about 18-32% of the doorway's width), a slight turn (±10°), a small offset from the corner and its own transparency (0.75-0.95), so no two cards match.
+  - The choice is seeded from the dungeon's key, so a card keeps the same webs every time you open it.
+  - Art: `Card_Ruin` is regenerated without webs, under a new file name (art rule: no replacing in place); a new `FX_Cobweb` texture holds one corner web (two or three shapes on one sheet for variety), mirrored by texture coordinates for the other corners and drawn over the scene, under the stone.
+  - Wild Gambit's dungeon event card uses the same overlay, so it follows the same rule.
 - [ ] Discovery of a boss (inside, names and GUIDs are hidden): the game's encounter starting (ENCOUNTER_START, the pin where you stood at the pull), its corpse looted (the corpse's spot), or, outside instances, seeing it as now. Walking past an unfought boss doesn't count.
 
 ## 74. Journey: where your hero has walked (noted 2026-10-08, details being settled) [ ]
@@ -749,6 +755,57 @@ Supersedes section 34 (Travels). Keeps its recorder (34a) and its draw test (lin
 - Account mode: one shared clock (above), or each character's journey played from its own start?
 - Markers on the line from the journal (first visits, level-ups, deaths): keep, or the line and jump pins only?
 
+**Effects, sounds and icons (approved by Shannon 2026-10-09, issue #49)**
+Goal: the time lapse should dazzle the viewer. Every trigger below gets its effect, icon and sound.
+
+*The line's head*
+- The character you're logged in on: their live face (`SetPortraitTexture(tex, "player")`), round.
+- Other characters, or no face available: the game's round class icon (`Interface\TargetingFrame\UI-Classes-Circles` with `CLASS_ICON_TCOORDS`); `Media\Crest_<CLASS>` is the alternative if it reads better. Last fallback: the Almanac logo.
+- A gold ring around it (class colour in Everyone mode), a soft pulsing glow, and a short comet trail of fading dots behind it.
+- **Smooth round edges everywhere:** every portrait, icon and pin gets a circle mask (`CreateMaskTexture` with `TempPortraitAlphaMask`, as `Modules/NodePins.lua` does), never a trimmed square. This replaces the texcoord trim the hearth and skull pins use today.
+
+*Ways you travelled (recorder marks)*
+| Trigger | Effect | Icon | Sound |
+|---|---|---|---|
+| Flight take-off (F) | Head lifts and grows; the dotted flight line draws dot by dot | Gryphon (Alliance) / wind rider (Horde), round frame | Gryphon wing flaps |
+| Flight landing (f) | Dust puff (`FX_Dust`); head settles with a small bounce | Same mount | Soft landing thump |
+| Boat ride (b) | Dashed line; head bobs on waves; bubbles (`FX_Bubbles`) at both docks | Anchor | Ship's bell, then waves |
+| Zeppelin ride (new mark z) | Dashed line; head sways gently | Zeppelin | Engine hum |
+| Hearthstone (h) | Blue rune flash where you left; light pillar and sparkles where you arrived | Hearthstone | Hearthstone cast sound |
+| Dungeon in / out (i) | Portal swirl spins up, head shrinks into it (grows back coming out) | Portal swirl | Portal whoosh |
+| Death (d) | Small map shake, red ripple, head turns grey | Skull | Low drum hit |
+| Ghost run (g) | Faint pale-blue line; head becomes a see-through spirit | Wisp | Soft spirit wind |
+| Resurrected (worked out: g followed by a plain point) | Burst of light (`FX_Reincarnation`); colour returns | Ankh | Resurrection chime |
+| A jump nothing explains | Purple flash and sparkles at both ends | Portal swirl | Arcane teleport |
+| First visit to a zone (worked out) | The zone's name fades in over the map, like the game's zone text | - | Discovery chime |
+| New day / gap over 2 hours (worked out) | Line fades out, next stretch fades in like dawn | Sun / moon | - |
+
+- Zeppelin vs boat: the recorder can't tell them apart today; Travel's ride knows the dock it left from, so the recorder writes a new mark `z` for zeppelins. Resurrected, first visit and new day need no recording.
+
+*Discoveries passed during playback (by toast tier)*
+- Common (creatures, merchants, people, nodes): the dot pops with a small ring ripple. Silent.
+- Uncommon (quests, new items, flight paths): pop, and the kind's icon floats up and fades. Soft chime.
+- Rare (new zones, dungeons, every 10th level, Studied): ring burst in the tier colour, brighter icon. Clearer chime.
+- Epic (epic items, Mastered): sparkle burst and a short glow over the map. Quest-complete sound.
+- Legendary (level 60, the biggest milestones): a column of golden light, fanfare, the head flashes.
+
+*Playback*
+| Trigger | Effect | Sound |
+|---|---|---|
+| Play | Map fades in from parchment | Page turn |
+| Zone change (full-size tab only) | Map cross-fades to follow the head | Map open |
+| Scrub slider | Effects skipped while dragging; head jumps to the spot | Faint tick |
+| Speed button 1x / 2x / 4x | Button flashes | Click |
+| Legend name clicked | That character's line fades out / in | Checkbox click |
+| Playback ends | Three gold ripples, then a summary line (zones, flights, deaths, discoveries) | Closing chord |
+| Hover a pin | Pin grows and glows; tooltip with the time | - |
+
+*Rules*
+- At most one sound every 0.4 s; when triggers coincide, the bigger tier wins.
+- At 4x, only Rare and above play sounds.
+- Settings: "Journey sounds" (on / off) and "Journey effects" (full / light / off); sound also follows the toasts' sound setting.
+- Exact sounds are picked by ear: `/aa journey sounds` plays each candidate before they're fixed in the code.
+
 ## 75. Requests of 2026-10-08 (plans for approval) [ ]
 Fifteen requests (issues 31 to 45); each one's plan, art prompts and open questions are in `docs/PLANS_2026-10-08.md`. Decided with Shannon 2026-10-08:
 - [x] The Journal's new top-right pane shows the Journey (section 74, issue 30).
@@ -776,6 +833,31 @@ Fifteen requests (issues 31 to 45); each one's plan, art prompts and open questi
 - [?] Built (Unreleased, 2026-10-08): #35 Journal panes: `UI/Journey.lua` (`W.JourneyPane`, `ns.Journey.Points(from, char)` the one reader of positions, so the recorder (section 74) only has to feed it). Plan questions settled by default, to revisit: the time lapse plays every time the Journal opens (8 s in the pane); the Overview stays in the bottom pane; Week / Month are the last 7 / 30 days; "Larger" fills the Journal's right side until a Journey tab exists on Characters. Not yet: the recorder, jump pins (boats, flights, portals), scrubbing and speed, the legend of names.
 - [?] Built (Unreleased, 2026-10-08): #36 / #37 locks: `tools/build_items.py` takes the client's `Lock.dbc` as a third argument (VMaNGOS doesn't ship client tables; the 3.3.5 file from github.com/Torrer/TrinityCore-3.3.5-data has the same Classic lock IDs and levels, checked against Peacebloom 1, Mageroyal 50, Iron Deposit 125, Black Lotus 300, the lockboxes 1 / 25 / 70 / 125 / 175 / 225) and writes `ns.DB.objectLock[object] = { skill, level }` (138 objects: 53 herbs, 43 veins, 42 locked chests) and `ns.DB.itemLock[item] = level` (24 lockboxes); the rest of `Data\Items.lua` rebuilt byte-identical. `Gathering:Needs(rec)` (object IDs, then by name, a game-tooltip `rec.need` wins), `NeedText`, `NeedColor` (red / orange +25 / yellow +50 / green +100 / grey), `LockRogue` (who sees and colours locks), `CharSkill(skill, key)` (saved ranks; the live `SkillRank(name)` is unchanged). Lockpicking is read with the skills (Trainers and the Professions scan, skill 633) under any heading. Pick Lock: UNIT_SPELLCAST_SUCCEEDED on the soft-interact chest (`rec.picked`, `pc[char]`, `pickSkill`, ranks and toasts by picks as `PickTier`), UNIT_SPELLCAST_FAILED with the skill below the level (`rec.hard[char]`). Not done: lockbox picks (only the contents, on the item page), doors (the question in the plan stays open).
 - [?] Built (Unreleased, 2026-10-08): #41 Recipes (page key stays "trainers"; a class spell's link goes to the trainer who teaches it, the one checked most recently) and #42 People (name plate, portrait tooltip, Training, For sale). Coordinates left out of the portrait tooltip too. Recipes and Training sort recipes by skill, spells by level.
+
+## 78. Creatures page: category cards (agreed with Shannon 2026-10-09) [ ]
+The Creatures page's left pane gets the Journal's card overview (Asia's fading-icon cards, section 77). The right pane and the detail pane stay as they are.
+
+**Views**
+- **Cards** (the new default) and **List**, switched at the top of the left pane; the choice is remembered.
+- The header's Tier, Type and Zone dropdowns are **removed**: the cards replace them.
+- **Show all**: a card (first) that opens the full list with search, every creature.
+- Picking a category card opens the list with that filter, under a title line with the painted back arrow (`Media\Back_Arrow`): "← Creatures › Beasts". Back clears the filter and returns to the cards. A list opened with the switch or Show all is the plain list, no back arrow.
+- Typing in search from the card view jumps to the full list, searching every creature.
+- Links from other pages (the Journal's research cards, `page:ShowTier`, `page:ShowCreature`) land in the list with that filter and the back arrow, not on the cards.
+- The right pane keeps the last creature picked while you browse the cards.
+
+**Card sets** (each under a banner, as on the Journal; each card shows its count and a green +N for creatures new since you last looked)
+1. **Creature Mastery**: one card per research tier you have reached, its tier icon and name (e.g. the Legendary Hunter icon, "Legendary Hunter"); Asia's fading-icon look, two to a row. Tiers you haven't reached have no card (natural discovery). The count is creatures currently at that tier, not "this tier or better", so nothing reads as a completion score.
+2. **Creature Types**: one card per type you've met (Beast, Humanoid, Undead ...), two to a row. Background: the type's painted Wild Gambit creature scene (the glade for beasts, the crypt for undead ...), in the same merged art-and-name style as the zone cards.
+3. **Zones**: one card per zone where you've met a creature (`rec.z`); a creature living in several zones counts in each. Full-width banners, one to a row: the zone's own world-map art as the background (the art the page's map draws, dimmed and slightly blurred so it reads as an old map), the zone's name written on it in Morpheus, gold, with a thick outline and drop shadow standing in for bold (the client has no bold Morpheus). Icon and text are merged into the art: no separate icon.
+   - Grouped under each continent with fold / unfold headings, and Fold all / Unfold all.
+   - Your current zone first, marked "You are here".
+   - Dungeons in their own group, using the dungeon card art.
+- Every card: hover highlight, the "New" count, tooltip with what clicking does.
+
+**Bug found the same day: detail pane jumps back to the top** (Creatures, likely Quests, Dungeons, Trainers)
+- Cause: these pages redraw the shown entry when item names arrive from the server (`GET_ITEM_INFO_RECEIVED`, constant while loot information loads) through their own handler, outside `UI.refreshing`, so `SetBlocks` resets the scroll.
+- Fix: the detail pane keeps its scroll whenever the same entry is redrawn; it returns to the top only when a different entry is picked. Done once in the shared pane (`W.Detail`'s `SetBlocks`), so all pages are covered. Ships on its own ahead of the redesign.
 
 ## What comes from Plus Everything
 
