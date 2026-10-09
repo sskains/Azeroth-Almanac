@@ -324,10 +324,19 @@ local CONT_COLOR = {
 local CONT_DEFAULT = { 0.85, 0.7, 0.3 }
 local function ContColor(name) return CONT_COLOR[name] or CONT_DEFAULT end
 local ZONE_ART = {
+	["Burning Steppes"] = "Zone_BurningSteppes",
+	["Dun Morogh"] = "Zone_DunMorogh",
+	["Duskwood"] = "Zone_Duskwood",
 	["Eastern Kingdoms"] = "Zone_EasternKingdoms",
 	["Elwynn Forest"] = "Zone_ElwynnForest",
+	["Ironforge"] = "Zone_Ironforge",
 	["Kalimdor"] = "Zone_Kalimdor",
+	["Orgrimmar"] = "Zone_Orgrimmar",
+	["Searing Gorge"] = "Zone_SearingGorge",
 	["Stormwind City"] = "Zone_StormwindCity",
+	["Stranglethorn Vale"] = "Zone_StranglethornVale",
+	["The Barrens"] = "Zone_TheBarrens",
+	["Thunder Bluff"] = "Zone_ThunderBluff",
 	["Westfall"] = "Zone_Westfall",
 }
 local ZONE_MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"

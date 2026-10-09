@@ -18,7 +18,7 @@
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
                                                          outside the ring made transparent, squared (default 256)
   python art_convert.py roundicon <out folder>            (0.69.2) the slightly rounded icon's mask (64 px) and ring (128 px): Icon_Mask.tga, Icon_Ring.tga
-  python art_convert.py banner <in.jpg> <out.tga> [W H]   (0.69.2) a wide zone picture, no keying: near-black painted borders trimmed, cropped to
+  python art_convert.py banner <in.jpg> <out.tga> [W H] [edge=0.05]   (0.69.2) a wide zone picture, no keying: near-black painted borders trimmed, cropped to
                                                          the W:H shape, resized, opaque (default 512 x 128)
   python art_convert.py ruin <Frame_Dungeon.tga> <out.tga>      (0.69.1) a see-through overlay for the dungeon arch: cracks,
                                                          dirt and soot on the stone, moss, cobwebs in the doorway (scipy)
@@ -529,7 +529,7 @@ def roundicon(folder):
     write_tga(rgba(rounded(128, 0, 4)), folder + "\\Icon_Ring.tga")
     print("roundicon: Icon_Mask.tga 64 x 64, Icon_Ring.tga 128 x 128 in " + folder)
 
-def banner(src, dst, w=512, h=128):
+def banner(src, dst, w=512, h=128, edge=0.0):
     """A wide zone picture (Gemini, about 4:1): a painted near-black border along its edges trimmed off (up to a tenth
     of each side), cropped to the w:h shape about its centre, resized, written opaque."""
     im = Image.open(src).convert("RGB")
@@ -547,6 +547,9 @@ def banner(src, dst, w=512, h=128):
         t = b = max(t, b)   # (the same frame all round: the side where the picture fades dark has no clear jump)
     l, r = trim(cols, W // 10), trim(cols[::-1], W // 10)
     im = im.crop((l, t, W - r, H - b))
+    if edge:   # (a share of the width off every side, as much off the top and bottom: the darkest part of a vignette)
+        e = int(round(im.width * edge))
+        im = im.crop((e, e, im.width - e, im.height - e))
     cw, ch = im.size
     aspect = w / h
     if cw / ch > aspect:
@@ -580,7 +583,9 @@ if __name__ == "__main__":
     elif sys.argv[1] == "roundicon":
         roundicon(sys.argv[2])
     elif sys.argv[1] == "banner":
-        banner(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
+        nums = [v for v in sys.argv[4:] if not v.startswith("edge=")]
+        eg = [v[5:] for v in sys.argv[4:] if v.startswith("edge=")]
+        banner(sys.argv[2], sys.argv[3], *(int(v) for v in nums[:2]), edge=float(eg[0]) if eg else 0.0)
     elif sys.argv[1] == "ruin":
         ruin(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == "round":
