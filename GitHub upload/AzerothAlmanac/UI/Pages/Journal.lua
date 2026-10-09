@@ -266,19 +266,19 @@ local function Overview()
 	local function New(n) return (n and n > 0) and ("  |cff1eff00+" .. n .. "|r") or "" end
 	local allNew = 0
 	for _, n in pairs(fresh) do allNew = allNew + n end
-	slots[#slots + 1] = { name = L["All discoveries"], icon = ns.JOURNAL_ICON, color = (kindFilter == nil) and SELECTED or nil,
+	slots[#slots + 1] = { name = L["All discoveries"], icon = ns.JOURNAL_ICON, color = (kindFilter == nil) and SELECTED or nil, selected = (kindFilter == nil),
 		note = tostring(total) .. New(allNew), tip = L["Every entry, newest first."], onClick = function() page:SetKind(nil) end }
 	for _, c in ipairs(CARDS) do
 		local k = c[1]
 		if (count[k] or 0) > 0 then
-			slots[#slots + 1] = { name = c[2], icon = W.KindArt(k), color = (kindFilter == k) and SELECTED or nil,
+			slots[#slots + 1] = { name = c[2], icon = W.KindArt(k), color = (kindFilter == k) and SELECTED or nil, selected = (kindFilter == k),
 				note = tostring(count[k]) .. New(fresh[k]),
 				tip = (kindFilter == k) and L["Showing these below. Click again to show everything."] or L["Click to show these below."],
 				onClick = function() page:SetKind(k) end }
 		end
 	end
 	b[#b + 1] = { "banner", L["Discoveries"] }
-	if total > 0 then b[#b + 1] = { "slots", slots } else b[#b + 1] = { "small", L["Nothing discovered yet. Go explore!"] } end
+	if total > 0 then b[#b + 1] = { "slots", slots, cards = true } else b[#b + 1] = { "small", L["Nothing discovered yet. Go explore!"] } end
 
 	-- research
 	local M = ns.Milestones
@@ -311,7 +311,7 @@ local function Overview()
 	end
 	if #research > 0 then
 		b[#b + 1] = { "banner", L["Research"] }
-		b[#b + 1] = { "slots", research }
+		b[#b + 1] = { "slots", research, cards = true }
 	end
 
 	-- milestones: the latest few
@@ -326,8 +326,8 @@ local function Overview()
 				onClick = function() page:SetKind("milestone") end }
 		end
 		ms[#ms + 1] = { name = L["Every milestone"], icon = W.FindIcon(W.KIND.milestone.icon), note = L["Shown below when picked."],
-			color = (kindFilter == "milestone") and SELECTED or nil, onClick = function() page:SetKind("milestone") end }
-		b[#b + 1] = { "slots", ms }
+			color = (kindFilter == "milestone") and SELECTED or nil, selected = (kindFilter == "milestone"), onClick = function() page:SetKind("milestone") end }
+		b[#b + 1] = { "slots", ms, cards = true }
 	else
 		b[#b + 1] = { "small", L["Milestones come from your own discoveries: your first elite, a hundred creatures, ten at Master Hunter..."] }
 	end

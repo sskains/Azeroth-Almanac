@@ -1610,7 +1610,50 @@ local function Slot(parent)
 	f.stripe:SetHeight(5)
 	if not TryAtlas(f.stripe, "Looting_RarityTag_Frame") then f.stripe:SetColorTexture(1, 1, 1, 0.5) end
 	f.stripe:Hide()
+	-- (0.69.2) the journal's cards: a gold wash fading to the right, behind a picked card; a fainter one under the mouse
+	f.wash = f:CreateTexture(nil, "BACKGROUND", nil, 0)
+	f.wash:SetAllPoints()
+	Fade(f.wash, "HORIZONTAL", 0.95, 0.72, 0.25, 0.28, 0)
+	f.wash:Hide()
+	f.hov = f:CreateTexture(nil, "BACKGROUND", nil, 1)
+	f.hov:SetAllPoints()
+	f.hov:SetBlendMode("ADD")
+	Fade(f.hov, "HORIZONTAL", 0.95, 0.8, 0.45, 0.14, 0)
+	f.hov:Hide()
 	function f:SetLook(look)
+		local journal = look == "journal"
+		self.journal = journal
+		-- (the foot rule: under the plate as before, or along the foot of a journal card)
+		self.rule:ClearAllPoints()
+		if journal then
+			self.rule:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 2, 0)
+			self.rule:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -2, 0)
+		else
+			self.rule:SetPoint("TOPLEFT", self.plate, "BOTTOMLEFT", 0, 1)
+			self.rule:SetPoint("RIGHT", self.plate, "RIGHT", 0, 0)
+		end
+		self.rule:SetHeight(1)
+		self.icon:ClearAllPoints()
+		self.icon:SetPoint("LEFT", journal and 0 or 2, 0)
+		if journal then
+			-- the icon large, solid on the left and fading to nothing on the right, where the text lies; no card behind
+			self.plate:Hide()
+			self.rule:Show()
+			self.border:Hide()
+			self.slotBg:Hide()
+			self.nameFrame:Hide()
+			self.box:Hide()
+			for _, t in ipairs(self.edges) do t:Hide() end
+			self.card:Hide()
+			self.cardStroke:Hide()
+			self.cardHover:Hide()
+			self.stripe:Hide()
+			self.useCard = false
+			self.icon:SetSize(46, 46)
+			self:SetHeight(46)
+			self.look = look
+			return
+		end
 		local box = look == "box"
 		self.plate:SetShown(false)
 		self.rule:SetShown(false)
@@ -1645,6 +1688,7 @@ local function Slot(parent)
 		local e = self.entry
 		if not e then return end
 		if self.useCard then self.cardHover:Show() end
+		if self.journal then self.hov:Show() end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		if e.item then pcall(GameTooltip.SetItemByID, GameTooltip, e.item)
 		elseif e.spell then pcall(GameTooltip.SetSpellByID, GameTooltip, e.spell)
@@ -1655,7 +1699,7 @@ local function Slot(parent)
 		if e.extra then GameTooltip:AddLine(e.extra, 0.6, 0.8, 1, true) end
 		GameTooltip:Show()
 	end)
-	f:SetScript("OnLeave", function(self) self.cardHover:Hide() GameTooltip_Hide() end)
+	f:SetScript("OnLeave", function(self) self.cardHover:Hide() self.hov:Hide() GameTooltip_Hide() end)
 	f:SetScript("OnClick", function(self)
 		local e = self.entry
 		-- Ctrl-click: dressing room, Shift-click: chat link; before the slot's own click
@@ -1735,6 +1779,27 @@ local function FillSlot(f, e)
 		f.name:SetPoint("LEFT", f.icon, "RIGHT", inset, 0)
 	end
 	f.name:SetPoint("RIGHT", -8, 0)
+	-- (0.69.2) journal cards: the name and note start over the icon's fading tail, a picked card is washed in gold
+	if f.journal then
+		f.name:ClearAllPoints()
+		f.name:SetFontObject(GameFontNormal)
+		f.name:SetText((e.color or color or "|cffffffff") .. (name or "?") .. "|r")
+		if e.note and e.note ~= "" then
+			f.name:SetPoint("TOPLEFT", f, "TOPLEFT", 40, -7)
+		else
+			f.name:SetPoint("LEFT", f, "LEFT", 40, 0)
+		end
+		f.name:SetPoint("RIGHT", -8, 0)
+		f.wash:SetShown(e.selected and true or false)
+		f.rule:SetAlpha(e.selected and 1 or 0.7)
+	else
+		f.wash:Hide()
+		f.rule:SetAlpha(1)
+	end
+	if CreateColor then
+		local white, clear = CreateColor(1, 1, 1, 1), CreateColor(1, 1, 1, f.journal and 0 or 1)
+		pcall(f.icon.SetGradient, f.icon, "HORIZONTAL", white, f.journal and clear or white)
+	end
 end
 
 -- the quest log's reward-band heading: light serif text between two gold rules fading outward
@@ -2055,13 +2120,14 @@ function W.Detail(parent, top, style)
 				local colW = math.floor((width - 8) / 2)
 				if box and style == "parchment" then colW = math.min(colW, 170) end
 				local rowH = box and (style == "parchment" and 34 or 36) or 44
+				if block.cards then rowH = 52 end -- (0.69.2: the journal's cards)
 				for n, e in ipairs(list) do
 					local s = Take("slot", function() return Slot(child) end)
 					local col, row = (n - 1) % 2, math.floor((n - 1) / 2)
 					s:ClearAllPoints()
 					s:SetPoint("TOPLEFT", child, "TOPLEFT", 4 + col * (colW + 4), -y - row * rowH)
 					s:SetWidth(colW)
-					s:SetLook(box and "box" or "fade")
+					s:SetLook(block.cards and "journal" or (box and "box" or "fade"))
 					FillSlot(s, e)
 				end
 				y = y + math.ceil(#list / 2) * rowH + 4
