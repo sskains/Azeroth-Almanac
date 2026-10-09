@@ -1,11 +1,13 @@
 -- Ported from Plus Everything (same author) for Azeroth Almanac's quality-of-life helpers.
 -- Follow button: a small button pinned to the top right of the target frame. Click it to follow
--- your target (the same as /follow). It greys out when the target can't be followed: not a
--- player, not friendly, yourself, or too far away.
+-- your target (the same as /follow). (#56) It only shows on a target that can be followed: a friendly,
+-- living player other than you; it greys out while that player is too far away (or you are dead).
 --
 -- It's a secure button, so the game won't let an addon create, move or show it during combat. It's
--- set up out of combat, and the game's own "[@target,exists]" rule shows and hides it as you
--- select and drop targets; only its look (grey or not) changes in combat.
+-- set up out of combat, and the game's own "[@target,help,nodead]" rule shows and hides it as you
+-- select and drop targets (enemies, the dead and no target: hidden, in combat too). A friendly NPC or
+-- yourself passes that rule, so those are made invisible and click-through by the addon instead (in
+-- combat only invisible: the game won't let the click area change until combat ends).
 
 local _, A = ...
 local ns = A.QoL
@@ -13,7 +15,7 @@ local FB = ns:NewModule("FollowButton")
 
 local R = function(v) return ns.Readable(v) end
 local FOLLOW_RANGE = 4        -- CheckInteractDistance index: follow distance (about 28 yards)
-local DRIVER = "[@target,exists] show; hide"
+local DRIVER = "[@target,help,nodead] show; hide" -- (#56: was [@target,exists])
 
 -- icons that exist in the game's spell art; the first is the default
 FB.HIT_GROW = 0.15 -- how far the click area reaches past the footsteps, as a fraction of their size, on every side
@@ -57,13 +59,29 @@ local function Followable()
 	return true
 end
 
+-- (#56) a target that could ever be followed: a friendly player other than you (range and death aside)
+local function Eligible()
+	if not R(UnitExists("target")) then return false end
+	if R(UnitIsUnit("target", "player")) then return false end
+	if not R(UnitIsPlayer("target")) then return false end
+	if R(UnitCanAttack("player", "target")) then return false end
+	return true
+end
+
 local function Refresh()
 	if not button then return end
 	local ok = Followable()
-	if button.ok ~= ok then
-		button.ok = ok
+	local eligible = Eligible()
+	if button.ok ~= ok or button.eligible ~= eligible then
+		button.ok, button.eligible = ok, eligible
 		button.icon:SetDesaturated(not ok)
-		button:SetAlpha(ok and 1 or 0.5)
+		button:SetAlpha((not eligible and 0) or (ok and 1) or 0.5)
+	end
+	-- not a target you could follow: click-through, so the target frame under it keeps its clicks
+	-- (out of combat only; the click area is locked in combat and set right when it ends)
+	if not InCombatLockdown() and button.mouseOn ~= eligible then
+		button.mouseOn = eligible
+		button:EnableMouse(eligible)
 	end
 	-- the aura: lit the whole time you are following someone
 	local lit = (button.foot and following) and true or false
@@ -162,6 +180,7 @@ local function Build()
 	b:HookScript("OnMouseUp", function(self) if self.foot then self.icon:SetPoint("CENTER", 0, 0) end end)
 
 	b:SetScript("OnEnter", function(self)
+		if self.eligible == false then return end -- (invisible over an NPC in combat: no tooltip)
 		GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
 		local ok, why = Followable()
 		if ok then
@@ -234,7 +253,7 @@ local function Apply()
 		UnregisterStateDriver(button, "visibility")
 		button:Hide()
 	end
-	button.ok = nil
+	button.ok, button.eligible, button.mouseOn = nil, nil, nil
 	Refresh()
 end
 

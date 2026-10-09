@@ -10,6 +10,45 @@ local MB = ns:NewModule("MinimapButton")
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local button
 
+---------------------------------------------------------------------------
+-- (#56, DESIGN 83) A default key to open the Almanac: Shift+J (J for Journal), else Alt+A.
+-- Once only (db.openKeyDone), out of combat, only while the toggle has no key and the key is free;
+-- never overrides another binding, never re-applied after the player changes or removes it.
+---------------------------------------------------------------------------
+
+local OPEN_ACTION = "AZEROTHALMANAC_TOGGLE"
+local OPEN_KEYS = { "SHIFT-J", "ALT-A" }
+
+-- the key that opens the Almanac now, as the game writes it ("Shift-J"), or nil
+function MB.OpenKeyText()
+	local key = GetBindingKey and GetBindingKey(OPEN_ACTION)
+	if not key then return nil end
+	return (GetBindingText and GetBindingText(key, "KEY_")) or key
+end
+
+local function GiveOpenKey()
+	if not ns.db or ns.db.openKeyDone then return end
+	if InCombatLockdown() then
+		local f = CreateFrame("Frame")
+		f:RegisterEvent("PLAYER_REGEN_ENABLED")
+		f:SetScript("OnEvent", function(self) self:UnregisterAllEvents() GiveOpenKey() end)
+		return
+	end
+	ns.db.openKeyDone = true
+	if not (GetBindingKey and GetBindingAction and SetBinding) then return end
+	if GetBindingKey(OPEN_ACTION) then return end -- (the player already chose one)
+	for _, key in ipairs(OPEN_KEYS) do
+		local used = GetBindingAction(key)
+		if used == nil or used == "" then
+			if SetBinding(key, OPEN_ACTION) then
+				if SaveBindings and GetCurrentBindingSet then SaveBindings(GetCurrentBindingSet()) end
+				ns.Print((L["Press %s to open Azeroth Almanac (change it in Key Bindings > AddOns)."]):format(MB.OpenKeyText() or key))
+			end
+			return
+		end
+	end
+end
+
 local function Settings() return ns.db.settings.minimap end
 
 local function UpdatePosition()
@@ -98,6 +137,8 @@ local function Build()
 		GameTooltip:AddLine("|cffffd100" .. L["Left-click:"] .. "|r " .. L["open the Almanac"], 1, 1, 1)
 		GameTooltip:AddLine("|cffffd100" .. L["Right-click:"] .. "|r " .. L["quick menu"], 1, 1, 1)
 		GameTooltip:AddLine("|cffffd100" .. L["Drag:"] .. "|r " .. L["move around the minimap"], 1, 1, 1)
+		local key = MB.OpenKeyText()
+		if key then GameTooltip:AddLine("|cffffd100" .. L["Open:"] .. "|r " .. key, 1, 1, 1) end
 		GameTooltip:Show()
 	end)
 	button:SetScript("OnLeave", GameTooltip_Hide)
@@ -105,6 +146,8 @@ local function Build()
 end
 
 function MB:OnLogin()
+	-- (the bindings are loaded a moment after login)
+	C_Timer.After(3, GiveOpenKey)
 	Build()
 	button:SetShown(Settings().show)
 	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then

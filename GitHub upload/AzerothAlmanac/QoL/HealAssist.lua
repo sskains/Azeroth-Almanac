@@ -378,6 +378,24 @@ local function Cooldown(name)
 	return start, duration
 end
 
+-- (#56) a spell that can't be cast on this member right now: greyed out, not just dimmed.
+-- Out of range, not enough mana (or a missing reagent / wrong form: the game's IsUsableSpell), on a real
+-- cooldown (longer than the global one), or a cure / resurrection / buff with nothing to do on them.
+local USEFUL_KINDS = { heal = true, hot = true, shield = true, funnel = true }
+local function CantCast(name, token, m, rel)
+	if not InRange(name, token) then return true end
+	if m.cost > (R(UnitPower("player", 0)) or math.huge) then return true end
+	local usable = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell
+	if usable then
+		local ok, can = pcall(usable, name)
+		if ok and R(can) == false then return true end
+	end
+	local start, duration = Cooldown(name)
+	if duration > 1.5 and start > 0 then return true end
+	if not rel and not USEFUL_KINDS[m.spell.kind] then return true end -- (nothing to cleanse, no one to raise, buff already on)
+	return false
+end
+
 ---------------------------------------------------------------------------
 -- The group
 ---------------------------------------------------------------------------
@@ -1407,6 +1425,35 @@ local function NameDrop(f)
 	return (drop > 0 and drop < 60) and drop or 0
 end
 
+-- (#56) the frame's health bar: the icons' top lines up with its top (the name plate above it stays clear)
+local function HealthBarOf(f)
+	local name = f.GetName and f:GetName()
+	local c = f.PlayerFrameContent
+	c = c and c.PlayerFrameContentMain
+	local cands = {
+		f.healthbar, f.HealthBar, f.healthBar,
+		f.HealthBarContainer and f.HealthBarContainer.HealthBar,
+		c and c.HealthBarsContainer and c.HealthBarsContainer.HealthBar,
+		c and c.HealthBarArea and c.HealthBarArea.HealthBar,
+		name and _G[name .. "HealthBar"],
+	}
+	for _, b in ipairs(cands) do
+		if type(b) == "table" and b.GetTop and b:GetTop() then return b end
+	end
+end
+
+local function HealthDrop(f)
+	local bar = HealthBarOf(f)
+	local top, btop = f:GetTop(), bar and bar:GetTop()
+	if not (top and btop) then return nil end
+	local drop = top - btop * (bar:GetEffectiveScale() / f:GetEffectiveScale())
+	return (drop >= 0 and drop < 80) and drop or nil
+end
+
+-- (#56) room left between the frame and its icons for the aggro badge (skull and count), so the
+-- count never sits on the frame's health numbers
+local BADGE_ROOM = 40
+
 -- how far right of a pet's frame its owner's frame ends (in the pet frame's units), so the pet's
 -- icons start in the same column as the owner's (0.65.4)
 local function PetShift(ownerFrame, petFrame)
@@ -1585,16 +1632,18 @@ local function Layout()
 					local owner = e.pet and placed[OwnerOf(e.token)]
 					e.ownFrame = f and e.pet or nil
 					if f then
-						local y = db.side == "below" and -2 or -NameDrop(f)
+						local y = db.side == "below" and -2 or -(HealthDrop(f) or NameDrop(f))
 						-- (0.65.4) a pet on its own frame lines its icons up with its owner's column
-						local x = 4
-						if owner and db.side == "right" then x = 4 + PetShift(owner.f, f) end
+						-- (#56) beside the frame, room for the aggro badge between frame and icons
+						local x = (db.side == "right" and db.aggroMarkers) and BADGE_ROOM or 4
+						if owner and db.side == "right" then x = x + PetShift(owner.f, f) end
 						placed[e.token] = { f = f, y = y, lines = Strip(e, f, db.side, x, y) }
 						PlaceMarkers(e, "frame", f)
 						keys[#keys + 1] = e.token .. "=" .. (f:GetName() or tostring(f))
 					elseif owner then
 						local size = db.iconSize
-						Strip(e, owner.f, db.side, 4 + 8, owner.y - owner.lines * (size + GAP) - 2)
+						local ox = (db.side == "right" and db.aggroMarkers) and BADGE_ROOM or 4
+						Strip(e, owner.f, db.side, ox + 8, owner.y - owner.lines * (size + GAP) - 2)
 						owner.lines = owner.lines + math.max(1, math.ceil(#e.order / math.max(1, db.perRow)))
 						keys[#keys + 1] = e.token .. "=under:" .. OwnerOf(e.token)
 					else
@@ -1849,7 +1898,7 @@ local function ApplyVisuals(e, now)
 			end
 			if driven then
 				-- (the curves set the brightness; out of range or short of mana still greys it out)
-				local desat = not InRange(name, e.token) or b.m.cost > (R(UnitPower("player", 0)) or math.huge)
+				local desat = CantCast(name, e.token, b.m, rel) -- (#56)
 				if b.shownDesat ~= desat then b.shownDesat = desat b.icon:SetDesaturated(desat) end
 			end
 			if not driven then
@@ -1865,9 +1914,9 @@ local function ApplyVisuals(e, now)
 					alpha = ABSENT
 				elseif rel then
 					alpha = res.soft[name] and 0.7 or 1
-					if not InRange(name, e.token) or b.m.cost > (R(UnitPower("player", 0)) or math.huge) then
-						alpha, desat = OFF, true
-					end
+					if CantCast(name, e.token, b.m, rel) then alpha, desat = OFF, true end
+				elseif CantCast(name, e.token, b.m, rel) then
+					desat = true -- (#56: faint as before, and grey: it can't be cast here now)
 				end
 				if b.shownAlpha ~= alpha then b.shownAlpha = alpha b:SetAlpha(alpha) end
 				if b.shownDesat ~= desat then b.shownDesat = desat b.icon:SetDesaturated(desat) end

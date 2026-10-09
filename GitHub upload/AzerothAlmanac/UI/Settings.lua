@@ -439,6 +439,10 @@ local function BuildGeneral(P)
 	P:Text(function() return (L["%d other Almanac players known."]):format(ns.Peers and ns.Peers:Count() or 0) end)
 
 	P:Section(L["Key bindings"], L["Set these in Options > Keybindings, under Azeroth Almanac (in the AddOns section)."])
+	P:Text(function()
+		local key = ns.MinimapButton and ns.MinimapButton.OpenKeyText and ns.MinimapButton.OpenKeyText()
+		return "|cffffd100" .. L["Open:"] .. "|r " .. (key or L["no key set"])
+	end)
 	P:Text(L["Open or close the Almanac  •  Open Almanac settings  •  Characters (bags, bank, gear)  •  Gem Match\nTarget nearest selected quest mob  •  Clear markers on nearby quest mobs"])
 
 	P:Section(L["Slash commands"])

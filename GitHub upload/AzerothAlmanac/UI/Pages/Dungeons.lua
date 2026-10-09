@@ -253,7 +253,10 @@ end
 
 local function SelectBoss(key)
 	state.boss = key
-	state.sub = key and "abilities" or "overview"
+	-- (#56) from one boss to another you stay on the tab you were reading (Abilities, Loot, Other);
+	-- from the Overview (or no boss) a boss opens on Abilities
+	if not key then state.sub = "overview"
+	elseif state.sub == "overview" or not state.sub then state.sub = "abilities" end
 	page:Refresh()
 end
 
