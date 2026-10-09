@@ -324,6 +324,7 @@ local CONT_COLOR = {
 local CONT_DEFAULT = { 0.85, 0.7, 0.3 }
 local function ContColor(name) return CONT_COLOR[name] or CONT_DEFAULT end
 local ZONE_ART = {
+	["Eastern Kingdoms"] = "Zone_EasternKingdoms",
 	["Elwynn Forest"] = "Zone_ElwynnForest",
 	["Stormwind City"] = "Zone_StormwindCity",
 	["Westfall"] = "Zone_Westfall",
