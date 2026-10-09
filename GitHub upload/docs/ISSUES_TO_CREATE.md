@@ -429,4 +429,14 @@ Protocol ranges, features switched off per match (stability first), opponent's v
 **Labels:** `almanac` `feature`
 ```
 Alt+Right-click a bag item on the Auctions tab: into the sell slot with stack and price from Auction Prices; Enter or a second Alt+Right-click posts. DESIGN.md section 82.
+### 61. Places: a mini map on each continent card
+**Labels:** `almanac` `feature` `art`
+```
+Later, on the Places tab's continent cards (Eastern Kingdoms, Kalimdor): a small silhouette of the continent with a dot where each explored zone lies (lit when fully explored). Needs a continent silhouette per continent (painted, or cut from the world map) and each zone's position on it. Idea agreed with Asia on 2026-10-09 together with the nested continent / zone cards (docs/DESIGN.md section 78).
+```
+
+### 62. Places: a sticky continent header
+**Labels:** `almanac` `feature`
+```
+Later, on the Places tab: while you scroll through a continent's zones, its name stays pinned at the top of the list (a slim bar with its colour and fold sign), so you always know which continent you are in. A bigger change to the shared list widget (UI/Widgets.lua, W.List): the list needs to know which row group is on top. Idea agreed with Asia on 2026-10-09 (docs/DESIGN.md section 78).
 ```

@@ -18,6 +18,8 @@
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
                                                          outside the ring made transparent, squared (default 256)
   python art_convert.py roundicon <out folder>            (0.69.2) the slightly rounded icon's mask (64 px) and ring (128 px): Icon_Mask.tga, Icon_Ring.tga
+  python art_convert.py banner <in.jpg> <out.tga> [W H]   (0.69.2) a wide zone picture, no keying: near-black painted borders trimmed, cropped to
+                                                         the W:H shape, resized, opaque (default 512 x 128)
   python art_convert.py ruin <Frame_Dungeon.tga> <out.tga>      (0.69.1) a see-through overlay for the dungeon arch: cracks,
                                                          dirt and soot on the stone, moss, cobwebs in the doorway (scipy)
   python art_convert.py parchment <frame.png> <out.tga> [W H] [shadow=<out.tga>]   (0.69.0, #33) a creature card frame on
@@ -527,6 +529,37 @@ def roundicon(folder):
     write_tga(rgba(rounded(128, 0, 4)), folder + "\\Icon_Ring.tga")
     print("roundicon: Icon_Mask.tga 64 x 64, Icon_Ring.tga 128 x 128 in " + folder)
 
+def banner(src, dst, w=512, h=128):
+    """A wide zone picture (Gemini, about 4:1): a painted near-black border along its edges trimmed off (up to a tenth
+    of each side), cropped to the w:h shape about its centre, resized, written opaque."""
+    im = Image.open(src).convert("RGB")
+    lum = np.array(im).astype(float).mean(axis=2)
+    H, W = lum.shape
+    rows, cols = lum.mean(axis=1), lum.mean(axis=0)
+    def trim(profile, limit):
+        # a border is a dark band (under 40) up to the first sharp jump in brightness: the picture begins there
+        for i in range(limit):
+            if profile[i + 1] - profile[i] > 20 and profile[:i + 1].mean() < 40:
+                return i + 3   # (a little more, for the edge's soft pixels)
+        return 0
+    t, b = trim(rows, H // 10), trim(rows[::-1], H // 10)
+    if (t == 0) != (b == 0) and (rows[:4].mean() < 40 and rows[-4:].mean() < 40):
+        t = b = max(t, b)   # (the same frame all round: the side where the picture fades dark has no clear jump)
+    l, r = trim(cols, W // 10), trim(cols[::-1], W // 10)
+    im = im.crop((l, t, W - r, H - b))
+    cw, ch = im.size
+    aspect = w / h
+    if cw / ch > aspect:
+        nw = int(round(ch * aspect))
+        x0 = (cw - nw) // 2
+        im = im.crop((x0, 0, x0 + nw, ch))
+    else:
+        nh = int(round(cw / aspect))
+        y0 = (ch - nh) // 2
+        im = im.crop((0, y0, cw, y0 + nh))
+    write_tga(im.resize((w, h), Image.LANCZOS).convert("RGBA"), dst)
+    print("banner: trimmed %d/%d/%d/%d (top/bottom/left/right) -> %d x %d" % (t, b, l, r, w, h))
+
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
         frame(sys.argv[2], sys.argv[3])
@@ -546,6 +579,8 @@ if __name__ == "__main__":
         parchment(sys.argv[2], sys.argv[3], *(int(v) for v in rest[:2]), shadow=sh[0] if sh else None)
     elif sys.argv[1] == "roundicon":
         roundicon(sys.argv[2])
+    elif sys.argv[1] == "banner":
+        banner(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
     elif sys.argv[1] == "ruin":
         ruin(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == "round":

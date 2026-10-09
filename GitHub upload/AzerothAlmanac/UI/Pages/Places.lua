@@ -11,6 +11,7 @@ local filter = ""
 local searchBox
 
 local collapsed = {}
+local known = {} -- zones the list has met: a new one starts folded (its places hidden), after that it is the reader's
 
 local function Who(rec)
 	local who = {}
@@ -310,6 +311,233 @@ local function DescribeInstance(inst)
 	}
 end
 
+-- (0.69.2) each zone is a full-width banner card: its painted picture (Media\Zone_<Name>, 512 x 128, the detail on
+-- the right), a dark fade from the left under its name and count; a zone without a picture yet gets a default card
+-- (dark oak with the zone icon faded in on the right). Zones with art are listed by the game's own zone name.
+local ZONE_H = 60   -- a zone card: smaller than a continent's, so the order shows in the size
+local CONT_H = 86   -- a continent card
+-- each continent's accent: its card's tint and the rail down the left of its zones and places
+local CONT_COLOR = {
+	["Eastern Kingdoms"] = { 0.95, 0.62, 0.2 },
+	["Kalimdor"] = { 0.3, 0.75, 0.7 },
+}
+local CONT_DEFAULT = { 0.85, 0.7, 0.3 }
+local function ContColor(name) return CONT_COLOR[name] or CONT_DEFAULT end
+local ZONE_ART = {
+	["Eastern Kingdoms"] = "Zone_EasternKingdoms",
+	["Elwynn Forest"] = "Zone_ElwynnForest",
+	["Kalimdor"] = "Zone_Kalimdor",
+	["Stormwind City"] = "Zone_StormwindCity",
+	["Westfall"] = "Zone_Westfall",
+}
+local ZONE_MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+
+local function ZoneBanner(row)
+	if row.banner then return row.banner end
+	local b = CreateFrame("Frame", nil, row)
+	b:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -6)
+	b:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
+	b:SetFrameLevel(row:GetFrameLevel() + 3)
+	b.art = b:CreateTexture(nil, "BACKGROUND", nil, 0)
+	b.art:SetAllPoints()
+	-- the default card: dark oak, a touch lighter to the right, the zone icon faded in
+	b.plain = b:CreateTexture(nil, "BACKGROUND", nil, 0)
+	b.plain:SetAllPoints()
+	W.Fade(b.plain, "HORIZONTAL", 0.16, 0.115, 0.07, 1, 1)
+	b.plainRight = b:CreateTexture(nil, "BACKGROUND", nil, 1)
+	b.plainRight:SetPoint("TOPRIGHT")
+	b.plainRight:SetPoint("BOTTOMRIGHT")
+	b.plainRight:SetWidth(150)
+	W.Fade(b.plainRight, "HORIZONTAL", 0.5, 0.36, 0.16, 0, 0.22)
+	b.icon = b:CreateTexture(nil, "ARTWORK")
+	b.icon:SetSize(46, 46)
+	b.icon:SetPoint("RIGHT", -14, 0)
+	b.icon:SetTexture(W.KindIcon("zone"))
+	b.icon:SetAlpha(0.55)
+	-- the dark fade the name lies on (clear by about two thirds across)
+	b.shade = b:CreateTexture(nil, "BACKGROUND", nil, 2)
+	b.shade:SetPoint("TOPLEFT")
+	b.shade:SetPoint("BOTTOMLEFT")
+	b.shade:SetPoint("RIGHT", b, "LEFT", 220, 0)
+	W.Fade(b.shade, "HORIZONTAL", 0.04, 0.025, 0.01, 0.86, 0)
+	-- a thin edge, gold when picked; a wash under the mouse
+	b.edges = {}
+	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local t = b:CreateTexture(nil, "BORDER")
+		t:SetColorTexture(0.34, 0.26, 0.14, 1)
+		t:SetPoint(e[1])
+		t:SetPoint(e[2])
+		if e[3] then t:SetHeight(1) else t:SetWidth(1) end
+		b.edges[#b.edges + 1] = t
+	end
+	b.hov = b:CreateTexture(nil, "ARTWORK", nil, 3)
+	b.hov:SetAllPoints()
+	b.hov:SetBlendMode("ADD")
+	W.Fade(b.hov, "HORIZONTAL", 0.95, 0.8, 0.45, 0.2, 0.05)
+	b.hov:Hide()
+	b.name = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	b.name:SetPoint("LEFT", b, "LEFT", 12, 8)
+	b.name:SetPoint("RIGHT", b, "RIGHT", -34, 8)
+	b.name:SetJustifyH("LEFT")
+	b.name:SetWordWrap(false)
+	b.name:SetShadowOffset(1, -1)
+	b.count = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	b.count:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", 1, -3)
+	b.count:SetShadowOffset(1, -1)
+	-- the fold sign in front of the name: a small gold-edged box with + (folded) or - (open); > on the dungeons card
+	local pill = CreateFrame("Button", nil, b)
+	pill:SetSize(20, 20)
+	pill:SetPoint("LEFT", b, "LEFT", 9, 8)
+	pill.bg = pill:CreateTexture(nil, "BACKGROUND")
+	pill.bg:SetAllPoints()
+	pill.bg:SetColorTexture(0.04, 0.025, 0.01, 0.85)
+	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local t = pill:CreateTexture(nil, "BORDER")
+		t:SetColorTexture(0.85, 0.66, 0.25, 1)
+		t:SetPoint(e[1])
+		t:SetPoint(e[2])
+		if e[3] then t:SetHeight(1) else t:SetWidth(1) end
+	end
+	pill.glow = pill:CreateTexture(nil, "HIGHLIGHT")
+	pill.glow:SetAllPoints()
+	pill.glow:SetColorTexture(1, 0.85, 0.4, 0.25)
+	pill.sign = pill:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	pill.sign:SetPoint("CENTER", 0, 1)
+	pill:SetScript("OnClick", function(self)
+		if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+		if self.action then self.action() end
+	end)
+	pill:SetScript("OnEnter", function(self)
+		if not self.tip then return end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(self.tip, 1, 0.82, 0)
+		GameTooltip:Show()
+	end)
+	pill:SetScript("OnLeave", GameTooltip_Hide)
+	b.pill = pill
+	-- the picture shows its right side when the card is wider than the picture (4 : 1)
+	b:SetScript("OnSizeChanged", function(self, w, h)
+		if not (w and h and h > 0) then return end
+		local aspect = w / h
+		if aspect > 4 then
+			local v = 4 / aspect
+			self.art:SetTexCoord(0, 1, (1 - v) / 2, (1 + v) / 2)
+		else
+			local u = aspect / 4
+			self.art:SetTexCoord(1 - u, 1, 0, 1)
+		end
+	end)
+	function b:SetSelected(on)
+		for _, t in ipairs(self.edges) do
+			if on then t:SetColorTexture(0.95, 0.75, 0.25, 1) else t:SetColorTexture(0.34, 0.26, 0.14, 1) end
+			t:SetHeight(on and 2 or 1)
+		end
+		self.edges[3]:SetWidth(on and 2 or 1)
+		self.edges[4]:SetWidth(on and 2 or 1)
+	end
+	-- the list marks the picked row through row.selected: a banner takes that mark itself
+	local orig = row.selected
+	row.selected = {
+		SetShown = function(_, on)
+			if b:IsShown() then orig:Hide() b:SetSelected(on and true or false) else orig:SetShown(on) end
+		end,
+		Hide = function() orig:Hide() b:SetSelected(false) end,
+	}
+	row:HookScript("OnEnter", function() if b:IsShown() then b.hov:Show() end end)
+	row:HookScript("OnLeave", function() b.hov:Hide() end)
+	row.banner = b
+	return b
+end
+
+-- o = { name, art (a Media file name or nil), icon (the default card's), count (the small line), pill = { sign, label, action } or nil }
+local function FillBanner(row, o)
+	local b = ZoneBanner(row)
+	-- (a zone card sits in from the rail on the left; the others reach almost to the edge)
+	b:ClearAllPoints()
+	b:SetPoint("TOPLEFT", row, "TOPLEFT", o.left or 3, -(o.top or 6))
+	b:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -3, 2)
+	-- the default card's tint follows the continent
+	local c = o.tint or { 0.42, 0.3, 0.14 }
+	W.Fade(b.plain, "HORIZONTAL", c[1] * 0.4, c[2] * 0.4, c[3] * 0.4, 1, 1)
+	W.Fade(b.plainRight, "HORIZONTAL", c[1], c[2], c[3], 0, 0.3)
+	b.name:SetFontObject(o.big and W.Font("GameFontNormalHuge", "GameFontNormalLarge") or GameFontNormalLarge)
+	b.art:SetShown(o.art ~= nil)
+	if o.art then b.art:SetTexture(ZONE_MEDIA .. o.art) end
+	b.plain:SetShown(o.art == nil)
+	b.plainRight:SetShown(o.art == nil)
+	b.icon:SetShown(o.art == nil)
+	if o.icon then b.icon:SetTexture(o.icon) end
+	b.name:SetText(o.name)
+	b.count:SetText(o.count or "")
+	if o.pill then
+		b.pill.sign:SetText("|cffffd100" .. o.pill.sign .. "|r")
+		b.pill.tip = o.pill.label
+		b.pill.action = o.pill.action
+		b.pill:Show()
+	else
+		b.pill:Hide()
+	end
+	-- (the name starts after the sign when there is one)
+	b.name:ClearAllPoints()
+	b.name:SetPoint("LEFT", b, "LEFT", o.pill and 38 or 12, 8)
+	b.name:SetPoint("RIGHT", b, "RIGHT", -10, 8)
+	b:SetSelected(false)
+	b:Show()
+end
+
+-- the rail: a thin line in the continent's colour down the left of its zones and places
+local function Rail(row, color)
+	if not row.rail then
+		row.rail = row:CreateTexture(nil, "BACKGROUND", nil, 3)
+		row.rail:SetWidth(2)
+		row.rail:SetPoint("TOPLEFT", row, "TOPLEFT", 7, 0)
+		row.rail:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 7, 0)
+	end
+	if color then
+		row.rail:SetColorTexture(color[1], color[2], color[3], 0.85)
+		row.rail:Show()
+	else
+		row.rail:Hide()
+	end
+end
+
+local function FillContinentBanner(row, r)
+	local name = r.text
+	local c = ContColor(name)
+	FillBanner(row, {
+		name = name, art = ZONE_ART[name], icon = W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }), tint = c, big = true,
+		count = "|cffcccccc" .. (L["%d zones"]):format(r.count) .. (r.explored and r.explored > 0 and ("  \194\183  " .. (L["%d explored"]):format(r.explored)) or "") .. "|r",
+		pill = {
+			sign = collapsed[r.key] and "+" or "-",
+			label = collapsed[r.key] and L["Show zones"] or L["Hide zones"],
+			action = function()
+				collapsed[r.key] = (not collapsed[r.key]) or nil
+				page:Refresh()
+			end,
+		},
+	})
+	for _, t in ipairs(row.banner.edges) do t:SetColorTexture(c[1] * 0.8, c[2] * 0.8, c[3] * 0.8, 1) end
+end
+
+local function FillZoneBanner(row, z, folded, cont)
+	local name = z.rec.name or "?"
+	local total, done = ns.Places:Exploration(name)
+	local n = #z.subs
+	FillBanner(row, {
+	name = name, art = ZONE_ART[name], icon = W.KindIcon("zone"), left = 14, top = 4, tint = ContColor(cont),
+		count = total and ((done >= total and "|cff40ff40" or "|cffcccccc") .. (L["%d / %d explored"]):format(done, total) .. "|r")
+			or ("|cffcccccc" .. (L["%d places"]):format(n) .. "|r"),
+		pill = n > 0 and {
+			sign = folded and "+" or "-",
+			label = folded and (L["Show areas (%d)"]):format(n) or L["Hide areas"],
+			action = function()
+				collapsed[z.id] = (not collapsed[z.id]) or nil
+				page:Refresh()
+			end,
+		} or nil,
+	})
+end
+
 local function Matches(rec)
 	return filter == "" or ((rec.name or ""):lower():find(filter, 1, true) ~= nil)
 end
@@ -338,7 +566,8 @@ local function Collect()
 	-- continents, each with its zones, each with its places (the tree is sorted by continent)
 	local lastCont, contRow
 	for _, z in ipairs(tree) do
-		zones = zones + 1
+	if not known[z.id] then known[z.id] = true collapsed[z.id] = true end
+	zones = zones + 1
 		places = places + #z.subs
 		local subs = {}
 		for _, s in ipairs(z.subs) do
@@ -348,14 +577,18 @@ local function Collect()
 			local cont = z.rec.continent or L["Elsewhere"]
 			if cont ~= lastCont then
 				lastCont = cont
-				contRow = { kind = "continent", text = cont, key = "c:" .. cont, count = 0 }
+				contRow = { kind = "continent", header = false, text = cont, key = "c:" .. cont, count = 0, explored = 0 }
 				rows[#rows + 1] = contRow
 			end
 			contRow.count = contRow.count + 1
+			do
+				local tot, dn = ns.Places:Exploration(z.rec.name)
+				if tot and dn and dn >= tot then contRow.explored = contRow.explored + 1 end
+			end
 			if not collapsed[contRow.key] then
-				rows[#rows + 1] = { kind = "zone", z = z, id = z.id } -- (id: so Back finds this row again)
-				if not collapsed[z.id] then
-					for _, s in ipairs(subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id } end
+				rows[#rows + 1] = { kind = "zone", z = z, id = z.id, cont = cont } -- (id: so Back finds this row again)
+				if not collapsed[z.id] or filter ~= "" then
+					for _, s in ipairs(subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id, cont = cont } end
 				end
 			end
 		end
@@ -367,8 +600,8 @@ local function Collect()
 	end
 	table.sort(inst, function(a, b) return (a.rec.name or "") < (b.rec.name or "") end)
 	if #inst > 0 then
-		rows[#rows + 1] = { kind = "header", text = L["Dungeons and raids"] }
-		for _, i in ipairs(inst) do rows[#rows + 1] = { kind = "instance", i = i, id = i.id } end
+	-- (header = false: it opens the Dungeons tab, it is never "selected")
+	rows[#rows + 1] = { kind = "dungeoncard", header = false, count = #inst }
 	end
 	return rows, zones, places, dungeons
 end
@@ -407,12 +640,14 @@ function page:Build(parent, header)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return (r.newHeader and "new") or (r.kind == "zone" and r.z and r.z.id) or (r.kind == "continent" and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
+		heightOf = function(r) if r.kind == "continent" or r.kind == "dungeoncard" then return CONT_H elseif r.kind == "zone" then return ZONE_H end end,
 		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No places yet. Every zone and place you enter is recorded here."],
 		update = function(row, r)
-			row:SetHeader(r.newHeader or r.kind == "zone" or r.kind == "header" or r.kind == "continent",
-				(r.newHeader and collapsed.new) or (r.kind == "zone" and collapsed[r.z.id]) or (r.kind == "continent" and collapsed[r.key]))
+			if row.banner then row.banner:Hide() row.banner:SetSelected(false) end
+			Rail(row, (r.kind == "zone" or r.kind == "subzone") and ContColor(r.cont) or nil)
+			row:SetHeader(r.newHeader or r.kind == "header", r.newHeader and collapsed.new)
 			row.icon:ClearAllPoints()
 			if ns.New then ns.New:MarkRow(row, r.isNew, "places", r.newKey) end
 			if r.newHeader then
@@ -429,11 +664,12 @@ function page:Build(parent, header)
 				row.text:SetText(r.rec.name or "?")
 				row.right:SetText(r.zoneName and ("|cff999999" .. r.zoneName .. "|r") or "")
 			elseif r.kind == "continent" then
-				row.icon:SetPoint("LEFT", 4, 0)
-				row.icon:SetTexture(W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }))
-				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
-				row.text:SetText("|cffffd100" .. r.text .. "|r")
-				row.right:SetText("|cff999999" .. r.count .. "|r")
+			-- (a big banner card, the zones nested under it)
+			row.icon:SetPoint("LEFT", 20, 0)
+			row.icon:SetTexture(nil)
+			row.text:SetText("")
+			row.right:SetText("")
+			FillContinentBanner(row, r)
 			elseif r.kind == "subzone" then
 				row.icon:SetPoint("LEFT", 46, 0)
 				row.icon:SetTexture(W.KindIcon("subzone"))
@@ -441,15 +677,24 @@ function page:Build(parent, header)
 				row.text:SetText(r.s.rec.name)
 				row.right:SetText("")
 			elseif r.kind == "zone" then
-				row.indent = 22 -- (under its continent)
-				row.icon:SetPoint("LEFT", 20, 0)
-				row.icon:SetTexture(W.KindIcon("zone"))
-				row.text:SetFontObject(GameFontNormal)
-				row.text:SetText(r.z.rec.name)
-				local total, done = ns.Places:Exploration(r.z.rec.name)
-				row.right:SetText(total and ((done >= total and "|cff40ff40" or "|cff999999") .. done .. "/" .. total .. "|r") or ("|cff999999" .. #r.z.subs .. "|r"))
+			-- (0.69.2) a banner card: the picture or the default card, the name and the count on it
+			row.icon:SetPoint("LEFT", 20, 0)
+			row.icon:SetTexture(nil)
+			row.text:SetText("")
+			row.right:SetText("")
+			FillZoneBanner(row, r.z, collapsed[r.z.id], r.cont)
+			elseif r.kind == "dungeoncard" then
+			row.icon:SetPoint("LEFT", 20, 0)
+			row.icon:SetTexture(nil)
+			row.text:SetText("")
+			row.right:SetText("")
+			FillBanner(row, {
+				name = L["Dungeons and raids"], art = "Zone_Dungeons", icon = W.KindIcon("instance"), big = true,
+				count = "|cffcccccc" .. (L["%d entered"]):format(r.count) .. "|r",
+				pill = { sign = ">", label = L["Open Dungeons"], action = GoTo("dungeons") },
+			})
 			elseif r.kind == "instance" then
-				row.icon:SetPoint("LEFT", 4, 0)
+			row.icon:SetPoint("LEFT", 4, 0)
 				row.icon:SetTexture(W.KindIcon("instance"))
 				row.text:SetFontObject(GameFontNormal)
 				row.text:SetText(r.i.rec.name)
@@ -499,8 +744,9 @@ function page:Build(parent, header)
 				page:Refresh()
 				return
 			end
+			if r.kind == "dungeoncard" then return GoTo("dungeons")() end
 			if r.newHeader then
-				collapsed.new = not collapsed.new
+			collapsed.new = not collapsed.new
 				page:Refresh()
 				return
 			end
@@ -563,6 +809,7 @@ function page:ShowZone(map, creature, merchant, pin)
 	focusPin = pin and { map = map, x = pin.x, y = pin.y, name = pin.name, sub = pin.sub, face = pin.face, icon = pin.icon, onClick = pin.onClick, spots = pin.spots } or nil
 	ns.UI:Open("places")
 	collapsed[map] = nil
+	known[map] = true
 	local zrec = ns.Store:Get("zone", map)
 	collapsed["c:" .. ((zrec and zrec.continent) or L["Elsewhere"])] = nil
 	-- a search that hides the zone would leave the page empty
