@@ -75,6 +75,7 @@ Modules\Gathering.lua
 Modules\Milestones.lua
 Modules\NodePins.lua
 Modules\MapTest.lua
+Modules\JourneyRecorder.lua
 Modules\Peers.lua
 UI\TownsfolkPin.xml
 UI\Toast.lua

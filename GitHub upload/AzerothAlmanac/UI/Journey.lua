@@ -5,9 +5,12 @@
 --   j:SetCharacter(key)     -- a character's journey (nil: the header's "All characters")
 --   j:Focus(entry)          -- turn to the entry's zone and light its marker (nil: back to the whole frame)
 --   j:Refresh(replay)       -- redraw (replay: play the time lapse again)
--- Points: until the Journey recorder exists (DESIGN 74, "Recorder") the line runs through the
--- journal's own points (every discovery has a time, map, x and y), as /aa maptest draws them.
--- J.Points(from, char) is the one place that reads them, so the recorder only has to feed it.
+-- Points: the Journey recorder's trail (Modules/JourneyRecorder.lua, 0.69.1) with the journal's own
+-- points among it (every discovery has a time, map, x and y: those are the dots you can click). Before
+-- the recorder has anything the line runs through the journal's points alone.
+-- How you moved shows on the line: a gryphon where a flight took off and landed, a hearthstone where
+-- you arrived by hearth, the portal swirl where you went into or out of a dungeon (and at both ends of
+-- any jump nothing explains), a skull where you died; boat rides and ghost runs drawn fainter.
 -- Character mode: one line in gold. Account mode (everyone): each character in its class colour,
 -- all on one clock. A gap of more than 2 hours, or a jump across the map, breaks the line.
 
@@ -25,6 +28,15 @@ local JUMP = 0.35
 local PLAY_TIME = 8          -- seconds for the whole time lapse in the small pane
 local MAX_POINTS = 800       -- the newest points in the frame (the oldest are left off)
 local GOLD = { 1, 0.82, 0.3 }
+-- the marks on the line (Modules/JourneyRecorder.lua's kinds)
+local PIN_ART = {
+	F = { icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01" }, round = true },
+	f = { icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01" }, round = true },
+	h = { icon = { "INV_Misc_Rune_01", 134414 }, round = true },
+	d = { icon = { "INV_Misc_Bone_HumanSkull_01", "Ability_Rogue_FeignDeath" }, round = true },
+	i = { icon = { "Interface\\AddOns\\AzerothAlmanac\\Media\\FX_DungeonPortal" }, add = true, scale = 1.8 },
+	jump = { icon = { "Interface\\AddOns\\AzerothAlmanac\\Media\\FX_DungeonPortal" }, add = true, scale = 1.5 },
+}
 
 J.RANGES = {
 	{ key = "today", label = L["Today"] },
@@ -44,9 +56,27 @@ function J.From(range)
 	return 0
 end
 
--- the points from a time on, oldest first: { t, m, x, y, c, e } (e: the journal entry);
--- char nil: every character
+-- the points from a time on, oldest first: { t, m, x, y, c, e, k } (e: the journal entry; k: how you
+-- got there, from the recorder); char nil: every character
 function J.Points(from, char)
+	local out = J.JournalPoints(from, char)
+	local JR = ns.JourneyRecorder
+	local trail = JR and JR.Points and JR:Points(from, char) or {}
+	if #trail == 0 then return out end
+	for _, p in ipairs(trail) do out[#out + 1] = p end
+	for i, p in ipairs(out) do p.s = p.s or i end
+	table.sort(out, function(a, b) if a.t ~= b.t then return a.t < b.t end return a.s < b.s end)
+	-- the newest MAX_POINTS * 4 (a long trail is thinned for drawing, keeping marks and discoveries)
+	local cap = MAX_POINTS * 4
+	if #out > cap then
+		local keep, step = {}, math.ceil(#out / cap)
+		for i, p in ipairs(out) do if p.e or p.k or i % step == 0 or i == #out then keep[#keep + 1] = p end end
+		out = keep
+	end
+	return out
+end
+
+function J.JournalPoints(from, char)
 	local out = {}
 	local j = ns.db and ns.db.journal or {}
 	for i = #j, 1, -1 do
@@ -126,7 +156,7 @@ function W.JourneyPane(parent, opts)
 	empty:SetPoint("CENTER", stage, "CENTER")
 	empty:SetWidth(360)
 
-	local lines, dots, pts = {}, {}, {}
+	local lines, dots, pts, pins = {}, {}, {}, {}
 	local head = overlay:CreateTexture(nil, "OVERLAY", nil, 6)
 	head:SetTexture(GLOW)
 	head:SetBlendMode("ADD")
@@ -167,6 +197,7 @@ function W.JourneyPane(parent, opts)
 	end
 
 	local function HideAll()
+		for _, t in ipairs(pins) do t:Hide() end
 		for _, l in ipairs(lines) do l:Hide() end
 		for _, d in ipairs(dots) do d:Hide() d.p = nil end
 		head:Hide()
@@ -181,6 +212,8 @@ function W.JourneyPane(parent, opts)
 			local on = p.t <= upTo
 			if p.dot then p.dot:SetShown(on) end
 			if p.line then p.line:SetShown(on) end
+			if p.pin then p.pin:SetShown(on) end
+			if p.pinFrom then p.pinFrom:SetShown(on) end
 			if on then last = p end
 		end
 		if last and state.playing then
@@ -298,7 +331,23 @@ function W.JourneyPane(parent, opts)
 
 		-- the points that fall on this map, each with its dot and the line from the one before it
 		local prevBy = {}
-		local nl, nd = 0, 0
+		local nl, nd, np = 0, 0, 0
+		for _, pin in ipairs(pins) do pin:Hide() end
+		local function Pin(kind, px, py)
+			np = np + 1
+			local t = pins[np]
+			if not t then t = overlay:CreateTexture(nil, "OVERLAY", nil, 4) pins[np] = t end
+			local art = PIN_ART[kind] or PIN_ART.jump
+			t:SetTexture(W.FindIcon(art.icon))
+			t:SetBlendMode(art.add and "ADD" or "BLEND")
+			if art.round then t:SetTexCoord(0.08, 0.92, 0.08, 0.92) else t:SetTexCoord(0, 1, 0, 1) end
+			local s = math.max(12, w / 34) * (art.scale or 1)
+			t:SetSize(s, s)
+			t:ClearAllPoints()
+			t:SetPoint("CENTER", overlay, "TOPLEFT", px * w, -py * h)
+			t:Show()
+			return t
+		end
 		first, last = nil, 0
 		local thick = math.max(2, w / 260)
 		local dotSize = math.max(6, w / 90)
@@ -308,24 +357,37 @@ function W.JourneyPane(parent, opts)
 			if px then
 				p.px, p.py = px, py
 				if who then p.r, p.g, p.b = GOLD[1], GOLD[2], GOLD[3] else p.r, p.g, p.b = ClassRGB(p.c) end
-				nd = nd + 1
-				local d = Dot(nd)
-				d.p = p
-				d:SetSize(dotSize, dotSize)
-				d:ClearAllPoints()
-				d:SetPoint("CENTER", overlay, "TOPLEFT", px * w, -py * h)
-				d.tex:SetVertexColor(p.r * 0.85, p.g * 0.85, p.b * 0.85, 1)
-				p.dot = d
-				if state.focus and p.e == state.focus then focusDot = d end
+				-- discoveries are the dots you can click; the recorder's points only carry the line
+				if p.e then
+					nd = nd + 1
+					local d = Dot(nd)
+					d.p = p
+					d:SetSize(dotSize, dotSize)
+					d:ClearAllPoints()
+					d:SetPoint("CENTER", overlay, "TOPLEFT", px * w, -py * h)
+					d.tex:SetVertexColor(p.r * 0.85, p.g * 0.85, p.b * 0.85, 1)
+					p.dot = d
+					if state.focus and p.e == state.focus then focusDot = d end
+				end
 				local q = prevBy[p.c]
-				if q and p.t - q.t <= GAP and ((px - q.px) ^ 2 + (py - q.py) ^ 2) <= JUMP * JUMP then
+				-- how you got here: a flight's landing, a hearth, a dungeon door, the graveyard after a death
+				local moved = p.k == "f" or p.k == "h" or p.k == "i" or (p.k == "g" and q and q.k == "d")
+				local near = q and p.t - q.t <= GAP and ((px - q.px) ^ 2 + (py - q.py) ^ 2) <= JUMP * JUMP
+				if q and near and not moved then
 					nl = nl + 1
 					local l = Line(nl)
-					l:SetThickness(thick)
-					l:SetColorTexture(p.r, p.g, p.b, 0.9)
+					l:SetThickness(p.k == "g" and thick * 0.7 or thick)
+					l:SetColorTexture(p.r, p.g, p.b, (p.k == "g" and 0.35) or (p.k == "b" and 0.6) or 0.9)
 					l:SetStartPoint("TOPLEFT", overlay, q.px * w, -q.py * h)
 					l:SetEndPoint("TOPLEFT", overlay, px * w, -py * h)
 					p.line = l
+				elseif q and not near and not moved and p.t - q.t <= GAP then
+					-- a jump nothing explains (a portal, a summon ...): the swirl at both ends
+					p.pinFrom = Pin("jump", q.px, q.py)
+					p.pin = Pin("jump", px, py)
+				end
+				if p.k == "F" or p.k == "f" or p.k == "h" or p.k == "i" or p.k == "d" then
+					p.pin = Pin(p.k, px, py)
 				end
 				prevBy[p.c] = p
 				pts[#pts + 1] = p

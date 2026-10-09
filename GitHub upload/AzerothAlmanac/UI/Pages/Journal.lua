@@ -82,7 +82,9 @@ local function Subject(e, rec)
 		return { name = def and def.title or e.s, icon = W.FindIcon(def and def.icon or W.KIND.milestone.icon), note = L["Milestone"],
 			tip = def and def.text or nil, onClick = function() page:ShowMilestones() end }
 	elseif k == "node" then
-		return { name = rec and rec.name or e.s, icon = W.KindArt("node"), note = L["Gathering"],
+		-- (0.69.1) the node's own item (a Peacebloom entry shows Peacebloom); the painting when it has none
+		local own = ns.Gathering and ns.Gathering.NodeIcon and ns.Gathering:NodeIcon(rec)
+		return { name = rec and rec.name or e.s, icon = own or W.KindArt("node"), note = L["Gathering"],
 			tip = L["Click to open in Gathering."], onClick = GoTo("gathering", "ShowNode", id) }
 	elseif k == "fishing" then
 		return { name = rec and (rec.zone or rec.name) or e.s, icon = W.KindArt("fishing"), note = L["Fishing"],
@@ -425,6 +427,8 @@ function page:Build(parent, header)
 			elseif e.k == "milestone" then
 				local def = ns.Milestones and ns.Milestones.byId[e.i]
 				icon = def and W.FindIcon(def.icon)
+			elseif e.k == "node" and ns.Gathering and ns.Gathering.NodeIcon then
+				icon = ns.Gathering:NodeIcon(ns.Store:Get("node", e.i))
 			end
 			icon = icon or W.KindArt(e.k)
 			row.icon:SetTexture(icon)

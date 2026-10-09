@@ -151,6 +151,47 @@ function N:Split(page, rows, recOf, keyOf)
 	return new, rest
 end
 
+-- (0.69.1) "Mark all seen" on the New group's header row (W.List calls this for every row it draws):
+-- the page you're on counts as looked at now, its New group and tab count clear
+function N:HeaderButton(row, item)
+	local on = type(item) == "table" and item.newHeader and true or false
+	if not on then
+		if row.markSeen then row.markSeen:Hide() end
+		return
+	end
+	if not row.markSeen then
+		local b = CreateFrame("Button", nil, row)
+		b:SetHeight(16)
+		b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		b.text:SetPoint("RIGHT")
+		b.text:SetText(L["Mark all seen"])
+		b.text:SetTextColor(1, 0.82, 0.25)
+		b:SetWidth(b.text:GetStringWidth() + 6)
+		b:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+		b:SetFrameLevel(row:GetFrameLevel() + 3)
+		b:SetScript("OnEnter", function(self)
+			self.text:SetTextColor(1, 1, 1)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(L["Mark all seen"], 1, 0.82, 0)
+			GameTooltip:AddLine(L["Clears the New group and this tab's count, as leaving the page does."], 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 0.82, 0.25) GameTooltip:Hide() end)
+		b:SetScript("OnClick", function()
+			local key = ns.UI and ns.UI.Current and ns.UI:Current()
+			if not (key and N.KINDS[key]) then return end
+			N:Stamp(key)
+			if ns.UI.UpdateBadges then ns.UI:UpdateBadges() end
+			local p = ns.UI:GetPage(key)
+			if p and p.Refresh then p:Refresh() end
+			if ns.MinimapButton and ns.MinimapButton.Refresh then pcall(ns.MinimapButton.Refresh, ns.MinimapButton) end
+		end)
+		row.markSeen = b
+	end
+	if row.right then row.right:SetText("") end -- (the count is in the header's own text)
+	row.markSeen:Show()
+end
+
 -- a row of the New group was clicked: no more glow on it (the page redraws its list); true if it was new
 function N:Clicked(page, r)
 	if not (r and r.isNew) then return false end

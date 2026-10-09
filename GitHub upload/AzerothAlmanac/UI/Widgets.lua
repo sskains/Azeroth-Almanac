@@ -828,6 +828,7 @@ function W.List(parent, opts)
 				if data[index].spacer then
 					row.item, row.index = nil, index
 					if row.SetSpacer then row:SetSpacer(true) end
+					if ns.New and ns.New.HeaderButton then ns.New:HeaderButton(row, nil) end
 				else
 					if row.SetSpacer and row.spacer then row:SetSpacer(false) end
 					row.item, row.index = data[index], index
@@ -835,6 +836,8 @@ function W.List(parent, opts)
 					if row.SetHeader then row:SetHeader(false) end
 					opts.update(row, data[index], index)
 					if row.StyleHeader then row:StyleHeader() end
+					-- (0.69.1) the New group's header row: its "Mark all seen" link
+					if ns.New and ns.New.HeaderButton then ns.New:HeaderButton(row, data[index]) end
 					if row.selected then row.selected:SetShown(data[index] == selected) end
 				end
 			elseif row then

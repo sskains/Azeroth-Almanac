@@ -93,23 +93,8 @@ end
 -- the item a node is pictured by: what comes out most often. Chests and other loot containers
 -- that give a mix of things (milk, potions, gloves ...) keep the chest icon instead; an object with
 -- one kind of thing in it (an egg, a crate of one item) still shows that item.
-local function TopItem(rec)
-	local best, n, kinds = nil, 0, 0
-	for item, c in pairs(rec.items or {}) do
-		kinds = kinds + 1
-		if c > n then best, n = item, c end
-	end
-	if rec.kind == "chest" and kinds > 1 then return nil end
-	-- (#44) nothing gathered yet (a herb or vein you've only seen): what the hidden database says
-	-- comes out of it, as the map pins already do, so a sighted Peacebloom shows Peacebloom
-	if not best and rec.kind ~= "chest" and rec.ids and ns.ItemDB then
-		for id in pairs(rec.ids) do
-			local list = ns.ItemDB:ObjectLoot(id)
-			if list and list[1] then return list[1].item end
-		end
-	end
-	return best
-end
+-- (0.69.1: the module's, so the Journal shows the same item)
+local function TopItem(rec) return ns.Gathering:TopItem(rec) end
 
 local function Record(sel)
 	if not sel then return nil end

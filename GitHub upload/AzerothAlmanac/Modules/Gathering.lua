@@ -284,6 +284,33 @@ ns:RegisterEvent("LOOT_READY", function()
 	ns.doing = "idle"
 end)
 
+-- the item that stands for a node (its icon on the Gathering page and the Journal): what it gave
+-- most; a chest that gives several things has none. (#44) Nothing gathered yet (a herb or vein you've
+-- only seen): what the hidden database says comes out of it, so a sighted Peacebloom shows Peacebloom.
+function G:TopItem(rec)
+	if type(rec) ~= "table" then return nil end
+	local best, n, kinds = nil, 0, 0
+	for item, c in pairs(rec.items or {}) do
+		kinds = kinds + 1
+		if c > n then best, n = item, c end
+	end
+	if rec.kind == "chest" and kinds > 1 then return nil end
+	if not best and rec.kind ~= "chest" and rec.ids and ns.ItemDB then
+		for id in pairs(rec.ids) do
+			local list = ns.ItemDB:ObjectLoot(id)
+			if list and list[1] then return list[1].item end
+		end
+	end
+	return best
+end
+
+-- that item's icon, or nil
+function G:NodeIcon(rec)
+	local item = self:TopItem(rec)
+	local instant = item and ((C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant)
+	return instant and select(5, instant(item)) or nil
+end
+
 -- everything a node can hold in the Classic records, over all its object IDs: { { item, chance } }
 function G:Contents(rec)
 	local best = {}

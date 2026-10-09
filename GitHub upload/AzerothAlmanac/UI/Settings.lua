@@ -417,6 +417,8 @@ local function BuildGeneral(P)
 		function() return Opt().window.newGlow ~= false end, function(v) Opt().window.newGlow = v end)
 	P:Check(L["Portal swirl on dungeons"], L["A portal opens in a dungeon card's doorway while you hover it, and swirls on the dungeon you're in (its card and its page)."],
 		function() return Opt().window.portalSwirl ~= false end, function(v) Opt().window.portalSwirl = v end)
+	P:Check(L["Record my journey"], L["Every few seconds while you move, where you are is noted (only for your own characters, never shared) so the Journal's Journey follows the path you really walked. Off: nothing more is recorded; the Journey joins up your discoveries instead."],
+		function() return Opt().window.journey ~= false end, function(v) Opt().window.journey = v end)
 	P:Buttons({
 		{ L["Open the Almanac"], 160, function() ns.UI:Open() end },
 		{ L["Reset window positions"], 190, function()
