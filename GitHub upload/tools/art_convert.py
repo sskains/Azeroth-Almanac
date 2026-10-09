@@ -17,6 +17,7 @@
                                                          squares keyed out by saturation (default 128)
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
                                                          outside the ring made transparent, squared (default 256)
+  python art_convert.py roundicon <out folder>            (0.69.2) the slightly rounded icon's mask (64 px) and ring (128 px): Icon_Mask.tga, Icon_Ring.tga
   python art_convert.py ruin <Frame_Dungeon.tga> <out.tga>      (0.69.1) a see-through overlay for the dungeon arch: cracks,
                                                          dirt and soot on the stone, moss, cobwebs in the doorway (scipy)
   python art_convert.py parchment <frame.png> <out.tga> [W H] [shadow=<out.tga>]   (0.69.0, #33) a creature card frame on
@@ -504,6 +505,28 @@ def ruin(src, dst, seed=11):
     write_tga(img.resize((W, H), Image.LANCZOS), dst)
     print(f"ruin overlay {W} x {H} -> {dst}")
 
+def roundicon(folder):
+    """Icon_Mask.tga (white rounded square, for a mask texture) and Icon_Ring.tga (its thin edge, white, to be tinted):
+    the corner radius is 14% of the side; drawn four times over and scaled down for smooth corners."""
+    from PIL import ImageDraw
+    def rounded(size, inset, thick=None):
+        k = 4
+        S = size * k
+        r = int(round(size * 0.14 * k))
+        img = Image.new("L", (S, S), 0)
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle((inset * k, inset * k, S - 1 - inset * k, S - 1 - inset * k), radius=max(r - inset * k // 2, 1), fill=255)
+        if thick:
+            t = thick * k
+            d.rounded_rectangle((inset * k + t, inset * k + t, S - 1 - inset * k - t, S - 1 - inset * k - t), radius=max(r - t, 1), fill=0)
+        return img.resize((size, size), Image.LANCZOS)
+    def rgba(alpha):
+        a = np.array(alpha)
+        return Image.fromarray(np.dstack([np.full_like(a, 255)] * 3 + [a]), "RGBA")
+    write_tga(rgba(rounded(64, 0)), folder + "\\Icon_Mask.tga")
+    write_tga(rgba(rounded(128, 0, 4)), folder + "\\Icon_Ring.tga")
+    print("roundicon: Icon_Mask.tga 64 x 64, Icon_Ring.tga 128 x 128 in " + folder)
+
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
         frame(sys.argv[2], sys.argv[3])
@@ -521,6 +544,8 @@ if __name__ == "__main__":
         rest = [v for v in sys.argv[4:] if not v.startswith("shadow=")]
         sh = [v[7:] for v in sys.argv[4:] if v.startswith("shadow=")]
         parchment(sys.argv[2], sys.argv[3], *(int(v) for v in rest[:2]), shadow=sh[0] if sh else None)
+    elif sys.argv[1] == "roundicon":
+        roundicon(sys.argv[2])
     elif sys.argv[1] == "ruin":
         ruin(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == "round":

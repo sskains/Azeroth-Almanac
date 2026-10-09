@@ -401,18 +401,10 @@ function page:Build(parent, header)
 	iconTex:SetSize(44, 44)
 	iconTex:SetPoint("TOPLEFT", 2, 0)
 	iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	-- (0.69.2) a thin gold edge round the icon, as on the list's icons, instead of the game's black quick-slot square
-	local iconEdges = {}
-	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
-		local t = detail.top:CreateTexture(nil, "OVERLAY")
-		t:SetColorTexture(0.62, 0.5, 0.24, 1)
-		t:SetPoint(e[1], iconTex, e[1])
-		t:SetPoint(e[2], iconTex, e[2])
-		if e[3] then t:SetHeight(1) else t:SetWidth(1) end
-		iconEdges[#iconEdges + 1] = t
-	end
-	iconTex:HookScript("OnShow", function() for _, t in ipairs(iconEdges) do t:Show() end end)
-	iconTex:HookScript("OnHide", function() for _, t in ipairs(iconEdges) do t:Hide() end end)
+	-- (0.69.2) the icon with slightly rounded corners and a thin gold edge, as the game's own, no black quick-slot square
+	local iconRing = W.RoundIcon(detail.top, iconTex)
+	iconTex:HookScript("OnShow", function() iconRing:SetShown(true) end)
+	iconTex:HookScript("OnHide", function() iconRing:SetShown(false) end)
 	nameText = detail.top:CreateFontString(nil, "OVERLAY")
 	W.HeroFont(nameText, 26)
 	nameText:SetPoint("TOPLEFT", 58, -2)

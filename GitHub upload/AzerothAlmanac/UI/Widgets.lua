@@ -567,6 +567,42 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 W.WHITE, W.CIRCLE = WHITE, CIRCLE
 W.GOLD = { 1, 0.82, 0.25 }
+
+-- (0.69.2) a slightly rounded square icon, as the game's own: the picture masked to rounded corners, a thin ring
+-- (Media\Icon_Ring, white, tinted) over its edge; a second ring just inside it makes the edge thicker.
+--   local ring = W.RoundIcon(frame, texture); ring:Set(r, g, b, thick); ring:SetShown(on)
+local ICON_MASK = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_Mask"
+local ICON_RING = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_Ring"
+function W.RoundIcon(frame, tex)
+	local ring = {}
+	if frame.CreateMaskTexture and tex.AddMaskTexture then
+		ring.mask = frame:CreateMaskTexture()
+		ring.mask:SetTexture(ICON_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+		ring.mask:SetAllPoints(tex)
+		tex:AddMaskTexture(ring.mask)
+	end
+	local r1 = frame:CreateTexture(nil, "OVERLAY")
+	r1:SetTexture(ICON_RING)
+	r1:SetAllPoints(tex)
+	local r2 = frame:CreateTexture(nil, "OVERLAY")
+	r2:SetTexture(ICON_RING)
+	r2:SetPoint("TOPLEFT", tex, "TOPLEFT", 1, -1)
+	r2:SetPoint("BOTTOMRIGHT", tex, "BOTTOMRIGHT", -1, 1)
+	r2:Hide()
+	ring.r1, ring.r2 = r1, r2
+	function ring:Set(r, g, b, thick)
+		r1:SetVertexColor(r, g, b)
+		r2:SetVertexColor(r, g, b)
+		self.thick = thick and true or false
+		if r1:IsShown() then r2:SetShown(self.thick) end
+	end
+	function ring:SetShown(on)
+		r1:SetShown(on and true or false)
+		r2:SetShown(on and self.thick or false)
+	end
+	ring:Set(0.62, 0.5, 0.24, false)
+	return ring
+end
 W.SELECTED = { 0.45, 0.33, 0.12, 0.5 }
 
 -- An atlas stretched sideways without stretching its ends: cut into left / middle / right from the

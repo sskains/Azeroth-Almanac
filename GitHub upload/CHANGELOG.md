@@ -6,7 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
-- **Recipes and Items: no black frame round the icon** (Asia): the page header of a recipe and of an item drew its icon inside the game's black quick-slot square; both now have a thin gold edge, as the list's icons do (the item's icon also loses its own rim). On an item the edge also shows its quality: its colour (green, blue, purple, orange) and a thicker line from uncommon up, thin gold below.
+- **Recipes and Items: no black frame round the icon** (Asia): the page header of a recipe and of an item drew its icon inside the game's black quick-slot square; both now have slightly rounded corners and a thin gold edge, as the game's own icons (the item's icon also loses its own rim). New textures `Icon_Mask.tga` and `Icon_Ring.tga` (full game restart); the shared `W.RoundIcon` in `UI/Widgets.lua`. On an item the edge also shows its quality: its colour (green, blue, purple, orange) and a thicker line from uncommon up, thin gold below.
 
 - **Journal cards with a fading icon** (Asia): the cards on the Journal's overview (Discoveries, Research and Milestones) are now one box each: the icon larger, solid on the left and fading to nothing on the right, with the title and count over the faded part and no card behind them. A thin gold rule runs along the foot of each card, a card under the mouse gets a faint gold wash, and the picked card a stronger one. Only the Journal's cards change: `UI/Widgets.lua` gets an opt-in `cards` look for the `slots` block (other pages' item and ability lists look as before).
 
