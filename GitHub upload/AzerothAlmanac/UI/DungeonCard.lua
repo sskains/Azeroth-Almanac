@@ -48,9 +48,15 @@ end
 -- (0.68.4) the card's face: the Almanac's parchment, a soft drop shadow and a thin dark edge, the stone
 -- arch inside it; 0.68.5: the arch fills the card, the parchment only a thin rim round it (as the
 -- creature cards' art fills theirs), the same width on the sides and foot, a sliver at the top
-local RIM = 0.05                  -- the parchment rim, of the card's width (0.69.0: the creature cards' painted
-                                  -- border, Media\Card_Parchment, cut from Frame_2_Common: 4.9% of the width)
-local RIM_TOP = 0.008             -- (0.68.6) thinner over the arch's keystone
+-- (0.69.1) the arch reaches into the painted parchment border (Media\Card_Parchment, 5% of the width
+-- each side): the arch art has a clear margin of its own (2.7%), so it starts 1.2% in from the edge
+-- and its stone overlaps the border's inner edge (no flat strip between them); a little more at the
+-- foot, a sliver at the top
+local SIDE = 0.012                -- the arch's inset each side, of the card's width
+local BOTTOM = 0.036              -- under the arch
+local RIM_TOP = 0.004             -- over the arch's keystone
+local PARCH_IN = 0.03             -- the flat parchment only behind the arch (the worn edge stays see-through)
+local SHADOW_PAD = 0.08           -- Media\Card_Shadow: the card's shape blurred, 8% bigger each way
 
 -- (0.69.0, #45) the swirl: a turning, gently pulsing portal of light (added, so the black of the art
 -- vanishes). sw:SetWanted(level): 0 hidden, 1 a hover, 1.25 brighter (you're inside); it fades there
@@ -105,7 +111,21 @@ end
 -- (0.69.0, #31) a dungeon's name as word art (Data\DungeonNames.lua, made by tools/wordart.py): the
 -- texture fitted inside maxW x maxH, keeping its shape. False when that name has none (then the plain
 -- text shows).
-function W.NameArt(name) return type(name) == "string" and ns.DungeonNames and ns.DungeonNames[name:lower()] or nil end
+local artByKey
+function W.NameArt(name)
+	if type(name) ~= "string" or not ns.DungeonNames then return nil end
+	local d = ns.DungeonNames[name:lower()]
+	if d then return d end
+	-- (0.69.1) as the game may say it: "The Hall of Thanes" finds "Hall of Thanes"
+	local D = ns.Dungeons
+	if not (D and D.NameKey) then return nil end
+	if not artByKey then
+		artByKey = {}
+		for n, e in pairs(ns.DungeonNames) do local k = D.NameKey(n) if k then artByKey[k] = e end end
+	end
+	local k = D.NameKey(name)
+	return k and artByKey[k] or nil
+end
 function W.SetNameArt(tex, name, maxW, maxH)
 	local d = W.NameArt(name)
 	if not d then tex:Hide() return false end
@@ -117,31 +137,19 @@ function W.SetNameArt(tex, name, maxW, maxH)
 	return true
 end
 
--- (0.69.0, #32) the name plate in the plaque: a dark recessed panel with a bronze rim, so the gold
--- word art stands out (stands in until the painted Plate_DungeonName art arrives). Returns the panel;
--- anchor it and the rim follows.
+-- (0.69.0, #32) the name plate in the plaque: carved stone with Celtic-knot corners round a recessed
+-- panel (Media\Plate_DungeonName, 512 x 256), so the gold word art stands out. Returns the texture;
+-- anchor it over the plaque. W.PLATE_INNER: the share of it the lettering may use (inside the rim).
+W.PLATE_INNER = { 0.84, 0.70 }
 function W.NamePlate(parent, layer)
-	local fill = parent:CreateTexture(nil, layer or "BORDER", nil, 4)
-	fill:SetColorTexture(0.11, 0.09, 0.07, 1)
-	local shade = parent:CreateTexture(nil, layer or "BORDER", nil, 5)
-	shade:SetColorTexture(1, 1, 1, 1)
-	shade:SetGradient("VERTICAL", CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, 0.55))
-	shade:SetPoint("TOPLEFT", fill, "TOPLEFT")
-	shade:SetPoint("BOTTOMRIGHT", fill, "RIGHT")
-	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
-		local t = parent:CreateTexture(nil, layer or "BORDER", nil, 6)
-		t:SetColorTexture(0.5, 0.37, 0.17, 1)
-		t:SetPoint(e[1], fill, e[1])
-		t:SetPoint(e[2], fill, e[2])
-		if e[3] then t:SetHeight(2) else t:SetWidth(2) end
-	end
-	return fill
+	local t = parent:CreateTexture(nil, layer or "BORDER", nil, 4)
+	t:SetTexture(MEDIA .. "Plate_DungeonName")
+	return t
 end
 
 -- a card's height for its width (the arch's shape plus the rim)
 function W.DungeonCardHeight(width)
-	local m = width * RIM
-	return (width - 2 * m) * RATIO + m + width * RIM_TOP
+	return (width - 2 * width * SIDE) * RATIO + width * BOTTOM + width * RIM_TOP
 end
 
 function W.DungeonCard(parent, width)
@@ -150,17 +158,14 @@ function W.DungeonCard(parent, width)
 	c:SetSize(cw, ch)
 	c.grow = 1.12
 	-- shadow, parchment, edge
-	c.shadow = {}
-	for k, spec in ipairs({ { 3, 0.45 }, { 7, 0.2 } }) do
-		local t = c:CreateTexture(nil, "BACKGROUND", nil, -8)
-		t:SetColorTexture(0, 0, 0, 1)
-		t:SetAlpha(spec[2])
-		t:SetPoint("TOPLEFT", c, "TOPLEFT", spec[1] / 2 + 2, -(spec[1] / 2 + 2))
-		t:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", spec[1], -spec[1])
-		c.shadow[k] = t
-	end
+	-- (0.69.1) a soft drop shadow in the card's own worn shape, down and to the right
+	c.shadow = c:CreateTexture(nil, "BACKGROUND", nil, -8)
+	c.shadow:SetTexture(MEDIA .. "Card_Shadow")
+	c.shadow:SetPoint("TOPLEFT", c, "TOPLEFT", -cw * SHADOW_PAD + 3, ch * SHADOW_PAD - 5)
+	c.shadow:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", cw * SHADOW_PAD + 3, -ch * SHADOW_PAD - 5)
 	c.parch = c:CreateTexture(nil, "BACKGROUND", nil, 1)
-	c.parch:SetAllPoints()
+	c.parch:SetPoint("TOPLEFT", cw * PARCH_IN, -cw * PARCH_IN)
+	c.parch:SetPoint("BOTTOMRIGHT", -cw * PARCH_IN, cw * PARCH_IN)
 	if not (W.TryAtlas and W.TryAtlas(c.parch, "QuestDetailsBackgrounds", "QuestBG-Parchment")) then
 		c.parch:SetTexture("Interface\\QuestFrame\\QuestBG")
 		c.parch:SetTexCoord(0, 0.586, 0, 0.655)
@@ -183,7 +188,7 @@ function W.DungeonCard(parent, width)
 	end
 	-- the arch, filling the card inside the rim
 	local arch = CreateFrame("Frame", nil, c)
-	local w = cw - 2 * cw * RIM
+	local w = cw - 2 * cw * SIDE
 	local h = w * RATIO
 	arch:SetSize(w, h)
 	arch:SetPoint("TOP", c, "TOP", 0, -cw * RIM_TOP)
@@ -201,15 +206,21 @@ function W.DungeonCard(parent, width)
 	c.frameArt = arch:CreateTexture(nil, "ARTWORK")
 	c.frameArt:SetTexture(MEDIA .. "Frame_Dungeon")
 	c.frameArt:SetAllPoints()
+	-- (0.69.1) abandoned: cracks, dirt, soot and moss on the stone, cobwebs in the doorway's corners
+	-- (Media\Card_Ruin, art_convert.py ruin), and the scene a touch dimmer and duller
+	c.ruin = arch:CreateTexture(nil, "ARTWORK", nil, 1)
+	c.ruin:SetTexture(MEDIA .. "Card_Ruin")
+	c.ruin:SetAllPoints()
+	c.art:SetVertexColor(0.9, 0.86, 0.8)
 	-- (0.69.0, #32) the dark name plate in the plaque's hole, under the stone
 	c.plate = W.NamePlate(arch, "BORDER")
-	c.plate:SetPoint("TOPLEFT", arch, "TOPLEFT", ART_L * w - 2, -PLQ_T * h + 2)
-	c.plate:SetPoint("BOTTOMRIGHT", arch, "TOPLEFT", ART_R * w + 2, -PLQ_B * h - 2)
+	c.plate:SetPoint("TOPLEFT", arch, "TOPLEFT", ART_L * w - 3, -PLQ_T * h + 3)
+	c.plate:SetPoint("BOTTOMRIGHT", arch, "TOPLEFT", ART_R * w + 3, -PLQ_B * h - 3)
 	-- (0.69.0, #31) the name as gold word art on it; the plain text when there's none
 	c.nameArt = arch:CreateTexture(nil, "OVERLAY", nil, 1)
 	c.nameArt:SetPoint("CENTER", arch, "TOPLEFT", (ART_L + ART_R) / 2 * w, -(PLQ_T + PLQ_B) / 2 * h)
 	c.nameArt:Hide()
-	c.nameBox = { (ART_R - ART_L) * w - 6, (PLQ_B - PLQ_T) * h - 4 }
+	c.nameBox = { ((ART_R - ART_L) * w + 6) * W.PLATE_INNER[1], ((PLQ_B - PLQ_T) * h + 6) * W.PLATE_INNER[2] }
 	c.name = arch:CreateFontString(nil, "OVERLAY")
 	c.name:SetFont("Fonts\\MORPHEUS.TTF", math.max(9, math.floor(w / 13)), "")
 	c.name:SetTextColor(1, 0.84, 0.45)

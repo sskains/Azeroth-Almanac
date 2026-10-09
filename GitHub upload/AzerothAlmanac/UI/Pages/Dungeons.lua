@@ -144,8 +144,19 @@ end
 
 local function Found()
 	local list = {}
+	-- (0.69.1) one card per dungeon: a record made up by /aa seeddungeons (or kept under a made-up key
+	-- for a WoW Forever dungeon) gives way to the real one once the game has named that dungeon
+	local real = {}
 	for id, rec in pairs(ns.Store:Shown("instance")) do
-		if type(rec) == "table" and (filter == "" or (rec.name or ""):lower():find(filter, 1, true)) then
+		if type(rec) == "table" and type(id) == "number" and id > 0 and not rec.seeded then
+			local k = DG().NameKey(rec.name)
+			if k then real[k] = true end
+		end
+	end
+	for id, rec in pairs(ns.Store:Shown("instance")) do
+		local stand = type(rec) == "table" and (rec.seeded or (type(id) == "number" and id < 0))
+		local k = type(rec) == "table" and DG().NameKey(rec.name)
+		if type(rec) == "table" and not (stand and k and real[k]) and (filter == "" or (rec.name or ""):lower():find(filter, 1, true)) then
 			local lo = DG():Info(id, rec)
 			list[#list + 1] = { id = id, rec = rec, lo = lo or 99, raid = IsRaid(id, rec),
 				isNew = ns.New and ns.New:IsNew("dungeons", rec) or nil }

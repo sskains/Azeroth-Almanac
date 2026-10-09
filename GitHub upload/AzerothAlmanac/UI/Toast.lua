@@ -244,9 +244,12 @@ local function Play(item)
 	ns.doing = "showing an alert"
 	local tier = TierOf(item.quality)
 	local T = TIER[tier]
-	local path = W.FindIcon(item.icon or ns.ICON)
-	frame.icon:SetTexture(path)
-	W.SetArtCoord(frame.icon, path)
+	if W.IsSpec(item.icon) then W.SetTex(frame.icon, item.icon) -- (0.69.1: the game's own gryphon)
+	else
+		local path = W.FindIcon(item.icon or ns.ICON)
+		frame.icon:SetTexture(path)
+		W.SetArtCoord(frame.icon, path)
+	end
 	frame.seal:SetShown(item.journal and true or false)
 	frame.seal.since = item.journal and GetTime() or nil
 	SetBorder(tier)
@@ -258,23 +261,66 @@ local function Play(item)
 			W.TryAtlas(frame.bg, frame.bgAtlas)
 		end
 	end
-	-- everything fits inside the band: the detail top right at its own width, the label left of it,
-	-- the name in the largest font that fits on one line (two lines in a smaller font as a last resort)
-	frame.sub:SetText(item.sub or "")
+	-- (0.69.1) everything always fits, never cut off with "...": the label and the detail share the top
+	-- line when both fit whole (in the normal font, else the small one); otherwise the detail drops
+	-- to its own small line under the name. The name: the largest font that fits on one line, else two
+	-- lines, else three in the small font.
 	local hasSub = (item.sub or "") ~= ""
+	frame.sub:SetText(item.sub or "")
+	frame.title:SetText(item.title or "")
+	frame.sub:SetWidth(0)
+	frame.sub:SetFontObject(GameFontNormalSmall)
+	frame.sub:SetWordWrap(false)
+	if frame.sub.SetMaxLines then frame.sub:SetMaxLines(1) end
+	frame.title:SetWordWrap(false)
+	if frame.title.SetMaxLines then frame.title:SetMaxLines(1) end
 	local subW = hasSub and (tonumber(frame.sub:GetStringWidth()) or 0) or 0
-	if subW > 96 then subW = 96 end
-	frame.sub:SetWidth(hasSub and subW + 2 or 1)
+	local shareTop = not hasSub
+	if hasSub then
+		for _, name in ipairs({ "GameFontNormal", "GameFontNormalSmall" }) do
+			local f = _G[name]
+			if f then
+				frame.title:SetFontObject(f)
+				if (tonumber(frame.title:GetStringWidth()) or 0) + subW + 10 <= AVAIL then shareTop = true break end
+			end
+		end
+	end
 	frame.title:ClearAllPoints()
 	frame.title:SetPoint("TOPLEFT", frame.icon, "TOPRIGHT", 12, 2)
-	frame.title:SetPoint("RIGHT", frame, "RIGHT", -26 - (hasSub and subW + 8 or 0), 0)
-	frame.title:SetText(item.title or "")
-	Fit(frame.title, AVAIL - (hasSub and subW + 8 or 0), { "GameFontNormal", "GameFontNormalSmall" })
+	frame.sub:ClearAllPoints()
+	frame.text:ClearAllPoints()
+	frame.text:SetPoint("RIGHT", -26, 0)
+	if shareTop then
+		frame.title:SetPoint("RIGHT", frame, "RIGHT", -26 - (hasSub and subW + 10 or 0), 0)
+		if not hasSub then Fit(frame.title, AVAIL, { "GameFontNormal", "GameFontNormalSmall" }) end
+		frame.sub:SetPoint("TOPRIGHT", -26, -27)
+		frame.sub:SetWidth(hasSub and subW + 2 or 1)
+		frame.sub:SetJustifyH("RIGHT")
+		frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 12, -14)
+	else
+		frame.title:SetPoint("RIGHT", frame, "RIGHT", -26, 0)
+		if not Fit(frame.title, AVAIL, { "GameFontNormal", "GameFontNormalSmall" }) then
+			frame.title:SetWordWrap(true)
+			if frame.title.SetMaxLines then frame.title:SetMaxLines(2) end
+		end
+		-- the name a little higher, the detail under it
+		frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 12, -6)
+		frame.sub:SetPoint("TOPLEFT", frame.text, "BOTTOMLEFT", 0, -3)
+		frame.sub:SetPoint("RIGHT", frame, "RIGHT", -26, 0)
+		frame.sub:SetJustifyH("LEFT")
+		frame.sub:SetWordWrap(true)
+		if frame.sub.SetMaxLines then frame.sub:SetMaxLines(2) end
+	end
 	frame.text:SetText(item.text or "")
 	if not Fit(frame.text, AVAIL, { "GameFontNormalLarge", "GameFontNormalMed3", "GameFontNormalMed2", "GameFontNormal" }) then
-		frame.text:SetFontObject(W.Font("GameFontNormal", "GameFontHighlight"))
 		frame.text:SetWordWrap(true)
+		frame.text:SetFontObject(W.Font("GameFontNormal", "GameFontHighlight"))
 		if frame.text.SetMaxLines then frame.text:SetMaxLines(2) end
+		-- (still more than two lines: three in the small font)
+		if (tonumber(frame.text:GetStringWidth()) or 0) > AVAIL * 2 then
+			frame.text:SetFontObject(W.Font("GameFontNormalSmall", "GameFontHighlightSmall"))
+			if frame.text.SetMaxLines then frame.text:SetMaxLines(3) end
+		end
 	end
 	if not (item.text or ""):find("^|c") then
 		local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[tier]
@@ -403,7 +449,8 @@ ns:On("DISCOVERY", function(kind, id, rec, journalText, quiet)
 		sub = (rec.lo and (L["Level %s"]):format(rec.lo == -1 and "??" or tostring(rec.lo)) or "") .. (rec.type and (" " .. rec.type) or "")
 		tier = CreatureTier(rec)
 	end
-	Toast:Show(k.title, rec.name or journalText, sub, k.icon, tier, nil, true)
+	-- (0.69.1) the kind's art as it is now (a flight path's depends on your faction, known after login)
+	Toast:Show(k.title, rec.name or journalText, sub, W.KindArt(kind) or k.icon, tier, nil, true)
 end)
 
 -- tier ups, level ups and milestones: each sender gives its tier (levels and milestones, fully explored
@@ -419,11 +466,14 @@ end)
 function Toast:Test()
 	Toast:Show(L["New place discovered"], "The Dagger Hills of Westbrook Garrison", "Westfall", W.KindArt("subzone"), 1, true, true)
 	Toast:Show(L["New zone discovered"], "Westfall", L["Eastern Kingdoms"], W.KindArt("zone"), 2, true, true)
+	-- (0.69.1) the flight path toast
+	Toast:Show(L["New flight path"], "Sentinel Hill", "Westfall", W.KindArt("flight"), 2, true, true)
 	Toast:Show(ns.Bestiary and ns.Bestiary.TIERS[4] or L["Master Hunter"], "Riverpaw Outrunner", nil, ns.Bestiary and ns.Bestiary:TierIcon(4), 3, true)
 	Toast:Show(L["Milestone reached"], L["First elite"], nil, { "Ability_Warrior_BattleShout" }, 4, true, true)
 	Toast:Show(L["Level %d"]:format(60), "Westfall", nil, W.KindArt("level"), 5, true, true)
 	if frame then
 		local a = LootArt()
 		ns.Print(("toast art: background %s, border %s"):format(tostring(frame.bgAtlas), tostring(a.border or "loottoast-itemborder-*")))
+
 	end
 end

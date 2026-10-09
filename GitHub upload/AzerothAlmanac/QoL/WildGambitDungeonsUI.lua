@@ -219,12 +219,21 @@ local function Card()
 	c.parch = c:CreateTexture(nil, "BACKGROUND", nil, 2)
 	-- (0.69.0, #33) now a parchment card round the arch, its edge the creature cards' painted border
 	-- (Media\Card_Parchment), as on the Dungeons page's cards; a sliver over the keystone
-	local rim = CARD_W * 0.055
-	c.parch:SetPoint("TOPLEFT", c, "TOPLEFT", -rim, CARD_W * 0.008)
-	c.parch:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", rim, -rim)
+	-- (0.69.1) the arch overlaps the border's inner edge (its art has a clear margin of 2.7%); the flat
+	-- parchment only behind the arch, so the border's worn edge stays see-through; a soft drop shadow
+	-- in the card's shape
+	local rim = CARD_W * 0.026
 	c.border = c:CreateTexture(nil, "BACKGROUND", nil, 3)
 	c.border:SetTexture(MEDIA .. "Card_Parchment")
-	c.border:SetAllPoints(c.parch)
+	c.border:SetPoint("TOPLEFT", c, "TOPLEFT", -rim, CARD_W * 0.004)
+	c.border:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", rim, -CARD_W * 0.02)
+	c.parch:SetPoint("TOPLEFT", c.border, "TOPLEFT", CARD_W * 0.03, -CARD_W * 0.03)
+	c.parch:SetPoint("BOTTOMRIGHT", c.border, "BOTTOMRIGHT", -CARD_W * 0.03, CARD_W * 0.03)
+	c.cardShadow = c:CreateTexture(nil, "BACKGROUND", nil, 1)
+	c.cardShadow:SetTexture(MEDIA .. "Card_Shadow")
+	local bw, bh = CARD_W + 2 * rim, CARD_H + CARD_W * 0.024
+	c.cardShadow:SetPoint("TOPLEFT", c.border, "TOPLEFT", -bw * 0.08 + 3, bh * 0.08 - 5)
+	c.cardShadow:SetPoint("BOTTOMRIGHT", c.border, "BOTTOMRIGHT", bw * 0.08 + 3, -bh * 0.08 - 5)
 	local W = A.Widgets
 	if not (W and W.TryAtlas and W.TryAtlas(c.parch, "QuestDetailsBackgrounds", "QuestBG-Parchment")) then
 		c.parch:SetTexture("Interface\\QuestFrame\\QuestBG")
@@ -238,6 +247,10 @@ local function Card()
 	c.frameArt = c:CreateTexture(nil, "ARTWORK")
 	c.frameArt:SetTexture(MEDIA .. "Frame_Dungeon")
 	c.frameArt:SetAllPoints()
+	-- (0.69.1) the abandoned look of the Dungeons page's cards: cracks, dirt, moss, cobwebs
+	c.ruin = c:CreateTexture(nil, "ARTWORK", nil, 1)
+	c.ruin:SetTexture(MEDIA .. "Card_Ruin")
+	c.ruin:SetAllPoints()
 	-- the torches: a glow on each flame, a softer one on the stone round it; each flickers on its own
 	c.torches = {}
 	for i, at in ipairs(TORCH) do
@@ -272,8 +285,8 @@ local function Card()
 	local W = A.Widgets
 	if W and W.NamePlate then
 		c.plate = W.NamePlate(c, "BORDER")
-		c.plate:SetPoint("TOPLEFT", c.plaque, "TOPLEFT", -2, 2)
-		c.plate:SetPoint("BOTTOMRIGHT", c.plaque, "BOTTOMRIGHT", 2, -2)
+		c.plate:SetPoint("TOPLEFT", c.plaque, "TOPLEFT", -3, 3)
+		c.plate:SetPoint("BOTTOMRIGHT", c.plaque, "BOTTOMRIGHT", 3, -3)
 	end
 	c.nameArt = c:CreateTexture(nil, "OVERLAY", nil, 1)
 	c.nameArt:SetPoint("CENTER", c.plaque, "CENTER")
@@ -354,7 +367,8 @@ local function Reveal(side, def, lasting)
 	end
 	c.title:SetText(def.dungeon)
 	local W = A.Widgets
-	local art = W and W.SetNameArt and W.SetNameArt(c.nameArt, def.dungeon, (ART_R - ART_L) * CARD_W - 6, (PLQ_B - PLQ_T) * CARD_H - 4)
+	local inner = W and W.PLATE_INNER or { 0.84, 0.7 }
+	local art = W and W.SetNameArt and W.SetNameArt(c.nameArt, def.dungeon, ((ART_R - ART_L) * CARD_W + 6) * inner[1], ((PLQ_B - PLQ_T) * CARD_H + 6) * inner[2])
 	c.title:SetShown(not art)
 	c.event:SetText(def.event)
 	c.rules:SetText(def.text)

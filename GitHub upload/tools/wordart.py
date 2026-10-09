@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 SIZE = 60          # letter size in pixels (sharp at the card's plaque and the page header)
 SHEET_W = 1024
+DISTRESS = True    # (0.69.1) weathered, abandoned gilding (see distress)
 # names the game uses that differ from the list's (GetInstanceInfo), drawn too
 ALIASES = {"Blackrock Spire": False, "Sunken Temple": False}
 
@@ -93,11 +94,46 @@ def render(font_path, name, colours, size=SIZE):
     over(np.zeros((H, W, 3)), sh * 0.85)
     over(np.ones((H, W, 3)) * np.array([70, 38, 10]), np.clip(o2, 0, 1) * 0.9)
     over(np.ones((H, W, 3)) * np.array([40, 20, 5]), o1)
+    if DISTRESS:
+        col, a = distress(name, col, a, size)
     over(col, a)
     # (colours stored straight, not premultiplied: the game blends with alpha)
     rgb = np.where(out[..., 3:] > 0, out[..., :3] / np.maximum(out[..., 3:], 1e-6), 0)
     img = Image.fromarray(np.dstack([rgb, out[..., 3] * 255]).astype(np.uint8), "RGBA")
     return img.crop(img.getbbox())
+
+
+def distress(name, col, a, size):
+    """(0.69.1) an abandoned, weathered look: tarnish (a little colour drained), dark grime pooled in
+    blotches and down the letters like old drips, chips in the gilding (the dark outline shows through)
+    and a few fine scratches. Seeded by the name, so a re-run gives the same marks."""
+    import zlib
+    from scipy import ndimage
+    H, W = a.shape
+    rng = np.random.default_rng(zlib.crc32(name.encode()))
+    def noise(sig):
+        n = ndimage.gaussian_filter(rng.random((H, W)), sig)
+        return (n - n.min()) / max(1e-6, n.max() - n.min())
+    grey = col.mean(axis=2, keepdims=True)
+    col = col * 0.7 + grey * 0.3                                        # tarnish
+    grime = np.clip((noise(size * 0.10) - 0.35) / 0.35, 0, 1)
+    drip = np.clip((ndimage.gaussian_filter(rng.random((1, W)), 1.2).repeat(H, 0) - 0.55) / 0.2, 0, 1)
+    drip *= np.linspace(0.2, 1.0, H)[:, None]                            # (heavier toward the foot)
+    m = np.clip(0.65 * grime + 0.5 * drip, 0, 0.8)[..., None]
+    col = col * (1 - m) + np.array([58, 40, 22]) * m
+    chips = np.clip((noise(size * 0.02) - 0.7) / 0.06, 0, 1)
+    a = a * (1 - 0.9 * chips)
+    # fine scratches across the letters
+    sc = Image.new("L", (W, H), 0)
+    d = ImageDraw.Draw(sc)
+    for _ in range(max(3, W // 60)):
+        x0, y0 = rng.uniform(0, W), rng.uniform(0, H)
+        ang = rng.uniform(-0.6, 0.6) + (0 if rng.random() < 0.5 else np.pi / 2)
+        ln = rng.uniform(size * 0.4, size * 1.2)
+        d.line((x0, y0, x0 + np.cos(ang) * ln, y0 + np.sin(ang) * ln), fill=200, width=1)
+    scr = np.asarray(sc).astype(float)[..., None] / 255
+    col = col * (1 - 0.55 * scr)
+    return np.clip(col, 0, 255), a
 
 
 def dungeon_names(addon):

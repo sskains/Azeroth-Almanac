@@ -30,8 +30,8 @@ local MAX_POINTS = 800       -- the newest points in the frame (the oldest are l
 local GOLD = { 1, 0.82, 0.3 }
 -- the marks on the line (Modules/JourneyRecorder.lua's kinds)
 local PIN_ART = {
-	F = { icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01" }, round = true },
-	f = { icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01" }, round = true },
+	F = { kindArt = "flight", scale = 1.4 },
+	f = { kindArt = "flight", scale = 1.4 },
 	h = { icon = { "INV_Misc_Rune_01", 134414 }, round = true },
 	d = { icon = { "INV_Misc_Bone_HumanSkull_01", "Ability_Rogue_FeignDeath" }, round = true },
 	i = { icon = { "Interface\\AddOns\\AzerothAlmanac\\Media\\FX_DungeonPortal" }, add = true, scale = 1.8 },
@@ -338,9 +338,13 @@ function W.JourneyPane(parent, opts)
 			local t = pins[np]
 			if not t then t = overlay:CreateTexture(nil, "OVERLAY", nil, 4) pins[np] = t end
 			local art = PIN_ART[kind] or PIN_ART.jump
-			t:SetTexture(W.FindIcon(art.icon))
 			t:SetBlendMode(art.add and "ADD" or "BLEND")
-			if art.round then t:SetTexCoord(0.08, 0.92, 0.08, 0.92) else t:SetTexCoord(0, 1, 0, 1) end
+			if art.kindArt then
+				W.SetTex(t, W.KindArt(art.kindArt)) -- (0.69.1: flights: the game's own gryphon)
+			else
+				t:SetTexture(W.FindIcon(art.icon))
+				if art.round then t:SetTexCoord(0.08, 0.92, 0.08, 0.92) else t:SetTexCoord(0, 1, 0, 1) end
+			end
 			local s = math.max(12, w / 34) * (art.scale or 1)
 			t:SetSize(s, s)
 			t:ClearAllPoints()

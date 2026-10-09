@@ -10,7 +10,7 @@ local L = ns.L
 local W = ns.Widgets
 
 -- (the page key stays "trainers", so saved tabs and links keep working)
-local page = { key = "trainers", title = L["Recipes"], icon = { "INV_Scroll_04", "INV_Misc_Book_08", "Trade_Engraving" }, order = 9 }
+local page = { key = "trainers", title = L["Recipes"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Recipes", order = 9 }   -- (0.69.1: the painted recipe book)
 local list, detail, countText, filterButton, nameText, subText, iconTex
 local filter, statusFilter = "", nil
 local shown -- { kind = "spell", id } or { kind = "group", group }

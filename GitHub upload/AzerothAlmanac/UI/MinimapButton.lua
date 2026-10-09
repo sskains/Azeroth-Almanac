@@ -46,7 +46,7 @@ local function MenuItems()
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Gathering", text = Named(L["Gathering"], "gathering"), run = function() ns.UI:Open("gathering") end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Dungeons", text = Named(L["Dungeons"], "dungeons"), run = function() ns.UI:Open("dungeons") end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", text = Named(L["People"], "townsfolk"), run = function() ns.UI:Open("townsfolk") end },
-		{ icon = { "INV_Scroll_04", "INV_Misc_Book_08" }, text = Named(L["Recipes"], "trainers"), run = function() ns.UI:Open("trainers") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Recipes", text = Named(L["Recipes"], "trainers"), run = function() ns.UI:Open("trainers") end },
 		-- the mini games under their own plate, Z to A
 		{ section = true, text = L["Mini Games"] },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit", text = L["Wild Gambit"], run = function() ns.QoL.WildGambit:Toggle() end },

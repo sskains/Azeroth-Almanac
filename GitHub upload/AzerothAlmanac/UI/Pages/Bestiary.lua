@@ -1006,6 +1006,19 @@ function page:CreatureBlocks(npc)
 	return ok and b or nil
 end
 
+-- (0.69.1) opened from the Journal's Research: only the creatures at one research tier (nil: every tier), at the top
+function page:ShowTier(t)
+	ns.UI:Open("bestiary")
+	tierFilter = t
+	-- (every type and zone, so the whole tier shows)
+	kindFilter, zoneFilter = nil, nil
+	if filterButton then filterButton:SetText(FilterLabel()) end
+	if zoneButton then zoneButton:SetText(ZoneLabel()) end
+	if tierButton then tierButton:SetText(TierLabel()) end
+	self:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
 function page:ShowCreature(npc)
 	ns.UI:Open("bestiary")
 	shown = npc

@@ -22,8 +22,10 @@ local function Index()
 	byID, byName, bossOf = {}, {}, {}
 	for _, d in ipairs(ns.DB and ns.DB.dungeon or {}) do
 		if d.id then byID[d.id] = byID[d.id] or {} table.insert(byID[d.id], d) end
-		byName[d.name] = byName[d.name] or {}
-		table.insert(byName[d.name], d)
+		-- (0.69.1) by name as the game may say it too: "The Hall of Thanes" finds "Hall of Thanes"
+		local key = D.NameKey(d.name) or d.name
+		byName[key] = byName[key] or {}
+		table.insert(byName[key], d)
 		for _, b in ipairs(d.bosses or {}) do
 			if b.npc then bossOf[b.npc] = d end
 		end
@@ -33,7 +35,7 @@ end
 -- the database entries for a dungeon (two for Blackrock Spire: lower and upper)
 function D:Entries(id, name)
 	Index()
-	return byID[id] or (name and byName[name]) or {}
+	return byID[id] or (name and byName[D.NameKey(name) or name]) or {}
 end
 
 -- is this NPC a dungeon boss in the records?

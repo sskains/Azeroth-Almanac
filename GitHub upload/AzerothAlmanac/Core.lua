@@ -45,8 +45,10 @@ function ns.Readable(v)
 	return v
 end
 
+-- (0.69.1) every chat line from the Almanac: the logo, then "Azeroth Almanac:" in the logo's crimson
+ns.CHAT_PREFIX = "|T" .. ns.ICON .. ":14:14:0:0|t |cffd8342b" .. L["Azeroth Almanac"] .. ":|r "
 function ns.Print(msg)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff" .. L["Azeroth Almanac"] .. ":|r " .. tostring(msg))
+	DEFAULT_CHAT_FRAME:AddMessage(ns.CHAT_PREFIX .. tostring(msg))
 end
 
 function ns.Debug(msg)

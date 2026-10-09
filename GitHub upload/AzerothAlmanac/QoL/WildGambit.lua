@@ -3088,8 +3088,10 @@ local function Build()
 	over:Hide()
 	frame.over = over
 
-	ns.NativeWindow(frame, { title = "Wild Gambit", icon = "Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth", close = close, byline = sub })
-	WG.AddEmblem("Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth") -- (a bigger icon in the gold elite frame)
+	-- (0.69.1) the painted Wild Gambit icon (three cards, coin, vines), as in the minimap menu
+	local winIcon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit"
+	ns.NativeWindow(frame, { title = "Wild Gambit", icon = winIcon, close = close, byline = sub })
+	WG.AddEmblem(winIcon) -- (a bigger icon in the gold elite frame)
 	-- tuck the window into a small floating bar (the game goes on; click the bar to come back)
 	local mini = CreateFrame("Button", nil, frame)
 	mini:SetSize(24, 24)

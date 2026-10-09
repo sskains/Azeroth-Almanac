@@ -138,21 +138,26 @@ W.KIND = {
 	zone = { label = L["Zone"], icon = { 4624629, "INV_Scroll_03", "INV_Misc_Map08" }, art = "Tab_Places" },   -- 4624629 picked in game with /aa whatis
 	subzone = { label = L["Place"], icon = { "INV_Misc_Map02" }, art = "Tab_Places" },
 	instance = { label = L["Dungeon"], icon = { 655958, "INV_Misc_Key_14", "INV_Misc_Key_03" }, art = "Tab_Dungeons" },   -- 655958 picked in game with /aa whatis
-	level = { label = L["Level"], icon = { "Spell_Holy_SurgeOfLight", "Spell_Holy_HolyBolt", "Spell_ChargePositive" }, art = "Tab_Characters" },
+	level = { label = L["Level"], icon = { "Spell_Holy_SurgeOfLight", "Spell_Holy_HolyBolt", "Spell_ChargePositive" }, art = "Icon_Level" },
 	character = { label = L["Character"], icon = { "INV_Misc_GroupNeedMore", "Achievement_Character_Human_Male", "INV_Misc_Head_Human_01" }, art = "Tab_Characters" },
-	item = { label = L["Item"], icon = { 515958, "INV_Chest_Chain_05", "INV_Misc_Bag_08" } },   -- 515958 picked in game with /aa whatis
-	merchant = { label = L["Merchant"], icon = { "INV_Misc_Coin_02", "INV_Misc_Coin_01" }, art = "Tab_People" },
+	item = { label = L["Item"], icon = { 515958, "INV_Chest_Chain_05", "INV_Misc_Bag_08" }, art = "Tab_Items" },   -- (art: the Journal's Items card; an item's own entry and toast still show the item)   -- 515958 picked in game with /aa whatis
+	merchant = { label = L["Merchant"], icon = { "INV_Misc_Coin_02", "INV_Misc_Coin_01" }, art = "Icon_Merchant" },
 	creature = { label = L["Creature"], icon = { 656556, "INV_Misc_Head_Dragon_01", "Ability_Hunter_Pet_Wolf" }, art = "Tab_Creatures" },   -- 656556 picked in game with /aa whatis
 	quest = { label = L["Quest"], icon = { 979575, "INV_Misc_Note_01", "INV_Letter_15" }, art = "Tab_Quests" },   -- 979575 picked in game with /aa whatis
 	npc = { label = L["Quest giver"], icon = { "INV_Misc_Head_Human_01", "Achievement_Character_Human_Male" }, art = "Tab_People" },
 	object = { label = L["Quest object"], icon = { "INV_Misc_Note_02", "INV_Scroll_03" } },
-	trainer = { label = L["Trainer"], icon = { "INV_Misc_Book_08", "INV_Scroll_04" }, art = "Tab_People" },
-	spell = { label = L["Spell or recipe"], icon = { "INV_Scroll_04", "INV_Misc_Book_08" } },
+	trainer = { label = L["Trainer"], icon = { "INV_Misc_Book_08", "INV_Scroll_04" }, art = "Icon_Training" },
+	spell = { label = L["Spell or recipe"], icon = { "INV_Scroll_04", "INV_Misc_Book_08" }, art = "Tab_Recipes" },
 	townsfolk = { label = L["People"], icon = { 8197123, "INV_Misc_Spyglass_03", "INV_Misc_Head_Human_01" }, art = "Tab_People" },   -- 8197123 picked in game with /aa whatis
 	mailbox = { label = L["Mailbox"], icon = { "INV_Letter_15" } },
-	flight = { label = L["Flight path"], icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" }, art = "Tab_Places" },
+	flight = { label = L["Flight path"], icon = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" }, art = "Tab_Places",
+		-- (0.69.1) the game's own gryphon off the action bar's end cap was tried (W.EndCapArt, still there):
+		-- at icon size it read poorly. Painted flight mounts by the player's faction instead (artByFaction);
+		-- a faction without one yet keeps the Places painting
+		artByFaction = { Alliance = "Icon_Flight_Gryphon", Horde = "Icon_Flight_WindRider" },
+	},
 	node = { label = L["Gathering"], icon = { 237271, "Trade_Herbalism", "INV_Misc_Herb_07" }, art = "Tab_Gathering" },   -- 237271 picked in game with /aa whatis
-	fishing = { label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" }, art = "Tab_Gathering" },
+	fishing = { label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" }, art = "Icon_Fishing" },
 	milestone = { label = L["Milestone"], icon = { "INV_Misc_Ribbon_01", "Spell_Holy_ChampionsBond", "INV_Misc_Note_06" } },
 }
 -- creature types: the icon shown in Bestiary rows
@@ -201,8 +206,75 @@ end
 -- or the game icon when the kind has none (items, milestones keep their own)
 function W.KindArt(kind)
 	local k = W.KIND[kind]
-	if k and k.art then return "Interface\\AddOns\\AzerothAlmanac\\Media\\" .. k.art end
-	return W.KindIcon(kind)
+	local art = k and k.art
+	-- (0.69.1) art that depends on your faction (flight paths: the gryphon for the Alliance)
+	if k and k.artByFaction and UnitFactionGroup then
+		local ok, faction = pcall(UnitFactionGroup, "player")
+		faction = ok and ns.Readable(faction) or nil
+		art = (faction and k.artByFaction[faction]) or art
+	end
+	local painted = art and ("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. art)
+	-- (0.69.1) art from the game itself: a spec W.SetTex draws (atlas, file and coords), the painting behind it
+	if k and k.gameArt then
+		local g = k.gameArt
+		return { endCap = g.endCap, atlas = g.atlas, file = g.file, coords = g.coords, fallback = painted or W.KindIcon(kind) }
+	end
+	return painted or W.KindIcon(kind)
+end
+
+-- (0.69.1) a texture spec ({ atlas, file, coords, fallback }, from W.KindArt) rather than a plain path
+function W.IsSpec(v) return type(v) == "table" and (v.atlas or v.file or v.endCap) ~= nil end
+
+-- draw a path, an icon ID or a spec on a texture: a spec tries the game's atlas, then its file, then
+-- the fallback; a plain path gets W.SetArtCoord (painted art whole, game icons trimmed)
+-- (0.69.1) the action bar's own end-cap art (the gryphon), read off the client's frame: its atlas, or
+-- its file and texture coordinates; nil when there's no such frame
+local endCapArt
+function W.EndCapArt()
+	if endCapArt then return endCapArt end -- (a miss isn't kept: the bar may not be built yet)
+	local function Cap(bar, key)
+		local caps = bar and bar.EndCaps
+		local cap = caps and caps[key]
+		return cap and (cap.Texture or (cap.GetAtlas and cap)) or nil
+	end
+	local t = Cap(_G.MainActionBar, "LeftEndCap") or Cap(_G.MainActionBar, "RightEndCap") or Cap(_G.MainMenuBar, "LeftEndCap")
+		or (_G.MainMenuBarArtFrame and _G.MainMenuBarArtFrame.LeftEndCap) or _G.MainMenuBarLeftEndCap
+	if t and t.GetAtlas then
+		local ok, atlas = pcall(t.GetAtlas, t)
+		atlas = ok and ns.Readable(atlas) or nil
+		if type(atlas) == "string" and atlas ~= "" then endCapArt = { atlas = atlas } return endCapArt end
+	end
+	if t and t.GetTexture then
+		local ok, file = pcall(t.GetTexture, t)
+		file = ok and ns.Readable(file) or nil
+		if file then
+			local c = { pcall(t.GetTexCoord, t) }
+			endCapArt = { file = file, coords = (c[1] and #c >= 9) and { c[2], c[8], c[3], c[9] } or nil }
+		end
+	end
+	return endCapArt
+end
+
+function W.SetTex(tex, v)
+	if W.IsSpec(v) then
+		local cap = v.endCap and W.EndCapArt()
+		if cap then
+			if cap.atlas and TryAtlas(tex, cap.atlas) then return true end
+			if cap.file and tex:SetTexture(cap.file) ~= false then
+				tex:SetTexCoord(unpack(cap.coords or { 0, 1, 0, 1 }))
+				return true
+			end
+		end
+		if v.atlas and TryAtlas(tex, unpack(type(v.atlas) == "table" and v.atlas or { v.atlas })) then return true end
+		if v.file and tex:SetTexture(v.file) ~= false then
+			tex:SetTexCoord(unpack(v.coords or { 0, 1, 0, 1 }))
+			return true
+		end
+		v = v.fallback
+	end
+	tex:SetTexture(v)
+	W.SetArtCoord(tex, v)
+	return v ~= nil
 end
 
 -- painted art fills its square (no game-icon border to trim): the full texture, or an icon's trimmed middle
@@ -1532,7 +1604,11 @@ local function FillSlot(f, e)
 		end
 		name = name or ("spell " .. e.spell)
 	end
-	f.icon:SetTexture(icon or W.FindIcon({ "INV_Misc_QuestionMark" }))
+	if W.IsSpec(icon) then W.SetTex(f.icon, icon) -- (0.69.1: the game's own art, e.g. the gryphon)
+	else
+		f.icon:SetTexture(icon or W.FindIcon({ "INV_Misc_QuestionMark" }))
+		f.icon:SetTexCoord(0, 1, 0, 1)
+	end
 	local boxed = f.look == "box"
 	local q = e.item and select(4, pcall((C_Item and C_Item.GetItemInfo) or GetItemInfo, e.item))
 	q = type(q) == "number" and q or nil

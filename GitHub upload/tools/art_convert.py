@@ -17,11 +17,15 @@
                                                          squares keyed out by saturation (default 128)
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
                                                          outside the ring made transparent, squared (default 256)
-  python art_convert.py parchment <frame.png> <out.tga> [W H]   (0.69.0, #33) a creature card frame on
+  python art_convert.py ruin <Frame_Dungeon.tga> <out.tga>      (0.69.1) a see-through overlay for the dungeon arch: cracks,
+                                                         dirt and soot on the stone, moss, cobwebs in the doorway (scipy)
+  python art_convert.py parchment <frame.png> <out.tga> [W H] [shadow=<out.tga>]   (0.69.0, #33) a creature card frame on
                                                          magenta -> only its painted parchment border (the
                                                          card's edge to the iron frame), the inside clear; a
                                                          gap where an ornament sat on it (the top gem) filled
-                                                         from beside it (default 256 x 512)
+                                                         from beside it (default 256 x 512); 0.69.1: the outer
+                                                         edge worn (nibbled, darkened), and with shadow= the
+                                                         card's soft drop shadow (8% bigger each way; scipy)
 
 A frame's layout (fractions of the CARD, the parchment rectangle):
   window = the magenta art window, panel = the dark text panel, band = between them,
@@ -29,7 +33,7 @@ A frame's layout (fractions of the CARD, the parchment rectangle):
 """
 import struct, sys
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 def write_tga(img, path):
     img = img.convert("RGBA")
@@ -314,7 +318,9 @@ def edge_clean(path, width=2):
     a[..., 2] -= spill
     write_tga(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), path)
 
-def parchment(src, dst, w=256, h=512, depth=34, dark=135):
+SHADOW_PAD = 0.08
+
+def parchment(src, dst, w=256, h=512, depth=34, dark=135, shadow=None):
     from PIL import ImageFilter
     im = np.asarray(Image.open(src).convert("RGB")).astype(float)
     r, g, b = im[..., 0], im[..., 1], im[..., 2]
@@ -371,9 +377,132 @@ def parchment(src, dst, w=256, h=512, depth=34, dark=135):
         for i in [i for i in range(lo, hi) if ds[i] < med - 4]:
             cand = [j for j in good if abs(j - i) > 8] or good
             put(i, strips[min(cand, key=lambda j: abs(j - i))])
+    # (0.69.1) worn, tattered outer edge: the card's edge nibbled in irregularly (soft noise, a few
+    # deeper tears), and darkened toward the edge like old paper, so it isn't a clean rectangle
+    from scipy import ndimage
+    rng = np.random.default_rng(7)
+    solid = out[..., 3] > 128
+    filled = ndimage.binary_fill_holes(solid)               # the card's whole shape, inside included
+    d = ndimage.distance_transform_edt(filled)               # distance in from the card's outer edge
+    n1 = ndimage.gaussian_filter(rng.random((H, W)), 2.0)
+    n2 = ndimage.gaussian_filter(rng.random((H, W)), 7.0)
+    n1 = (n1 - n1.min()) / (n1.max() - n1.min())
+    n2 = (n2 - n2.min()) / (n2.max() - n2.min())
+    bite = 1.0 + 5.0 * n1 + 14.0 * np.clip((n2 - 0.66) / 0.34, 0, 1) ** 2    # px eaten from the edge
+    keep = np.clip((d - bite) / 1.4, 0, 1)
+    out[..., 3] *= keep
+    burn = 1 - 0.38 * np.exp(-np.maximum(d - bite, 0) / 3.5)
+    out[..., :3] *= burn[..., None]
+    # (0.69.1) an abandoned card: water stains and grime blotches, and a few small scorch marks
+    stain = np.clip((ndimage.gaussian_filter(rng.random((H, W)), 9.0) - 0.5) * 9, 0, 1)
+    out[..., :3] *= (1 - 0.32 * stain)[..., None]
+    out[..., :3] += (np.array([-6, -14, -22]) * stain[..., None])         # (browner where stained)
+    for _ in range(4):
+        cy, cx = rng.uniform(0, H), rng.choice([rng.uniform(0, W * 0.06), rng.uniform(W * 0.94, W)])
+        r = rng.uniform(3, 7)
+        yy, xx = np.ogrid[:H, :W]
+        dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+        scorch = np.clip(1 - dist / (r * 2.2), 0, 1) ** 1.6
+        out[..., :3] *= (1 - 0.75 * scorch)[..., None]
     img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
     write_tga(img.resize((w, h), Image.LANCZOS), dst)
     print(f"parchment border {W} x {H} -> {w} x {h}: sides {np.median([thick(A[y, :L]) for y in range(H)]) / W:.3f} of the width")
+    if shadow:
+        # the card's soft drop shadow: its worn shape, filled, blurred, black; drawn PAD of the card's
+        # width / height bigger each way (the blur spills past the card)
+        shape = ndimage.binary_fill_holes(out[..., 3] > 128).astype(float)
+        pw, ph = int(W * SHADOW_PAD), int(H * SHADOW_PAD)
+        big = np.zeros((H + 2 * ph, W + 2 * pw))
+        big[ph:ph + H, pw:pw + W] = shape
+        big = ndimage.gaussian_filter(big, W * 0.022)
+        sh = np.zeros(big.shape + (4,))
+        sh[..., 3] = np.clip(big * 255, 0, 255)
+        write_tga(Image.fromarray(sh.astype(np.uint8), "RGBA").resize((w, h), Image.LANCZOS), shadow)
+        print(f"shadow -> {shadow} (pad {SHADOW_PAD} of the card each way)")
+
+def ruin(src, dst, seed=11):
+    """(0.69.1) a see-through overlay for the dungeon card's stone arch (Media\\Frame_Dungeon): cracks,
+    dirt and soot on the stone only, a little moss, and cobwebs in the doorway's upper corners. Same size
+    as the frame; drawn over it."""
+    from scipy import ndimage
+    from PIL import ImageDraw
+    fr = np.asarray(Image.open(src).convert("RGBA")).astype(float)
+    H, W = fr.shape[:2]
+    S = 2                                                   # (drawn at twice the size, then reduced)
+    stone = ndimage.zoom(fr[..., 3] / 255.0, S, order=1) > 0.6
+    filled = ndimage.binary_fill_holes(stone)
+    window = filled & ~stone                                 # the doorway (the picture shows there)
+    HH, WW = stone.shape
+    rng = np.random.default_rng(seed)
+    out = np.zeros((HH, WW, 4))
+    def put(rgb, alpha):
+        al = alpha[..., None]
+        out[..., :3] = rgb * al + out[..., :3] * (1 - al)
+        out[..., 3] = alpha + out[..., 3] * (1 - alpha)
+    def noise(sig):
+        n = ndimage.gaussian_filter(rng.random((HH, WW)), sig)
+        return (n - n.min()) / max(1e-6, n.max() - n.min())
+    # dirt and soot in blotches, heavier low down and round the stone's edges
+    edge = ndimage.distance_transform_edt(stone)
+    dirt = np.clip((noise(14) - 0.45) / 0.35, 0, 1) * 0.55 + np.exp(-edge / 6) * 0.25
+    dirt *= np.linspace(0.7, 1.15, HH)[:, None]
+    put(np.ones((HH, WW, 3)) * np.array([28, 20, 12]), np.clip(dirt, 0, 0.7) * stone)
+    # cracks: a few wandering, branching dark lines
+    cr = Image.new("L", (WW, HH), 0)
+    d = ImageDraw.Draw(cr)
+    ys, xs = np.where(stone)
+    for _ in range(14):
+        i = rng.integers(len(ys))
+        y, x = float(ys[i]), float(xs[i])
+        ang = rng.uniform(0, 2 * np.pi)
+        for step in range(int(rng.integers(12, 30))):
+            ang += rng.normal(0, 0.45)
+            ln = rng.uniform(4, 10) * S
+            ny, nx = y + np.sin(ang) * ln, x + np.cos(ang) * ln
+            d.line((x, y, nx, ny), fill=255, width=int(rng.choice([1, 2, 2, 3])))
+            if rng.random() < 0.12:   # a branch
+                ba = ang + rng.choice([-1, 1]) * rng.uniform(0.6, 1.2)
+                d.line((nx, ny, nx + np.cos(ba) * ln * 2, ny + np.sin(ba) * ln * 2), fill=200, width=1)
+            y, x = ny, nx
+    crack = np.asarray(cr.filter(ImageFilter.GaussianBlur(0.6))).astype(float) / 255 * stone
+    put(np.ones((HH, WW, 3)) * np.array([14, 10, 6]), crack * 0.85)
+    # moss: small green clumps along the stone's lower and inner edges
+    moss = np.clip((noise(4) - 0.72) / 0.12, 0, 1) * np.exp(-edge / 10) * stone
+    moss *= np.linspace(0.5, 1.2, HH)[:, None]
+    put(np.ones((HH, WW, 3)) * np.array([70, 92, 38]), np.clip(moss, 0, 0.75))
+    # cobwebs in the doorway's two upper corners (where the arch meets the pillars)
+    wy, wx = np.where(window)
+    if len(wy):
+        top, bot = wy.min(), wy.max()
+        web = Image.new("L", (WW, HH), 0)
+        dw = ImageDraw.Draw(web)
+        yrow = int(top + (bot - top) * 0.36)
+        cols = np.where(window[yrow])[0]
+        for side, cx in (("left", cols.min()), ("right", cols.max())):
+            sgn = 1 if side == "left" else -1
+            R = (cols.max() - cols.min()) * 0.3
+            # strands fanning from the corner into the doorway (from up along the arch to down the pillar),
+            # then rings joining them, each sagging a little toward the corner
+            ends = []
+            for a_ in np.radians(np.linspace(-75, 65, 8)):
+                ends.append((cx + np.cos(a_) * R * sgn, yrow + np.sin(a_) * R))
+                dw.line((cx, yrow, ends[-1][0], ends[-1][1]), fill=235, width=2)
+            for ring in (0.28, 0.5, 0.72, 0.93):
+                pts = []
+                for k_, (ex, ey) in enumerate(ends):
+                    px_, py_ = cx + (ex - cx) * ring, yrow + (ey - yrow) * ring
+                    if 0 < k_:
+                        qx, qy = pts[-1]
+                        mx, my = (qx + px_) / 2, (qy + py_) / 2
+                        pts.append((mx + (cx - mx) * 0.12, my + (yrow - my) * 0.12))
+                    pts.append((px_, py_))
+                dw.line(pts, fill=200, width=1 + (ring > 0.6))
+        webm = np.asarray(web.filter(ImageFilter.GaussianBlur(0.5))).astype(float) / 255 * window
+        put(np.ones((HH, WW, 3)) * np.array([225, 222, 214]), np.clip(webm * 0.8, 0, 0.75))
+    rgb = np.where(out[..., 3:] > 0, out[..., :3], 0)
+    img = Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.clip(out[..., 3] * 255, 0, 255)]).astype(np.uint8), "RGBA")
+    write_tga(img.resize((W, H), Image.LANCZOS), dst)
+    print(f"ruin overlay {W} x {H} -> {dst}")
 
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
@@ -389,7 +518,11 @@ if __name__ == "__main__":
     elif sys.argv[1] == "arrow":
         arrow(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
     elif sys.argv[1] == "parchment":
-        parchment(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:6]))
+        rest = [v for v in sys.argv[4:] if not v.startswith("shadow=")]
+        sh = [v[7:] for v in sys.argv[4:] if v.startswith("shadow=")]
+        parchment(sys.argv[2], sys.argv[3], *(int(v) for v in rest[:2]), shadow=sh[0] if sh else None)
+    elif sys.argv[1] == "ruin":
+        ruin(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == "round":
         round_art(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
     else:

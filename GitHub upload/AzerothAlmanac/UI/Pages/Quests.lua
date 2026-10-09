@@ -837,6 +837,18 @@ function page:Refresh()
 	if shown then Show(shown) end
 end
 
+-- (0.69.1) opened from the Journal's Research: only quests with one status ("d" done ...), every
+-- zone open, at the top
+function page:ShowStatus(st)
+	ns.UI:Open("quests")
+	statusFilter = st
+	if filterButton then filterButton:SetText(FilterLabel()) end
+	wipe(collapsed)
+	collapsed.new = true
+	self:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
 function page:ShowQuest(qid)
 	ns.UI:Open("quests")
 	shown = qid

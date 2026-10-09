@@ -102,9 +102,10 @@ local function Clock(seconds)
 	return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
 end
 
+-- (0.69.1) through the Almanac's own chat line (its logo and red name), then the feature's name
 local HEADER = "|cff66ccffWings & Whispers:|r "
 local function Out(text)
-	DEFAULT_CHAT_FRAME:AddMessage(HEADER .. text)
+	if ns.Print then ns.Print(HEADER .. text) else DEFAULT_CHAT_FRAME:AddMessage(HEADER .. text) end
 end
 
 local function Rides(key)
