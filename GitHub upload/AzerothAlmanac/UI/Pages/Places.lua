@@ -11,6 +11,7 @@ local filter = ""
 local searchBox
 
 local collapsed = {}
+local known = {} -- zones the list has met: a new one starts folded (its places hidden), after that it is the reader's
 
 local function Who(rec)
 	local who = {}
@@ -373,10 +374,32 @@ local function ZoneBanner(row)
 	b.count = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	b.count:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", 1, -3)
 	b.count:SetShadowOffset(1, -1)
-	-- the fold sign: - while its places are listed, + when folded
-	b.state = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-	b.state:SetPoint("TOPRIGHT", b, "TOPRIGHT", -9, -4)
-	b.state:SetShadowOffset(1, -1)
+	-- the button at the card's foot: "+ Show areas (12)" / "- Hide areas" (and "> Open" on the dungeons card)
+	local pill = CreateFrame("Button", nil, b)
+	pill:SetHeight(22)
+	pill:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -8, 8)
+	pill.bg = pill:CreateTexture(nil, "BACKGROUND")
+	pill.bg:SetAllPoints()
+	pill.bg:SetColorTexture(0.04, 0.025, 0.01, 0.85)
+	for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local t = pill:CreateTexture(nil, "BORDER")
+		t:SetColorTexture(0.85, 0.66, 0.25, 1)
+		t:SetPoint(e[1])
+		t:SetPoint(e[2])
+		if e[3] then t:SetHeight(1) else t:SetWidth(1) end
+	end
+	pill.glow = pill:CreateTexture(nil, "HIGHLIGHT")
+	pill.glow:SetAllPoints()
+	pill.glow:SetColorTexture(1, 0.85, 0.4, 0.2)
+	pill.sign = pill:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	pill.sign:SetPoint("LEFT", 8, 1)
+	pill.label = pill:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	pill.label:SetPoint("LEFT", pill.sign, "RIGHT", 6, -1)
+	pill:SetScript("OnClick", function(self)
+		if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+		if self.action then self.action() end
+	end)
+	b.pill = pill
 	-- the picture shows its right side when the card is wider than the picture (4 : 1)
 	b:SetScript("OnSizeChanged", function(self, w, h)
 		if not (w and h and h > 0) then return end
@@ -411,22 +434,47 @@ local function ZoneBanner(row)
 	return b
 end
 
-local function FillZoneBanner(row, z, folded)
+-- o = { name, art (a Media file name or nil), icon (the default card's), count (the small line), pill = { sign, label, action } or nil }
+local function FillBanner(row, o)
 	local b = ZoneBanner(row)
-	local name = z.rec.name or "?"
-	local art = ZONE_ART[name]
-	b.art:SetShown(art ~= nil)
-	if art then b.art:SetTexture(ZONE_MEDIA .. art) end
-	b.plain:SetShown(art == nil)
-	b.plainRight:SetShown(art == nil)
-	b.icon:SetShown(art == nil)
-	b.name:SetText(name)
-	local total, done = ns.Places:Exploration(name)
-	b.count:SetText(total and ((done >= total and "|cff40ff40" or "|cffcccccc") .. (L["%d / %d explored"]):format(done, total) .. "|r")
-		or ("|cffcccccc" .. (L["%d places"]):format(#z.subs) .. "|r"))
-	b.state:SetText(folded and "|cffffd100+|r" or "|cffffd100-|r")
+	b.art:SetShown(o.art ~= nil)
+	if o.art then b.art:SetTexture(ZONE_MEDIA .. o.art) end
+	b.plain:SetShown(o.art == nil)
+	b.plainRight:SetShown(o.art == nil)
+	b.icon:SetShown(o.art == nil)
+	if o.icon then b.icon:SetTexture(o.icon) end
+	b.name:SetText(o.name)
+	b.count:SetText(o.count or "")
+	if o.pill then
+		b.pill.sign:SetText("|cffffd100" .. o.pill.sign .. "|r")
+		b.pill.label:SetText("|cffffd100" .. o.pill.label .. "|r")
+		b.pill.action = o.pill.action
+		b.pill:SetWidth(b.pill.label:GetStringWidth() + 40)
+		b.pill:Show()
+	else
+		b.pill:Hide()
+	end
 	b:SetSelected(false)
 	b:Show()
+end
+
+local function FillZoneBanner(row, z, folded)
+	local name = z.rec.name or "?"
+	local total, done = ns.Places:Exploration(name)
+	local n = #z.subs
+	FillBanner(row, {
+		name = name, art = ZONE_ART[name], icon = W.KindIcon("zone"),
+		count = total and ((done >= total and "|cff40ff40" or "|cffcccccc") .. (L["%d / %d explored"]):format(done, total) .. "|r")
+			or ("|cffcccccc" .. (L["%d places"]):format(n) .. "|r"),
+		pill = n > 0 and {
+			sign = folded and "+" or "-",
+			label = folded and (L["Show areas (%d)"]):format(n) or L["Hide areas"],
+			action = function()
+				collapsed[z.id] = (not collapsed[z.id]) or nil
+				page:Refresh()
+			end,
+		} or nil,
+	})
 end
 
 local function Matches(rec)
@@ -457,7 +505,8 @@ local function Collect()
 	-- continents, each with its zones, each with its places (the tree is sorted by continent)
 	local lastCont, contRow
 	for _, z in ipairs(tree) do
-		zones = zones + 1
+	if not known[z.id] then known[z.id] = true collapsed[z.id] = true end
+	zones = zones + 1
 		places = places + #z.subs
 		local subs = {}
 		for _, s in ipairs(z.subs) do
@@ -473,7 +522,7 @@ local function Collect()
 			contRow.count = contRow.count + 1
 			if not collapsed[contRow.key] then
 				rows[#rows + 1] = { kind = "zone", z = z, id = z.id } -- (id: so Back finds this row again)
-				if not collapsed[z.id] then
+				if not collapsed[z.id] or filter ~= "" then
 					for _, s in ipairs(subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id } end
 				end
 			end
@@ -486,8 +535,8 @@ local function Collect()
 	end
 	table.sort(inst, function(a, b) return (a.rec.name or "") < (b.rec.name or "") end)
 	if #inst > 0 then
-		rows[#rows + 1] = { kind = "header", text = L["Dungeons and raids"] }
-		for _, i in ipairs(inst) do rows[#rows + 1] = { kind = "instance", i = i, id = i.id } end
+	-- (header = false: it opens the Dungeons tab, it is never "selected")
+	rows[#rows + 1] = { kind = "dungeoncard", header = false, count = #inst }
 	end
 	return rows, zones, places, dungeons
 end
@@ -526,7 +575,7 @@ function page:Build(parent, header)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return (r.newHeader and "new") or (r.kind == "zone" and r.z and r.z.id) or (r.kind == "continent" and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
-		heightOf = function(r) if r.kind == "zone" then return ZONE_H end end,
+		heightOf = function(r) if r.kind == "zone" or r.kind == "dungeoncard" then return ZONE_H end end,
 		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No places yet. Every zone and place you enter is recorded here."],
@@ -568,8 +617,18 @@ function page:Build(parent, header)
 			row.text:SetText("")
 			row.right:SetText("")
 			FillZoneBanner(row, r.z, collapsed[r.z.id])
+			elseif r.kind == "dungeoncard" then
+			row.icon:SetPoint("LEFT", 20, 0)
+			row.icon:SetTexture(nil)
+			row.text:SetText("")
+			row.right:SetText("")
+			FillBanner(row, {
+				name = L["Dungeons and raids"], icon = W.KindIcon("instance"),
+				count = "|cffcccccc" .. (L["%d entered"]):format(r.count) .. "|r",
+				pill = { sign = ">", label = L["Open Dungeons"], action = GoTo("dungeons") },
+			})
 			elseif r.kind == "instance" then
-				row.icon:SetPoint("LEFT", 4, 0)
+			row.icon:SetPoint("LEFT", 4, 0)
 				row.icon:SetTexture(W.KindIcon("instance"))
 				row.text:SetFontObject(GameFontNormal)
 				row.text:SetText(r.i.rec.name)
@@ -619,8 +678,9 @@ function page:Build(parent, header)
 				page:Refresh()
 				return
 			end
+			if r.kind == "dungeoncard" then return GoTo("dungeons")() end
 			if r.newHeader then
-				collapsed.new = not collapsed.new
+			collapsed.new = not collapsed.new
 				page:Refresh()
 				return
 			end
@@ -683,6 +743,7 @@ function page:ShowZone(map, creature, merchant, pin)
 	focusPin = pin and { map = map, x = pin.x, y = pin.y, name = pin.name, sub = pin.sub, face = pin.face, icon = pin.icon, onClick = pin.onClick, spots = pin.spots } or nil
 	ns.UI:Open("places")
 	collapsed[map] = nil
+	known[map] = true
 	local zrec = ns.Store:Get("zone", map)
 	collapsed["c:" .. ((zrec and zrec.continent) or L["Elsewhere"])] = nil
 	-- a search that hides the zone would leave the page empty
