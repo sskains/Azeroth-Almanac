@@ -388,3 +388,15 @@ The Creatures page's left pane as cards (default) or the list, switched at the t
 ```
 Creatures (and likely Quests, Dungeons, Trainers): the right-hand detail pane jumps to the top while item names load. Keep the scroll when the same entry is redrawn (W.Detail SetBlocks). DESIGN.md section 78.
 ```
+
+### 54. Places: a mini map on each continent card
+**Labels:** `almanac` `feature` `art`
+```
+Later, on the Places tab's continent cards (Eastern Kingdoms, Kalimdor): a small silhouette of the continent with a dot where each explored zone lies (lit when fully explored). Needs a continent silhouette per continent (painted, or cut from the world map) and each zone's position on it. Idea agreed with Asia on 2026-10-09 together with the nested continent / zone cards (docs/DESIGN.md section 78).
+```
+
+### 55. Places: a sticky continent header
+**Labels:** `almanac` `feature`
+```
+Later, on the Places tab: while you scroll through a continent's zones, its name stays pinned at the top of the list (a slim bar with its colour and fold sign), so you always know which continent you are in. A bigger change to the shared list widget (UI/Widgets.lua, W.List): the list needs to know which row group is on top. Idea agreed with Asia on 2026-10-09 (docs/DESIGN.md section 78).
+```
