@@ -143,6 +143,13 @@ local function Price(recipe, basis)
 	return r
 end
 
+-- (DESIGN 90) a recipe the Almanac recorded (reagents = { { itemID, n } }, made, makes): its cost,
+-- value and profit at your price basis, for the Recipes page
+function CR:PriceOf(reagents, made, makes)
+	if not (reagents and db) then return nil end
+	return Price({ mats = reagents, output = made, count = makes or 1 }, db.basis)
+end
+
 function CR:Analyze(recipeID, basis)
 	local recipe = Recipe(recipeID)
 	if recipe then return recipe, Price(recipe, basis) end

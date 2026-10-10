@@ -148,6 +148,9 @@ local function OpenEntry(e)
 	if sub and sub.onClick then sub.onClick() end
 end
 
+-- (#46) other pages' Journey dots open their entries the same way
+function page:OpenEntry(e) OpenEntry(e) end
+
 local function DayKey(t) return date("%Y-%m-%d", t) end
 local function DayLabel(t)
 	local today = DayKey(time())
@@ -484,7 +487,7 @@ function page:Refresh()
 	local data, n = Collect()
 	list:SetData(data)
 	local kind = kindFilter and W.KIND[kindFilter]
-	countText:SetText((kind and (kind.label .. ": ") or "") .. (L["%d entries"]):format(n))
+	countText:SetText((kind and (kind.label .. ": ") or "") .. ns.N(n, "entry", "entries"))
 	if journey and not journey:IsPlaying() then journey:Refresh(false) end
 	detail:SetBlocks(Overview(), nil, true)
 end

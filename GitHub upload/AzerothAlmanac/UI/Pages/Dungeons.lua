@@ -430,7 +430,7 @@ local function OverviewBlocks(id, rec)
 			for map in pairs(rec.maps or {}) do
 				if c.z[map] then
 					others[#others + 1] = { name = c.name or "?", icon = TypeIcon(c),
-						note = (L["%d kills"]):format(B():KillCount(c)), onClick = OpenCreature(npc) }
+						note = ns.N(B():KillCount(c), "kill", "kills"), onClick = OpenCreature(npc) }
 					break
 				end
 			end

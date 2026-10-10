@@ -602,6 +602,18 @@ function TR:CurrentRide()
 	return ride
 end
 
+-- (#49) "Zeppelin" or "Boat" for the ride in progress (by the port it left from), else nil
+function TR:RideKind()
+	local from = ride and ride.from
+	if not from then return ride and "Boat" or nil end
+	local aliases = db and db.portAliases
+	from = (aliases and aliases[from]) or PORT_ALIASES[from] or from
+	for _, r in ipairs(ROUTES) do
+		if r[1] == from or r[2] == from then return r[3] end
+	end
+	return "Boat"
+end
+
 function TR:SetBoatStatus(status)
 	boatStatus = status
 end

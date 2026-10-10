@@ -6,7 +6,9 @@
 --   header: search across every character's items, account gold.
 --   plate:  portrait (live model for you), name, class line, gold, rest, last location (click: map),
 --           hearthstone, data freshness, XP and rested XP bar.
---   tabs:   Story (levels, first visits), Gear, Bags, Bank, Auctions, Professions, each with a game icon.
+--   tabs:   Story (levels, first visits), Gear, Bags, Bank, Auctions, Professions, each with a game icon;
+--           (#46) Journey: the Journal's time lapse at full size for the selected character (or everyone).
+local JOURNEY_TAB = { key = "journey", label = "Journey", icon = "Interface\\Icons\\INV_Misc_Map_01" }
 
 local _, ns = ...
 local L = ns.L
@@ -14,6 +16,7 @@ local W = ns.Widgets
 
 local page = { key = "characters", title = L["Characters"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Characters", order = 2 }   -- (the painted journal icon)
 local list, detail, plate, invScroll, invContent, tabRow, searchBox, goldText, summaryText, root
+local journeyPane -- (#46)
 local tabs = {}
 local state = { tab = "story", search = "", showHidden = false }
 local pendingDraw
@@ -283,7 +286,10 @@ function page:Build(parent, header)
 	tabRow:SetSize(10, 27)
 	tabRow:SetFrameLevel(detail.scroll:GetFrameLevel() + 2)
 	local x = 0
-	for i, spec in ipairs(iw and iw.TABS or { { key = "story", label = "Story", icon = "Interface\\Icons\\INV_Misc_Book_09" } }) do
+	local specs = {}
+	for _, spec in ipairs(iw and iw.TABS or { { key = "story", label = "Story", icon = "Interface\\Icons\\INV_Misc_Book_09" } }) do specs[#specs + 1] = spec end
+	specs[#specs + 1] = JOURNEY_TAB
+	for i, spec in ipairs(specs) do
 		local t = MakeTab(tabRow, spec)
 		t:SetLabel(L[spec.label])
 		t:SetPoint("BOTTOMLEFT", tabRow, "BOTTOMLEFT", x, 0)
@@ -301,6 +307,22 @@ function page:Build(parent, header)
 	invContent:SetSize(10, 10)
 	invScroll:SetScrollChild(invContent)
 	invScroll:Hide()
+
+	-- (#46) the Journey tab: the time lapse filling the body
+	if W.JourneyPane then
+		journeyPane = W.JourneyPane(detail, {
+			full = true,
+			onPick = function(e)
+				ns.UI:Open("journal")
+				local j = ns.UI:GetPage("journal")
+				if j and j.OpenEntry then j:OpenEntry(e) end
+			end,
+		})
+		journeyPane:SetPoint("TOPLEFT", detail.body or detail, "TOPLEFT", 6, -6)
+		journeyPane:SetPoint("BOTTOMRIGHT", detail.body or detail, "BOTTOMRIGHT", -6, 6)
+		journeyPane:SetFrameLevel(detail.scroll:GetFrameLevel() + 1)
+		journeyPane:Hide()
+	end
 
 	if iw then
 		iw.onChange = function()
@@ -401,6 +423,18 @@ function page:Refresh()
 		x = x + t:GetWidth() + 2
 	end
 
+	if state.tab == "journey" and not searching and journeyPane then
+		invScroll:Hide()
+		if iw then iw:Draw(invContent, nil, "none", 10) end
+		detail.scroll:Hide()
+		local changed = journeyPane.charKey ~= found.key
+		journeyPane.charKey = found.key
+		journeyPane:SetCharacter(found.key)
+		if not journeyPane:IsShown() then journeyPane:Show() -- (its OnShow plays the time lapse)
+		elseif changed then journeyPane:Refresh(true) end
+		return
+	end
+	if journeyPane then journeyPane:Hide() end
 	if state.tab == "story" and not searching then
 		invScroll:Hide()
 		if iw then iw:Draw(invContent, nil, "none", 10) end   -- releases the inventory frames
@@ -411,6 +445,14 @@ function page:Refresh()
 		invScroll:Show()
 		if iw then DrawInventory(found) end
 	end
+end
+
+-- (#46) /aa journey: the Journey tab
+function page:ShowJourney()
+	state.tab = "journey"
+	state.search = ""
+	if searchBox then searchBox:SetText("") end
+	self:Refresh()
 end
 
 -- /aa inv, the key binding and the minimap menu: open on a character (inventory key) and tab

@@ -24,7 +24,7 @@ BINDING_NAME_AZEROTHALMANAC_TOGGLE = L["Open or close the Almanac"]
 ns.defaults = {
 	minimap = { show = true, angle = 200 },
 	window = { scale = 1, tab = "journal", scroll = 100, smooth = true },
-	toasts = { enabled = true, sound = true, minTier = 1, soundTier = 2, zone = true, subzone = true, instance = true, level = true, creature = true, tier = true, merchant = true, item = true, quest = true, trainer = true, flight = true, node = true, fishing = true, milestone = true },
+	toasts = { enabled = true, sound = true, minTier = 1, soundTier = 2, cards = true, zone = true, subzone = true, instance = true, level = true, creature = true, tier = true, merchant = true, item = true, quest = true, trainer = true, flight = true, node = true, fishing = true, milestone = true },
 	bestiary = { tooltip = true },
 	peers = { share = true, tooltip = true, nudge = true, accepted = nil },
 	nodes = { map = true, minimap = true, herb = true, ore = true, chest = true, sighted = true, size = 14, mmSize = 7, mmButton = true },
@@ -191,7 +191,7 @@ function ns.AgoText(t)
 	if d < 60 then return L["just now"] end
 	if d < 3600 then return (L["%d min ago"]):format(math.floor(d / 60)) end
 	if d < 86400 then return (L["%d h ago"]):format(math.floor(d / 3600)) end
-	if d < 86400 * 14 then return (L["%d days ago"]):format(math.floor(d / 86400)) end
+	if d < 86400 * 14 then return (L["%s ago"]):format(ns.N(math.floor(d / 86400), "day", "days")) end
 	return ns.DateText(t)
 end
 
@@ -359,7 +359,7 @@ StaticPopupDialogs.AZEROTHALMANAC_RESET = {
 	timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
 }
 
-local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, ejscan = true, wgdungeon = true, wgdebug = true, seeddungeons = true, whatis = true, cards = true }
+local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, ejscan = true, wgdungeon = true, wgdebug = true, seeddungeons = true, whatis = true, cards = true, cardtoast = true, ringzoom = true }
 
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
@@ -379,6 +379,15 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.Townsfolk:Check()
 	elseif cmd == "help" or cmd == "?" then
 		ns.Help()
+	elseif cmd == "journey" then
+		-- (#46, #49) /aa journey: the Characters page's Journey tab; /aa journey sounds | sound <name> <id>
+		if rest == "" then
+			ns.UI:Open("characters")
+			local p = ns.UI:GetPage("characters")
+			if p and p.ShowJourney then p:ShowJourney() end
+		elseif ns.Journey and ns.Journey.Command then
+			ns.Journey.Command(rest)
+		end
 	elseif PAGE_ALIASES[cmd] == "bestiary" and rest ~= "" then
 		local page = ns.UI:GetPage("bestiary")
 		local npc = page and page:Find(rest)
@@ -391,6 +400,8 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.Settings:Open("townsfolk")
 	elseif cmd == "scan" then
 		ns.QoL.AuctionPrices:StartScan()
+	elseif cmd == "ahpost" then
+		if ns.QoL.AuctionPost then ns.QoL.AuctionPost:Status() end
 	elseif cmd == "inv" or cmd == "inventory" or cmd == "bags" then
 		ns.QoL.InventoryWindow:Toggle()
 	elseif cmd == "games" or cmd == "game" or cmd == "gems" then
@@ -399,7 +410,7 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		if rest == "quest" then
 			ns.UpdateQuest:Preview()
 		else
-			ns.Print(("version |cffffffff%s|r  -  %s"):format(ns.VERSION, (L["%d other Almanac players known"]):format(ns.Peers and ns.Peers:Count() or 0)))
+			ns.Print(("version |cffffffff%s|r  -  %s"):format(ns.VERSION, (L["%s known"]):format(ns.N(ns.Peers and ns.Peers:Count() or 0, "other Almanac player", "other Almanac players"))))
 		end
 	elseif cmd == "gambit" or cmd == "wild" or cmd == "wildgambit" then
 		ns.QoL.WildGambit:Command(rest)
@@ -448,6 +459,10 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.ArtScan:Scan()
 	elseif cmd == "toast" then
 		if ns.Toast then ns.Toast:Test() end
+	elseif cmd == "ringzoom" then
+		if ns.Widgets and ns.Widgets.SetRingZoom then ns.Widgets.SetRingZoom(rest) end
+	elseif cmd == "cardtoast" then
+		if ns.CardToast then ns.CardToast:Test(rest) end
 	elseif cmd == "atlascheck" then
 		ns.ArtScan:AtlasCheck()
 	elseif cmd == "seeddungeons" then

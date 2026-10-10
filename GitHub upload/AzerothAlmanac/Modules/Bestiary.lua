@@ -421,6 +421,9 @@ local function CountKill(guid, npc)
 	local rec = ns.Store:Get("creature", npc)
 	if not rec then return end
 	local before = B:Tier(rec)
+	-- (#54) the Wild Gambit card for it, before this kill
+	local WG = ns.QoL and ns.QoL.WildGambit
+	local cardBefore = WG and WG.EarnedTier and WG.EarnedTier(npc, rec) or nil
 	rec.kills = (rec.kills or 0) + 1
 	-- (each character's own kills too, for the character-only Almanac)
 	local me = ns.CharKey()
@@ -430,7 +433,14 @@ local function CountKill(guid, npc)
 	B:AddSpot(rec, "kz", where)
 	if where.map and where.x then rec.lastKill = { map = where.map, x = where.x, y = where.y, t = time() } end
 	if fight then fight.deaths[guid] = npc end
-	TierCheck(npc, rec, before)
+	-- (#54) a card earned or raised: the card toast stands in for the tier toast (one toast, not two)
+	local cardAfter = cardBefore and WG.EarnedTier(npc, rec) or nil
+	local CT = ns.CardToast
+	if cardAfter and cardAfter > cardBefore and cardAfter >= 2 and CT and CT:Wanted() then
+		CT:Add(npc, cardBefore, cardAfter, rec.name)
+	else
+		TierCheck(npc, rec, before)
+	end
 	ns:Fire("KILL", npc, rec)
 	ns:Fire("CHANGED", "creature", npc)
 end
@@ -755,6 +765,7 @@ local function OnLoot()
 				rec.gc[ns.CharKey()] = (rec.gc[ns.CharKey()] or 0) + 1
 				rec.gather = rec.gather or {}
 				for item in pairs(c.items) do rec.gather[item] = (rec.gather[item] or 0) + 1 end
+				if ns.Gathering and ns.Gathering.Tally then ns.Gathering:Tally("skin", c.items) end
 			elseif not looted[guid] then
 				looted[guid] = true
 				rec.corpses = (rec.corpses or 0) + 1
@@ -884,11 +895,27 @@ local function TooltipLine(tooltip)
 		tooltip:AddLine("|cff66ccff" .. L["Almanac:"] .. "|r " .. L["not yet in your Almanac"], 0.7, 0.7, 0.7)
 		return
 	end
-	local tier, need = B:Tier(rec)
-	local text = ("|cff66ccff%s|r %s %s"):format(L["Almanac:"], B:TierMarkup(tier, 16), B:TierText(tier))
-	if B:KillCount(rec) > 0 then text = text .. " - " .. ns.N(B:KillCount(rec), "kill", "kills") end
-	if need then text = text .. " |cff999999" .. (L["(%d to %s)"]):format(need, B.TIERS[tier + 1]) .. "|r " .. B:TierMarkup(tier + 1, 12) end
+	-- (Shannon, 2026-10-10) "Almanac: <tier icon> 7 slain, 8 to Master Hunter <next icon>": the badge
+	-- names the tier, the words count the kills; the climb goes on through Epic and Legendary
+	local kills = B:KillCount(rec)
+	local tier, need = B:FullTier(rec)
+	local sighted = kills == 0 and tier <= 1
+	local text
+	if sighted then
+		text = ("|cff66ccff%s|r %s %s"):format(L["Almanac:"], B:TierMarkup(tier, 16), B:TierText(tier))
+	else
+		text = ("|cff66ccff%s|r %s %s"):format(L["Almanac:"], B:TierMarkup(tier, 16), (L["%d slain"]):format(kills))
+		if need and B.TIERS[tier + 1] then
+			text = text .. "|cff999999, " .. (L["%d to %s"]):format(need, B.TIERS[tier + 1]) .. "|r " .. B:TierMarkup(tier + 1, 12)
+		else
+			text = text .. "|cff999999, |r" .. B:TierText(tier) -- (the top: its name, no next)
+		end
+	end
 	tooltip:AddLine(text, 1, 1, 1)
+	if sighted then
+		-- (the creature by name: "Defeat Captain Hecklebury Smotts to earn their Wild Gambit card.", wrapped)
+		tooltip:AddLine("|TInterface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit:16:16|t " .. (L["Defeat %s to earn their Wild Gambit card."]):format(rec.name or L["one"]), 1, 0.82, 0, true)
+	end
 	-- Studied and up: its abilities, each with its icon (melee left out)
 	if tier >= 3 and ns.CreatureDB then
 		local known = ns.CreatureDB:KnownSpells(npc, rec, tier)

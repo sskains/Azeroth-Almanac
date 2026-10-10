@@ -281,6 +281,28 @@ local function DescribePerson(p)
 			tip = L["Click to open this flight path."], onClick = function() page:ShowNode(node) end } } }
 	end
 	if #b == 0 then b[#b + 1] = { "small", L["Nothing more recorded for them yet: what they teach, sell or ask of you shows here once you've seen it."] } end
+	-- (#54) their Wild Gambit card: earned only by winning games against them
+	local WG = ns.QoL and ns.QoL.WildGambit
+	local WL = ns.QoL and ns.QoL.WildLogic
+	if WG and WG.Wins and WL and WL.WinsFor then
+		local won = WG.Wins(p.npc)
+		local wins = won and won.w or 0
+		local card = WG:CardFor(p.npc)
+		local tier = card and card.tier or 1
+		local nextAt = WL.WinsFor(tier)
+		b[#b + 1] = { "banner", L["Wild Gambit"] }
+		local c = WL.COLORS[tier] or { 1, 1, 1 }
+		local tierText = card and ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, WL.TIERS[tier]) or (NOTE .. L["Not yet earned"] .. "|r")
+		b[#b + 1] = { "stat", L["Their card"], tierText }
+		if nextAt then
+			b[#b + 1] = { "skillbar", nil, wins, nextAt, (L["%d / %d"]):format(wins, nextAt) .. "  ·  "
+				.. (L["%s to %s"]):format(ns.N(nextAt - wins, "win", "wins"), WL.TIERS[math.max(2, tier + 1)]) }
+		else
+			b[#b + 1] = { "skillbar", nil, 1, 1, ns.N(wins, "win", "wins") .. "  ·  " .. WL.TIERS[6] }
+		end
+		b[#b + 1] = { "small", NOTE .. (card and L["Each win against them counts towards a better card (1, 3, 5, 10 and 20 wins). They play stronger as it climbs."]
+			or L["Win a game of Wild Gambit against them to earn their card: right-click their portrait and choose Play Wild Gambit."]) .. "|r" }
+	end
 	if not p.x then b[#b + 1] = { "small", L["Talk to them to record exactly where they stand."] } end
 	return b
 end

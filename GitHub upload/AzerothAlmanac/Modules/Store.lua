@@ -224,8 +224,8 @@ function Store:PrintStats()
 	for _, kind in ipairs(kinds) do parts[#parts + 1] = kind .. " " .. self:Count(kind) end
 	local chars = 0
 	for _ in pairs(ns.db.chars) do chars = chars + 1 end
-	ns.Print((L["%d characters. Discoveries: %s. Journal: %d entries. Saved data about %d KB."])
-		:format(chars, #parts > 0 and table.concat(parts, ", ") or L["none yet"], #ns.db.journal, self:SizeKB()))
+	ns.Print((L["%s. Discoveries: %s. Journal: %s. Saved data about %d KB."])
+		:format(ns.N(chars, "character", "characters"), #parts > 0 and table.concat(parts, ", ") or L["none yet"], ns.N(#ns.db.journal, "entry", "entries"), self:SizeKB()))
 	-- blocked actions this version (a summary, one line per function: how often, the latest time)
 	local by, order = {}, {}
 	for _, d in ipairs(ns.db.diag or {}) do

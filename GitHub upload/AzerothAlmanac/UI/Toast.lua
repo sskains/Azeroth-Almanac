@@ -53,6 +53,7 @@ local function Sound(tier)
 end
 
 local frame, queue, showing = nil, {}, false
+Toast.PlayTierSound = Sound -- (#54: the card toast sounds as an alert of its tier)
 local Fit, CreatureTier
 
 -- The game's loot toast ("You received ..."): its background and icon border, read off the game's

@@ -208,7 +208,8 @@ local function ScanContainer(bag)
 	for slot = 1, size do
 		local info = Container.GetContainerItemInfo(bag, slot)
 		if info and (info.hyperlink or info.itemID) then
-			slots[slot] = { Compact(info.hyperlink) or info.itemID, info.stackCount or 1 }
+			-- (#55: [3] true when this copy is soulbound, asked of the game: whether it could be mailed to an alt)
+			slots[slot] = { Compact(info.hyperlink) or info.itemID, info.stackCount or 1, info.isBound and true or nil }
 		end
 	end
 	if bag > 0 and C_Container.ContainerIDToInventoryID and GetInventoryItemLink then
@@ -270,11 +271,14 @@ end
 
 local function ScanGear()
 	local c = Me()
-	local gear, any = {}, false
+	local gear, links, any = {}, {}, false
 	for slot = 0, 19 do
 		local link = GetInventoryItemLink("player", slot)
 		if link then
 			gear[slot] = Compact(link)
+			-- (#55) the full link too: a random suffix ("of the Whale") lives in its bonus IDs, which
+			-- the compact form drops, and the upgrade arrows need the worn item's real stats
+			links[slot] = link
 			any = true
 			if slot == 0 then c.ammoCount = GetInventoryItemCount("player", 0) end
 		end
@@ -282,9 +286,54 @@ local function ScanGear()
 	-- Same guard as the bags: an all-empty read (loading or logging out) keeps what was saved.
 	if not any and c.gear and next(c.gear) then return end
 	c.gear = gear
+	c.gearLinks = links
 	c.gearTime = time()
 	Touch()
 end
+
+-- (#55) the talent split, for upgrade arrows (the tree with the most points is the spec):
+-- c.talents = { points in tree 1, 2, 3 }, c.talentNames = { tree names }
+local function ScanTalents()
+	-- WoW Forever keeps talents in the newer trait trees: the Talent Planner reads them, by tree
+	local TL = ns.TalentPlannerLogic
+	if TL and TL.CurrentBuild and TL.TreePoints then
+		local ok, b = pcall(TL.CurrentBuild)
+		if ok and b then
+			local points, names = {}, {}
+			for t = 1, 3 do
+				points[t] = TL.TreePoints(b, t)
+				local tree = TL.Tree and TL.Tree(b, t)
+				names[t] = tree and tree.name or nil
+			end
+			if points[1] + points[2] + points[3] > 0 then
+				local c = Me()
+				c.talents, c.talentNames = points, names
+				Touch()
+				return
+			end
+		end
+	end
+	if not (GetNumTalentTabs and GetTalentTabInfo) then return end
+	local ok, n = pcall(GetNumTalentTabs)
+	if not ok or type(n) ~= "number" or n < 1 then return end
+	local points, names = {}, {}
+	for i = 1, math.min(n, 3) do
+		local r = { pcall(GetTalentTabInfo, i) }
+		if r[1] then
+			-- (older clients: name, icon, points; newer: id, name, description, icon, points)
+			if type(r[2]) == "number" and type(r[3]) == "string" then
+				names[i], points[i] = r[3], tonumber(r[6]) or 0
+			else
+				names[i], points[i] = r[2], tonumber(r[4]) or 0
+			end
+		end
+	end
+	if #points == 0 then return end
+	local c = Me()
+	c.talents, c.talentNames = points, names
+	Touch()
+end
+INV.ScanTalents = ScanTalents
 
 local function ScanMail()
 	if not mailOpen or not GetInboxNumItems then return end
@@ -507,6 +556,7 @@ function INV:OnLogin()
 	ScanGear()
 	ScanBags()
 	ScanProfessions()
+	pcall(ScanTalents)
 
 	local events = CreateFrame("Frame")
 	local handlers = {
@@ -535,6 +585,9 @@ function INV:OnLogin()
 		OWNED_AUCTIONS_UPDATED = ScanAuctions,
 		AUCTION_HOUSE_SHOW = function() if C_AuctionHouse and C_AuctionHouse.QueryOwnedAuctions then pcall(C_AuctionHouse.QueryOwnedAuctions, {}) end end,
 		SKILL_LINES_CHANGED = ScanProfessions,
+		CHARACTER_POINTS_CHANGED = function() pcall(ScanTalents) end,
+		PLAYER_TALENT_UPDATE = function() pcall(ScanTalents) end,
+		TRAIT_CONFIG_UPDATED = function() C_Timer.After(0.5, function() pcall(ScanTalents) end) end,
 		-- At logout the game already reports empty bags, 0 XP and 0 gold, so nothing is read
 		-- then (it's all saved as it changes); only the time is noted, for the rested estimate.
 		PLAYER_LOGOUT = function()

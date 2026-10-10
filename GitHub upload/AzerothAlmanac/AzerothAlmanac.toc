@@ -20,6 +20,8 @@ Modules\Merchants.lua
 Modules\Trainers.lua
 Data\Items.lua
 Modules\ItemDB.lua
+Data\StatWeights.lua
+Modules\Upgrades.lua
 Modules\Quests.lua
 Data\Quests.lua
 Modules\QuestDB.lua
@@ -33,6 +35,7 @@ Data\QoLData.lua
 QoL\WindowUtil.lua
 QoL\Inventory.lua
 QoL\AuctionPrices.lua
+QoL\AuctionPost.lua
 QoL\AuctionVolume.lua
 QoL\Disenchant.lua
 QoL\Crafting.lua
@@ -79,6 +82,7 @@ Modules\JourneyRecorder.lua
 Modules\Peers.lua
 UI\TownsfolkPin.xml
 UI\Toast.lua
+UI\CardToast.lua
 UI\UpdateQuest.lua
 UI\NewMarks.lua
 UI\Journey.lua

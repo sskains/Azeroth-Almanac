@@ -86,6 +86,8 @@ end
 
 -- Back: one step, to the page you came from, showing what you were looking at there. Going back
 -- uses it up (it never walks further back than the screen before).
+-- (2026-10-09) Only a link sets up the step back (a creature named in the Journal, a quest giver on
+-- a quest ...); picking a side tab yourself starts afresh, and Back greys out.
 local previous
 
 -- (0.68.1) a page can take a Back step of its own first (the Dungeons page: from a dungeon back to the
@@ -123,7 +125,8 @@ function UI:ShowPage(key)
 	if not def then return end
 	-- leaving a page for another: remember where you were on it
 	if current and current ~= def and not UI.restoring then
-		previous = { key = current.key, item = current.list and current.list:Selected() }
+		if UI.byTab then previous = nil
+		else previous = { key = current.key, item = current.list and current.list:Selected() } end
 	end
 	-- (0.69.0) and you've now seen what was new on it
 	if current and current ~= def and ns.New then ns.New:Stamp(current.key) end
@@ -327,7 +330,9 @@ local function Build()
 		end
 		tab:SetScript("OnClick", function(self)
 			if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+			UI.byTab = true
 			UI:ShowPage(def.key)
+			UI.byTab = nil
 		end)
 		tab:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")

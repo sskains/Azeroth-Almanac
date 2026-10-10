@@ -421,12 +421,19 @@ local function BuildGeneral(P)
 		function() return Opt().window.portalSwirl ~= false end, function(v) Opt().window.portalSwirl = v end)
 	P:Check(L["Record my journey"], L["Every few seconds while you move, where you are is noted (only for your own characters, never shared) so the Journal's Journey follows the path you really walked. Off: nothing more is recorded; the Journey joins up your discoveries instead."],
 		function() return Opt().window.journey ~= false end, function(v) Opt().window.journey = v end)
+	P:Check(L["Journey effects"], L["Bursts, dust, light and ripples as the Journey's time lapse passes flights, boats, hearths, deaths and discoveries (bigger finds, bigger moments)."],
+		function() return Opt().window.journeyEffects ~= false end, function(v) Opt().window.journeyEffects = v end)
+	P:Check(L["Lighter Journey effects"], L["Only the bigger moments: no ring on every small find, no map shake on a death."],
+		function() return Opt().window.journeyEffectsLight == true end, function(v) Opt().window.journeyEffectsLight = v end)
+	P:Check(L["Journey sounds"], L["Sounds on the Characters page's Journey tab (the Journal's small Journey stays silent). /aa journey sounds plays them all."],
+		function() return Opt().window.journeySounds ~= false end, function(v) Opt().window.journeySounds = v end)
 	P:Buttons({
 		{ L["Open the Almanac"], 160, function() ns.UI:Open() end },
 		{ L["Reset window positions"], 190, function()
 			ns.UI:ResetPosition() ns.MinimapButton:ResetPosition() S:ResetPosition()
 			-- (the alerts and the gathering button too, 0.64.0)
 			if ns.Toast and ns.Toast.ResetPosition then ns.Toast:ResetPosition() end
+			if ns.CardToast and ns.CardToast.ResetPosition then ns.CardToast:ResetPosition() end
 			if ns.NodePins and ns.NodePins.ResetMiniButton then ns.NodePins:ResetMiniButton() ns.NodePins:Refresh() end
 		end },
 	})
@@ -438,7 +445,7 @@ local function BuildGeneral(P)
 		function() return Opt().peers.tooltip end, function(v) Opt().peers.tooltip = v end)
 	P:Check(L["Tell me when a newer version is out"], L["A quest from the Almanac itself when someone's copy is newer than yours. /aa version quest shows it."],
 		function() return Opt().peers.nudge end, function(v) Opt().peers.nudge = v end)
-	P:Text(function() return (L["%d other Almanac players known."]):format(ns.Peers and ns.Peers:Count() or 0) end)
+	P:Text(function() return (L["%s known."]):format(ns.N(ns.Peers and ns.Peers:Count() or 0, "other Almanac player", "other Almanac players")) end)
 
 	P:Section(L["Key bindings"], L["Set these in Options > Keybindings, under Azeroth Almanac (in the AddOns section)."])
 	P:Text(function()
@@ -472,6 +479,8 @@ local function BuildAlerts(P)
 	P:Section(L["Discovery alerts"], L["An alert in the style of the game's loot toast, near the bottom middle of the screen, when you discover something new. Shift-drag an alert to move them."])
 	P:Check(L["Show an alert for new discoveries"], nil, function() return t.enabled end, function(v) t.enabled = v end)
 	P:Check(L["Play a sound with the alert"], nil, function() return t.sound end, function(v) t.sound = v end, 1)
+	-- (#54) a Wild Gambit card earned or upgraded: the card itself as the alert
+	P:Check(L["Card toasts: show a Wild Gambit card earned or upgraded as the card itself"], nil, function() return t.cards ~= false end, function(v) t.cards = v end, 1)
 	-- tiers: the colour of each alert says how notable it is (Common white ... Legendary orange)
 	local C = ITEM_QUALITY_COLORS or {}
 	local function Name(i, text)
@@ -490,6 +499,12 @@ local function BuildAlerts(P)
 	P:Buttons({
 		{ L["Show a test alert"], 150, function() if ns.Toast then ns.Toast:Test() end end },
 		{ L["Reset position"], 130, function() if ns.Toast then ns.Toast:ResetPosition() end end },
+		{ L["Show a test card"], 140, function() if ns.CardToast then ns.CardToast:Test() end end },
+	})
+	-- (#54) the card toasts have their own place (bottom right, above the backpack)
+	P:Buttons({
+		{ L["Move card toasts"], 150, function() if ns.CardToast then ns.CardToast:Move() end end },
+		{ L["Reset card toasts"], 150, function() if ns.CardToast then ns.CardToast:ResetPosition() end end },
 	})
 	P:Section(L["Alert me for"])
 	for _, k in ipairs(TOASTS) do
@@ -654,7 +669,7 @@ local function BuildTiers(P)
 
 	-- 3. Wild Gambit
 	if WL and B then
-		P:Section(L["Wild Gambit"], L["Every creature you've met is a card. Its spikes (its strength on the board) come from its level and its tier, so the more you hunt a creature, the stronger its card."])
+		P:Section(L["Wild Gambit"], L["Every creature you've slain is a card (seeing one isn't enough: Fought is the first card). People you can't fight earn you their card by beating them at Wild Gambit: 1 win for Fought, then 3, 5, 10 and 20. Its spikes (its strength on the board) come from its level and its tier, so the more you hunt a creature, the stronger its card."])
 		P:Custom(196, function(f, w)
 			-- the formula: [level] + [tier] = [spikes]
 			local boxes = {
@@ -920,7 +935,7 @@ local function BuildNodes(P)
 	P:Check(L["Herb button on the minimap"], L["Left-click shows or hides the pins, right-click opens these settings, drag moves it around the minimap. /aa nodes does the same as a click."], function() return m.mmButton ~= false end, function(v) m.mmButton = v R() end, 1)
 	P:Check(L["Herbs"], nil, function() return m.herb end, function(v) m.herb = v R() end, 1)
 	P:Check(L["Ore and stone"], nil, function() return m.ore end, function(v) m.ore = v R() end, 1)
-	P:Check(L["Chests and objects"], nil, function() return m.chest end, function(v) m.chest = v R() end, 1)
+	P:Check(L["Treasure"], nil, function() return m.chest end, function(v) m.chest = v R() end, 1)
 	P:Check(L["Spots where they were only sighted"], nil, function() return m.sighted end, function(v) m.sighted = v R() end, 1)
 	P:Stepper(L["World map pin size"], 10, 24, 2, function() return m.size end, function(v) m.size = v R() end, 1)
 	P:Stepper(L["Minimap pin size"], 4, 20, 1, function() return m.mmSize end, function(v) m.mmSize = v R() end, 1)
@@ -945,6 +960,10 @@ local function BuildAuction(P)
 	P:Check(L["How old the auction price is"], nil, function() return db.age end, function(v) db.age = v end, 1)
 	P:Check(L["Average of recent daily lows (7 days)"], nil, function() return db.average end, function(v) db.average = v end, 1)
 	P:Check(L["Whole-stack price while holding Shift"], nil, function() return db.stackOnShift end, function(v) db.stackOnShift = v end, 1)
+
+	P:Section(L["Selling"])
+	P:Check(L["Alt+Right-click a bag item to sell it"], L["With the Auctions tab open: the whole stack goes into the sell slot, priced 1% under the lowest price from your last scan. Press Enter, or Alt+Right-click it again, to post it."],
+		function() return db.altPost ~= false end, function(v) db.altPost = v end)
 
 	P:Section(L["Scanning"], L["Open the auction house and press \"Full scan\" (or /aa scan). The game allows one full scan every 15 minutes."])
 	P:Check(L["Scan automatically"], L["Starts a full scan by itself whenever the auction house is open and the 15-minute cooldown allows, and again every 15 minutes while you stay."],
@@ -1153,6 +1172,25 @@ local function BuildInventory(P)
 		function() return db.bankTab end, function(v) db.bankTab = v Q.BagBank:Apply() end)
 	P:Check(L["Count my other characters' items"], L["In the crafting profit card."], function() return db.alts end, function(v) db.alts = v end)
 	P:Stepper(L["Remind me to visit a banker after (days)"], 1, 30, 1, function() return db.staleDays end, function(v) db.staleDays = v end)
+
+	-- (#55) upgrade arrows on the Items page and item tooltips, and each character's role
+	local U = ns.Upgrades
+	if U and ns.StatWeights then
+		P:Section(L["Upgrade arrows"], L["A green arrow on items that would be an upgrade for the character you're on, a gold one for another of your characters (same realm and faction) when you own a copy that isn't soulbound. Scored by each character's talents and compared with what they wear: a rough guide."])
+		P:Check(L["Show upgrade arrows"], nil, function() return U:On() end, function(v) ns.db.settings.upgrades = ns.db.settings.upgrades or {} ns.db.settings.upgrades.on = v U:Forget() end)
+		for _, c in ipairs(INV:Characters(false)) do
+			local trees = ns.StatWeights[c.class or ""]
+			if trees then
+				local options = { { name = L["By talents"] } }
+				for i, t in ipairs(trees) do options[#options + 1] = { name = t.name } end
+				local label = ("%s |cff999999(%s)|r"):format(c.name or "?", select(2, U.Tree(c)) or "?")
+				P:Picker(label, options, function()
+					local chosen = ns.db.settings.upgrades and ns.db.settings.upgrades.spec and ns.db.settings.upgrades.spec[c.key]
+					return chosen and (chosen + 1) or 1
+				end, function(i) U:SetTree(c.key, i > 1 and (i - 1) or nil) end, nil, 1, L["The talent tree the upgrade arrows score for (a Feral druid who tanks, say). By talents: the tree with the most points."])
+			end
+		end
+	end
 
 	local list = INV:Characters(true)
 	P:Section(L["Characters"], L["Untick a character to leave it out of tooltips, totals and the list. Remove forgets what was saved; it comes back when you next log in on them."])
