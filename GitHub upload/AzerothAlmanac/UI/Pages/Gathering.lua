@@ -418,7 +418,10 @@ local PROF_TINT = {
 }
 -- each card's painted picture (Media\Gather_<Name>.tga, 512 x 128; ART_ASSETS.md "Gathering profession
 -- cards"); a card without one keeps the plain tinted card with its icon. Add a line when a picture arrives.
-local PROF_ART = { herb = "Gather_Herbalism", ore = "Gather_Mining" }
+local PROF_ART = {
+	herb = "Gather_Herbalism", ore = "Gather_Mining", treasure = "Gather_Treasure", fish = "Gather_Fishing",
+	skin = "Gather_Skinning", toohigh = "Gather_TooHigh",
+}
 local function ProfIcon(prof) return W.FindIcon(PROF_ICON[prof]) end
 local function IconMarkup(prof, size)
 	local icon = ProfIcon(prof)

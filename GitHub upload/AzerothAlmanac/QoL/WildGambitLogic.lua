@@ -193,7 +193,7 @@ function WL.HeroTier(masters)
 	return tier
 end
 
--- a companion's card: Fought, then by creatures killed together (the creature counts: 5 / 15 / 50 / 200)
+-- (unused since 2026-10-10, DESIGN 91: a companion takes its master's tier) a companion's card by creatures killed together (5 / 15 / 50 / 200)
 WL.PET_AT = { 5, 15, 50, 200 }
 function WL.PetTier(kills)
 	local tier = 2

@@ -616,6 +616,8 @@ function W.JourneyPane(parent, opts)
 	-- how much of the line shows: everything up to this time. While playing or scrubbing, each
 	-- character's head sits on their latest point, with a short trail behind it.
 	local first, last = 0, 0
+	local allPts = {} -- (every point in the frame, on whatever map; `pts`: those on the map shown)
+	local Build -- (forward: the map's drawing, below)
 	local function Reveal(upTo)
 		local w, h = map:GetWidth(), map:GetHeight()
 		local lastBy, prevBy = {}, {}
@@ -722,17 +724,50 @@ function W.JourneyPane(parent, opts)
 		if full then J.Sound("finish", 3, 1) end
 	end
 
+	-- (2026-10-10, Shannon) the time lapse follows you zone by zone: when the newest point shown so far
+	-- is in another zone, that zone's map takes over (fading in, its name over it); `toCont`: pull back
+	-- to the continent the journey ends on (the end of the time lapse)
+	local function Follow(upTo, toCont)
+		if state.focus or #allPts == 0 then return end
+		local m
+		if toCont then
+			m = Continent(allPts[#allPts].m)
+		else
+			for i = #allPts, 1, -1 do if allPts[i].t <= upTo then m = allPts[i].m break end end
+			m = m or allPts[1].m
+		end
+		if not m or m == f.shownMap then return end
+		-- (Everyone mode: two characters in different zones would flip the map back and forth)
+		if not toCont and f.switchedAt and GetTime() - f.switchedAt < 1.5 then return end
+		f.switchedAt = GetTime()
+		-- (what's already behind the heads counts as passed: no burst of old effects on the new map)
+		for _, p in ipairs(allPts) do if p.t <= upTo then p.fired = true end end
+		if not Build(m, allPts) then return end
+		map:SetAlpha(0)
+		f.fadeAt = GetTime()
+		if not toCont then Banner(ZoneName(m)) end
+	end
+
 	f:SetScript("OnUpdate", function(_, elapsed)
 		StepFx()
+		if f.fadeAt then
+			local k = (GetTime() - f.fadeAt) / (f.fadeTime or 0.35)
+			if k >= 1 then map:SetAlpha(1) f.fadeAt = nil else map:SetAlpha(k) end
+		end
 		if not state.playing then return end
 		state.clock = state.clock + elapsed * state.speed
 		local frac = math.min(1, state.clock / PlayTime())
 		local pulse = 0.7 + 0.3 * math.sin(GetTime() * 9)
 		for _, hd in pairs(heads) do hd.glow:SetAlpha(pulse) end
-		Reveal(first + (last - first) * frac)
+		local upTo = first + (last - first) * frac
+		Follow(upTo)
+		Reveal(upTo)
 		SetSlider(frac)
 		if frac >= 1 then
 			state.playing = false
+			-- the end: pull back to the whole continent, the journey drawn on it
+			f.fadeTime = 0.8
+			Follow(last, true)
 			Reveal(last)
 			if f.play then f.play:SetText(L["Play"]) end
 			Finish()
@@ -814,6 +849,8 @@ function W.JourneyPane(parent, opts)
 			f.play:SetText(L["Play"])
 			state.scrubbing = true
 			state.clock = frac * PlayTime()
+			f.fadeTime = 0.35
+			Follow(first + (last - first) * frac, frac >= 0.999)
 			Reveal(first + (last - first) * frac)
 			if math.abs((self.ticked or 0) - v) > 60 then
 				self.ticked = v
@@ -936,69 +973,21 @@ function W.JourneyPane(parent, opts)
 		end
 	end
 
-	function f:Refresh(replay)
-		if not ns.db then return end
+	-- (2026-10-10, Shannon) one map's drawing: `shown` fitted and zoomed to the points that fall on it,
+	-- each with its dot, pins and the line from the one before it. Used for the whole frame at rest,
+	-- for each zone in turn while the time lapse plays, and for the continent when it ends.
+	function Build(shown, all)
 		HideAll()
 		wipe(pts)
 		nl, nb = 0, 0
-		local scope = ns.ScopeChar()
-		-- (full: Everyone works for the selected character's account too)
-		local who
-		if full then who = scope or ((not state.everyone) and (state.char or ns.CharKey())) or nil
-		else who = scope or state.char or ((not state.everyone) and ns.CharKey()) or nil end
-		f.who:SetShown(not scope and (full or not state.char))
-		if full then f.who:SetText(state.everyone and L["One character"] or L["Everyone"])
-		else f.who:SetText(state.everyone and L["Only me"] or L["Everyone"]) end
-		for _, b in ipairs(buttons) do
-			if b.key == state.range then b:LockHighlight() else b:UnlockHighlight() end
-		end
-		local all = J.Points(J.From(state.range), who)
-		-- (#48) Everyone mode: the legend of names; hidden characters' points left out
-		if not who then
-			local seen, keys = {}, {}
-			for _, p in ipairs(all) do if p.c and not seen[p.c] then seen[p.c] = true keys[#keys + 1] = p.c end end
-			table.sort(keys, function(a, b) return ns.CharName(a, true) < ns.CharName(b, true) end)
-			Legend(#keys > 1 and keys or nil)
-			local hidden = Saved()
-			if next(hidden) then
-				local kept = {}
-				for _, p in ipairs(all) do if not hidden[p.c] then kept[#kept + 1] = p end end
-				all = kept
-			end
-		else
-			Legend(nil)
-		end
-		-- the map: the focused entry's zone; else the newest point's zone, or its continent when the
-		-- line leaves that zone
-		local shown
-		if state.focus then shown = state.focus.m
-		elseif #all > 0 then
-			shown = all[#all].m
-			for _, p in ipairs(all) do if p.m ~= shown then shown = Continent(shown) break end end
-		end
-		local rangeLabel
-		for _, r in ipairs(J.RANGES) do if r.key == state.range then rangeLabel = r.label end end
-		local whoText = who and ns.CharName(who) or L["Everyone"]
-		if not shown then
-			map:Hide()
-			empty:SetText(L["No journey here yet: each discovery you make marks where you were, and the line joins them."])
-			empty:Show()
-			title:SetText(L["Journey"] .. "  |cff999999" .. whoText .. "  ·  " .. rangeLabel .. "|r")
-			f.play:Disable()
-			return
-		end
+		map:Show()
 		empty:Hide()
+		f.shownMap = shown
 		-- fit the map into the stage, keeping its shape
 		local sw, sh = stage:GetWidth(), stage:GetHeight()
 		if not (sw and sw > 10 and sh and sh > 10) then sw, sh = 540, 300 end
 		local h = map:Draw(shown, sw)
-		if h == 0 then
-			map:Hide()
-			empty:SetText(L["This map can't be drawn here."])
-			empty:Show()
-			f.play:Disable()
-			return
-		end
+		if h == 0 then return false end
 		-- the whole map fitted in the stage
 		local baseW = (h > sh) and (sw * sh / h) or sw
 		local baseH = h * baseW / sw
@@ -1029,7 +1018,7 @@ function W.JourneyPane(parent, opts)
 		map:SetPoint("TOPLEFT", stage, "TOPLEFT", f.mapX, f.mapY)
 		map:SetPins({})
 		unitW = sw
-		title:SetText(L["Journey"] .. "  |cff999999" .. whoText .. "  ·  " .. rangeLabel .. "  ·  " .. ZoneName(shown) .. "|r")
+		title:SetText(L["Journey"] .. "  |cff999999" .. (f.whoText or "") .. "  ·  " .. (f.rangeLabel or "") .. "  ·  " .. ZoneName(shown) .. "|r")
 
 		-- the points that fall on this map, each with its dot and the line from the one before it
 		local prevBy = {}
@@ -1066,7 +1055,6 @@ function W.JourneyPane(parent, opts)
 			placed[#placed + 1] = { kind = kind, x = px * w, y = py * h, t = t }
 			return t
 		end
-		first, last = nil, 0
 		local tFirst, tLast = all[1] and all[1].t or 0, all[#all] and all[#all].t or 0
 		local thick = math.max(2, unitW / 260)
 		local dotSize = math.max(4, unitW / 150) -- (specks; they grow under the mouse)
@@ -1133,11 +1121,8 @@ function W.JourneyPane(parent, opts)
 				end
 				prevBy[p.c] = p
 				pts[#pts + 1] = p
-				first = first or p.t
-				last = p.t
 			end
 		end
-		first = first or 0
 		if focusDot then
 			ring:ClearAllPoints()
 			ring:SetPoint("CENTER", focusDot, "CENTER")
@@ -1146,11 +1131,76 @@ function W.JourneyPane(parent, opts)
 			ring:Show()
 			focusDot:SetFrameLevel(overlay:GetFrameLevel() + 5)
 		end
-		f.play:SetEnabled(#pts > 0)
-		if slider then slider:SetEnabled(#pts > 1) end
+		return true
+	end
+
+	function f:Refresh(replay)
+		if not ns.db then return end
+		HideAll()
+		wipe(pts)
+		nl, nb = 0, 0
+		local scope = ns.ScopeChar()
+		-- (full: Everyone works for the selected character's account too)
+		local who
+		if full then who = scope or ((not state.everyone) and (state.char or ns.CharKey())) or nil
+		else who = scope or state.char or ((not state.everyone) and ns.CharKey()) or nil end
+		f.who:SetShown(not scope and (full or not state.char))
+		if full then f.who:SetText(state.everyone and L["One character"] or L["Everyone"])
+		else f.who:SetText(state.everyone and L["Only me"] or L["Everyone"]) end
+		for _, b in ipairs(buttons) do
+			if b.key == state.range then b:LockHighlight() else b:UnlockHighlight() end
+		end
+		local all = J.Points(J.From(state.range), who)
+		-- (#48) Everyone mode: the legend of names; hidden characters' points left out
+		if not who then
+			local seen, keys = {}, {}
+			for _, p in ipairs(all) do if p.c and not seen[p.c] then seen[p.c] = true keys[#keys + 1] = p.c end end
+			table.sort(keys, function(a, b) return ns.CharName(a, true) < ns.CharName(b, true) end)
+			Legend(#keys > 1 and keys or nil)
+			local hidden = Saved()
+			if next(hidden) then
+				local kept = {}
+				for _, p in ipairs(all) do if not hidden[p.c] then kept[#kept + 1] = p end end
+				all = kept
+			end
+		else
+			Legend(nil)
+		end
+		-- the map at rest: the focused entry's zone; else the continent the journey ends on (2026-10-10:
+		-- the time lapse plays zone by zone, then the view pulls back to the continent)
+		local shown
+		if state.focus then shown = state.focus.m
+		elseif #all > 0 then shown = Continent(all[#all].m) end
+		local rangeLabel
+		for _, r in ipairs(J.RANGES) do if r.key == state.range then rangeLabel = r.label end end
+		local whoText = who and ns.CharName(who) or L["Everyone"]
+		f.whoText, f.rangeLabel = whoText, rangeLabel
+		allPts = all
+		first, last = (all[1] and all[1].t) or 0, (all[#all] and all[#all].t) or 0
+		if not shown then
+			map:Hide()
+			empty:SetText(L["No journey here yet: each discovery you make marks where you were, and the line joins them."])
+			empty:Show()
+			title:SetText(L["Journey"] .. "  |cff999999" .. whoText .. "  ·  " .. rangeLabel .. "|r")
+			f.play:Disable()
+			return
+		end
 		state.scrubbing = nil
 		ClearFx()
-		if replay and #pts > 1 and not state.focus then
+		local play = replay and #all > 1 and not state.focus
+		f.fadeAt, f.fadeTime = nil, 0.35
+		map:SetAlpha(1)
+		-- playing: the first point's own zone; at rest: the whole frame
+		if not Build(play and all[1].m or shown, all) then
+			map:Hide()
+			empty:SetText(L["This map can't be drawn here."])
+			empty:Show()
+			f.play:Disable()
+			return
+		end
+		f.play:SetEnabled(#all > 0)
+		if slider then slider:SetEnabled(#all > 1) end
+		if play then
 			state.clock, state.playing = 0, true
 			f.play:SetText(L["Pause"])
 			SetSlider(0)
@@ -1160,7 +1210,7 @@ function W.JourneyPane(parent, opts)
 			state.playing = false
 			f.play:SetText(L["Play"])
 			SetSlider(1)
-			for _, p in ipairs(pts) do p.fired = true end
+			for _, p in ipairs(all) do p.fired = true end
 			Reveal(last)
 		end
 	end

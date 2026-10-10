@@ -474,7 +474,7 @@ end
 --   brought to Master Hunter or above. Only ever your chosen card. Its spikes lean toward your
 --   race's capital and take your class's shape; your own screen shows your character.
 --   Companion cards (Hunters and Warlocks): right-click your pet's portrait, "Add to Wild Gambit
---   deck" (or /aa gambit pet). Fought, then by creatures killed together (5 / 15 / 50 / 200).
+--   deck" (or /aa gambit pet). Its quality is its master's (the hero card's); creatures killed together are counted for the skull on its card.
 ---------------------------------------------------------------------------
 
 -- each race's capital: its map (the spikes' lean) and its scene (Media\Scene_Hero_<name>)
@@ -630,9 +630,17 @@ function WG:AddPet()
 	p.display = p.display or (type(rec) == "table" and rec.display) or nil
 	pets[key] = p
 	PetFace(p)
-	local tier = WL.PetTier(p.kills)
-	Tell(fresh and ("%s joins your deck: a %s card, level %d."):format(name, WL.TIERS[tier], p.level)
-		or ("%s's card is up to date: %s, level %d, %d kills together."):format(name, WL.TIERS[tier], p.level, p.kills))
+	-- (Shannon, 2026-10-10) a new companion card plays the card toast, like a creature's earned card
+	if fresh and A.CardToast and A.CardToast.Add then
+		for _, c in ipairs(self:PetCards()) do
+			if c.petKey == key then pcall(A.CardToast.Add, A.CardToast, npc, 0, c.tier, name, c) break end
+		end
+	end
+	-- (Shannon, 2026-10-10) a companion's card takes its master's quality (your hero card's tier);
+	-- kills together are still counted, shown by the skull on its card
+	local tier = WL.HeroTier(MasterCount())
+	Tell(fresh and ("%s joins your deck: a %s card like yours, level %d."):format(name, WL.TIERS[tier], p.level)
+		or ("%s's card is up to date: %s like yours, level %d, %d kills together."):format(name, WL.TIERS[tier], p.level, p.kills or 0))
 	if frame and frame.prep and frame.prep:IsVisible() then self:ShowPick() end -- (only when the table is open)
 end
 
@@ -647,6 +655,7 @@ end
 function WG:PetCards()
 	local out = {}
 	local out_, outNpc = CurrentPet()
+	local masterTier = WL.HeroTier(MasterCount()) -- (a companion's quality is its master's, 2026-10-10)
 	for key, p in pairs(self:Pets()) do
 		local info = {
 			npc = p.npc, name = p.name, level = p.level or 1, class = "pet", pet = true, species = p.species,
@@ -655,14 +664,14 @@ function WG:PetCards()
 			-- the pet that's out: drawn from the unit itself on your screen
 			unit = (out_ == p) and "pet" or nil,
 		}
-		local c = WL.Card(info, WL.PetTier(p.kills))
+		local c = WL.Card(info, masterTier)
 		c.kills, c.petKey = p.kills, key
 		out[#out + 1] = c
 	end
 	return out
 end
 
--- creatures killed with your companion out count for its card
+-- creatures killed with your companion out: its "kills together", shown by the skull on its card
 -- takes a companion out of your deck (its kills together go with it)
 function WG:DiscardPet(key)
 	local p = self:Pets()[key]
@@ -688,11 +697,9 @@ end
 if A.On then A:On("KILL", function()
 	local p = db and CurrentPet()
 	if not p then return end
-	local before = WL.PetTier(p.kills)
+	-- (kills together: a stat for the skull on its card, no longer its quality, 2026-10-10)
 	p.kills = (p.kills or 0) + 1
 	p.level = UnitLevel("pet") or p.level
-	local after = WL.PetTier(p.kills)
-	if after > before then Tell(("%s's card is now %s (%d kills together)."):format(p.name or "Your companion", WL.TIERS[after], p.kills)) end
 end) end
 
 -- "Add to Wild Gambit deck" on your pet's menu (its portrait, or the target frame on your pet)
@@ -838,8 +845,12 @@ local function PlayAllowed(unit)
 		and (R(UnitIsPlayer(unit)) == true or NpcOfGuid(UnitGUID(unit)) ~= nil)
 end
 
+-- (2026-10-10, Shannon) the Wild Gambit logo in front of its right-click menu entries
+-- (a WG field, not a local: this file is near Lua's 200-locals limit)
+WG.MENU_ICON = "|TInterface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit:16:16:0:0|t "
+
 local function HookPlayMenu()
-	local label = "|cff9be36bPlay Wild Gambit|r"
+	local label = WG.MENU_ICON .. "|cff9be36bPlay Wild Gambit|r"
 	if Menu and Menu.ModifyMenu then
 		for _, tag in ipairs({ "MENU_UNIT_TARGET", "MENU_UNIT_FOCUS", "MENU_UNIT_PLAYER", "MENU_UNIT_ENEMY_PLAYER",
 			"MENU_UNIT_PARTY", "MENU_UNIT_RAID_PLAYER", "MENU_UNIT_BOSS", "MENU_UNIT_FRIEND" }) do
@@ -881,9 +892,9 @@ local function HookPetMenu()
 			root:CreateDivider()
 			-- in your deck already: the choice is to discard it (it updates itself)
 			if CurrentPet() then
-				root:CreateButton("|cff9be36bDiscard its Wild Gambit card|r", function() WG:AskDiscardPet() end)
+				root:CreateButton(WG.MENU_ICON .. "|cff9be36bDiscard its Wild Gambit card|r", function() WG:AskDiscardPet() end)
 			else
-				root:CreateButton("|cff9be36bAdd to Wild Gambit deck|r", function() WG:AddPet() end)
+				root:CreateButton(WG.MENU_ICON .. "|cff9be36bAdd to Wild Gambit deck|r", function() WG:AddPet() end)
 			end
 		end)
 	elseif UnitPopup_ShowMenu and hooksecurefunc then
@@ -891,7 +902,7 @@ local function HookPetMenu()
 			if which ~= "PET" or (UIDROPDOWNMENU_MENU_LEVEL or 1) ~= 1 or not Allowed() then return end
 			local info = UIDropDownMenu_CreateInfo()
 			local inDeck = CurrentPet() ~= nil
-			info.text = inDeck and "|cff9be36bDiscard its Wild Gambit card|r" or "|cff9be36bAdd to Wild Gambit deck|r"
+			info.text = inDeck and WG.MENU_ICON .. "|cff9be36bDiscard its Wild Gambit card|r" or WG.MENU_ICON .. "|cff9be36bAdd to Wild Gambit deck|r"
 			info.notCheckable = true
 			info.func = function() if inDeck then WG:AskDiscardPet() else WG:AddPet() end end
 			UIDropDownMenu_AddButton(info)
@@ -2212,6 +2223,17 @@ function WG:Showcase(parent)
 		self.dragged, self.moved = false, 0
 		if not dragged then WG:Open() end
 	end)
+	-- (2026-10-10) a given card (a companion's, for its card toast) rather than a creature's own
+	function f:ShowCard(card)
+		if not card then return end
+		if self.ring then self.ring:Hide() end
+		SetCard(self, card)
+		SetOwner(self, WL.COLORS[card.tier], false)
+		self.banner:SetVertexColor(1, 1, 1)
+		self.facing = 0.35
+		self:Show()
+		if not self.modelKept then self:FitModel() end
+	end
 	function f:ShowCreature(npc)
 		local card = WG:CardFor(npc)
 		-- (#54) not earned yet: the iron ring with the creature's model where its card would be

@@ -47,6 +47,23 @@ local PROF_ICON = {
 	Jewelcrafting = "INV_Misc_Gem_01", Inscription = "INV_Inscription_Tradeskill01", Lockpicking = "Spell_Nature_MoonKey",
 }
 local SECONDARY = { Cooking = 1, ["First Aid"] = 2, Fishing = 3 }
+-- (2026-10-10) each profession's painted banner (Media\Recipe_<Name>.tga, 512 x 128; ART_ASSETS.md
+-- "Crafting profession cards") and the tint its card takes; a profession without one keeps the plain
+-- tinted card with its icon
+local PROF_ART = {
+	Alchemy = "Recipe_Alchemy", Blacksmithing = "Recipe_Blacksmithing", Enchanting = "Recipe_Enchanting",
+	Engineering = "Recipe_Engineering", Leatherworking = "Recipe_Leatherworking", Tailoring = "Recipe_Tailoring",
+	Cooking = "Recipe_Cooking", ["First Aid"] = "Recipe_FirstAid",
+	-- (the gathering professions' trainer spells, e.g. smelting: the Gathering page's paintings)
+	Herbalism = "Gather_Herbalism", Mining = "Gather_Mining", Skinning = "Gather_Skinning", Fishing = "Gather_Fishing",
+}
+local PROF_TINT = {
+	Alchemy = { 0.55, 0.4, 0.8 }, Blacksmithing = { 0.9, 0.45, 0.25 }, Enchanting = { 0.6, 0.45, 0.95 },
+	Engineering = { 0.75, 0.6, 0.35 }, Leatherworking = { 0.75, 0.55, 0.35 }, Tailoring = { 0.5, 0.6, 0.85 },
+	Cooking = { 0.9, 0.65, 0.3 }, ["First Aid"] = { 0.85, 0.85, 0.8 },
+	Herbalism = { 0.35, 0.7, 0.3 }, Mining = { 0.8, 0.52, 0.3 }, Skinning = { 0.65, 0.42, 0.25 }, Fishing = { 0.3, 0.58, 0.85 },
+}
+local PROF_H = 76
 local function ProfIcon(group)
 	local v = (group or ""):match("^skill:(.*)$")
 	return W.FindIcon({ PROF_ICON[v or ""] or "INV_Misc_Book_08", "INV_Misc_Book_08" })
@@ -610,7 +627,6 @@ local function CardRows()
 		local order = {}
 		for g in pairs(profs) do order[#order + 1] = g end
 		table.sort(order, function(a, b) return GroupOrder(a) < GroupOrder(b) end)
-		local cards = {}
 		for _, g in ipairs(order) do
 			local p, v = profs[g], g:match("^skill:(.*)$")
 			-- the best skill among your characters
@@ -621,9 +637,10 @@ local function CardRows()
 			end
 			local count = tostring(p.n) .. NewText(p.new) .. (best and ("  |cff999999" .. best .. (bestMax and (" / " .. bestMax) or "") .. "|r") or "")
 			local tip = best and (L["Best: %s, %d"]):format(ns.CharName(bestKey, true), best) or v
-			cards[#cards + 1] = Card(ProfIcon(g), v, count, tip, function() OpenCard(v, function(_, rec) return rec.group == g end, g) end)
+			-- (2026-10-10) a full-width painted banner per profession, like the Gathering cards
+			rows[#rows + 1] = { card = "prof", group = g, name = v, count = count, tip = tip,
+				action = function() OpenCard(v, function(_, rec) return rec.group == g end, g) end }
 		end
-		Pairs(cards)
 	end
 
 	-- the character you're playing: only their own professions count
@@ -649,6 +666,25 @@ local function FillCardRow(row, r)
 	row.icon:SetTexture(nil)
 	row.text:SetText("")
 	row.right:SetText("")
+	if row.banner then row.banner:Hide() row.banner:SetSelected(false) end
+	if r.card == "prof" then
+		for _, c in ipairs(row.halves or {}) do c:Hide() end
+		if row.badge then row.badge:Hide() end
+		if ns.New then ns.New:MarkRow(row, false) end
+		row.indent = 0
+		row:SetHeader(false)
+		if not W.FillZoneBanner then
+			row.text:SetFontObject(GameFontNormalLarge)
+			row.text:SetText(r.name)
+			row.right:SetText(r.count)
+			return
+		end
+		local tint = PROF_TINT[r.name] or { 0.6, 0.5, 0.35 }
+		W.FillZoneBanner(row, { name = r.name, art = PROF_ART[r.name], icon = ProfIcon(r.group), tint = tint, top = 4,
+			count = "|cffcccccc" .. r.count .. "|r", pill = { sign = ">", label = (L["Open %s"]):format(r.name), action = r.action } })
+		for _, t in ipairs(row.banner.edges) do t:SetColorTexture(tint[1] * 0.75, tint[2] * 0.75, tint[3] * 0.75, 1) end
+		return
+	end
 	if row.badge then row.badge:Hide() end
 	if ns.New then ns.New:MarkRow(row, false) end
 	for _, c in ipairs(row.halves or {}) do c:Hide() end
@@ -681,6 +717,7 @@ end
 
 local function FillRecipeRow(row, r)
 	for _, c in ipairs(row.halves or {}) do c:Hide() end
+	if row.banner then row.banner:Hide() row.banner:SetSelected(false) end
 	row.icon:ClearAllPoints()
 	if ns.New then ns.New:MarkRow(row, r.isNew, "trainers", r.newKey) end
 	if not row.badge then
@@ -763,7 +800,7 @@ function page:Build(parent, header)
 	list = W.List(listHolder, {
 		collapse = { state = collapsed, key = function(r) return (r.newHeader and "new") or (r.header and not r.card and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
-		heightOf = function(r) if r.card == "pair" then return PAIR_H end end,
+		heightOf = function(r) if r.card == "pair" then return PAIR_H elseif r.card == "prof" then return PROF_H end end,
 		spacers = false,
 		-- (#62) the card section, or the profession you're scrolling through, stays pinned at the top
 		sticky = function(r)
@@ -782,6 +819,7 @@ function page:Build(parent, header)
 				page:Refresh()
 				return
 			end
+			if r.card == "prof" then return r.action() end
 			if r.card then return end
 			if r.newHeader then
 				collapsed.new = not collapsed.new

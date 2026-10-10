@@ -895,11 +895,27 @@ local function TooltipLine(tooltip)
 		tooltip:AddLine("|cff66ccff" .. L["Almanac:"] .. "|r " .. L["not yet in your Almanac"], 0.7, 0.7, 0.7)
 		return
 	end
-	local tier, need = B:Tier(rec)
-	local text = ("|cff66ccff%s|r %s %s"):format(L["Almanac:"], B:TierMarkup(tier, 16), B:TierText(tier))
-	if B:KillCount(rec) > 0 then text = text .. " - " .. ns.N(B:KillCount(rec), "kill", "kills") end
-	if need then text = text .. " |cff999999" .. (L["(%d to %s)"]):format(need, B.TIERS[tier + 1]) .. "|r " .. B:TierMarkup(tier + 1, 12) end
+	-- (Shannon, 2026-10-10) "Almanac: <tier icon> 7 slain, 8 to Master Hunter <next icon>": the badge
+	-- names the tier, the words count the kills; the climb goes on through Epic and Legendary
+	local kills = B:KillCount(rec)
+	local tier, need = B:FullTier(rec)
+	local sighted = kills == 0 and tier <= 1
+	local text
+	if sighted then
+		text = ("|cff66ccff%s|r %s %s"):format(L["Almanac:"], B:TierMarkup(tier, 16), B:TierText(tier))
+	else
+		text = ("|cff66ccff%s|r %s %s"):format(L["Almanac:"], B:TierMarkup(tier, 16), (L["%d slain"]):format(kills))
+		if need and B.TIERS[tier + 1] then
+			text = text .. "|cff999999, " .. (L["%d to %s"]):format(need, B.TIERS[tier + 1]) .. "|r " .. B:TierMarkup(tier + 1, 12)
+		else
+			text = text .. "|cff999999, |r" .. B:TierText(tier) -- (the top: its name, no next)
+		end
+	end
 	tooltip:AddLine(text, 1, 1, 1)
+	if sighted then
+		-- (the creature by name: "Defeat Captain Hecklebury Smotts to earn their Wild Gambit card.", wrapped)
+		tooltip:AddLine("|TInterface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit:16:16|t " .. (L["Defeat %s to earn their Wild Gambit card."]):format(rec.name or L["one"]), 1, 0.82, 0, true)
+	end
 	-- Studied and up: its abilities, each with its icon (melee left out)
 	if tier >= 3 and ns.CreatureDB then
 		local known = ns.CreatureDB:KnownSpells(npc, rec, tier)

@@ -1445,6 +1445,21 @@ function W.PairCard(row, i)
 	c = CreateFrame("Button", nil, row)
 	c:SetFrameLevel(row:GetFrameLevel() + 4)
 	c:RegisterForClicks("LeftButtonUp")
+	-- (Shannon, 2026-10-10) a row holding cards doesn't light up itself: each card has its own hover,
+	-- and the row's glow beside a lone card (Show all) read as a second button. Put back when the
+	-- row's cards are hidden (the row is reused for a plain entry).
+	local function RowGlow()
+		local any = false
+		for _, h in ipairs(row.halves or {}) do if h:IsShown() then any = true end end
+		for _, t in ipairs(row.hover or {}) do
+			if t.SetAlpha then
+				if t.baseAlpha == nil then t.baseAlpha = t:GetAlpha() or 1 end
+				t:SetAlpha(any and 0 or t.baseAlpha)
+			end
+		end
+	end
+	c:HookScript("OnShow", RowGlow)
+	c:HookScript("OnHide", RowGlow)
 	c.art = c:CreateTexture(nil, "BACKGROUND", nil, 0)
 	c.art:SetAllPoints()
 	c.shade = c:CreateTexture(nil, "BACKGROUND", nil, 1)

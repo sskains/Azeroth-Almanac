@@ -53,7 +53,7 @@ A.UI:Open("trainers")
 RP = A.UI:GetPage("trainers")
 RP:Refresh()
 function Find(f) for _, r in ipairs(R_ROWS or {}) do if f(r) then return r end end end
-function Cards() local t = {} for _, r in ipairs(R_ROWS or {}) do if r.card == "pair" then for _, o in ipairs({ r.a, r.b }) do if o then t[#t + 1] = o.plain end end end end return table.concat(t, ",") end
+function Cards() local t = {} for _, r in ipairs(R_ROWS or {}) do if r.card == "pair" then for _, o in ipairs({ r.a, r.b }) do if o then t[#t + 1] = o.plain end end elseif r.card == "prof" then t[#t + 1] = r.name end end return table.concat(t, ",") end
 function Draw() for _, r in ipairs(R_ROWS or {}) do
 	local row = Mock("Row") row.icon = Mock("I") row.text = Mock("T") row.right = Mock("R") row.SetHeader = function() end
 	R_OPTS.update(row, r)
@@ -63,14 +63,15 @@ function BlockText(b) local t = {} for _, x in ipairs(b or {}) do t[#t + 1] = to
 cards = p.eval("Cards()")
 print("  cards:", cards)
 check(cards.startswith("Show all"), "the page opens on its cards, Show all first")
-check("Alchemy" in cards and "First Aid" in cards and cards.index("Alchemy") < cards.index("First Aid"), "a card per profession, primary ones before First Aid")
+check("Alchemy" in cards and "First Aid" in cards and cards.index("Alchemy") < cards.index("First Aid"), "a banner per profession, primary ones before First Aid")
+check(p.eval("(function() for _, r in ipairs(R_ROWS) do if r.card == 'prof' and r.name == 'Alchemy' then return true end end end)()"), "professions are full-width banner rows")
 check("Fireball" not in cards and "MAGE" not in cards, "class spells stay off the Recipes page")
 check("Can learn now" in cards and "Not yet" in cards and "Learned" in cards, "For <you>: Can learn now, Not yet, Learned")
 p.lua("Draw()")
 check(p.eval("type(SUMMARY) == 'table'") and "You can learn now" in p.eval("BlockText(SUMMARY)") or "can learn" in p.eval("BlockText(SUMMARY)").lower(), "the summary shows what you can learn now")
 # open the Alchemy card
 p.lua("""
-for _, r in ipairs(R_ROWS) do if r.card == 'pair' then for _, o in ipairs({ r.a, r.b }) do if o and o.plain == 'Alchemy' then o.action() end end end end
+for _, r in ipairs(R_ROWS) do if r.card == 'prof' and r.name == 'Alchemy' then R_OPTS.onClick(r) break end end
 """)
 heads = p.eval("(function() local t = {} for _, r in ipairs(R_ROWS) do if r.header then t[#t + 1] = r.header end end return table.concat(t, ',') end)()")
 print("  headers:", heads)

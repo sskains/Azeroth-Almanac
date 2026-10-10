@@ -304,7 +304,7 @@ function CT.Next()
 	local c = WLm and WLm.COLORS[top.after] or { 1, 1, 1 }
 	frame.glow:SetVertexColor(c[1], c[2], c[3])
 	frame.burst:SetVertexColor(c[1], c[2], c[3])
-	frame.title:SetText((top.before < 2 and L["New Wild Gambit card"] or L["Wild Gambit card upgraded"]))
+	frame.title:SetText((top.card and top.before < 2 and L["Companion joins your deck"]) or (top.before < 2 and L["New Wild Gambit card"] or L["Wild Gambit card upgraded"]))
 	for i, b in ipairs(frame.backs) do
 		b:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\CardBack_Almanac")
 		b:SetShown(#list > i)
@@ -313,7 +313,7 @@ function CT.Next()
 	local state = { t = 0, top = top, color = c }
 	if top.before < 2 then
 		state.new = true
-		pcall(card.ShowCreature, card, top.npc)
+		if top.card and card.ShowCard then pcall(card.ShowCard, card, top.card) else pcall(card.ShowCreature, card, top.npc) end
 		card:FaceDown(true)
 	else
 		state.upgrade = true
@@ -353,14 +353,15 @@ local function Gathered()
 	CT.Next()
 end
 
--- a card earned (before < 2) or raised: npc, its tier before and after, its name
-function CT:Add(npc, before, after, name)
+-- a card earned (before < 2) or raised: npc, its tier before and after, its name; `card` (optional): the
+-- card to show instead of the creature's own (a companion's card, 2026-10-10)
+function CT:Add(npc, before, after, name, card)
 	if not npc or (after or 0) <= (before or 0) or (after or 0) < 2 then return end
 	local t = Settings()
 	if not t or not t.enabled then return end
 	if AlertTier(after) < (t.minTier or 1) then return end
 	count = count + 1
-	local it = { npc = npc, before = before or 0, after = after, name = name, n = count }
+	local it = { npc = npc, before = before or 0, after = after, name = name, n = count, card = card }
 	if not self:Wanted() then CT.Plain(it) return end
 	pending[#pending + 1] = it
 	-- (cards in quick succession, or a fight's worth, come as one stack)

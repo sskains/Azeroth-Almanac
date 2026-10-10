@@ -1172,9 +1172,23 @@ Shannon asked for the Recipes tab in the same style and format as Creatures, Ite
 
 **Built (Unreleased, 2026-10-09)** [?]
 - `UI/Pages/Trainers.lua` (page key still `trainers`): `view` / `crumb` / `cardFilter` (`settings.window.recipesView`), `CardRows()` (Show all, Professions with count, +N and the best skill, For <you> with Can learn now / Not yet / Learned for your own professions), `Collect()` (profession, then `BRACKETS`: Apprentice to 74, Journeyman 149, Expert 224, Artisan 300, Master above, "No skill shown"; heading and skill on the right), `FillRecipeRow` (badge: `ReadyCheck-Ready` learned, `Character-Plus` can learn now, `UI-LFG-ICON-LOCK` not yet; name in `DIFF` colour for learned recipes the window has coloured), `Summary()` on the right with nothing picked. The "Show" dropdown and the in-tree Overview row are gone; a profession's heading (or card) shows its overview. A recipe's page adds Can make now, Costs to make / Sells for (`Crafting:PriceOf`), The recipe item and Sold by (`Merchants:Selling`), Upgrade for (`Upgrades:Lines`).
+- (2026-10-10) The Professions cards became full-width painted banners (`card = "prof"` rows, 76 px, Asia's `W.FillZoneBanner` with `PROF_ART` / `PROF_TINT`, ">" opens), like the Gathering cards; Show all and For <you> stay pair cards.
 - `Modules/Trainers.lua`: `chars[key].recipeDiff[spellID]` from `C_TradeSkillUI.GetRecipeInfo` (`relativeDifficulty`, or the older `difficulty` words).
 - Tests: `dev/tests/test_recipes_page.py`.
 
+
+## 91. Companion cards take their master's quality (Shannon, 2026-10-10) [?]
+- A hunter's or warlock's companion card now has the same quality (tier, frame) as its master's hero card (`WL.HeroTier(MasterCount())`: Fought, then Hunted / Master Hunter / Epic / Legendary at 10 / 25 / 50 / 100 mastered creatures). Kills made with the companion out no longer raise it (`WL.PetTier` / `PET_AT` are left unused).
+- Kills together are still counted (`pets[key].kills`, one per kill with the pet out) as a stat: the skull and number on the companion's card strip, where a creature card shows its kills. Suggested wording wherever it needs a label (tooltip, chat): "Kills together".
+- Supersedes the companion tiers of section 69 / 0.41.0.
+- Adding a companion (first time) plays the card toast (section 79's `CardToast:Add`, with the companion's card passed in: `Add(npc, 0, tier, name, card)`; the showcase card gained `ShowCard(card)`), titled "Companion joins your deck".
+- Same day: the creature tooltip for a creature only sighted (no kills) drops "(1 to Fought)" for a line with the Wild Gambit icon, "Defeat <its name> to earn their Wild Gambit card." (wrapped) (`Modules/Bestiary.lua` TooltipLine), since cards are earned by a kill (section 79).
+- Also: the line for a creature you've killed reads "<tier badge> N slain, x to <next tier> <next badge>" (Shannon), using `B:FullTier`, so it climbs on to Epic and Legendary Hunter; the top tier ends with its name.
+
+## 92. Journey: zone by zone, then the continent (Shannon, 2026-10-10) [?]
+- While the time lapse plays (or the slider is dragged), the map shown is the zone of the newest point reached so far (`Follow(upTo)` in `UI/Journey.lua`): when it changes, that zone's map is drawn (`Build(map, allPts)`: fitted and zoomed to the points that fall on it, its dots, pins and line), fades in (0.35 s) and its name shows as the banner. Points already behind the heads count as passed, so a new map doesn't burst with old effects. Everyone mode: at most one switch every 1.5 s, so two characters in different zones don't flip the map.
+- When it ends, `Follow(last, true)` pulls back to the continent the journey ends on (a 0.8 s fade), then the closing ripples and summary. At rest (no play, focus off) the journey is drawn on that continent too; a focused journal entry still shows its own zone.
+- The time range (first, last) now comes from every point in the frame, not only those on the map shown. Test: `dev/tests/test_journey.py`.
 
 ## What comes from Plus Everything
 
