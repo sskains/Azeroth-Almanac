@@ -446,6 +446,62 @@ function W.Button(parent, text, width, onClick)
 	return b
 end
 
+-- (DESIGN 87) a small square view button with a picture instead of a word (Cards / List on the
+-- Creatures and Items pages): a dark tile, the picture gold when it's the view you're in and grey
+-- otherwise, brighter under the mouse, its name in the tooltip. b:SetActive(on). Also the Gathering
+-- page's profession toggles, with a game icon (media = a file ID or a full path).
+function W.ViewButton(parent, media, tip, onClick)
+	local b = CreateFrame("Button", nil, parent)
+	b:SetSize(24, 24)
+	b.bg = b:CreateTexture(nil, "BACKGROUND")
+	b.bg:SetAllPoints()
+	b.bg:SetColorTexture(0, 0, 0, 0.35)
+	b.edge = b:CreateTexture(nil, "BACKGROUND", nil, -1)
+	b.edge:SetPoint("TOPLEFT", -1, 1)
+	b.edge:SetPoint("BOTTOMRIGHT", 1, -1)
+	b.edge:SetColorTexture(0.34, 0.26, 0.14, 0.9)
+	b.tex = b:CreateTexture(nil, "ARTWORK")
+	b.tex:SetPoint("TOPLEFT", 3, -3)
+	b.tex:SetPoint("BOTTOMRIGHT", -3, 3)
+	-- (a game icon, a file ID or a full path, shows in its own colours, greyed when off; a picture
+	-- of ours from Media is white and takes the gold / grey tint)
+	local game = type(media) == "number" or (type(media) == "string" and media:find("\\", 1, true) ~= nil)
+	local file = game and media or ("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. media)
+	b.tex:SetTexture(file)
+	if game then b.tex:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+	b.hl = b:CreateTexture(nil, "HIGHLIGHT")
+	b.hl:SetAllPoints(b.tex)
+	b.hl:SetTexture(file)
+	if game then b.hl:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+	b.hl:SetBlendMode("ADD")
+	b.hl:SetAlpha(0.35)
+	function b:SetActive(on)
+		self.active = on and true or false
+		if on then
+			if game then self.tex:SetDesaturated(false) self.tex:SetVertexColor(1, 1, 1) else self.tex:SetVertexColor(1, 0.82, 0.2) end
+			self.edge:SetColorTexture(0.95, 0.75, 0.25, 1)
+		else
+			if game then self.tex:SetDesaturated(true) self.tex:SetVertexColor(0.55, 0.55, 0.55) else self.tex:SetVertexColor(0.62, 0.6, 0.56) end
+			self.edge:SetColorTexture(0.34, 0.26, 0.14, 0.9)
+		end
+	end
+	b:SetActive(false)
+	b:SetScript("OnClick", function(self)
+		if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+		onClick(self)
+	end)
+	b:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		local t, more = tip, nil
+		if type(tip) == "function" then t, more = tip(self) end
+		GameTooltip:AddLine(t or "", 1, 0.82, 0)
+		if more then GameTooltip:AddLine(more, 1, 1, 1, true) end
+		GameTooltip:Show()
+	end)
+	b:SetScript("OnLeave", GameTooltip_Hide)
+	return b
+end
+
 -- the profession window's Filter button: common-dropdown-b-button with gold text and a small arrow;
 -- the red button where the art is missing
 function W.Dropdown(parent, text, width, onClick)
@@ -565,6 +621,7 @@ end
 -- round frame with a thin ring (people and creatures), else a square icon with a thin edge.
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 W.WHITE, W.CIRCLE = WHITE, CIRCLE
 W.GOLD = { 1, 0.82, 0.25 }
 
@@ -995,6 +1052,9 @@ function W.List(parent, opts)
 				if data[index].spacer then
 					row.item, row.index = nil, index
 					if row.SetSpacer then row:SetSpacer(true) end
+					-- (a recycled row keeps nothing a page drew on it: banner cards, half cards)
+					if row.banner then row.banner:Hide() end
+					for _, c in ipairs(row.halves or {}) do c:Hide() end
 					if ns.New and ns.New.HeaderButton then ns.New:HeaderButton(row, nil) end
 				else
 					if row.SetSpacer and row.spacer then row:SetSpacer(false) end
@@ -1015,6 +1075,68 @@ function W.List(parent, opts)
 		end
 		empty:SetShown(#data == 0)
 		W.FitScrollBar(scroll, tops and totalH or #data * rh)
+		if holder.PaintSticky then holder:PaintSticky(offset) end
+	end
+
+	-- (#62) a sticky group header: opts.sticky(item) -> { text, r, g, b, folded } for a row that heads
+	-- a group (a continent, a kind of item), else nil. While its rows scroll past, the group's
+	-- heading stays pinned at the top of the list as a slim bar in its colour with its fold sign;
+	-- clicking the bar folds or opens the group (opts.onClick on the heading row).
+	if opts.sticky then
+		local bar = CreateFrame("Button", nil, holder)
+		bar:SetHeight(22)
+		bar:SetFrameLevel(scroll:GetFrameLevel() + 20)
+		bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+		bar.bg:SetAllPoints()
+		bar.bg:SetColorTexture(1, 1, 1, 1)
+		bar.edge = bar:CreateTexture(nil, "BORDER")
+		bar.edge:SetHeight(1)
+		bar.edge:SetPoint("BOTTOMLEFT")
+		bar.edge:SetPoint("BOTTOMRIGHT")
+		bar.edge:SetColorTexture(1, 1, 1, 1)
+		bar.sign = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+		bar.sign:SetPoint("RIGHT", -8, 0)
+		bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		bar.text:SetPoint("LEFT", 8, 0)
+		bar.text:SetPoint("RIGHT", bar.sign, "LEFT", -6, 0)
+		bar.text:SetJustifyH("LEFT")
+		bar.text:SetWordWrap(false)
+		bar.hl = bar:CreateTexture(nil, "HIGHLIGHT")
+		bar.hl:SetAllPoints()
+		bar.hl:SetColorTexture(1, 0.85, 0.4, 0.12)
+		bar:SetScript("OnClick", function(self)
+			if self.item and opts.onClick then
+				if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+				opts.onClick(self.item, self.index, "LeftButton")
+			end
+		end)
+		bar:Hide()
+		holder.stickyBar = bar
+		function holder:PaintSticky(offset)
+			offset = offset or (scroll:GetVerticalScroll() or 0)
+			-- the last group heading above the top edge (the one whose rows are on show)
+			local found, foundIndex
+			for i, it in ipairs(data) do
+				local top = tops and tops[i] or (i - 1) * rh
+				if top >= offset then break end
+				if not it.spacer then
+					local info = opts.sticky(it)
+					if info then found, foundIndex = info, i end
+				end
+			end
+			if not found or offset <= 0 then bar:Hide() bar.item = nil return end
+			bar:ClearAllPoints()
+			bar:SetPoint("TOPLEFT", scroll, "TOPLEFT", 0, 0)
+			bar:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, 0)
+			local r, g, b = found[2] or 0.85, found[3] or 0.7, found[4] or 0.3
+			W.Fade(bar.bg, "HORIZONTAL", r * 0.35, g * 0.35, b * 0.35, 0.96, 0.85)
+			bar.edge:SetColorTexture(r, g, b, 0.8)
+			bar.text:SetText(found[1] or "")
+			bar.text:SetTextColor(math.min(1, r + 0.25), math.min(1, g + 0.25), math.min(1, b + 0.25))
+			bar.sign:SetText(found[5] and "+" or "-")
+			bar.item, bar.index = data[foundIndex], foundIndex
+			bar:Show()
+		end
 	end
 
 	-- a little space above each heading after the first, as in the profession window
@@ -1313,6 +1435,218 @@ function W.Portrait(parent, size)
 	return p
 end
 
+-- (#52, #55) a half-width card in a list row: Asia's fading icon (the Creatures page's Mastery
+-- cards, the Items page's) or a painted scene. W.PairCard(row, i) makes / reuses card i of the row;
+-- W.FillPairCard(c, o, pairH): o = { icon | scene, name, plain, count, tip, action, tipLine }
+function W.PairCard(row, i)
+	row.halves = row.halves or {}
+	local c = row.halves[i]
+	if c then return c end
+	c = CreateFrame("Button", nil, row)
+	c:SetFrameLevel(row:GetFrameLevel() + 4)
+	c:RegisterForClicks("LeftButtonUp")
+	c.art = c:CreateTexture(nil, "BACKGROUND", nil, 0)
+	c.art:SetAllPoints()
+	c.shade = c:CreateTexture(nil, "BACKGROUND", nil, 1)
+	c.shade:SetAllPoints()
+	W.Fade(c.shade, "HORIZONTAL", 0.03, 0.02, 0.01, 0.85, 0.1)
+	c.icon = c:CreateTexture(nil, "ARTWORK")
+	c.icon:SetPoint("LEFT", 0, 0)
+	c.rule = c:CreateTexture(nil, "BORDER")
+	c.rule:SetHeight(1)
+	c.rule:SetPoint("BOTTOMLEFT", 2, 0)
+	c.rule:SetPoint("BOTTOMRIGHT", -2, 0)
+	c.rule:SetColorTexture(1, 1, 1, 1)
+	W.Fade(c.rule, "HORIZONTAL", 0.9, 0.72, 0.3, 0.9, 0)
+	c.hov = c:CreateTexture(nil, "ARTWORK", nil, 3)
+	c.hov:SetAllPoints()
+	c.hov:SetBlendMode("ADD")
+	W.Fade(c.hov, "HORIZONTAL", 0.95, 0.8, 0.45, 0.18, 0)
+	c.hov:Hide()
+	c.name = c:CreateFontString(nil, "OVERLAY")
+	c.name:SetShadowOffset(1, -1)
+	c.name:SetJustifyH("LEFT")
+	c.name:SetWordWrap(false)
+	c.count = c:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	c.count:SetShadowOffset(1, -1)
+	c.count:SetJustifyH("LEFT")
+	c:SetScript("OnEnter", function(self)
+		self.hov:Show()
+		if self.tip then
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:AddLine(self.tip, 1, 0.82, 0)
+			GameTooltip:AddLine(self.tipLine or L["Click: list them."], 0.6, 0.8, 1)
+			GameTooltip:Show()
+		end
+	end)
+	c:SetScript("OnLeave", function(self) self.hov:Hide() GameTooltip_Hide() end)
+	c:SetScript("OnClick", function(self)
+		if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+		if self.action then self.action() end
+	end)
+	-- (the painting keeps its shape: cut to the card's width / height)
+	c:SetScript("OnSizeChanged", function(self, w, h)
+		if not (self.scene and w and h and h > 0) then return end
+		local aspect, art = w / h, 2 -- (the scenes are 2 : 1)
+		if aspect > art then local v = art / aspect self.art:SetTexCoord(0, 1, (1 - v) / 2, (1 + v) / 2)
+		else local u = aspect / art self.art:SetTexCoord((1 - u) / 2, (1 + u) / 2, 0, 1) end
+	end)
+	row.halves[i] = c
+	return c
+end
+
+function W.FillPairCard(c, o, PAIR_H)
+	PAIR_H = PAIR_H or 60
+	c.action, c.tip, c.tipLine = o.action, o.tip, o.tipLine
+	c.scene = o.scene and true or false
+	if o.scene then
+		c.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. o.scene)
+		c.art:Show()
+		c.icon:Hide()
+		-- (Asia's banner lettering: the game's large gold font, as on the Places cards)
+		c.name:SetFontObject(GameFontNormalLarge)
+		c.name:SetTextColor(GameFontNormalLarge:GetTextColor())
+		c.name:SetWordWrap(false)
+		c.name:ClearAllPoints()
+		c.name:SetPoint("LEFT", c, "LEFT", 10, 6)
+		c.name:SetPoint("RIGHT", c, "RIGHT", -6, 6)
+		c.count:ClearAllPoints()
+		c.count:SetPoint("TOPLEFT", c.name, "BOTTOMLEFT", 1, -2)
+		local w, h = c:GetWidth(), c:GetHeight()
+		if w and h and h > 0 then c:GetScript("OnSizeChanged")(c, w, h) end
+	else
+		c.art:Hide()
+		c.icon:Show()
+		c.icon:SetTexture(o.icon)
+		c.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		c.icon:SetSize(PAIR_H - 8, PAIR_H - 8)
+		-- (Asia's journal look: solid on the left, fading to nothing under the words)
+		if CreateColor then pcall(c.icon.SetGradient, c.icon, "HORIZONTAL", CreateColor(1, 1, 1, 1), CreateColor(1, 1, 1, 0)) end
+		-- (a recycled card may carry the scenes' large font: set the plain font outright; long tier names
+		-- like "Legendary Hunter" step down a size and wrap onto a second line instead of being cut)
+		local font, size = GameFontNormal:GetFont()
+		size = (#(o.plain or "") > 12) and (size - 1) or size
+		c.name:SetFont(font, size, "")
+		c.name:SetTextColor(1, 1, 1)
+		c.name:SetWordWrap(true)
+		if c.name.SetMaxLines then c.name:SetMaxLines(2) end
+		c.name:SetText(o.name)
+		-- (two lines sit a little higher, so the count still fits under them)
+		local room = (c:GetWidth() or 0) - (PAIR_H - 14) - 4
+		local two = room > 0 and (c.name:GetStringWidth() or 0) > room
+		c.name:ClearAllPoints()
+		c.name:SetPoint("LEFT", c, "LEFT", PAIR_H - 14, two and 11 or 7) -- (over the icon's faded edge)
+		c.name:SetPoint("RIGHT", c, "RIGHT", -4, two and 11 or 7)
+		c.count:ClearAllPoints()
+		c.count:SetPoint("TOPLEFT", c.name, "BOTTOMLEFT", 0, two and -2 or -3)
+	end
+	c.name:SetText(o.name)
+	c.count:SetText(o.count or "")
+	c:Show()
+end
+
+
+-- (#54) the iron ring for a card not yet earned: the Characters page's portrait ring in iron grey,
+-- holding the creature's 3D model on a dark disc (the page header already shows its face). The
+-- model sits in the square inside the circle, so the creature stays within the ring; without a
+-- model, the creature-type icon fills the ring. ring:SetCreature(npc, display, icon, tip)
+function W.IronRing(parent, size)
+	local p = W.Portrait(parent, size)
+	p:SetRing(0.46, 0.47, 0.5)
+	p.inner:SetVertexColor(0.04, 0.04, 0.05)
+	p.disc = p:CreateTexture(nil, "BORDER", nil, 2)
+	p.disc:SetTexture(CIRCLE)
+	p.disc:SetPoint("TOPLEFT", 4, -4)
+	p.disc:SetPoint("BOTTOMRIGHT", -4, 4)
+	p.disc:SetVertexColor(0.07, 0.07, 0.08)
+	p.art:ClearAllPoints()
+	p.art:SetPoint("TOPLEFT", 8, -8)
+	p.art:SetPoint("BOTTOMRIGHT", -8, 8)
+	p.art:SetDesaturated(true)
+	-- (Shannon, 2026-10-09: fill the ring.) The model fills the whole disc: a model frame is square
+	-- and can't be masked round, so what it draws past the circle is hidden under a cover (clear
+	-- inside the circle, the page's dark outside it), and the ring itself is drawn over the top.
+	-- The creature is framed close; a big one is cut by the ring, as in a portrait frame.
+	p.model = W.Try("PlayerModel", nil, p)
+	p.model:SetPoint("TOPLEFT", 4, -4)
+	p.model:SetPoint("BOTTOMRIGHT", -4, 4)
+	p.top = CreateFrame("Frame", nil, p)
+	p.top:SetAllPoints()
+	p.top:SetFrameLevel(p.model:GetFrameLevel() + 3)
+	p.cover = p.top:CreateTexture(nil, "BACKGROUND")
+	p.cover:SetTexture(MEDIA .. "Mask_CircleOutside")
+	p.cover:SetPoint("TOPLEFT", 3, -3)
+	p.cover:SetPoint("BOTTOMRIGHT", -3, 3)
+	p.cover:SetVertexColor(0.08, 0.065, 0.05)
+	p.band = p.top:CreateTexture(nil, "ARTWORK")
+	p.band:SetTexture(MEDIA .. "Ring_Band")
+	p.band:SetAllPoints()
+	p.band:SetVertexColor(0.46, 0.47, 0.5)
+	p.bandIn = p.top:CreateTexture(nil, "ARTWORK", nil, 1)
+	p.bandIn:SetTexture(MEDIA .. "Ring_Band")
+	p.bandIn:SetPoint("TOPLEFT", 3, -3)
+	p.bandIn:SetPoint("BOTTOMRIGHT", -3, 3)
+	p.bandIn:SetVertexColor(0.2, 0.2, 0.22)
+	-- the camera: close in (settings.window.ringZoom, /aa ringzoom to try others), re-set once the
+	-- model has loaded and whenever the frame is laid out (a camera set before either is lost)
+	local function Frame(self)
+		local m = self.model
+		local zoom = (ns.db and ns.db.settings and ns.db.settings.window and ns.db.settings.window.ringZoom) or W.RING_ZOOM
+		pcall(m.SetPortraitZoom, m, 0)
+		pcall(m.SetPosition, m, 0, 0, 0)
+		pcall(m.SetCamDistanceScale, m, zoom)
+		pcall(m.SetFacing, m, 0.35)
+	end
+	p.Frame = Frame
+	p.model:SetScript("OnModelLoaded", function() Frame(p) end)
+	p.model:HookScript("OnSizeChanged", function() Frame(p) end)
+	p.model:HookScript("OnShow", function() C_Timer.After(0, function() Frame(p) end) end)
+	W.ironRings = W.ironRings or {}
+	table.insert(W.ironRings, p)
+	p:EnableMouse(true)
+	p:SetScript("OnEnter", function(self)
+		if not self.tip then return end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(self.tip[1] or "", 1, 0.82, 0)
+		if self.tip[2] then GameTooltip:AddLine(self.tip[2], 0.75, 0.75, 0.75, true) end
+		GameTooltip:Show()
+	end)
+	p:SetScript("OnLeave", GameTooltip_Hide)
+	function p:SetCreature(npc, display, icon, tip)
+		self.tip = tip
+		-- (the Creatures page redraws as discoveries come in: the same creature keeps its model
+		-- rather than loading again, which reset it twice a second)
+		if self.npc == npc and self.display == display and self.model:IsShown() and self:IsShown() then return end
+		self.npc, self.display = npc, display
+		local shown = false
+		pcall(self.model.ClearModel, self.model)
+		if display then shown = pcall(self.model.SetDisplayInfo, self.model, display) end
+		if not shown and npc then shown = pcall(self.model.SetCreature, self.model, npc) end
+		if shown then
+			Frame(self)
+			C_Timer.After(0, function() Frame(self) end)
+			self.model:Show()
+			self.art:Hide()
+		else
+			self.model:Hide()
+			W.SetIcon(self.art, icon or W.KIND.creature.icon)
+			self.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			self.art:Show()
+		end
+		self:Show()
+	end
+	return p
+end
+W.RING_ZOOM = 0.85 -- (1 = the game's own framing of the whole creature; lower = closer)
+
+-- /aa ringzoom <n>: try another framing on every iron ring now shown (kept in settings)
+function W.SetRingZoom(n)
+	n = tonumber(n)
+	if not n or n <= 0 then ns.db.settings.window.ringZoom = nil else ns.db.settings.window.ringZoom = n end
+	for _, r in ipairs(W.ironRings or {}) do if r.Frame then r.Frame(r) end end
+	ns.Print(("iron ring zoom: %s (1 = the whole creature, lower = closer)"):format(tostring(ns.db.settings.window.ringZoom or (W.RING_ZOOM .. ", the default"))))
+end
+
 -- the Alliance / Horde crest for a texture (the friends list's round faction icons); hides it for
 -- anything else. faction = "Alliance" | "Horde" (UnitFactionGroup)
 function W.SetFactionBadge(tex, faction)
@@ -1326,11 +1660,19 @@ function W.SetFactionBadge(tex, faction)
 	return false
 end
 
--- The target frame's dragon round a round portrait, by creature class: gold for elites and bosses,
--- silver for rares, silver-winged for rare elites (the classic target frame sheets). The dragon is
--- cut from the 256 x 128 sheet at x 146..256, y 0..100; its portrait hole is 64 px across, centred
--- 36 px from the cut's left and 44 px from its top, so it wraps the right side of the portrait.
--- Returns true when a dragon shows. anchor = the round portrait region, diameter = its size.
+-- (DESIGN 89, Shannon 2026-10-09) The elite frame round a round portrait, by creature class: the
+-- game's winged gold dragon (UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged, the same art as
+-- the Wild Gambit window's emblem, ns.GoldEmblem) for elites, bosses and world bosses everywhere in
+-- the Almanac; the silver one (Boss-Rare-Silver) for rares and rare elites. Centred on the portrait,
+-- 1.6 times its size (the emblem's 118 over a 74 icon), wider by the art's own shape. Where the
+-- client lacks the atlas: the classic target frame sheets, cut at x 146..256, y 0..100.
+-- Returns true and how far the art reaches past the portrait's right edge when a dragon shows.
+-- anchor = the round portrait region, diameter = its size. Draw the texture over the portrait.
+local DRAGON_ATLAS = {
+	elite = { "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged", "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold" },
+	rare = { "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Silver" },
+}
+DRAGON_ATLAS.boss, DRAGON_ATLAS.worldboss, DRAGON_ATLAS.rareelite = DRAGON_ATLAS.elite, DRAGON_ATLAS.elite, DRAGON_ATLAS.rare
 local DRAGON = {
 	elite = "Interface\\TargetingFrame\\UI-TargetingFrame-Elite",
 	worldboss = "Interface\\TargetingFrame\\UI-TargetingFrame-Elite",
@@ -1339,14 +1681,36 @@ local DRAGON = {
 	rareelite = "Interface\\TargetingFrame\\UI-TargetingFrame-Rare-Elite",
 }
 W.DRAGON = DRAGON
+W.DRAGON_ATLAS = DRAGON_ATLAS
+W.DRAGON_SCALE = 1.6
 function W.DragonFor(rec)
 	if not rec then return nil end
 	if rec.boss then return "boss" end
 	return DRAGON[rec.class or ""] and rec.class or nil
 end
+-- the atlas for a kind and its width / height, or nil where the client lacks it
+function W.DragonAtlas(kind)
+	for _, atlas in ipairs(DRAGON_ATLAS[kind or ""] or {}) do
+		local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
+		if info then
+			local wide = (info.width and info.height and info.height > 0) and info.width / info.height or 1
+			return atlas, wide
+		end
+	end
+end
 function W.SetDragon(tex, kind, anchor, diameter)
 	local file = kind and DRAGON[kind]
 	if not file then tex:Hide() return false end
+	local atlas, wide = W.DragonAtlas(kind)
+	if atlas and tex.SetAtlas and pcall(tex.SetAtlas, tex, atlas) then
+		local h = diameter * W.DRAGON_SCALE
+		tex:SetTexCoord(0, 1, 0, 1)
+		tex:SetSize(h * wide, h)
+		tex:ClearAllPoints()
+		tex:SetPoint("CENTER", anchor, "CENTER", 0, 0)
+		tex:Show()
+		return true, (h * wide - diameter) / 2
+	end
 	local k = diameter / 64
 	tex:SetTexture(file)
 	tex:SetTexCoord(146 / 256, 1, 0, 100 / 128)
@@ -1354,7 +1718,7 @@ function W.SetDragon(tex, kind, anchor, diameter)
 	tex:ClearAllPoints()
 	tex:SetPoint("TOPLEFT", anchor, "CENTER", -36 * k, 44 * k)
 	tex:Show()
-	return true
+	return true, 110 * k - 36 * k - diameter / 2
 end
 
 -- a skill-window bar: dark track, coloured fill, thin frame, text on top

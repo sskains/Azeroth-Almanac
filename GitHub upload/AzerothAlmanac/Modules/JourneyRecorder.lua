@@ -3,7 +3,7 @@
 --   A point every 5 seconds once you've moved about 15 yards (standing still or AFK adds nothing),
 --   or at once when the map changes; time, map, x, y, and what moved you when it wasn't walking:
 --     F  took off on a flight path      f  landed (the flight itself isn't recorded)
---     b  on a boat or zeppelin (Travel's ride)
+--     b  on a boat (Travel's ride)          z  on a zeppelin (#49: by the port the ride left from)
 --     h  arrived by hearthstone
 --     i  went into or out of a dungeon
 --     d  died here                       g  running back as a ghost
@@ -85,7 +85,8 @@ function JR:Tick()
 	if ghost ~= wasGhost then wasGhost = ghost end
 	local TR = ns.QoL and ns.QoL.Travel
 	local riding = TR and TR.CurrentRide and TR:CurrentRide()
-	Write((riding and "b") or (ghost and "g") or nil)
+	local rideMark = riding and ((TR.RideKind and TR:RideKind() == "Zeppelin") and "z" or "b") or nil
+	Write(rideMark or (ghost and "g") or nil)
 end
 
 -- a map change (a zone line, a dungeon, a hearth) gets a point at once

@@ -792,6 +792,7 @@ function WG:DungeonAfterPlay(side, spell)
 	local key = WD.Roll(dun.owned[side], g.board, Hands(g), Info(g), dun.rng)
 	if not key then return end
 	dun.fired = { side = side, key = key }
+	if WG.SaveClear then WG.SaveClear() end -- (#50: a fired event can't be replayed after a /reload)
 	Fire(side, key)
 end
 

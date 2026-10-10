@@ -62,7 +62,7 @@ Say which area you're in before starting, and avoid the other person's files unt
 ## 7. Testing
 
 - Syntax-check every changed Lua file before committing.
-- The offline Wild Gambit tests (game, PvP, hero, lobby, tutorial) run with Python + `lupa` against stubbed WoW APIs; run them after Wild Gambit changes.
+- The offline tests live in `GitHub upload/dev/tests/` (Python + `lupa` against stubbed WoW APIs; see its README). Run `test_wg_pvp.py` after Wild Gambit changes. Run `test_gathering_page.py` and `test_recipes_page.py` after changes to those pages. (The older game, hero, lobby and tutorial tests were lost with an earlier workspace; new ones join this folder.)
 - Anything that can only be confirmed in game: say so in the pull request and in `STATUS.md`.
 
 ## 8. Commits and pull requests

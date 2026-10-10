@@ -1,7 +1,9 @@
 -- Recipes page (was Spells & Recipes until 0.69.0, #41): the recipes trainers and your profession
--- windows have shown you, by profession. Each profession starts with an overview (your characters'
--- skill bars, the trainers you've met, recipe items found); then its recipes, coloured as a trainer
--- colours them for the character you're playing: green can learn now, red not yet, grey learned.
+-- windows have shown you. (DESIGN 90) Cards (Show all, each profession, and the playing character's
+-- Can learn now / Not yet / Learned) or List (profession, then the game's ranks by the skill each
+-- recipe needs). A badge on each recipe's icon says whether you've learned it, can learn it now or
+-- not yet; a learned recipe's name takes the game's skill-up colour. A profession's overview (your
+-- characters' skill bars, trainers met, recipe items found) shows when you open its card.
 -- Class spells, weapon skills and riding are on each trainer's own page in People (Training):
 -- only what that trainer has shown you.
 
@@ -11,14 +13,79 @@ local W = ns.Widgets
 
 -- (the page key stays "trainers", so saved tabs and links keep working)
 local page = { key = "trainers", title = L["Recipes"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Recipes", order = 9 }   -- (0.69.1: the painted recipe book)
-local list, detail, countText, filterButton, nameText, subText, iconTex
-local filter, statusFilter = "", nil
+local list, detail, countText, nameText, subText, iconTex
+local filter = ""
 local shown -- { kind = "spell", id } or { kind = "group", group }
 local collapsed = {}
 
 local COLOR = { now = "|cff40c040", later = "|cffe03030", known = "|cff999999", other = "|cffffffff" }
 local STATUS = { now = L["Can learn now"], later = L["Not yet"], known = L["Learned"], other = "" }
 local function TR() return ns.Trainers end
+
+-- (DESIGN 90) the playing character's skill-up colour for a recipe they know, as the profession
+-- window last showed it (orange, yellow, green, grey); nil when unknown
+local DIFF = { [0] = "|cffff8040", [1] = "|cffffff00", [2] = "|cff40c040", [3] = "|cff808080" }
+local function DiffColor(id)
+	local c = ns.db and ns.db.chars[ns.CharKey()]
+	local d = c and c.recipeDiff and c.recipeDiff[id]
+	return d and DIFF[d] or nil
+end
+
+-- the learn state as a small badge on the icon: learned (a tick), can learn now (a gold plus), not
+-- yet (a lock); nothing for a profession the character doesn't have
+local BADGE = {
+	known = "Interface\\RaidFrame\\ReadyCheck-Ready",
+	now = "Interface\\PaperDollInfoFrame\\Character-Plus",
+	later = "Interface\\LFGFrame\\UI-LFG-ICON-LOCK",
+}
+
+-- the profession's own icon
+local PROF_ICON = {
+	Alchemy = "Trade_Alchemy", Blacksmithing = "Trade_BlackSmithing", Enchanting = "Trade_Engraving", Engineering = "Trade_Engineering",
+	Leatherworking = "Trade_LeatherWorking", Tailoring = "Trade_Tailoring", Cooking = "INV_Misc_Food_15", ["First Aid"] = "Spell_Holy_SealOfSacrifice",
+	Mining = "Trade_Mining", Herbalism = "Trade_Herbalism", Skinning = "INV_Misc_Pelt_Wolf_01", Fishing = "Trade_Fishing",
+	Jewelcrafting = "INV_Misc_Gem_01", Inscription = "INV_Inscription_Tradeskill01", Lockpicking = "Spell_Nature_MoonKey",
+}
+local SECONDARY = { Cooking = 1, ["First Aid"] = 2, Fishing = 3 }
+local function ProfIcon(group)
+	local v = (group or ""):match("^skill:(.*)$")
+	return W.FindIcon({ PROF_ICON[v or ""] or "INV_Misc_Book_08", "INV_Misc_Book_08" })
+end
+
+-- the game's profession ranks, by the skill a recipe needs
+local BRACKETS = {
+	{ 74, L["Apprentice"] }, { 149, L["Journeyman"] }, { 224, L["Expert"] }, { 300, L["Artisan"] }, { 9999, L["Master"] },
+}
+local function Bracket(skill)
+	if not skill then return #BRACKETS + 1, L["No skill shown"] end
+	for i, b in ipairs(BRACKETS) do if skill <= b[1] then return i, b[2] end end
+	return #BRACKETS, BRACKETS[#BRACKETS][2]
+end
+
+-- this character's count of an item (bags and bank): total, in the bank
+local function Have(item)
+	local INV = ns.QoL and ns.QoL.Inventory
+	if not (INV and INV.WhoHas) then return 0, 0 end
+	local me = ns.CharKey()
+	for _, e in ipairs(INV:WhoHas(item) or {}) do
+		if e.key == me then
+			local parts = e.parts or {}
+			return (parts.bags or 0) + (parts.bank or 0), parts.bank or 0
+		end
+	end
+	return 0, 0
+end
+
+-- the recipe item that teaches a recipe (a "Recipe: ..." you've come across), or nil
+local function RecipeItemFor(rec)
+	local v = (rec.group or ""):match("^skill:(.*)$")
+	if not v or not rec.name then return nil end
+	for _, it in ipairs(TR():RecipeItems(v)) do
+		local name = it.rec.name or (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(it.id))
+		local spell = type(name) == "string" and name:match("^[^:]+:%s*(.+)$")
+		if spell == rec.name then return it.id end
+	end
+end
 
 local function SpellIcon(id, rec)
 	if rec and rec.icon then return rec.icon end
@@ -61,6 +128,34 @@ local function DescribeSpell(id, rec)
 	if rec.cost then b[#b + 1] = { "stat", L["Training cost"], rec.cost > 0 and ns.MoneyText(rec.cost) or L["free"] } end
 	if rec.cat then b[#b + 1] = { "stat", L["Category"], rec.cat } end
 	b[#b + 1] = { "stat", L["First seen"], ns.CharName(rec.b) .. ", " .. ns.DateText(rec.f) }
+	-- (DESIGN 90) what the playing character can do with it now
+	local me = ns.CharKey()
+	if rec.reagents and TR():StatusFor(me, rec, id) == "known" then
+		local can, fromBank, short = math.huge, false, nil
+		for _, r in ipairs(rec.reagents) do
+			local have, bank = Have(r[1])
+			local times = math.floor(have / math.max(1, r[2] or 1))
+			if times < can then can = times end
+			if bank > 0 then fromBank = true end
+			if have < (r[2] or 1) and not short then short = { r[1], (r[2] or 1) - have } end
+		end
+		if can == math.huge then can = 0 end
+		local text = can > 0 and (tostring(can) .. (fromBank and ("  |cff999999" .. L["(some in the bank)"] .. "|r") or "")) or ("|cffff6060" .. L["not yet"] .. "|r")
+		if can == 0 and short then
+			local n = select(1, (C_Item and C_Item.GetItemInfo or GetItemInfo)(short[1]))
+			text = text .. "  |cff999999" .. (L["needs %d more %s"]):format(short[2], n or L["reagents"]) .. "|r"
+		end
+		b[#b + 1] = { "stat", L["Can make now"], text }
+	end
+	-- cost and price, when auction scans know them
+	local CR = ns.Crafting or (ns.QoL and ns.QoL.Crafting)
+	if rec.reagents and rec.made and CR and CR.PriceOf then
+		local ok, r = pcall(CR.PriceOf, CR, rec.reagents, rec.made, rec.makes)
+		if ok and r and r.cost and r.cost > 0 and #(r.missing or {}) == 0 then
+			b[#b + 1] = { "stat", L["Costs to make"], ns.MoneyText(math.floor(r.cost)) }
+			if r.value then b[#b + 1] = { "stat", L["Sells for"], ns.MoneyText(math.floor(r.value)) .. "  |cff999999" .. L["(auction, after the cut)"] .. "|r" } end
+		end
+	end
 
 	-- the rank itself, as its tooltip shows it: cost, cast time, cooldown, range, then what it does
 	local tip = TR():Tooltip(id, rec)
@@ -120,6 +215,35 @@ local function DescribeSpell(id, rec)
 		b[#b + 1] = { "slots", teachers }
 	end
 
+	-- where else to learn it: merchants you've met who sell its recipe item
+	local recipeItem = RecipeItemFor(rec)
+	if recipeItem then
+		local sellers = {}
+		for _, s in ipairs(ns.Merchants and ns.Merchants.Selling and ns.Merchants:Selling(recipeItem) or {}) do
+			local t = s.rec
+			local e = { name = t.name or "?", icon = W.FindIcon({ "INV_Misc_Coin_02", "INV_Misc_Bag_08" }),
+				note = ((s.e and s.e.price and s.e.price > 0) and (ns.MoneyText(s.e.price) .. "  ") or "") .. Place(t) }
+			if t.map and t.x then e.tip = L["Click to set a waypoint here."] e.onClick = function() W.Waypoint(t.map, t.x, t.y, t.name) end end
+			sellers[#sellers + 1] = e
+		end
+		b[#b + 1] = { "banner", L["The recipe item"] }
+		b[#b + 1] = { "slots", { ItemSlot(recipeItem) } }
+		if #sellers > 0 then
+			b[#b + 1] = { "banner", (L["Sold by (%d)"]):format(#sellers) }
+			b[#b + 1] = { "slots", sellers }
+		end
+	end
+	-- crafted gear: who it would be an upgrade for
+	if rec.made and ns.Upgrades and ns.Upgrades.Lines then
+		local ok, lines = pcall(ns.Upgrades.Lines, ns.Upgrades, rec.made)
+		if ok and lines and #lines > 0 then
+			b[#b + 1] = { "banner", L["Upgrade for"] }
+			for _, ln in ipairs(lines) do
+				b[#b + 1] = { "small", ("|cff%02x%02x%02x"):format((ln[2] or 1) * 255, (ln[3] or 1) * 255, (ln[4] or 1) * 255) .. ln[1] .. "|r" }
+			end
+		end
+	end
+
 	local rows = {}
 	for key in pairs(ns.db.chars) do
 		local st = TR():StatusFor(key, rec, id)
@@ -170,15 +294,20 @@ local function DescribeGroup(group)
 			rows[#rows + 1] = { key = key, learned = learned, level = c.level }
 		end
 	end
-	table.sort(rows, function(x, y) return x.key < y.key end)
+	-- (the character you're playing first)
+	local me = ns.CharKey()
+	table.sort(rows, function(x, y) if (x.key == me) ~= (y.key == me) then return x.key == me end return x.key < y.key end)
 	if #rows > 0 then
 		b[#b + 1] = { "banner", L["Your characters"] }
 		for _, r in ipairs(rows) do
 			if r.s then
-				-- (0.69.0) the blue skills bar, as on the Creatures and Gathering pages and the Characters page
-				b[#b + 1] = { "skillbar", ns.CharName(r.key), r.s.rank or 0, math.max(1, r.s.max or 1),
+				-- (0.69.0) the blue skills bar, as on the Creatures and Gathering pages and the Characters page;
+				-- (2026-10-09) each character's name on its own line above the bar (it was cut to one letter
+				-- in the bar's label column, so two characters' bars looked like one bar twice)
+				b[#b + 1] = { "stat", ns.CharName(r.key), r.learned > 0 and (L["%s known"]):format(ns.N(r.learned, "recipe", "recipes"))
+					or ("|cff999999" .. L["open their profession window to list their recipes"] .. "|r") }
+				b[#b + 1] = { "skillbar", nil, r.s.rank or 0, math.max(1, r.s.max or 1),
 					("%s %d / %d"):format(name, r.s.rank or 0, r.s.max or 0) }
-				b[#b + 1] = { "small", "      " .. (L["%s known"]):format(ns.N(r.learned, "recipe", "recipes")) }
 			else
 				b[#b + 1] = { "stat", ns.CharName(r.key), (L["level %d, %s learned"]):format(r.level or 0, ns.N(r.learned, "spell", "spells")) }
 			end
@@ -215,6 +344,90 @@ local function Theme(group)
 	return { "Enchanting", "Blacksmithing" }
 end
 
+-- (DESIGN 90) the right side with nothing picked: what the playing character can learn now (the
+-- training cost, the nearest trainer you've met who teaches it), recipes learned lately, and recipe
+-- items this character carries but hasn't learned
+local function Summary()
+	local b = {}
+	local me = ns.CharKey()
+	local c = ns.db.chars[me] or {}
+	local now, cost = {}, 0
+	local teachers = {}
+	for id, rec in pairs(ns.Store:Shown("spell")) do
+		if TR():IsProfession(rec.group) and TR():StatusFor(me, rec, id) == "now" then
+			now[#now + 1] = { id = id, rec = rec }
+			local best
+			for npc, t in pairs(rec.trainers or {}) do
+				if not best or (t or 0) < best then best = t or 0 end
+				teachers[npc] = true
+			end
+			cost = cost + (best or rec.cost or 0)
+		end
+	end
+	table.sort(now, function(x, y) return (x.rec.skill or 0) < (y.rec.skill or 0) end)
+	if #now > 0 then
+		b[#b + 1] = { "banner", (L["You can learn now (%d)"]):format(#now) }
+		if cost > 0 then b[#b + 1] = { "stat", L["Training cost"], ns.MoneyText(cost) } end
+		-- the nearest: one in this zone, else on this continent, else any you've met
+		local here = ns.Where and ns.Where() or {}
+		local pick, score
+		for npc in pairs(teachers) do
+			local t = ns.Store:Get("trainer", npc)
+			if t then
+				local s = (t.map and t.map == here.map) and 3 or (t.zone and t.zone == here.zone) and 2 or 1
+				if not score or s > score then pick, score = npc, s end
+			end
+		end
+		local t = pick and ns.Store:Get("trainer", pick)
+		if t then b[#b + 1] = { "slots", { TrainerSlot(pick, t) } } end
+		local s = {}
+		for i, e in ipairs(now) do
+			if i > 12 then break end
+			s[#s + 1] = { spell = e.id, icon = SpellIcon(e.id, e.rec), name = e.rec.name, note = e.rec.skill and ("|cff999999" .. TR():GroupName(e.rec.group) .. " " .. e.rec.skill .. "|r") or nil,
+				onClick = function() page:ShowSpell(e.id) end }
+		end
+		b[#b + 1] = { "slots", s }
+	end
+	local lately = {}
+	for id, t in pairs(c.spells or {}) do
+		local rec = ns.Store:Get("spell", id)
+		if rec and t > 0 and TR():IsProfession(rec.group) then lately[#lately + 1] = { id = id, rec = rec, t = t } end
+	end
+	table.sort(lately, function(x, y) return x.t > y.t end)
+	if #lately > 0 then
+		b[#b + 1] = { "banner", L["Learned lately"] }
+		local s = {}
+		for i, e in ipairs(lately) do
+			if i > 8 then break end
+			s[#s + 1] = { spell = e.id, icon = SpellIcon(e.id, e.rec), name = e.rec.name, note = "|cff999999" .. ns.DateText(e.t) .. "|r",
+				onClick = function() page:ShowSpell(e.id) end }
+		end
+		b[#b + 1] = { "slots", s }
+	end
+	-- (a recipe item counts until one of your characters knows its recipe)
+	local byName = {}
+	for sid, sp in pairs(ns.Store:Shown("spell")) do if TR():IsProfession(sp.group) and sp.name then byName[sp.name] = sid end end
+	local function Learned(itemID, rec)
+		local name = rec.name or (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID))
+		local sid = type(name) == "string" and byName[name:match("^[^:]+:%s*(.+)$") or ""]
+		if not sid then return false end
+		for _, ch in pairs(ns.db.chars) do if ch.spells and ch.spells[sid] then return true end end
+		return false
+	end
+	local carried = {}
+	for v in pairs(c.skills or {}) do
+		for _, it in ipairs(TR():RecipeItems(v)) do
+			if Have(it.id) > 0 and not Learned(it.id, it.rec) then carried[#carried + 1] = ItemSlot(it.id) end
+		end
+	end
+	if #carried > 0 then
+		b[#b + 1] = { "banner", L["Recipe items you carry, not yet learned"] }
+		b[#b + 1] = { "slots", carried }
+	end
+	if #b == 0 then b[#b + 1] = { "small", L["Select a recipe, or open a profession's card."] } end
+	return b
+end
+
 local function Show(sel, keep)
 	shown = sel
 	if sel then
@@ -222,10 +435,12 @@ local function Show(sel, keep)
 		detail:SetTheme(Theme(g))
 	end
 	if not sel then
-		nameText:SetText("")
-		subText:SetText("")
+		detail:SetTheme(Theme(nil))
+		nameText:SetText(L["Recipes"])
+		subText:SetText(ns.CharName(ns.CharKey(), true))
 		iconTex:Hide()
-		detail:SetBlocks(nil, L["Select a spell or recipe."])
+		local ok, b = pcall(Summary)
+		if ok and b then detail:SetBlocks(b, nil, keep) else detail:SetBlocks(nil, L["Select a recipe."]) end
 		return
 	end
 	if sel.kind == "group" then
@@ -245,27 +460,28 @@ local function Show(sel, keep)
 end
 
 ---------------------------------------------------------------------------
--- List
+-- List (DESIGN 90, agreed with Shannon 2026-10-09): Cards (Show all, the professions, and the
+-- playing character's Can learn now / Not yet / Learned) or List (profession, then the game's
+-- ranks by the skill a recipe needs, then the recipes). A card opens the list under "Recipes › ...".
 ---------------------------------------------------------------------------
 
-local FILTERS = {
-	{ nil, L["Everything"] },
-	{ "now", L["Can learn now"] },
-	{ "later", L["Not yet"] },
-	{ "known", L["Learned"] },
-}
-local function FilterLabel()
-	for _, f in ipairs(FILTERS) do if f[1] == statusFilter then return f[2] end end
-	return L["Everything"]
+local PAIR_H = 60
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+local view, crumb, cardFilter = "cards", nil, nil
+local cardBar, backBtn, crumbText, cardsBtn, listBtn, searchBox
+local foldedSections = {}
+
+local function Win()
+	local s = ns.db and ns.db.settings
+	return s and s.window or {}
 end
 
 local function GroupOrder(group)
-	local kind, v = group:match("^(%a+):(.*)$")
-	local _, myClass = UnitClass("player")
-	if kind == "class" then return (v == myClass and "0" or "1") .. v end
-	if kind == "skill" then return "2" .. v end
-	return "3" .. (v or "")
+	local v = (group or ""):match("^skill:(.*)$") or group or ""
+	return (SECONDARY[v] and ("2" .. SECONDARY[v]) or "1") .. v
 end
+
+local function NewText(n) return (n and n > 0) and ("  |cff1eff00+" .. n .. "|r") or "" end
 
 local function Collect()
 	local groups, total, n = {}, 0, 0
@@ -275,19 +491,22 @@ local function Collect()
 		-- (class spells, weapon skills and riding: on their trainer's page in People)
 		if TR():IsProfession(g) then
 			total = total + 1
-			groups[g] = groups[g] or {}
 			local st = TR():StatusFor(me, rec, id)
 			local hit = filter == "" or (rec.name or ""):lower():find(filter, 1, true)
-			if hit and (not statusFilter or st == statusFilter) then
+			if hit and (not cardFilter or cardFilter(id, rec, st)) then
+				groups[g] = groups[g] or {}
 				table.insert(groups[g], { id = id, rec = rec, st = st })
 				n = n + 1
 			end
 		end
 	end
-	for _, t in pairs(ns.Store:Shown("trainer")) do
-		if t.group and TR():IsProfession(t.group) then groups[t.group] = groups[t.group] or {} end
+	-- (a profession you've met a trainer for shows even with nothing listed yet, in the full list)
+	if not cardFilter and filter == "" then
+		for _, t in pairs(ns.Store:Shown("trainer")) do
+			if t.group and TR():IsProfession(t.group) then groups[t.group] = groups[t.group] or {} end
+		end
 	end
-	-- (0.69.0, #38) recipes found since you last looked: their own group at the top
+	-- (#38) recipes found since you last looked: their own group at the top
 	local rows = {}
 	if ns.New then
 		local all = {}
@@ -299,8 +518,7 @@ local function Collect()
 				for _, it in ipairs(items) do if not it.isNew then keep[#keep + 1] = it end end
 				groups[g] = keep
 			end
-			local head = ns.New:Header(#new)
-			rows[#rows + 1] = head
+			rows[#rows + 1] = ns.New:Header(#new)
 			if not collapsed.new then for _, it in ipairs(new) do rows[#rows + 1] = it end end
 		end
 	end
@@ -309,39 +527,205 @@ local function Collect()
 	table.sort(order, function(a, b) return GroupOrder(a) < GroupOrder(b) end)
 	for _, g in ipairs(order) do
 		local items = groups[g]
-		rows[#rows + 1] = { header = TR():GroupName(g), group = g, count = #items }
-		table.sort(items, function(a, b)
-			-- (0.69.0) recipes by the skill they need first, then level
-			if (a.rec.skill or 0) ~= (b.rec.skill or 0) then return (a.rec.skill or 0) < (b.rec.skill or 0) end
-			if (a.rec.lvl or 0) ~= (b.rec.lvl or 0) then return (a.rec.lvl or 0) < (b.rec.lvl or 0) end
-			return (a.rec.name or "") < (b.rec.name or "")
-		end)
+		rows[#rows + 1] = { header = TR():GroupName(g), group = g, key = g, count = #items, depth = 0 }
 		if not collapsed[g] then
-			rows[#rows + 1] = { summary = true, group = g }
-			for _, it in ipairs(items) do rows[#rows + 1] = it end
+			-- the game's ranks by the skill each recipe needs, lowest first
+			local brackets = {}
+			for _, it in ipairs(items) do
+				local i, label = Bracket(it.rec.skill)
+				brackets[i] = brackets[i] or { label = label, items = {} }
+				table.insert(brackets[i].items, it)
+			end
+			for i = 1, #BRACKETS + 1 do
+				local br = brackets[i]
+				if br then
+					local key = g .. "|" .. i
+					rows[#rows + 1] = { header = br.label, group = g, key = key, count = #br.items, depth = 1 }
+					if not collapsed[key] then
+						table.sort(br.items, function(a, b)
+							if (a.rec.skill or 0) ~= (b.rec.skill or 0) then return (a.rec.skill or 0) < (b.rec.skill or 0) end
+							if (a.rec.lvl or 0) ~= (b.rec.lvl or 0) then return (a.rec.lvl or 0) < (b.rec.lvl or 0) end
+							return (a.rec.name or "") < (b.rec.name or "")
+						end)
+						for _, it in ipairs(br.items) do rows[#rows + 1] = it end
+					end
+				end
+			end
 		end
 	end
 	return rows, n, total
 end
 
+-- the cards
+local function Card(icon, name, count, tip, action, plain)
+	return { icon = icon, name = name, plain = plain or name, count = count, tip = tip, action = action }
+end
+
+local function OpenCard(label, fn, group)
+	cardFilter, crumb, view = fn, label, "list"
+	filter = ""
+	if searchBox then searchBox:SetText("") end
+	Win().recipesView = view
+	if group then shown = { kind = "group", group = group } end
+	page:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
+local function BackToCards()
+	cardFilter, crumb, view = nil, nil, "cards"
+	Win().recipesView = view
+	page:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
+local function CardRows()
+	local rows = {}
+	local me = ns.CharKey()
+	local total, newAll = 0, 0
+	local profs, mine = {}, { now = 0, later = 0, known = 0 }
+	for id, rec in pairs(ns.Store:Shown("spell")) do
+		local g = rec.group
+		if TR():IsProfession(g) then
+			total = total + 1
+			local isNew = ns.New and ns.New:IsNew("trainers", rec) and 1 or 0
+			newAll = newAll + isNew
+			local p = profs[g] or { n = 0, new = 0 }
+			profs[g] = p
+			p.n, p.new = p.n + 1, p.new + isNew
+			local st = TR():StatusFor(me, rec, id)
+			if mine[st] then mine[st] = mine[st] + 1 end
+		end
+	end
+	if total == 0 then return rows, 0 end
+	local function Section(key, text)
+		rows[#rows + 1] = { card = "section", header = text, key = key }
+		return not foldedSections[key]
+	end
+	local function Pairs(cards)
+		for i = 1, #cards, 2 do rows[#rows + 1] = { card = "pair", a = cards[i], b = cards[i + 1] } end
+	end
+	Pairs({ Card(MEDIA .. "Tab_Recipes", L["Show all"], tostring(total) .. NewText(newAll), L["Every recipe on the account"], function() OpenCard(L["All recipes"], nil) end) })
+
+	if Section("s:prof", L["Professions"]) then
+		local order = {}
+		for g in pairs(profs) do order[#order + 1] = g end
+		table.sort(order, function(a, b) return GroupOrder(a) < GroupOrder(b) end)
+		local cards = {}
+		for _, g in ipairs(order) do
+			local p, v = profs[g], g:match("^skill:(.*)$")
+			-- the best skill among your characters
+			local best, bestKey, bestMax
+			for key, c in pairs(ns.db.chars) do
+				local s = c.skills and c.skills[v]
+				if s and (not best or (s.rank or 0) > best) then best, bestKey, bestMax = s.rank or 0, key, s.max end
+			end
+			local count = tostring(p.n) .. NewText(p.new) .. (best and ("  |cff999999" .. best .. (bestMax and (" / " .. bestMax) or "") .. "|r") or "")
+			local tip = best and (L["Best: %s, %d"]):format(ns.CharName(bestKey, true), best) or v
+			cards[#cards + 1] = Card(ProfIcon(g), v, count, tip, function() OpenCard(v, function(_, rec) return rec.group == g end, g) end)
+		end
+		Pairs(cards)
+	end
+
+	-- the character you're playing: only their own professions count
+	if mine.now + mine.later + mine.known > 0 and Section("s:me", (L["For %s"]):format(ns.CharName(me, true))) then
+		local cards = {}
+		local defs = {
+			{ "now", L["Can learn now"], { "INV_Misc_Book_09", "INV_Misc_Book_08" }, L["Recipes you can learn at a trainer now"] },
+			{ "later", L["Not yet"], { "INV_Misc_Book_04", "INV_Misc_Book_08" }, L["Recipes that need more skill or level"] },
+			{ "known", L["Learned"], { "INV_Misc_Book_11", "INV_Misc_Book_08" }, L["Recipes you know"] },
+		}
+		for _, d in ipairs(defs) do
+			if mine[d[1]] > 0 then
+				local st = d[1]
+				cards[#cards + 1] = Card(W.FindIcon(d[3]), d[2], tostring(mine[st]), d[4], function() OpenCard(d[2], function(_, _, s) return s == st end) end)
+			end
+		end
+		Pairs(cards)
+	end
+	return rows, total
+end
+
+local function FillCardRow(row, r)
+	row.icon:SetTexture(nil)
+	row.text:SetText("")
+	row.right:SetText("")
+	if row.badge then row.badge:Hide() end
+	if ns.New then ns.New:MarkRow(row, false) end
+	for _, c in ipairs(row.halves or {}) do c:Hide() end
+	if r.card == "section" then
+		row.indent = 0
+		row:SetHeader(true, foldedSections[r.key])
+		row.text:SetText(r.header)
+		return
+	end
+	row:SetHeader(false)
+	local w = row:GetWidth()
+	if not w or w < 50 then w = 300 end -- (before the first layout)
+	for i, o in ipairs({ r.a, r.b }) do
+		local c = W.PairCard(row, i)
+		c:ClearAllPoints()
+		c:SetPoint("TOPLEFT", row, "TOPLEFT", 4 + (i - 1) * (w / 2), -3)
+		c:SetSize(w / 2 - 6, PAIR_H - 6)
+		if o then W.FillPairCard(c, o, PAIR_H) else c:Hide() end
+	end
+end
+
+local function PaintBar()
+	if not cardBar then return end
+	local inCard = view == "list" and crumb ~= nil
+	backBtn:SetShown(inCard)
+	crumbText:SetText(inCard and ("|cffffd100" .. L["Recipes"] .. "|r  |cff999999›|r  " .. crumb) or "")
+	cardsBtn:SetActive(view == "cards")
+	listBtn:SetActive(view ~= "cards")
+end
+
+local function FillRecipeRow(row, r)
+	for _, c in ipairs(row.halves or {}) do c:Hide() end
+	row.icon:ClearAllPoints()
+	if ns.New then ns.New:MarkRow(row, r.isNew, "trainers", r.newKey) end
+	if not row.badge then
+		row.badge = row:CreateTexture(nil, "OVERLAY", nil, 5)
+		row.badge:SetSize(12, 12)
+		row.badge:SetPoint("CENTER", row.icon, "BOTTOMRIGHT", -1, 2)
+	end
+	row.badge:Hide()
+	if r.header then
+		row.indent = (r.depth or 0) * 12
+		row:SetHeader(true, collapsed[r.key])
+		row.icon:SetPoint("LEFT", 4, 0)
+		row.icon:SetTexture(nil)
+		row.text:SetFontObject(r.depth == 1 and GameFontNormal or W.Font("GameFontNormalLarge", "GameFontNormal"))
+		row.text:SetText(r.header)
+		row.right:SetText(r.newHeader and "" or ("|cff999999" .. (r.count or "") .. "|r"))
+		return
+	end
+	row.indent = 0
+	row:SetHeader(false)
+	row.icon:SetPoint("LEFT", 24, 0)
+	row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	row.icon:SetTexture(SpellIcon(r.id, r.rec))
+	row.text:SetFontObject(GameFontHighlight)
+	-- the name in the game's skill-up colour where the profession window has shown it; white otherwise
+	local color = (r.st == "known" and DiffColor(r.id)) or "|cffffffff"
+	row.text:SetText(color .. (r.rec.name or "?") .. "|r" .. (r.rec.rank and ("  |cff999999" .. r.rec.rank .. "|r") or ""))
+	local badge = BADGE[r.st]
+	if badge then row.badge:SetTexture(badge) row.badge:Show() end
+	local right = {}
+	if r.rec.cat then right[#right + 1] = r.rec.cat end
+	if r.rec.skill then right[#right + 1] = tostring(r.rec.skill) elseif r.rec.lvl then right[#right + 1] = "[" .. r.rec.lvl .. "]" end
+	row.right:SetText("|cff999999" .. table.concat(right, "  ") .. "|r")
+end
+
 function page:Build(parent, header)
+	view = Win().recipesView == "list" and "list" or "cards"
 	local search = W.Search(header, 200, function(text)
-		filter = text
+		filter = text or ""
+		-- (search looks through everything: the whole list, from the cards too)
+		if filter ~= "" then cardFilter, crumb, view = nil, nil, "list" end
 		page:Refresh()
 	end)
+	searchBox = search
 	search:SetPoint("LEFT", header, "LEFT", 16, -2)
-	filterButton = W.Dropdown(header, FilterLabel(), 160, function(self)
-		local items = { { title = true, text = L["Show"] } }
-		for _, f in ipairs(FILTERS) do
-			items[#items + 1] = { text = f[2], run = function()
-				statusFilter = f[1]
-				filterButton:SetText(FilterLabel())
-				page:Refresh()
-			end }
-		end
-		W.Menu(self, items)
-	end)
-	filterButton:SetPoint("LEFT", search, "RIGHT", 12, 0)
 	countText = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	countText:SetPoint("RIGHT", header, "RIGHT", -12, -2)
 
@@ -349,50 +733,71 @@ function page:Build(parent, header)
 	left:SetPoint("TOPLEFT", 0, 0)
 	left:SetPoint("BOTTOMLEFT", 0, 0)
 	left:SetWidth(320)
-	list = W.List(left, {
-		collapse = { state = collapsed, key = function(r) return r.header and r.group end, refresh = function() page:Refresh() end },
+	-- Cards / List, and the way back from a card
+	cardBar = CreateFrame("Frame", nil, left)
+	cardBar:SetPoint("TOPLEFT", 4, -4)
+	cardBar:SetPoint("TOPRIGHT", -4, -4)
+	cardBar:SetHeight(26)
+	backBtn = CreateFrame("Button", nil, cardBar)
+	backBtn:SetSize(24, 24)
+	backBtn:SetPoint("LEFT", 2, 0)
+	backBtn.tex = backBtn:CreateTexture(nil, "ARTWORK")
+	backBtn.tex:SetAllPoints()
+	backBtn.tex:SetTexture(MEDIA .. "Back_Arrow")
+	backBtn:SetHighlightTexture(MEDIA .. "Back_Arrow", "ADD")
+	backBtn:SetScript("OnClick", function() BackToCards() end)
+	backBtn:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT") GameTooltip:AddLine(L["Back to the cards"], 1, 0.82, 0) GameTooltip:Show() end)
+	backBtn:SetScript("OnLeave", GameTooltip_Hide)
+	crumbText = cardBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	crumbText:SetPoint("LEFT", backBtn, "RIGHT", 4, 0)
+	crumbText:SetJustifyH("LEFT")
+	crumbText:SetWordWrap(false)
+	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() cardFilter, crumb, view = nil, nil, "list" Win().recipesView = view page:Refresh() end)
+	listBtn:SetPoint("RIGHT", -2, 0)
+	cardsBtn = W.ViewButton(cardBar, "View_Cards", L["Cards"], function() filter = "" search:SetText("") BackToCards() end)
+	cardsBtn:SetPoint("RIGHT", listBtn, "LEFT", -4, 0)
+	crumbText:SetPoint("RIGHT", cardsBtn, "LEFT", -6, 0)
+	local listHolder = CreateFrame("Frame", nil, left)
+	listHolder:SetPoint("TOPLEFT", 0, -30)
+	listHolder:SetPoint("BOTTOMRIGHT", 0, 0)
+	list = W.List(listHolder, {
+		collapse = { state = collapsed, key = function(r) return (r.newHeader and "new") or (r.header and not r.card and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
-		style = "log",   -- the Map & Quest Log look, as on Quests
+		heightOf = function(r) if r.card == "pair" then return PAIR_H end end,
+		spacers = false,
+		-- (#62) the card section, or the profession you're scrolling through, stays pinned at the top
+		sticky = function(r)
+			if r.card == "section" then return { r.header, 1, 0.82, 0.3, foldedSections[r.key] } end
+			if r.header and r.depth == 0 and not r.card then return { r.header .. "  |cff999999" .. (r.count or "") .. "|r", 1, 0.82, 0.3, collapsed[r.key] } end
+		end,
 		emptyText = L["Nothing yet. Open a profession trainer's window, or your own profession window: every recipe you come across is recorded here. Class spells are on each trainer's page in People."],
 		update = function(row, r)
-			row.icon:ClearAllPoints()
-			row:SetHeader(r.header ~= nil, r.header and collapsed[r.group])
-			row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-			if ns.New then ns.New:MarkRow(row, r.isNew, "trainers", r.newKey) end
-			if r.header then
-				row.icon:SetPoint("LEFT", 4, 0)
-				row.icon:SetTexture(nil)
-				row.text:SetFontObject(W.Font("GameFontNormalLarge", "GameFontNormal"))
-				row.text:SetText(r.header)
-				row.right:SetText(r.newHeader and "" or ("|cff999999" .. r.count .. "|r"))
-			elseif r.summary then
-				row.icon:SetPoint("LEFT", 20, 0)
-				row.icon:SetTexture(W.FindIcon(TR():IsProfession(r.group) and { "INV_Misc_Note_01" } or W.KIND.character.icon))
-				row.text:SetFontObject(GameFontNormal)
-				row.text:SetText(L["Overview"])
-				row.right:SetText("")
-			else
-				row.icon:SetPoint("LEFT", 20, 0)
-				row.icon:SetTexture(SpellIcon(r.id, r.rec))
-				row.text:SetFontObject(GameFontHighlight)
-				row.text:SetText(COLOR[r.st] .. (r.rec.name or "?") .. "|r" .. (r.rec.rank and ("  |cff999999" .. r.rec.rank .. "|r") or ""))
-				local req = r.rec.skill and ("(" .. r.rec.skill .. ")") or (r.rec.lvl and ("[" .. r.rec.lvl .. "]")) or ""
-				row.right:SetText("|cff999999" .. req .. "|r")
-			end
+			if r.card then return FillCardRow(row, r) end
+			FillRecipeRow(row, r)
 		end,
+		onEnterRow = nil,
 		onClick = function(r)
-			if r.header then
-				collapsed[r.group] = not collapsed[r.group]
+			if r.card == "section" then
+				foldedSections[r.key] = (not foldedSections[r.key]) or nil
 				page:Refresh()
-			elseif r.summary then
-				Show({ kind = "group", group = r.group })
+				return
+			end
+			if r.card then return end
+			if r.newHeader then
+				collapsed.new = not collapsed.new
+				page:Refresh()
+			elseif r.header then
+				collapsed[r.key] = not collapsed[r.key]
+				-- (a profession's heading also shows its overview on the right)
+				if r.depth == 0 then shown = { kind = "group", group = r.group } end
+				page:Refresh()
 			elseif r.id then
 				if ns.New and ns.New:Clicked("trainers", r) then list:Refresh() end
 				Show({ kind = "spell", id = r.id })
 			end
 		end,
 	})
-	list:SetAllPoints(left)
+	list:SetAllPoints(listHolder)
 
 	detail = W.Detail(parent, 50)
 	detail:SetPoint("TOPLEFT", left, "TOPRIGHT", 6, 0)
@@ -418,15 +823,24 @@ end
 
 function page:Refresh()
 	if not list then return end
+	PaintBar()
+	if view == "cards" then
+		local rows, total = CardRows()
+		list:SetData(rows)
+		list:Select(nil)
+		countText:SetText(ns.N(total, "recipe", "recipes"))
+		Show(shown, true)
+		return
+	end
 	local rows, n, total = Collect()
 	local keep
 	for _, r in ipairs(rows) do
-		if shown and ((shown.kind == "spell" and r.id == shown.id) or (shown.kind == "group" and r.summary and r.group == shown.group)) then keep = r end
+		if shown and shown.kind == "spell" and r.id == shown.id then keep = r end
 	end
 	list:SetData(rows)
 	list:Select(keep)
 	countText:SetText((L["%d of %d recipes"]):format(n, total))
-	if shown then Show(shown, true) end
+	Show(shown, true)
 end
 
 -- a trainer who teaches this (a class spell's way to People): one you've met, the latest checked first
@@ -448,24 +862,16 @@ end
 function page:ShowGroup(group)
 	-- (0.69.0) class, weapon and riding trainers: their spells are on their People pages
 	if not TR():IsProfession(group) then return ToPeople(nil) end
-	ns.UI:Open("trainers")
-	collapsed[group] = nil
-	shown = { kind = "group", group = group }
-	self:Refresh()
+	return self:ShowOnly(group)
 end
 
--- (0.69.0, #40) opened from a profession card: that profession's recipes, every other group closed,
--- at the top (group: "skill:<profession name>")
+-- (0.69.0, #40) opened from a profession card elsewhere: that profession's list under
+-- "Recipes › Alchemy" with the back arrow, its overview on the right (group: "skill:<name>")
 function page:ShowOnly(group)
 	ns.UI:Open("trainers")
-	if list then
-		for _, r in ipairs(list:Data() or {}) do if type(r) == "table" and r.header and r.group then collapsed[r.group] = true end end
-	end
 	collapsed.new = true
 	collapsed[group] = nil
-	shown = { kind = "group", group = group }
-	self:Refresh()
-	if list and list.ScrollTop then list:ScrollTop() end
+	OpenCard(TR():GroupName(group), function(_, rec) return rec.group == group end, group)
 end
 
 function page:ShowSpell(id)
@@ -473,7 +879,11 @@ function page:ShowSpell(id)
 	-- (0.69.0) a class spell opens the trainer who teaches it, in People
 	if rec and not TR():IsProfession(rec.group) then return ToPeople(TeacherOf(rec)) end
 	ns.UI:Open("trainers")
-	if rec and rec.group then collapsed[rec.group] = nil end
+	if rec and rec.group then
+		collapsed[rec.group] = nil
+		collapsed[rec.group .. "|" .. (Bracket(rec.skill))] = nil
+		cardFilter, crumb, view = function(_, r) return r.group == rec.group end, TR():GroupName(rec.group), "list"
+	end
 	shown = { kind = "spell", id = id }
 	self:Refresh()
 end

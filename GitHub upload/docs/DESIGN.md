@@ -32,6 +32,7 @@ Azeroth Almanac turns WoW Forever into a game of discovery. It records what the 
 8. **Standalone.** Azeroth Almanac is never installed alongside Plus Everything, so no conflict handling is needed. It borrows code from Plus Everything (`D:\Plus Everything`) but has its own files and data.
 9. **No completionism** (decided 2026-10-03). No completion percentages, progress bars or "x of y" totals anywhere. Progress is shown only through what has been found: running counts ("214 creatures discovered"), research tiers per creature, milestones based on your own discoveries, and a journal of discoveries. Nothing implies a fixed amount left to find. (This also means the database doesn't need complete or Forever-exact totals, and Questie isn't needed.)
    **Exception (2026-10-07): zone exploration.** WoW Forever's legacy exploration achievements already show every area of a zone, so the Places page shows "x of y areas explored" per zone (from those achievements, for the character you're playing) and a "Fully explored" alert. Nowhere else.
+10. **Elites wear the winged gold dragon** (Shannon, 2026-10-09). Every elite, boss and world boss anywhere in the Almanac is framed with the game's `UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged` (the Wild Gambit window's emblem art), always through `W.SetDragon`; rares use the silver `Boss-Rare-Silver`. The classic `UI-TargetingFrame-Elite` sheet is only a fallback. Details: section 89.
 
 ---
 
@@ -806,6 +807,11 @@ Goal: the time lapse should dazzle the viewer. Every trigger below gets its effe
 - Settings: "Journey sounds" (on / off) and "Journey effects" (full / light / off); sound also follows the toasts' sound setting.
 - Exact sounds are picked by ear: `/aa journey sounds` plays each candidate before they're fixed in the code.
 
+**Built (Unreleased, 2026-10-09): #46-#49** [?]
+- `UI/Journey.lua`: `W.JourneyPane(parent, { full = true })` for the Characters page's Journey tab (20 s today, 30 s longer frames); slider and 1x/2x/4x; legend in Everyone mode (`settings.window.journeyHidden`); `Segment` draws solid / dashed / dotted; per-character heads (`SetPortraitTexture` for the current character, `UI-Classes-Circles` else, `Media\Ring_Class`, circle masks); `Fire` per point reached while playing (not while scrubbing); `J.SOUNDS` / `J.Sound` (0.4 s throttle, tier priority, 4x Rare+) / `J.Command` (`/aa journey sounds`, `/aa journey sound <name> <id>` saved in `settings.window.journeySoundPick`).
+- Recorder: `z` for zeppelin rides (`QoL/Travel.lua` `TR:RideKind()` by the port left from).
+- Decided while building: sounds only on the full-size tab (the Journal's small pane replays on every open, so it plays effects silently). Travel sounds are placeholders (proven sounds in the meantime) until picked by ear. First visit to a zone uses the Journal's zone discovery (its name over the map); "new day" fades are not built yet.
+
 ## 75. Requests of 2026-10-08 (plans for approval) [ ]
 Fifteen requests (issues 31 to 45); each one's plan, art prompts and open questions are in `docs/PLANS_2026-10-08.md`. Decided with Shannon 2026-10-08:
 - [x] The Journal's new top-right pane shows the Journey (section 74, issue 30).
@@ -849,11 +855,15 @@ The Creatures page's left pane gets the Journal's card overview (Asia's fading-i
 **Card sets** (each under a banner, as on the Journal; each card shows its count and a green +N for creatures new since you last looked)
 1. **Creature Mastery**: one card per research tier you have reached, its tier icon and name (e.g. the Legendary Hunter icon, "Legendary Hunter"); Asia's fading-icon look, two to a row. Tiers you haven't reached have no card (natural discovery). The count is creatures currently at that tier, not "this tier or better", so nothing reads as a completion score.
 2. **Creature Types**: one card per type you've met (Beast, Humanoid, Undead ...), two to a row. Background: the type's painted Wild Gambit creature scene (the glade for beasts, the crypt for undead ...), in the same merged art-and-name style as the zone cards.
-3. **Zones**: one card per zone where you've met a creature (`rec.z`); a creature living in several zones counts in each. Full-width banners, one to a row: the zone's **painted banner from the Places tab** (Asia's `Media/Zone_<Name>` art and its `ZONE_ART` lookup, section 84) as the background, falling back to the zone's world-map art (dimmed and slightly blurred so it reads as an old map) for zones without a painting, the zone's name written on it in Morpheus, gold, with a thick outline and drop shadow standing in for bold (the client has no bold Morpheus). Icon and text are merged into the art: no separate icon.
+3. **Zones**: one card per zone where you've met a creature (`rec.z`); a creature living in several zones counts in each. Full-width banners, one to a row: the zone's **painted banner from the Places tab** (Asia's `Media/Zone_<Name>` art and its `ZONE_ART` lookup, section 84) as the background, falling back to the zone's world-map art (dimmed and slightly blurred so it reads as an old map) for zones without a painting, the zone's name in Asia's banner lettering (`GameFontNormalLarge`, gold; Huge for continents), the same as the Places cards (2026-10-09: replaced Morpheus, so Creatures and Places read as one family; type scenes use it too). Icon and text are merged into the art: no separate icon.
    - Grouped under each continent with fold / unfold headings, and Fold all / Unfold all.
    - Your current zone first, marked "You are here".
    - Dungeons in their own group, using the dungeon card art.
 - Every card: hover highlight, the "New" count, tooltip with what clicking does.
+
+**Built (Unreleased, 2026-10-09)** [?]
+- `UI/Pages/Bestiary.lua`: `view` ("cards" / "list", `settings.window.bestiaryView`), `crumb`, `CardRows()` (rows: all, section, pair, cont, zone; folded sections / continents in `collapsedCards`), `FillCardRow`, `HalfCard` / `FillHalf` (tier icons with a fading gradient; type scenes cut to the card), `OpenCard` / `BackToCards`, the bar with `Media\Back_Arrow`, Cards / List. Zone and continent cards use Asia's banner (`W.FillZoneBanner`, `W.ZONE_ART`, `W.ContinentColor`, shared from `UI/Pages/Places.lua`) with her banner font. With nothing chosen, the right side reopens on the last creature read (`settings.window.bestiaryLast`), else a summary (`Summary()`: newest finds by `rec.f`, nearest next tier by `B:FullTier` need, creatures with `rec.z[here]`), each a clickable slot. Counts use `ns.N` everywhere so one reads "1 creature".
+- Decided while building: zones without a painting use Asia's plain oak card (as on Places) rather than world-map art, so the two pages match; the old dropdown menus' code stays unused for now.
 
 **Bug found the same day: detail pane jumps back to the top** (Creatures, likely Quests, Dungeons, Trainers)
 - Cause: these pages redraw the shown entry when item names arrive from the server (`GET_ITEM_INFO_RECEIVED`, constant while loot information loads) through their own handler, outside `UI.refreshing`, so `SetBlocks` resets the scroll.
@@ -896,6 +906,19 @@ Not released yet: no existing players' collections to migrate (see "Release" in 
 - **The NPC plays stronger** as your card for it climbs, so each upgrade is earned.
 - **Where the card shows:** a friendly NPC's page on **People** gets its card (or the iron ring with "Win a game of Wild Gambit against them to earn their card") and a wins bar like the Creatures page's kills bar ("0 / 1 wins · 1 to Fought"). Neutral and enemy NPCs show on Creatures with both kills and wins.
 - Build notes: wins are recorded per NPC (today only practice totals); a friendly NPC's card is built from its People record (level, elite or not, type), since it has no Creatures record.
+
+**Built (Unreleased, 2026-10-09)** [?]
+- `WildGambitLogic.lua`: `WL.WIN_AT` {1, 3, 5, 10, 20}, `WL.WinTier(wins)`, `WL.WinsFor(tier)` (the next step), `WL.EarnedTier(killTier, kills, wins, reaction)`: by kill from the first kill (at least Fought), by wins from the first win; for `"hostile"` wins only count once killed.
+- `QoL/WildGambit.lua`: wins in `db.npcWins[npc] = { w, name, level, class, type, display, reaction, t }` (account-wide, like the deck); `WG.Wins`, `WG.EarnedTier(npc, rec)` (with the starting tier), `WG.WinCard` (an NPC with no Creatures record, built from what was read off its unit when the game began), `WG.AddWin(opp)` (from `WG.RecordResult` on a practice win; chat line and card toast), `WG:Unearned()`. `WG:Collection()` holds only earned cards; `WG:CardFor` returns nil when unearned. `WG:OpponentFromUnit` now reads the unit's reaction (5+ friendly, 4 neutral, else hostile), level, classification and type. An opponent taken from the Almanac with no unit (the fallback) has no reaction: treated as an enemy. Starters: the old fillers, now at Fought and marked `starter`.
+- Stronger NPCs: in `WG:Start`, after the hands are evened, one of the gambler's cards goes up a tier (weakest first) for each tier your card for that NPC is past Fought (at most 4).
+- Iron ring, filled (Shannon 2026-10-09: "fill in the space more; is clipping a concern?"): yes: a `PlayerModel` draws in its square frame and can't take a round mask, so a bigger model spills past the circle at the corners. Done as a portrait frame: the model fills the disc's square (4 px in), a cover above it (`Media/Mask_CircleOutside`, clear inside the circle, tinted to the panel's dark 0.08 / 0.065 / 0.05) hides what spills, and the ring (`Media/Ring_Band`, iron, plus a darker inner band) is drawn over the model. Camera re-set on `OnModelLoaded`, size changes and show (one set before the model loads is lost: the cause of the old small, off-centre framing); `SetCamDistanceScale` = `settings.window.ringZoom` or `W.RING_ZOOM` 0.85; `/aa ringzoom <n>` to tune in game. Textures from `tools/make_ring.py`. The cover's colour is a single dark; on a lighter or painted panel its corners could show.
+- Iron ring: `W.IronRing(parent, size)` (`UI/Widgets.lua`): `W.Portrait` in iron grey with a darker inner edge and a dark disc; a `PlayerModel` in the square inside the circle (16% inset; portrait zoom 0, camera 1.35x) so the creature stays inside; the type icon without a model. Shown by `WG:Showcase`'s `ShowCreature` in place of the card.
+- Card toast placement (Shannon, 2026-10-09): bottom right, above the backpack (`MainMenuBarBackpackButton`, its card's right edge just past the bag's), raised 120 px over it so the second and third action bars stay clear (Shannon's screenshot: the first try covered them); movable with Settings > Discovery alerts > "Move card toasts" (a stand-in card to drag; right-click when done; `settings.toasts.cardPos` = its centre) and "Reset card toasts" (also reset by "Reset window positions"; `/aa cardtoast move|reset`). The drop still goes into the bag from wherever it is.
+- (first placement) not where the discovery alerts are (their Shift-drag position doesn't apply). The end is a drop instead of a fade: over 0.85 s the card shrinks to 6% (eased in) along a small arc into the bag's centre; the 3D model fades in the first 20% (a model doesn't follow a scale change); a glint (glow and turning star in the tier colour) on the bag and `IG_BACKPACK_CLOSE`. The game's bag button itself is never touched (no taint). No backpack on screen: the bottom right corner.
+- Card toast: `UI/CardToast.lua` draws the card with `WG:Showcase` (the build note's move of the card drawing out of `WildGambit.lua` wasn't needed: Showcase already draws a card anywhere). New: `FaceDown(true)` then turned at 0.35 s with a swell. Upgrade: the old tier's card (`WG.D.SetCard` with `WL.Card(info, before)`) shakes, then the new card with a burst (`Interface\Cooldown\star4`) in the tier colour. Gathered for 1 s, held while in combat (`PLAYER_REGEN_ENABLED`), one stack per batch with up to two fanned backs. Alert tier = card tier - 1. `Bestiary.lua`'s kill counts the card tier before and after; when the card toast takes it, the tier toast is skipped. Setting `settings.toasts.cards` (default on). `/aa cardtoast [new|upgrade|stack|all]` (a developer command like `/aa toast`): `CT:Test(mode)` queues samples from your own collection (the strongest card as new; the first Hunted-or-better as an upgrade from the tier below; up to four as a stack), shown even with card toasts off.
+- People: a "Wild Gambit" section in `DescribePerson` (tier or "Not yet earned", skills bar to the next tier). The People page's header has no room for a full card, so the card itself isn't drawn there (its tier is named instead).
+- Progression (Settings): the Wild Gambit text says cards come from kills and wins.
+- Tests: `dev/tests/test_wg_cards.py`.
 
 ## 80. Items page: cards, a tree, and upgrade arrows (agreed with Shannon 2026-10-09) [ ]
 The Items page follows the Creatures page's new pattern (section 78). The right-hand detail pane stays as it is (tooltip card, how it was found, owners, sources).
@@ -948,6 +971,26 @@ The Items page follows the Creatures page's new pattern (section 78). The right-
 - The detail pane gets an "Upgrade for" line too.
 - Build notes: the bag and bank scan also records whether each copy is bound (asked of the game directly, no tooltip reading); talents saved per character; the stat-weight table per class and spec in a data file.
 
+**Built, part 2 (Unreleased, 2026-10-09)** [?]: upgrade arrows.
+- `QoL/Inventory.lua`: bag and bank slots keep `[3] = true` for a soulbound copy (`C_Container.GetContainerItemInfo().isBound`); `c.talents` = points per tree, `c.talentNames` (`GetTalentTabInfo`, both the old and the newer return order), on login and when talents change.
+- `Data/StatWeights.lua`: `ns.StatWeights[class][tree] = { name, w }` (str agi sta int spi ap rap crit hit sp heal mp5 def dodge parry block armor dps rdps; crit / hit / dodge / parry per 1%), `start` = the tree for a character with no talents; `ns.ClassGear` (armor by class with the level it's worn from: mail and plate at 40; weapons by class; who dual-wields from which level).
+- `Modules/Upgrades.lua` (`ns.Upgrades`): stats from `GetItemStats` mapped by name (most specific first), `U.Score(link, class, tree)`; `U.Tree(c)` (Settings choice, else most points, else `start`); `CanWear` (you: your skill list; others: `ns.ClassGear`; jewelry, cloaks, librams, idols, totems: anyone); `Current` (the slot rules above; an off hand beside a worn two-hander isn't compared); an upgrade is 2% or more; `U:For(item)` -> you and the others (same realm and faction only), each with `reach` (where an unbound copy is: "in your bank", "in Thrall's bags") or a `note` ("binds when picked up" for bind-on-pickup, "if they get one"); results kept 5 s. `U:RowMark`, `U:Lines`; item tooltip lines via `TooltipDataProcessor` (or `OnTooltipSetItem`). Settings: `settings.upgrades.on`, `settings.upgrades.spec[charKey]`.
+- `Media/Arrow_Upgrade.tga` (64 px): a code-drawn white arrow (`tools/make_arrow.py`), tinted in texture markup (green 60,230,60; gold 255,200,40). A stand-in until a painted one (same name and size) replaces it.
+- Bag arrows (Shannon, 2026-10-09: "on the item in the bag as well, bottom right corner"): `U:PaintBags()` over the game's bag buttons (`ContainerFrameCombinedBags` / `ContainerFrame<n>` via `EnumerateValidItems`, else `<frame>Item<m>`), bag and slot by `GetBagID` (or the parent's ID) and `GetID`; a 14 px `Arrow_Upgrade` at the icon's bottom right, tinted green (you) or gold (a reachable alt); "Upgrade at NN" items get none. Redrawn 0.2 s after `BAG_UPDATE_DELAYED`, gear, talent, level, skill and item-info events, a bag window opening, and `ContainerFrame_Update` where the client has it.
+- Fix: worn items are read through a full hyperlink (`AsLink`): a random-suffix item's stats come only from a link; a worn item with no stats known yet makes the compare unknown (no arrow) instead of counting as an empty slot; empty stat reads aren't cached. Grey line: "if they get one", or "if they get their own (binds when picked up)" / "(yours is soulbound)" when a copy exists but is bound.
+- Fix 2 (from Shannon's saved data, 2026-10-09: Johnny's wrist saved as `9793`, Boaz's as `item:6556:924:::::::15:1485:::1:12731` with the suffix in the bonus IDs; no character had `talents`): `ScanGear` also keeps `c.gearLinks[slot]` (the full link), which `WornLink` prefers. `Better` calls a slot empty only when nothing is worn there (`U.lastWorn`); a worn item scoring 0 is compared against a floor of 1. `ScanTalents` first asks the Talent Planner (`TalentPlannerLogic.CurrentBuild`, `TreePoints` per tree: WoW Forever's talents are trait trees, `GetTalentTabInfo` gives nothing), then the old API; rescanned on `TRAIT_CONFIG_UPDATED`.
+- Class-only items: `U.ClassLimit(item)` reads the item's tooltip data once (`C_TooltipInfo.GetItemByID`; the line matching `ITEM_CLASSES_ALLOWED`, class names to class files by `LOCALIZED_CLASS_NAMES_MALE` / `FEMALE`), cached per item (an uncached item is asked again later). Used by `CanWear` (no arrow for other classes) and the Items page's "Can't use".
+- Not done: set bonuses aren't scored.
+- Tests: `dev/tests/test_upgrades.py`.
+
+**Built, part 1 (Unreleased, 2026-10-09)** [?]: cards, tree, Can't use.
+- `UI/Pages/Items.lua`: `view` ("cards" / "list", `settings.window.itemsView`), `crumb`, `cardFilter` (the card's test), the bar with `Media\Back_Arrow`, Cards / List. Cards drawn with the pair card now shared in `UI/Widgets.lua` (`W.PairCard`, `W.FillPairCard`; moved out of the Creatures page, which uses it too).
+- Kinds from `GetItemInfoInstant`'s class ID (cached per item): 2 Weapons, 4 Armor, 0 Consumables, 7 / 5 / 3 Trade Goods, 9 Recipes, 1 Containers, 12 Quest Items, 6 / 11 Ammunition and Quivers, 13 Keys, the rest Miscellaneous; any Poor item goes to Junk. Branches: the instant sub-type text (weapon type, consumable / trade good / recipe / container kind); armor by subclass (4 Plate, 3 Mail, 2 Leather, 1 Cloth, 6 Shields; finger, neck, trinket, cloak slots as Jewelry and cloaks) then the slot, in paper-doll order; quest items by the zone of a quest you've seen that asks for it. Containers by sub-kind (Bag, Soul Bag, Herb Bag ...), not by size: the game doesn't say a bag's size without its tooltip.
+- Folding: one state for the list through a proxy (`folded`): tree keys (`t:kind/branch/slot`) start folded (`opened`), card sections start open. A card whose tree has one kind opens it; search opens every branch with a match; `page:ShowItem(id)` opens the item's branch down to it.
+- Can't use: the level it asks for (`minLevel` over yours: "Level NN"), and for armor and weapons a skill for it in your skill list (`Cloth`, `Leather`, `Mail`, `Plate Mail`, `Shield`; weapon skills by subclass), which also covers mail and plate at 40. Class-only items (a tooltip line) aren't checked. Red tint on the icon (1, 0.3, 0.3) and a red tag on the right.
+- Recipes: a recipe item ("Pattern: Linen Bag") opens the spell of the same name on the Recipes tab when you've seen it; otherwise the item's own page.
+- Tests: `dev/tests/test_items_page.py`, `test_creatures_page.py` (whole addon loaded offline: `harness.ALL_FILES`).
+
 ## 81. Mini games across versions: compatibility and guard rails (agreed with Shannon 2026-10-09) [ ]
 Applies to Wild Gambit, Murloc Tac Toe and Gem Match.
 
@@ -970,7 +1013,11 @@ Applies to Wild Gambit, Murloc Tac Toe and Gem Match.
 - Wild Gambit: `WG.PROTO_MIN` / `PROTO_MAX`, `WG.Accepts`, `WG.ProtoFor` (the match's protocol, else the one they last used), `WG.FEATURE_PROTO` + `WG:Feature(name)`; `V` carries our range and the challenger re-sends `C` once at the newest shared protocol; `WG.VersionClash` tells who must update and offers the update quest; marks on the Challenge tile and the challenge pop-up.
 - Murloc Tac Toe: answers a challenge it can't play with `V|-|version|min|max` (read whatever the protocol), tells both sides, offers the update quest.
 - Gem Match: range registered; score messages read with later fields ignored.
-- **Not yet (part 2):** the board checksum after every move, and the old-against-new tests. The offline Wild Gambit tests named in CONTRIBUTING.md aren't in the repo (they lived in an earlier session's workspace), so part 2 starts by rebuilding a test harness under `dev/tests/`.
+**Built, part 2 (Unreleased, 2026-10-09)** [?]
+- `WL.BoardSum(board, mover)` (`WildGambitLogic.lua`): a short hex checksum of the board, owners written as the mover's / the other's / nobody's so both screens agree; covers each card (creature, spikes, shield, frozen, stone, ice), the ankh and the traps.
+- `WG.MoveSum(side, h, cell)` / `WG.SpellSum(side, cell, cell2)` work it out on a copy of the board (`WL.CopyBoard`), so the real board is untouched; `M` and `U` carry it as a last field (`-` when it can't be worked out). The receiver checks before playing the move; a difference calls `WG.Desync`: `X|step` to the other screen (the reason every version reads as out of step, never as a forfeit) and `CancelGame`, nothing counted. Older copies send no checksum (the check is skipped) and ignore the extra field, so no protocol bump.
+- Checked before the move rather than after, so a final move that drifted is caught before the result is recorded. Dungeon events (which change the board on timers) are practice-only, so a player match's board only changes at moves and spells.
+- Tests: `dev/tests/` (README there): `wow_stub.lua`, `harness.py` (one Lua runtime per player, messages delivered between them), `wg_setup.lua`, `test_wg_pvp.py` (new/new, old/new, drift, nine classes' spells, protocol ranges 12-13 against 12 and 12 against 11). A deliberately broken checksum fails 13 of its checks.
 
 ## 82. Auction House: bag to auction (agreed with Shannon 2026-10-09) [ ]
 - **Alt+Right-click** a bag item while the Auction House's Auctions tab is open: it goes into the sell slot, with the stack size and a price filled in from Auction Prices (`QoL/AuctionPrices.lua`: the last scan, slightly undercut).
@@ -978,6 +1025,15 @@ Applies to Wild Gambit, Murloc Tac Toe and Gem Match.
 - Not Shift-click (chat links, stack splitting), not Ctrl-click (the Almanac's dressing room), not plain right-click (uses or equips the item with the Auction House open). Alt+Right-click is also what most auction addons use.
 - Optional: a small "Post all of these" button when you hold several stacks of the same item.
 - Outside the Auctions tab, Alt+Right-click does nothing new.
+
+**Built (Unreleased, 2026-10-09)** [?]
+- `QoL/AuctionPost.lua` (after `AuctionPrices.lua` in the .toc). Hooks the game's bag buttons (`ContainerFrame<n>Item<m>`, PreClick + OnClick via HookScript: never replaces the game's handlers, so no taint; re-checked on `BAG_UPDATE` for bags opened later). PreClick notes what was in the sell slot before the click, so the second Alt+Right-click on a waiting item posts it, and a first click is never mistaken for a second.
+- Into the slot: `PickupContainerItem` + `ClickAuctionSellItemButton` (skipped if the game already put it there). Filled 0.15 s later and again on `NEW_AUCTION_UPDATE` (after the game's own suggestion): `AuctionsStackSizeEntry` = the stack, `AuctionsNumStacksEntry` = 1, `BuyoutPrice` = 99% of `AuctionPrices:PriceFor(link).p` (at least 1 copper under), times the stack when `AuctionFrameAuctions.priceType` is per stack; `StartPrice` 95% of that; `UpdateDeposit` / `AuctionsFrameAuctions_ValidateAuction` refreshed.
+- Posting is `AuctionsCreateAuctionButton:Click()` inside the click or key press (the hardware event). Enter: a keyboard frame shown only while an item waits, passing every other key (and Enter while chat is open or in combat) on to the game.
+- Fix (Shannon: "isn't working", 2026-10-09): a second way in that doesn't depend on which buttons draw the bags: `GLOBAL_MOUSE_DOWN` with the right button and Alt held reads the button under the mouse (`GetMouseFoci` / `GetMouseFocus`) as a bag and slot (`GetBagID`, a `bag` field or its parent's ID, and `GetID`; bags 0-4, a real item there). The press and the click of one Alt+Right-click are acted on once (same bag and slot within 0.6 s). Posting no longer clears the wait itself; the slot emptying (`NEW_AUCTION_UPDATE`) does, so a post the game refuses can be tried again with Enter. `/aa ahpost` (`AH:Status`): on/off, Auction House window and Auctions tab found and open, game bag buttons hooked, the last Alt+Right-click and how it came in, what was under the mouse, and why nothing happened.
+- Fix 2 (Shannon's `/aa ahpost`, 2026-10-09: "Auction House window: not found; Auctions tab: not found; game bag buttons hooked: 0"): WoW Forever has the **newer Auction House** (`AuctionHouseFrame`, tabs Buy / Sell / Auctions, "Post Auctions" with Quantity, Unit Price, Duration and Create Auction; Auction Prices already scanned it) and the **combined backpack**, not the old `AuctionFrame` and `ContainerFrame<n>Item<m>` buttons the first build assumed. Now both Auction Houses: newer = on the Sell tab (`AuctionHouseFrameDisplayMode.CommoditiesSell` / `ItemSell`), the item goes in with `AuctionHouseFrame:SetPostItem(ItemLocation:CreateFromBagAndSlot(bag, slot))`, `QuantityInput:SetQuantity(stack)`, and the unit price (`PriceInput:SetAmount`) is set 1% under the price the game fills in from its live search (re-applied when `COMMODITY_SEARCH_RESULTS_UPDATED` / `ITEM_SEARCH_RESULTS_UPDATED` lands, for 4 s), else 1% under the last scan; posted with the sell frame's `PostButton:Click()`; done on `AUCTION_HOUSE_AUCTION_CREATED`. Design change: the live lowest price beats the last scan when there is one (it's newer). A third way in: `hooksecurefunc("HandleModifiedItemClick")` (the game's bags call it on a modified click, with the item's location). A press over the item (`GLOBAL_MOUSE_DOWN`) never posts by itself: it waits for the click (the hardware event), with a try 0.35 s later if no click comes. `/aa ahpost` now also says which Auction House, which tab (display mode), and how many bag clicks and mouse presses it has seen.
+- Not built: the optional "Post all of these" button (multiple stacks); say if wanted.
+- Setting `qol.auction.altPost` (default on). Tests: `dev/tests/test_auction_post.py`.
 
 ## 83. Default key to open the Almanac: Shift+J (agreed with Shannon 2026-10-09) [ ]
 The binding already exists (Key Bindings > AddOns > "Open or close the Almanac", `AZEROTHALMANAC_TOGGLE` in `Bindings.xml`) but has no key.
@@ -990,6 +1046,135 @@ The binding already exists (Key Bindings > AddOns > "Open or close the Almanac",
   - Saved to the player's current binding set (`SaveBindings(GetCurrentBindingSet())`).
   - Says so once in chat, in the Almanac's red style: "Press Shift+J to open Azeroth Almanac (change it in Key Bindings > AddOns)."
   - The minimap button's tooltip and the Settings page show the current key ("Open: Shift+J").
+
+## 85. Wild Gambit: a game survives /reload (#50, 2026-10-09) [?]
+From the issue: "a /reload drops the match (not counted); a PvP opponent waits up to 5 minutes. Quick fix: answer moves for an unknown game with 'gone'. Full fix: save the match as it's played and resume it on login." Both built.
+- **Kept as played:** `db.resume = { o, moves, sent, t, char }` (Wild Gambit's saved settings). `o` is `WG:Begin`'s options copied as plain data (`WG.CopyData`: no frames or functions; the opponent's unit dropped). Every card played (`Play1`) and spell cast (`WG:ApplyAbility`) appends `{ side, "M"/"U", a, b }`; a player match also keeps each move it sent (`sent`). Cleared when the game ends or is cancelled, and when a practice game's dungeon event fires (its effects run on timers and can't be replayed). Not for the tutorial.
+- **Resume on login** (`WG.Resume`, first thing in `WG:OnLogin`, before the message handler exists, so nothing can arrive for a game not yet back): within an hour (practice) or 270 s (player match), same character: `WG:Begin` again with the saved options (`o.resumed`, so it isn't saved over), then the moves replayed through `Play1` / `ApplyAbility` with `game.replaying` (silent: no sounds, nothing sent, no gambler turns); `game.seq` = moves played. Practice on the gambler's turn: it carries on. Fails: the game is cancelled (not counted).
+- **Missed moves** (player matches): the resumed side sends `W|gid|seq` (its last move). The other side resends its moves after that (`WG.AnswerMissing`, from `game.sentMoves`), and if the asker is ahead (one of its moves never left, lost with the outbox on reload) asks back with `W|gid|seq|back`, so each side gets what it lacks. No protocol change: older copies ignore `W` (an older opponent just waits as before).
+- **Quick fix:** `M`, `U`, `W`, `H` or `P` for a game this screen doesn't have (not the current one, not one being set up) is answered `X|gid|gone`, which every version reads as "stopped waiting": their side cancels at once, nothing counted.
+- Tests: `dev/tests/test_wg_resume.py` (a broken `W` request fails 5 of its checks).
+
+## 86. Sticky group headings (#62, 2026-10-09) [?]
+From the issue (agreed with Asia for Places): while you scroll through a group, its heading stays pinned at the top of the list.
+- `W.List` option `sticky = function(item) -> { text, r, g, b, folded }` for rows that head a group. After each draw (`holder:PaintSticky`) the last such heading above the top edge is shown as a 22 px bar over the top of the list: a fade in the group's colour, its name, "-" / "+", a gold hover; clicking it calls the page's `onClick` with the heading row (so it folds as the heading itself would). Hidden at the very top of the list or when no heading has scrolled past.
+- Used by the Creatures cards (sections gold; continents in `W.ContinentColor`) and the Items page (card sections; the tree's kinds, with their count). Places (Asia's page) can turn it on by passing `sticky` to its list; not done here, her file.
+- Tests: `dev/tests/test_items_page.py` (pinned while scrolling Armor, folds on click, gone at the top).
+
+## 87. View buttons as pictures; long card names wrap (2026-10-09, Shannon) [?]
+- Cards / List over the Creatures and Items lists: `W.ViewButton(parent, media, tip, onClick)`, a 24 px square (dark tile, thin edge) holding a white picture tinted gold (active, gold edge) or grey; `b:SetActive(on)`. Pictures `Media/View_Cards.tga` (2 x 2 tiles) and `View_List.tga` (three lines with bullets), 32 x 32, drawn by `tools/make_view_icons.py` (painted ones can replace them, same names).
+- Creatures' Show all banner uses `Media/Tab_Creatures` (the tab's own picture), not the creature-kind icon.
+- Redraws keep models: the Window refreshes the open page on CHANGED (at most twice a second), and the Creatures page's `Show(shown, true)` re-filled the Wild Gambit card and the iron ring each time. `SetCard` now keeps the model when the same display is already shown (`f.modelDisplay`, `f.modelKept`; no ClearModel, no FitModel), `ShowCreature` skips its FitModel then, and `IronRing:SetCreature` returns early for the same npc and display.
+- The creature face's dragon: replaced the same day by the winged gold dragon drawn over the face (section 89); the "dragon behind the face" step is gone.
+- `W.FillPairCard`: names longer than 12 letters step down one size (was two) and may wrap to two lines; when the name is wider than the room beside the icon it sits 4 px higher so the count still fits below.
+
+## 88. Gathering page: zones like Places (agreed with Shannon 2026-10-09) [ ]
+Shannon asked for the Gathering page in the same style as the other pages. First proposal (cards and list, research rank cards, a tree sorted by skill bracket) **dropped** on her review: "more in line with the Places tab and design style; a lot of the sorting and organization is probably more than what is useful for a player". This is the revised plan. The right side (the node's page) stays as it is.
+
+**Today:** one Quest Log style tree (Herbs, Ore and stone, Chests and objects, Locks for rogues, Fishing, Skinning), alphabetical, a "Show" dropdown in the header, the New group on top. Nodes are kept by name across zones (`found.node[name]`, gathered per zone in `z`, sighted per zone in `sz`), fishing per zone, skinning built from the creatures' records.
+
+**The layout: one list, the way Places reads**
+- **Continents** as Places' tall banner cards (Eastern Kingdoms, Kalimdor), in their colour, with the rail down the left; **zones** as the smaller banner cards under them, using Asia's banners (`W.FillZoneBanner`, `W.ZONE_ART`, `W.ContinentColor`, shared from her Places page; the plain oak card where a zone has no painting). Your current zone first, marked "You are here". Every zone starts folded, as on Places.
+- **A zone's banner line:** what you've gathered there, as small icons with counts ("herb 12 · ore 4 · fish · skin 3"), and the green +N for new finds.
+- **Opening a zone:** a plain list of what grows there, no sub-headings: each node with its item's icon, its name, the skill it needs ("Herbalism 125" in the skill-up colour), its rank badge, and how often you gathered it **in that zone** (`z[map]`; "sighted" when only seen there). Fishing in that zone is one row; skins from creatures killed there are rows too. Sorted A to Z. A node growing in several zones is listed under each.
+- **Search** finds a node in any zone (zones with a match open); the "Show" dropdown is replaced by **five small profession toggles** in the header (herb, ore, treasure, fish, skin; all on by default) that hide or show those rows in every zone. Links from other pages (`ShowOnly` from the Characters profession cards and the Journal's research cards) turn on only that profession and open the zones where it was gathered.
+- Sticky headings (section 86): the continent and zone you're scrolling through stay pinned.
+- The New group stays at the top.
+
+**Treasure (chests and locks merged)**
+- "Chests and objects" and "Locks" become one kind, **Treasure**: chests, footlockers and other lootable objects, and (for a rogue, `G:LockRogue`) lockboxes you've come across. Rows that need Lockpicking show it ("Lockpicking 75", coloured for your rogue) whenever any of your characters is a rogue; for nobody else. Lockboxes aren't tied to a zone: they sit in their own "Lockboxes" card at the end, next to "Too high for you yet".
+
+**Session tally (simple but noticeable)**
+- A slim gold strip at the top of the list, above everything: "This session:" then each profession's icon and count gathered since you logged in (herbs, ore, treasure, fish, skins), and a rough auction value only when prices are known. Hidden until the first gather of the session.
+- **Noticeable:** each time a count goes up, that number pulses gold once (the Journal's highlight), so you see it tick while the page is open. Cleared at logout; per character.
+
+**Too high for you yet**
+- A card at the top, under the tally (Places' default card style, a red tint): "Too high for you yet (n)": nodes you've sighted that the playing character's skill can't gather yet (needs > your skill; red in the skill-up colours), each with the level it needs and the zone you saw it in. Click one: its page. A card, not a filter, so it's there when you want it and folds away otherwise.
+- The same nodes stay in their zones too, with the red "Herbalism 150".
+
+**Dropped from the first proposal:** the Cards / List switch, research rank cards, the skill-bracket tree, the summary on the right, value per gather as its own feature, skinning levels, per-character skill bars on cards, counts of herbs not yet found (natural discovery, ground rule 2: nothing unfound is hinted).
+
+**Holes still to watch**
+- **Nodes without a zone:** older records gathered before zones were saved, and lockboxes (items). Old nodes go in an "Elsewhere" card at the end; lockboxes in their own card.
+- **Skins by zone** use where the creatures were killed; kills from before kill spots were saved have no zone and go under "Elsewhere".
+- **Asia's banners:** shared with Places, so a change to them changes both pages; the Gathering page only calls her exported functions and never edits her file.
+- **Dungeons:** nodes inside instances (rare) list under the dungeon's own zone banner like any zone, no special Dungeons card.
+
+**Revised the same evening (Shannon, from the first build's screenshot):** the continent and zone banners go; the list is **a 4 : 1 card per profession** (Herbalism, Mining, Treasure, Fishing, Skinning) that opens to its gatherables, each row showing where it grows (its main zone, "+2" for more). (Smelting lines under ores, "Copper Ore → Copper Bar", were built and then **taken out** the same evening at Shannon's request: the Gathering page shows only what you gather.) The header's profession toggles went too (the cards fold instead); lockboxes and zoneless entries simply sit in their profession's list (no Lockboxes or Elsewhere cards).
+
+**Built (Unreleased, 2026-10-09)** [?]
+- `UI/Pages/Gathering.lua`: `Collect()` rows: tally, New group, "Too high for you yet" card, then a `prof` card per profession with entries (folded until opened, `opened[prof]`; search opens them all). The cards are Asia's banner card (`W.FillZoneBanner`, only called) in the profession's tint with its icon, the count, +N and your skill ("Mining 87"); a plain heading without it. `ShowOnly`, `ShowNode`, `ShowSkin`, `ShowFishing` open the right card.
+- `Modules/Gathering.lua`: `G.session` / `G:Tally(prof, items)` (fires `TALLY`; also from skinning in `Modules/Bestiary.lua`), `G:Prof(rec)`; the "Chests and objects" kind is now called Treasure (also the map pins' setting).
+- "Too high for you yet": nodes whose level is above the playing character's own skill (a lock: only when you're the rogue); a profession the character doesn't have doesn't count.
+- Fishing (Shannon, same evening): the card lists each kind of fish caught (`FishItems()`: every fishing water's `items` added up), no zone names; a fish's page (`DescribeFishItem`) shows catches and "Caught in" the waters, each opening the water's own page.
+- Tests: `dev/tests/test_gathering_page.py`.
+
+## 89. The elite frame: the winged gold dragon, everywhere (decided by Shannon 2026-10-09) [?]
+**Rule (ground rule 10):** every elite, boss and world boss shown anywhere in the Almanac wears the game's **winged gold dragon**, atlas `UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged`: the same art as the Wild Gambit window's corner emblem (`ns.GoldEmblem`, QoL/WindowUtil.lua), which Shannon picked as the reference. Not the classic target frame sheet (`Interface\TargetingFrame\UI-TargetingFrame-Elite`), which only stays as a fallback where the client lacks the atlas.
+- Rares and rare elites use the matching silver one, `UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Silver` (same family; change it if Shannon picks other art).
+- How: always through `W.SetDragon(tex, kind, portrait, diameter)` (UI/Widgets.lua) with `W.DragonFor(rec)`; never set the dragon art by hand. The dragon is centred on the round portrait at `W.DRAGON_SCALE` (1.6) times its size, as tall as that and as wide as the art's own shape (`W.DragonAtlas(kind)` returns the atlas and its width / height), drawn over the portrait (its hole frames the face). `SetDragon` returns true and how far the art reaches past the portrait's right edge, so text beside it can move clear.
+- Used by: the Creatures page's face beside the name and the list rows' faces (2026-10-09).
+- **Not yet:** Wild Gambit's card name plates draw half dragons at each end of the name ribbon, cut from the classic sheet; the winged ring can't be split that way. Open question for Shannon: a small winged emblem on the card, or keep the plate halves (section 69's card look).
+
+## 90. Recipes page: cards and a skill-ordered tree (agreed with Shannon 2026-10-09) [ ]
+Shannon asked for the Recipes tab in the same style and format as Creatures, Items and Places (section 88 does the same for Gathering). Proposal for approval; nothing built.
+
+**Today** (`UI/Pages/Trainers.lua`, page key `trainers`): one Quest Log style tree of the professions, each starting with an "Overview" row (your characters' skill bars, trainers met, recipe items found) and then its recipes by required skill, coloured for the playing character (green can learn now, red not yet, grey learned); a "Show" dropdown with those three; the New group at the top. A recipe's page: General, its tooltip, all ranks, Makes, Reagents, Taught by, Your characters. Recipes come only from trainer windows and your own profession windows (ground rule 5); the profession window also gives `cat` (its heading, e.g. "Potions") and the reagents.
+
+**Views** (as on Creatures, Items and section 88)
+- **Cards** (default) and **List** with the picture buttons (section 87), remembered (`settings.window.recipesView`); the "Show" dropdown goes; search jumps to the whole tree.
+- A card opens its tree under "Recipes › Alchemy" with the back arrow. `page:ShowOnly` (Characters' profession cards), `ShowGroup`, `ShowSpell` and the Items page's recipe links land in the matching tree with the back arrow.
+- The "Overview" row leaves the tree: opening a profession card shows that overview on the right side instead.
+
+**Cards** (count and green +N on each)
+1. **Professions** (pair cards with the profession's icon): Show all, then one per profession with anything recorded, primary professions first, then Cooking and First Aid. Under the name: the recipe count and the best skill among your characters ("Elfo 187 / 225").
+2. **For <the character you're playing>** (pair cards; only that character's own professions): **Can learn now**, **Not yet**, **Learned**. Replaces the dropdown, and "Can learn now" is the one players want before a trainer visit.
+3. **Your crafters** (pair cards, the class crest, `Media/Crest_<CLASS>`): one per character with a crafting profession; opens the recipes that character knows, across professions. Answers "which of my characters makes this?" without opening each recipe.
+
+**The tree**
+- Profession, then **skill bracket** (Apprentice 1-74, Journeyman 75-149, Expert 150-224, Artisan 225-300; "No skill shown" last), then recipes by required skill. The profession window's own heading (`cat`) shows as a small grey note on the row rather than as a level of the tree: recipes only seen at a trainer have no heading, so a tree by heading would split into two schemes.
+- Sticky headings (section 86), the New group on top, Collapse all / Expand all.
+
+**Additions on the right side**
+- **Summary** with nothing picked: what the playing character can learn now with the total training cost and the nearest trainer you've met who teaches them; recipes learned lately; recipe items in any character's bags or bank that nobody has learned yet.
+- On a recipe: **"Can make now"**: how many times, from reagents in bags and banks across characters (the Inventory records), e.g. "3 (reagents with Bob in the bank)". **Cost and price** from the Crafting module when auction scans exist ("costs 45s to make, sells for 1g 10s"); hidden otherwise. **Where to learn** beyond trainers: merchants you've met who sell its recipe item (`Merchants:Selling`), the recipe item's page in Items. **Upgrade for**: when it makes gear, the upgrade line from section 80 ("Upgrade for Bob (Fury)").
+
+**Poking holes**
+- **"Green" means two things.** Today green = can learn now, but in the game's profession window green is a recipe's skill-up colour (orange / yellow / green / grey). A player reads one as the other. Proposal: the learn state becomes a small badge (a gold "+" can learn, a lock not yet, a tick learned) and the name's colour is left to the game's skill-up colour where known. That needs recording `relativeDifficulty` from `C_TradeSkillUI.GetRecipeInfo` per character when their profession window is open (only for recipes they know; unknown otherwise, white). A real change to recording; needs a yes.
+- **Never a completion score.** Under ground rule 5 the page only knows recipes a trainer or a profession window has shown. Recipes from drops, vendors and quests appear only once some character learns them. Counts must never read as "34 of 40"; the cards say "34 recipes", not a fraction.
+- **"For this character" can be empty.** A character with no crafting profession gets no card set 2; the cards must not show empty "Can learn now (0)" cards.
+- **Enchanting and other recipes that make nothing** (`made` is nil): no Makes, no cost and price, no upgrade line; their page shows reagents only. Fine, but the Summary's value lines skip them.
+- **"Can make now" counts reagents across characters**, which is only true if you mail them; say "with Bob" for anything not on the playing character, and count the playing character's bags first.
+- **Reagent counts are a snapshot** (bags and bank as last scanned on each character): an alt's bank may be weeks old. Show the scan's age in the tooltip.
+- **Crafters cards repeat the Characters page** a little. Kept because they answer a recipe question (who makes this), not a character one.
+- **The page key stays `trainers`** (saved tabs and links): any rename of files or keys during the rebuild must keep it.
+
+**Other features worth considering** (each optional)
+- **Shopping list:** pick recipes to make, the page adds up reagents, subtracts what's in bags and banks, and shows where each missing one comes from (vendor, auction price, gathered on the Gathering page).
+- **Skill-up path:** for the playing character, the cheapest recipes you know that still give skill-ups (needs the difficulty colours above).
+- **Cooldowns:** transmutes and similar, per character, from the profession window (if Forever's API gives them).
+- **Recipe items to watch:** recipe items you've seen on merchants or the auction house that none of your characters knows, with which character could use them.
+- **A crafted item's link back:** on an Items page item, "Made by: Alchemy, Elfo knows it", opening the recipe (the reverse of today's Items → Recipes link).
+
+**Questions for Shannon**
+1. The three card sets: all of them, or only Professions and "For this character"?
+2. Learn state as a badge, and the game's skill-up colours on the names (needs the new recording)?
+3. Skill brackets in the tree, with the window's heading as a note: agreed?
+4. "Can make now" across characters, or the playing character only?
+5. Which optional features: shopping list, skill-up path, cooldowns, recipe items to watch, "Made by" on Items?
+
+**Shannon's answers (2026-10-09)**
+1. Cards: **Show all** for the whole account; the **For <character>** cards for the character you're playing only. (The professions cards stay to open each profession; "Your crafters" dropped.)
+2. Yes: the learn state as a badge, the game's skill-up colours on the names (recording `relativeDifficulty`).
+3. Yes: skill brackets in the tree, the window's heading as a note.
+4. "Can make now": the playing character only (bags and bank).
+5. No extras now. **Parked for a later review:** shopping list, skill-up path, cooldowns, recipe items to watch, "Made by" on Items.
+
+**Built (Unreleased, 2026-10-09)** [?]
+- `UI/Pages/Trainers.lua` (page key still `trainers`): `view` / `crumb` / `cardFilter` (`settings.window.recipesView`), `CardRows()` (Show all, Professions with count, +N and the best skill, For <you> with Can learn now / Not yet / Learned for your own professions), `Collect()` (profession, then `BRACKETS`: Apprentice to 74, Journeyman 149, Expert 224, Artisan 300, Master above, "No skill shown"; heading and skill on the right), `FillRecipeRow` (badge: `ReadyCheck-Ready` learned, `Character-Plus` can learn now, `UI-LFG-ICON-LOCK` not yet; name in `DIFF` colour for learned recipes the window has coloured), `Summary()` on the right with nothing picked. The "Show" dropdown and the in-tree Overview row are gone; a profession's heading (or card) shows its overview. A recipe's page adds Can make now, Costs to make / Sells for (`Crafting:PriceOf`), The recipe item and Sold by (`Merchants:Selling`), Upgrade for (`Upgrades:Lines`).
+- `Modules/Trainers.lua`: `chars[key].recipeDiff[spellID]` from `C_TradeSkillUI.GetRecipeInfo` (`relativeDifficulty`, or the older `difficulty` words).
+- Tests: `dev/tests/test_recipes_page.py`.
+
 
 ## What comes from Plus Everything
 

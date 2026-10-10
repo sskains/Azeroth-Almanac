@@ -223,7 +223,7 @@ local function DescribeZone(z)
 		local areas = c.mapAreas and c.mapAreas[z.id]
 		if n > 0 or areas or (rec.c and rec.c[key]) then
 			local parts = {}
-			if areas then parts[#parts + 1] = (L["%d map areas uncovered"]):format(areas) end
+			if areas then parts[#parts + 1] = (L["%s uncovered"]):format(ns.N(areas, "map area", "map areas")) end
 			if n > 0 then parts[#parts + 1] = (L["%s explored"]):format(ns.N(n, "place", "places")) .. (xp > 0 and (" (" .. (L["%d experience"]):format(xp) .. ")") or "") end
 			if #parts == 0 then parts[1] = L["visited"] end
 			rows[#rows + 1] = { "stat", ns.CharName(key), table.concat(parts, ", "), sortKey = ns.CharName(key, true) }
@@ -485,6 +485,9 @@ local function FillBanner(row, o)
 	b:Show()
 end
 
+-- (#52) the same banner cards for the Creatures page's zone cards
+W.ZoneBanner, W.FillZoneBanner, W.ZONE_ART, W.ContinentColor = ZoneBanner, FillBanner, ZONE_ART, ContColor
+
 -- the rail: a thin line in the continent's colour down the left of its zones and places
 local function Rail(row, color)
 	if not row.rail then
@@ -506,7 +509,7 @@ local function FillContinentBanner(row, r)
 	local c = ContColor(name)
 	FillBanner(row, {
 		name = name, art = ZONE_ART[name], icon = W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }), tint = c, big = true,
-		count = "|cffcccccc" .. (L["%d zones"]):format(r.count) .. (r.explored and r.explored > 0 and ("  \194\183  " .. (L["%d explored"]):format(r.explored)) or "") .. "|r",
+		count = "|cffcccccc" .. ns.N(r.count, "zone", "zones") .. (r.explored and r.explored > 0 and ("  \194\183  " .. (L["%d explored"]):format(r.explored)) or "") .. "|r",
 		pill = {
 			sign = collapsed[r.key] and "+" or "-",
 			label = collapsed[r.key] and L["Show zones"] or L["Hide zones"],
@@ -526,7 +529,7 @@ local function FillZoneBanner(row, z, folded, cont)
 	FillBanner(row, {
 	name = name, art = ZONE_ART[name], icon = W.KindIcon("zone"), left = 14, top = 4, tint = ContColor(cont),
 		count = total and ((done >= total and "|cff40ff40" or "|cffcccccc") .. (L["%d / %d explored"]):format(done, total) .. "|r")
-			or ("|cffcccccc" .. (L["%d places"]):format(n) .. "|r"),
+			or ("|cffcccccc" .. ns.N(n, "place", "places") .. "|r"),
 		pill = n > 0 and {
 			sign = folded and "+" or "-",
 			label = folded and (L["Show areas (%d)"]):format(n) or L["Hide areas"],
@@ -795,7 +798,7 @@ function page:Refresh()
 	list:SetData(rows)
 	list:Select(keep)
 	if keep then ShowRow(keep.place or keep, true) end
-	countText:SetText((L["%d zones, %d places, %d dungeons"]):format(zones, places, dungeons))
+	countText:SetText(ns.N(zones, "zone", "zones") .. ", " .. ns.N(places, "place", "places") .. ", " .. ns.N(dungeons, "dungeon", "dungeons"))
 end
 
 -- open the page on a zone (uiMapID)

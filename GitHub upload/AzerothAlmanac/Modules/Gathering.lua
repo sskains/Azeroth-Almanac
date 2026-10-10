@@ -45,7 +45,7 @@ local SKILL = { herb = L["Herbalism"], ore = L["Mining"], fish = L["Fishing"] }
 G.KINDS = {
 	{ key = "herb", label = L["Herbs"], icon = { 133939, "Trade_Herbalism", "INV_Misc_Herb_07" }, flavor = "Herbalism" },
 	{ key = "ore", label = L["Ore and stone"], icon = { "Trade_Mining", "INV_Ore_Copper_01" }, flavor = "Mining" },
-	{ key = "chest", label = L["Chests and objects"], icon = { 1450989, 132594, "INV_Box_02" }, flavor = "Blacksmithing" },
+	{ key = "chest", label = L["Treasure"], icon = { 1450989, 132594, "INV_Box_02" }, flavor = "Blacksmithing" },
 	{ key = "fish", label = L["Fishing"], icon = { "Trade_Fishing", "INV_Misc_Fish_02" }, flavor = "Fishing" },
 }
 G.KIND = {}
@@ -135,6 +135,23 @@ local function Fill(rec, items, where)
 		rec.z[where.map] = (rec.z[where.map] or 0) + 1
 		if ns.Bestiary then ns.Bestiary:AddSpot(rec, "spots", where) end
 	end
+end
+
+-- (DESIGN 88) the session tally: what you've gathered since you logged in, by profession ("herb",
+-- "ore", "treasure", "fish", "skin"), and every item that came out (for a rough auction value).
+-- Kept in memory only, so it's this character's and clears at logout. Fires "TALLY".
+G.session = { counts = {}, items = {}, total = 0 }
+function G:Tally(prof, items)
+	local t = self.session
+	t.counts[prof] = (t.counts[prof] or 0) + 1
+	t.total = t.total + 1
+	for item, q in pairs(items or {}) do t.items[item] = (t.items[item] or 0) + (tonumber(q) or 1) end
+	ns:Fire("TALLY", prof)
+end
+-- the kind of row a node is on the Gathering page: herbs, ore, or treasure (chests and locks)
+function G:Prof(rec)
+	local k = rec and rec.kind
+	return (k == "herb" or k == "ore") and k or "treasure"
 end
 
 -- the tier a node or fishing spot has reached (1 Sighted .. 6 Master), and how many more to the next
@@ -228,6 +245,7 @@ local function OnLoot()
 				(L["Fishing in %s"]):format(where.zone or "?"), where)
 			if rec then
 				Fill(rec, catch, where)
+				G:Tally("fish", catch)
 				Skill(rec, "fish")
 				rec.pools = rec.pools or {}
 				for name in pairs(pools) do rec.pools[name] = (rec.pools[name] or 0) + 1 end
@@ -269,6 +287,7 @@ local function OnLoot()
 				rec.ids = rec.ids or {}
 				rec.ids[o.id] = true
 				Fill(rec, o.items, where)
+				G:Tally(G:Prof(rec), o.items)
 				Skill(rec, rec.kind)
 				TierCheck(rec, before, o.name, rec.kind)
 			end

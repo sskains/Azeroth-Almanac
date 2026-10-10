@@ -40,7 +40,7 @@ ns.defaults = {
 		size = 32, sound = true, soundIndex = 1, gameIcon = false, showName = false, arc = 2,
 		style = "pulse", look = "both", range = 15, customNames = {}, npcPlates = false,
 	},
-	auction = { autoScan = true, tooltip = true, vendor = true, age = true, average = true, stackOnShift = true, realms = {} },
+	auction = { autoScan = true, tooltip = true, vendor = true, age = true, average = true, stackOnShift = true, altPost = true, realms = {} },
 	disenchant = { tooltip = true, bestHint = true, learn = true, learned = {} },
 	travel = {
 		bar = true, barStyle = "minimap", barLocked = false, mapTimes = true, dockPanel = true, share = true, panelAlpha = 0.8,

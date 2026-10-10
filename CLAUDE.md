@@ -11,4 +11,6 @@ The project lives under `GitHub upload/`:
 - design record (rules, research, decisions): `GitHub upload/docs/DESIGN.md` (was `docs/TASKS.md`)
 - current version and open points: `GitHub upload/STATUS.md`
 
+Before any UI or art work, read the **Ground rules** at the top of `docs/DESIGN.md`: standing decisions such as the winged gold dragon on every elite (rule 10) live there.
+
 At the start of a session, read this file, `CONTRIBUTING.md` and `STATUS.md`, and ask which issue is being worked on. Before committing, add the change to `CHANGELOG.md`, add anything that needs an in-game check to `docs/TEST_CHECKLIST.md`, and record any design decision in `docs/DESIGN.md`.

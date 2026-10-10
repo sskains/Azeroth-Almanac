@@ -27,6 +27,13 @@ local FILTER_TIERS = {
 	{ B.TIERS[4], "ff0070dd" }, { B.TIERS[5], "ffa335ee" }, { B.TIERS[6], "ffff8000" },
 }
 local shown -- npc id on the page
+-- (#52, DESIGN 78) the left pane: category cards (the default) or the list; a list opened from a card
+-- carries a crumb ("Creatures > Beasts") and a back arrow
+local view          -- "cards" | "list" (remembered in settings.window.bestiaryView)
+local crumb         -- the open card's label, or nil
+local cardBar, backBtn, crumbText, cardsBtn, listBtn
+local collapsedCards = {}
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 
 local RARITY = {
 	normal = L["Normal"], trivial = L["Normal"], minus = L["Normal"],
@@ -140,6 +147,10 @@ local function Describe(npc, rec)
 	b[#b + 1] = { "stat", L["Rarity"], Rarity(rec) }
 	b[#b + 1] = { "stat", L["Type"], (rec.type or "?") .. (rec.family and (" (" .. rec.family .. ")") or "") }
 	b[#b + 1] = { "stat", L["Kills"], tostring(B:KillCount(rec)) }
+	-- (#54) games of Wild Gambit won against it (they count towards its card)
+	local WGm = ns.QoL and ns.QoL.WildGambit
+	local won = WGm and WGm.Wins and WGm.Wins(npc)
+	if won and (won.w or 0) > 0 then b[#b + 1] = { "stat", L["Wild Gambit wins"], tostring(won.w) } end
 	local who = {}
 	for key in pairs(rec.c or {}) do if key ~= rec.b then who[#who + 1] = ns.CharName(key) end end
 	table.sort(who)
@@ -347,9 +358,64 @@ local TYPE_THEME = {
 	Giant = { "Mining" }, Critter = { "Herbalism", "Cooking" },
 }
 
+local function ZoneName(map)
+	local z = ns.Store:Get("zone", map)
+	if z and z.name then return z.name end
+	local ok, info = pcall(C_Map.GetMapInfo, map)
+	return ok and type(info) == "table" and info.name or nil
+end
+
+-- (#52) nothing chosen yet: a summary instead of an empty page. Newest finds, the creatures closest
+-- to their next tier, and what lives in the zone you're standing in; each one opens the creature.
+local function Summary()
+	local all, closest, here = {}, {}, {}
+	local map = ns.Where and ns.Where().map
+	for npc, rec in pairs(ns.Store:Shown("creature")) do
+		if type(rec) == "table" and not B:IsObject(rec) then
+			local e = { npc = npc, rec = rec, name = rec.name or "?",
+				icon = W.FindIcon(W.TYPE_ICON[rec.type or ""] or W.KIND.creature.icon) }
+			all[#all + 1] = e
+			local tier, need = B:FullTier(rec)
+			if need and need > 0 and tier < 6 then e.tier, e.need = tier, need closest[#closest + 1] = e end
+			if map and rec.z and rec.z[map] then here[#here + 1] = e end
+		end
+	end
+	if #all == 0 then return nil end
+	local function Open(npc) return function() shown = npc page:Refresh() end end
+	local function Slots(list, note, max)
+		local out = {}
+		for i = 1, math.min(#list, max) do
+			local e = list[i]
+			out[#out + 1] = { icon = e.icon, name = NameColor(e.rec) .. e.name .. "|r", note = note(e), onClick = Open(e.npc) }
+		end
+		return { "slots", out, cards = true }
+	end
+	local b = {}
+	b[#b + 1] = { "banner", L["Your Bestiary"] }
+	b[#b + 1] = { "stat", L["Creatures met"], tostring(#all) }
+	b[#b + 1] = { "small", NOTE .. L["Pick a creature on the left, or one below."] .. "|r" }
+	table.sort(all, function(x, y) return (x.rec.f or 0) > (y.rec.f or 0) end)
+	b[#b + 1] = { "banner", L["Newest finds"] }
+	b[#b + 1] = Slots(all, function(e) return ns.AgoText(e.rec.f) end, 6)
+	if #closest > 0 then
+		table.sort(closest, function(x, y) if x.need ~= y.need then return x.need < y.need end return x.name < y.name end)
+		b[#b + 1] = { "banner", L["Nearly there"] }
+		b[#b + 1] = Slots(closest, function(e) return (L["%s more to %s"]):format(ns.N(e.need, "kill", "kills"), B.TIERS[e.tier + 1] or "?") end, 6)
+	end
+	if #here > 0 then
+		table.sort(here, function(x, y) return x.name < y.name end)
+		b[#b + 1] = { "banner", (L["Around %s"]):format(ZoneName(map) or L["here"]) }
+		b[#b + 1] = Slots(here, function(e) return ns.N(B:KillCount(e.rec), "kill", "kills") end, 8)
+		if #here > 8 then b[#b + 1] = { "small", NOTE .. (L["and %s more: the Zones cards list them all."]):format(ns.N(#here - 8, "other", "others")) .. "|r" } end
+	end
+	return b
+end
+
 local function Show(npc, keepModel)
 	shown = npc
 	local rec = npc and ns.Store:Get("creature", npc)
+	-- (#52: the page reopens on the creature you last read)
+	if rec and ns.db.settings.window then ns.db.settings.window.bestiaryLast = npc end
 	detail:SetTheme(rec and (TYPE_THEME[rec.type or ""] or { "Skinning", "Mining" }) or nil)
 	if not rec then
 		model:Hide()
@@ -360,9 +426,10 @@ local function Show(npc, keepModel)
 		badge:Hide()
 		firstText:SetText("")
 		killPin:Hide()
-		if gambitCard then gambitCard:Hide() end
+		if gambitCard then gambitCard:Hide() if gambitCard.ring then gambitCard.ring:Hide() end end
 		if favButton then favButton:Hide() end
-		detail:SetBlocks(nil, L["Select a creature."])
+		local ok, b = pcall(Summary)
+		if ok and b then detail:SetBlocks(b) else detail:SetBlocks(nil, L["Select a creature."]) end
 		return
 	end
 	model:Show()
@@ -422,7 +489,11 @@ local function Show(npc, keepModel)
 	tierBar:SetMarkers({ { t1, 2 }, { t3, 3 }, { t4, 4 }, { t5, 5 }, { t6, 6 } }, kills, nextAt or kills)
 	badge:SetTier(tier, need, npc, rec)
 	if gambitCard then pcall(gambitCard.ShowCreature, gambitCard, npc) end
-	if favButton then favButton:SetCreature(npc) end
+	if favButton then
+		-- (#54: a favourite is a card on the pick table, so only for a card you hold)
+		local WGm = ns.QoL and ns.QoL.WildGambit
+		if WGm and WGm.CardFor and not WGm:CardFor(npc) then favButton:Hide() else favButton:SetCreature(npc) end
+	end
 	firstText:SetText(NOTE .. (L["First met by %s on %s."]):format(ns.CharName(rec.b), ns.DateText(rec.f)) .. "|r")
 	killPin.rec = rec
 	killPin:SetShown(type(rec.lastKill) == "table" and rec.lastKill.map ~= nil)
@@ -562,12 +633,6 @@ local function FilterMenu(anchor)
 	W.Menu(anchor, items)
 end
 
-local function ZoneName(map)
-	local z = ns.Store:Get("zone", map)
-	if z and z.name then return z.name end
-	local ok, info = pcall(C_Map.GetMapInfo, map)
-	return ok and type(info) == "table" and info.name or nil
-end
 
 local function ZoneLabel()
 	if not zoneFilter then return L["All zones"] end
@@ -604,37 +669,282 @@ local function ZoneMenu(anchor)
 end
 page.ZoneMenu = ZoneMenu
 
+---------------------------------------------------------------------------
+-- (#52, DESIGN 78) Category cards: Show all, Creature Mastery, Creature Types, Zones
+---------------------------------------------------------------------------
+
+local CARD_H, PAIR_H, BANNER_H, CONT_H = 58, 60, 58, 72
+local SCENE = { Beast = "Scene_Beast_1", Critter = "Scene_Critter_1", Demon = "Scene_Demon_1", Dragonkin = "Scene_Dragonkin_1",
+	Elemental = "Scene_Elemental_1", Giant = "Scene_Giant_1", Humanoid = "Scene_Humanoid_1", Mechanical = "Scene_Mechanical_1",
+	Undead = "Scene_Undead_1" }
+
+local function Win() return ns.db.settings.window end
+local function SaveView() Win().bestiaryView = view end
+
+-- a half-width card: a painting (creature types) or an icon fading to the right (tiers), the name
+-- and count over it, a thin gold rule at the foot, a gold wash under the mouse, a green +N for new ones
+local function HalfCard(row, i) return W.PairCard(row, i) end
+local function FillHalf(c, o) return W.FillPairCard(c, o, PAIR_H) end
+
+local function NewText(n) return (n and n > 0) and ("  |cff1eff00+" .. n .. "|r") or "" end
+
+-- open the list on one card's creatures
+local function OpenCard(label, tier, kind, zone)
+	tierFilter, kindFilter, zoneFilter = tier, kind, zone
+	view, crumb = "list", label
+	SaveView()
+	page:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
+local function BackToCards()
+	tierFilter, kindFilter, zoneFilter = nil, nil, nil
+	view, crumb = "cards", nil
+	SaveView()
+	page:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
+local CONTINENT_TYPE = (Enum and Enum.UIMapType and Enum.UIMapType.Continent) or 2
+local DUNGEON_TYPE = (Enum and Enum.UIMapType and Enum.UIMapType.Dungeon) or 4
+local function MapInfo(map)
+	if not (C_Map and C_Map.GetMapInfo and map) then return nil end
+	local ok, info = pcall(C_Map.GetMapInfo, map)
+	return ok and type(info) == "table" and info or nil
+end
+local function ContinentOf(map)
+	local m, guard = map, 0
+	while m and guard < 8 do
+		local info = MapInfo(m)
+		if not info then break end
+		if info.mapType == CONTINENT_TYPE then return info.name end
+		m, guard = info.parentMapID, guard + 1
+	end
+end
+
+-- the cards, as list rows (folded sections and continents leave their rows out). Card rows have no
+-- `header` field: the list puts a spacer before every row that has one (only the sections want it)
+local function CardRows()
+	local rows = {}
+	local total, newAll = 0, 0
+	local tierN, tierNew, typeN, typeNew, zoneN, zoneNew = {}, {}, {}, {}, {}, {}
+	for _, rec in pairs(ns.Store:Shown("creature")) do
+		if not B:IsObject(rec) then
+			total = total + 1
+			local isNew = ns.New and ns.New:IsNew("bestiary", rec) and 1 or 0
+			newAll = newAll + isNew
+			local t = FilterTier(rec)
+			tierN[t], tierNew[t] = (tierN[t] or 0) + 1, (tierNew[t] or 0) + isNew
+			local ty = rec.type or L["Other"]
+			typeN[ty], typeNew[ty] = (typeN[ty] or 0) + 1, (typeNew[ty] or 0) + isNew
+			for map in pairs(rec.z or {}) do zoneN[map], zoneNew[map] = (zoneN[map] or 0) + 1, (zoneNew[map] or 0) + isNew end
+		end
+	end
+	if total == 0 then return rows, 0 end
+	rows[#rows + 1] = { card = "all", count = total, new = newAll }
+
+	local function Section(key, text)
+		rows[#rows + 1] = { card = "section", header = text, key = key }
+		return not collapsedCards[key]
+	end
+	local function Pairs(list)
+		for i = 1, #list, 2 do rows[#rows + 1] = { card = "pair", a = list[i], b = list[i + 1] } end
+	end
+
+	-- Creature Mastery: the tiers you've reached, each its icon and name
+	if Section("mastery", L["Creature Mastery"]) then
+		local list = {}
+		for t = 1, 6 do
+			if (tierN[t] or 0) > 0 then
+				local f = FILTER_TIERS[t]
+				list[#list + 1] = { icon = TierIconFor(t), name = ("|c%s%s|r"):format(f[2], f[1]), plain = f[1], count = tostring(tierN[t]) .. NewText(tierNew[t]),
+					tip = (L["Creatures at %s"]):format(f[1]), action = function() OpenCard(f[1], t, nil, nil) end }
+			end
+		end
+		Pairs(list)
+	end
+
+	-- Creature Types: each type you've met, on its painted scene
+	if Section("types", L["Creature Types"]) then
+		local types = {}
+		for ty in pairs(typeN) do types[#types + 1] = ty end
+		table.sort(types)
+		local list = {}
+		for _, ty in ipairs(types) do
+			list[#list + 1] = { scene = SCENE[ty] or "Scene_Generic_1", name = ty, count = tostring(typeN[ty]) .. NewText(typeNew[ty]),
+				tip = ty, action = function() OpenCard(ty, nil, { "type", ty, ty }, nil) end }
+		end
+		Pairs(list)
+	end
+
+	-- Zones: by continent (your current zone first), dungeons in a group of their own
+	if Section("zones", L["Zones"]) then
+		local here = ns.Where and ns.Where().map
+		local groups, order = {}, {}
+		for map, n in pairs(zoneN) do
+			local info = MapInfo(map)
+			local name = info and info.name or ZoneName(map)
+			-- (a creature noted while the game only knew the continent: no card of its own; it's still
+			-- in Show all and its type and tier)
+			if info and info.mapType == CONTINENT_TYPE then name = nil end
+			if name then
+				local cont = (info and info.mapType == DUNGEON_TYPE) and L["Dungeons and raids"] or ContinentOf(map) or L["Elsewhere"]
+				if not groups[cont] then groups[cont] = {} order[#order + 1] = cont end
+				table.insert(groups[cont], { map = map, name = name, n = n, new = zoneNew[map], here = map == here })
+			end
+		end
+		table.sort(order, function(a, b)
+			local da, db = a == L["Dungeons and raids"], b == L["Dungeons and raids"]
+			if da ~= db then return db end
+			return a < b
+		end)
+		for _, cont in ipairs(order) do
+			local zones = groups[cont]
+			table.sort(zones, function(a, b) if a.here ~= b.here then return a.here end return a.name < b.name end)
+			local key = "c:" .. cont
+			rows[#rows + 1] = { card = "cont", key = key, text = cont, count = #zones }
+			if not collapsedCards[key] then
+				for _, z in ipairs(zones) do rows[#rows + 1] = { card = "zone", z = z, cont = cont } end
+			end
+		end
+	end
+	return rows, total
+end
+
+-- a card row in the list
+local function FillCardRow(row, r)
+	row.icon:SetTexture(nil)
+	row.text:SetText("")
+	row.right:SetText("")
+	if type(row.tierTex) == "table" then row.tierTex:Hide() end
+	if type(row.dragon) == "table" then row.dragon:Hide() end
+	if type(row.faction) == "table" then row.faction:Hide() end
+	if ns.New then ns.New:MarkRow(row, false) end
+	for _, c in ipairs(row.halves or {}) do c:Hide() end
+	if row.banner then row.banner:Hide() end
+	if r.card == "section" then
+		row:SetHeader(true, collapsedCards[r.key])
+		row.text:SetText(r.header)
+		return
+	end
+	if r.card == "pair" then
+		local w = row:GetWidth()
+		if not w or w < 50 then w = 300 end -- (before the first layout)
+		for i, o in ipairs({ r.a, r.b }) do
+			local c = HalfCard(row, i)
+			c:ClearAllPoints()
+			c:SetPoint("TOPLEFT", row, "TOPLEFT", 4 + (i - 1) * (w / 2), -3)
+			c:SetSize(w / 2 - 6, PAIR_H - 6)
+			if o then FillHalf(c, o) else c:Hide() end
+		end
+		return
+	end
+	if not W.FillZoneBanner then return end
+	if r.card == "all" then
+		W.FillZoneBanner(row, { name = L["Show all"], icon = MEDIA .. "Tab_Creatures", -- (the Creatures tab's own picture)
+			count = "|cffcccccc" .. ns.N(r.count, "creature", "creatures") .. "|r" .. NewText(r.new) })
+	elseif r.card == "cont" then
+		local c = W.ContinentColor and W.ContinentColor(r.text) or { 0.85, 0.7, 0.3 }
+		W.FillZoneBanner(row, {
+			name = r.text, art = W.ZONE_ART and W.ZONE_ART[r.text] or (r.text == L["Dungeons and raids"] and "Zone_Dungeons" or nil),
+			icon = W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }), tint = c, big = true,
+			count = "|cffcccccc" .. ns.N(r.count, "zone", "zones") .. "|r",
+			pill = { sign = collapsedCards[r.key] and "+" or "-", label = collapsedCards[r.key] and L["Show zones"] or L["Hide zones"],
+				action = function() collapsedCards[r.key] = (not collapsedCards[r.key]) or nil page:Refresh() end },
+		})
+	elseif r.card == "zone" then
+		local z = r.z
+		local tint = W.ContinentColor and W.ContinentColor(r.cont) or nil
+		W.FillZoneBanner(row, { name = z.name, art = W.ZONE_ART and W.ZONE_ART[z.name] or nil, icon = W.KindIcon and W.KindIcon("zone") or nil,
+			left = 14, top = 4, tint = tint,
+			count = (z.here and ("|cff40ff40" .. L["You are here"] .. "|r  ·  ") or "") .. "|cffcccccc" .. ns.N(z.n, "creature", "creatures") .. "|r" .. NewText(z.new) })
+	end
+	-- (names in Asia's banner lettering, the same gold font as the Places cards)
+	if row.banner then row.banner.name:SetTextColor(GameFontNormalLarge:GetTextColor()) end
+end
+
+local function CardHeight(r)
+	if r.card == "pair" then return PAIR_H end
+	if r.card == "cont" then return CONT_H end
+	if r.card == "zone" or r.card == "all" then return BANNER_H end
+end
+
+-- the bar over the list: the back arrow and crumb in a card's list; Cards / List on the right
+local function PaintBar()
+	if not cardBar then return end
+	local inCard = view == "list" and crumb ~= nil
+	backBtn:SetShown(inCard)
+	crumbText:SetText(inCard and ("|cffffd100" .. L["Creatures"] .. "|r  |cff999999›|r  " .. crumb) or "")
+	cardsBtn:SetActive(view == "cards")
+	listBtn:SetActive(view ~= "cards")
+end
+
 function page:Build(parent, header)
-	local search = W.Search(header, 104, function(text)
-		filter = text
+	view = Win().bestiaryView or "cards"
+	if view ~= "list" then view = "cards" end
+	-- (#52) the Type, Zone and Tier dropdowns gave way to the cards; search stays, and typing from
+	-- the cards opens the full list
+	local search = W.Search(header, 220, function(text)
+		filter = text or ""
+		if filter ~= "" and view == "cards" then
+			tierFilter, kindFilter, zoneFilter = nil, nil, nil
+			view, crumb = "list", nil
+		end
 		page:Refresh()
 	end)
 	search:SetPoint("LEFT", header, "LEFT", 16, -2)
-	filterButton = W.Dropdown(header, FilterLabel(), 132, function(self) FilterMenu(self) end)
-	filterButton:SetPoint("LEFT", search, "RIGHT", 10, 0)
-	zoneButton = W.Dropdown(header, ZoneLabel(), 120, function(self) ZoneMenu(self) end)
-	zoneButton:SetPoint("LEFT", filterButton, "RIGHT", 6, 0)
 	countText = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-
-	-- the tier filter: one dropdown, Everything or a single tier, each in its quality colour with
-	-- its icon and how many creatures are at it
-	tierButton = W.Dropdown(header, TierLabel(), 212, function(self) TierMenu(self) end) -- (room for "Legendary Hunter" on one line)
-	tierButton:SetPoint("LEFT", zoneButton, "RIGHT", 6, 0)
-	tierButton.badge = W.Portrait(tierButton, 18):SetThin()
-	tierButton.badge:SetPoint("LEFT", 8, 0)
-	tierButton.badge:EnableMouse(false)
-	tierButton:SetText(TierLabel())
 	countText:SetPoint("RIGHT", header, "RIGHT", -12, -2)
 
 	local left = W.Inset(parent)
 	left:SetPoint("TOPLEFT", 0, 0)
 	left:SetPoint("BOTTOMLEFT", 0, 0)
 	left:SetWidth(320)
+	-- (#52) the bar over the list: back arrow and crumb, Cards / List
+	cardBar = CreateFrame("Frame", nil, left)
+	cardBar:SetPoint("TOPLEFT", 4, -4)
+	cardBar:SetPoint("TOPRIGHT", -4, -4)
+	cardBar:SetHeight(26)
+	backBtn = CreateFrame("Button", nil, cardBar)
+	backBtn:SetSize(24, 24)
+	backBtn:SetPoint("LEFT", 2, 0)
+	backBtn.tex = backBtn:CreateTexture(nil, "ARTWORK")
+	backBtn.tex:SetAllPoints()
+	backBtn.tex:SetTexture(MEDIA .. "Back_Arrow")
+	backBtn:SetHighlightTexture(MEDIA .. "Back_Arrow", "ADD")
+	backBtn:SetScript("OnClick", function()
+		if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+		BackToCards()
+	end)
+	backBtn:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT") GameTooltip:AddLine(L["Back to the cards"], 1, 0.82, 0) GameTooltip:Show() end)
+	backBtn:SetScript("OnLeave", GameTooltip_Hide)
+	crumbText = cardBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	crumbText:SetPoint("LEFT", backBtn, "RIGHT", 4, 0)
+	crumbText:SetJustifyH("LEFT")
+	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() view, crumb = "list", nil tierFilter, kindFilter, zoneFilter = nil, nil, nil SaveView() page:Refresh() end)
+	listBtn:SetPoint("RIGHT", -2, 0)
+	cardsBtn = W.ViewButton(cardBar, "View_Cards", L["Cards"], function() filter = "" BackToCards() end)
+	cardsBtn:SetPoint("RIGHT", listBtn, "LEFT", -4, 0)
+	crumbText:SetPoint("RIGHT", cardsBtn, "LEFT", -6, 0)
+	crumbText:SetWordWrap(false)
 	list = W.List(left, {
 		rowHeight = 26,
+		heightOf = CardHeight,
+		-- (#62) the section or continent you're scrolling through stays pinned at the top
+		sticky = function(r)
+			if r.card == "section" then return { r.header, 1, 0.82, 0.3, collapsedCards[r.key] } end
+			if r.card == "cont" then
+				local c = W.ContinentColor and W.ContinentColor(r.text) or { 0.85, 0.7, 0.3 }
+				return { r.text, c[1], c[2], c[3], collapsedCards[r.key] }
+			end
+		end,
+		collapse = { state = collapsedCards, key = function(r) return (r.card == "section" or r.card == "cont") and r.key or nil end, refresh = function() page:Refresh() end },
 		round = true,
 		emptyText = L["No creatures yet. Every creature you meet is recorded here."],
 		update = function(row, r)
+			if r.card then FillCardRow(row, r) return end
+			for _, c in ipairs(row.halves or {}) do c:Hide() end
+			if row.banner then row.banner:Hide() end
 			if r.header then
 				-- (0.69.0) the New group's heading, and the one over the rest of the list
 				row:SetHeader(true)
@@ -661,7 +971,8 @@ function page:Build(parent, header)
 			if type(row.dragon) ~= "table" then
 				row.dragon = row.icon:GetParent():CreateTexture(nil, "OVERLAY", nil, 3)
 			end
-			local dragon = W.SetDragon(row.dragon, W.DragonFor(r.rec), row.icon, row.icon:GetWidth())
+			local dragon, reach = W.SetDragon(row.dragon, W.DragonFor(r.rec), row.icon, row.icon:GetWidth())
+			dragon = dragon and math.floor(math.max(0, reach or 8) + 0.5) or false
 			-- Alliance or Horde: the faction crest at the face's bottom right
 			if type(row.faction) ~= "table" then
 				row.faction = row.icon:GetParent():CreateTexture(nil, "OVERLAY", nil, 5)
@@ -671,7 +982,7 @@ function page:Build(parent, header)
 			W.SetFactionBadge(row.faction, r.rec.faction)
 			if row.hasDragon ~= dragon then
 				row.hasDragon = dragon
-				row.text:SetPoint("LEFT", row.icon, "RIGHT", dragon and 15 or 7, 0)
+				row.text:SetPoint("LEFT", row.icon, "RIGHT", dragon and (dragon + 4) or 7, 0)
 			end
 			local tier = B:FullTier(r.rec) -- (Revered and Exalted too)
 			-- the tier as a small badge at the right end (the creature's face once Fought)
@@ -688,12 +999,27 @@ function page:Build(parent, header)
 			row.right:SetText("|cff999999" .. LevelText(r.rec) .. "|r")
 		end,
 		onClick = function(r, row, mouse)
+			-- (#52) the cards: a section or continent folds; Show all and a zone open the list
+			if r.card then
+				if mouse and mouse ~= "LeftButton" then return end
+				if r.card == "section" or r.card == "cont" then
+					collapsedCards[r.key] = (not collapsedCards[r.key]) or nil
+					page:Refresh()
+				elseif r.card == "all" then
+					OpenCard(nil, nil, nil, nil)
+					crumb = nil PaintBar()
+				elseif r.card == "zone" then
+					OpenCard(r.z.name, nil, nil, r.z.map)
+				end
+				return
+			end
 			if r.header or (mouse and mouse ~= "LeftButton") then return end
 			if ns.New and ns.New:Clicked("bestiary", r) then list:Refresh() end
 			Show(r.npc)
 		end,
 	})
-	list:SetAllPoints(left)
+	list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -32)
+	list:SetPoint("BOTTOMRIGHT", left, "BOTTOMRIGHT", 0, 0)
 
 	detail = W.Detail(parent, 170)
 	detail:SetPoint("TOPLEFT", left, "TOPRIGHT", 6, 0)
@@ -798,6 +1124,7 @@ function page:Build(parent, header)
 	local FACE, NAME_X = 44, 92
 	face = W.Portrait(detail.top, FACE)
 	face:SetPoint("CENTER", box, "TOPRIGHT", 14 + FACE / 2, -6 - FACE / 2)
+	-- (DESIGN 89) the winged gold dragon over the face (its hole frames it)
 	face.dragon = face:CreateTexture(nil, "OVERLAY", nil, 3)
 	face.faction = face:CreateTexture(nil, "OVERLAY", nil, 6)
 	face.faction:SetSize(20, 20)
@@ -964,7 +1291,7 @@ function page:Build(parent, header)
 		GameTooltip:AddLine(B.TIER_HINTS[self.tier], 1, 1, 1, true)
 		if self.need and B.TIERS[self.tier + 1] then
 			GameTooltip:AddLine(" ")
-			GameTooltip:AddLine(B:TierMarkup(self.tier + 1, 14) .. " " .. (L["%d more kills to %s"]):format(self.need, B.TIERS[self.tier + 1]), 0.7, 0.7, 0.7)
+			GameTooltip:AddLine(B:TierMarkup(self.tier + 1, 14) .. " " .. (L["%s more to %s"]):format(ns.N(self.need, "kill", "kills"), B.TIERS[self.tier + 1]), 0.7, 0.7, 0.7)
 		end
 		GameTooltip:Show()
 	end)
@@ -976,13 +1303,27 @@ end
 
 function page:Refresh()
 	if not list then return end
+	PaintBar()
+	-- (#52) nothing open: the creature you last read, else the summary
+	if not shown then
+		local last = Win().bestiaryLast
+		if last and ns.Store:Get("creature", last) then shown = last end
+	end
+	if view == "cards" then
+		local rows, total = CardRows()
+		list:SetData(rows)
+		list:Select(nil)
+		countText:SetText(ns.N(total, "creature", "creatures"))
+		Show(shown, true) -- (the right side keeps the creature you were reading; nil: the summary)
+		return
+	end
 	local rows, total, listed = Collect()
 	local keep
 	for _, r in ipairs(rows) do if r.npc and r.npc == shown then keep = r end end
 	list:SetData(rows)
 	list:Select(keep)
 	countText:SetText((L["%d of %d"]):format(listed or #rows, total))
-	if shown then Show(shown, true) end
+	Show(shown, true)
 end
 
 -- item names arrive from the server a moment after they're first asked for
@@ -994,7 +1335,7 @@ ns:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
 	end
 end)
 
-ns:On("RESET", function() shown = nil if list then list:Select(nil) Show(nil) end end)
+ns:On("RESET", function() shown = nil if ns.db and ns.db.settings and ns.db.settings.window then ns.db.settings.window.bestiaryLast = nil end if list then list:Select(nil) Show(nil) end end)
 
 -- open the Bestiary on one creature
 -- (0.68.0) a creature's detail blocks (General, Health, Abilities, Defenses, Loot, Where ...), for
@@ -1010,11 +1351,9 @@ end
 function page:ShowTier(t)
 	ns.UI:Open("bestiary")
 	tierFilter = t
-	-- (every type and zone, so the whole tier shows)
+	-- (every type and zone, so the whole tier shows; #52: in the list, with the back arrow)
 	kindFilter, zoneFilter = nil, nil
-	if filterButton then filterButton:SetText(FilterLabel()) end
-	if zoneButton then zoneButton:SetText(ZoneLabel()) end
-	if tierButton then tierButton:SetText(TierLabel()) end
+	view, crumb = "list", t and FILTER_TIERS[t] and FILTER_TIERS[t][1] or nil
 	self:Refresh()
 	if list and list.ScrollTop then list:ScrollTop() end
 end
@@ -1022,6 +1361,8 @@ end
 function page:ShowCreature(npc)
 	ns.UI:Open("bestiary")
 	shown = npc
+	-- (#52) opened from another page: the full list, so the creature's row is there to see
+	if view == "cards" then view, crumb = "list", nil tierFilter, kindFilter, zoneFilter = nil, nil, nil end
 	self:Refresh()
 end
 

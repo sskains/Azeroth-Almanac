@@ -8,6 +8,7 @@
 --                            trainers = { [npcID] = cost } }
 --   chars[key].spells[spellID] = time learned (or 0 when found already known)
 --   chars[key].skills[name] = { rank, max }   professions and secondary skills
+--   chars[key].recipeDiff[spellID] = 0 orange .. 3 grey, the skill-up colour the profession window last showed (DESIGN 90)
 -- groups: "class:<CLASSFILE>" for class trainers, "skill:<profession>" for profession trainers
 
 local _, ns = ...
@@ -213,6 +214,9 @@ ns:RegisterEvent("TRAINER_SHOW", Soon)
 ns:RegisterEvent("TRAINER_UPDATE", function() if not reading then Soon() end end)
 
 ---------------------------------------------------------------------------
+-- the older API's words for a recipe's skill-up colour, as Enum.TradeskillRelativeDifficulty numbers
+local DIFFICULTY = { optimal = 0, medium = 1, easy = 2, trivial = 3 }
+
 -- The profession window: the recipes this character knows, with reagents and what they make
 ---------------------------------------------------------------------------
 
@@ -259,6 +263,13 @@ function T:ReadProfession()
 			if not me.spells[id] then
 				me.spells[id] = 0
 				added = added + 1
+			end
+			-- (DESIGN 90) its skill-up colour for this character now: 0 orange, 1 yellow, 2 green, 3 grey
+			local d = R(info.relativeDifficulty)
+			if type(d) ~= "number" then d = DIFFICULTY[R(info.difficulty) or ""] end
+			if type(d) == "number" and d >= 0 and d <= 3 then
+				me.recipeDiff = me.recipeDiff or {}
+				me.recipeDiff[id] = d
 			end
 		end
 	end

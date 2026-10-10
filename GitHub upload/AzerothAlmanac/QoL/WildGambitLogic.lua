@@ -205,6 +205,31 @@ end
 -- for casters (the creature shapes: Giant, Dragonkin, Elemental)
 WL.HERO_SHAPE = { WARRIOR = "Giant", PALADIN = "Giant", ROGUE = "Dragonkin", HUNTER = "Dragonkin" }
 
+-- (#54) an NPC's card from games won against it: Fought at the first win, then Hunted at 3, Master
+-- Hunter at 5, Epic at 10, Legendary at 20 (each NPC counted on its own). 0 before the first win. A
+-- card never sits below its starting tier (WL.MinTier, applied by WL.Card): a guard's first win
+-- gives Hunted, a leader's Master Hunter; nothing goes past Legendary.
+WL.WIN_AT = { 1, 3, 5, 10, 20 } -- Fought, Hunted, Master Hunter, Epic, Legendary
+function WL.WinTier(wins)
+	local tier = 0
+	for i, n in ipairs(WL.WIN_AT) do if (wins or 0) >= n then tier = 1 + i end end
+	return tier
+end
+-- the wins the next tier above `tier` needs (no card yet: 1; Fought: 3; ... Legendary: nil)
+function WL.WinsFor(tier)
+	return WL.WIN_AT[math.max(1, tier or 1)]
+end
+
+-- (#54) a creature's card tier from its kills and its wins: kills give a card from the first one
+-- (Fought; Sighted is never a card), wins from the first win for friendly and neutral NPCs; enemies
+-- earn theirs by the kill and wins only count once they have it. 0: no card yet.
+function WL.EarnedTier(killTier, kills, wins, reaction)
+	local byKill = (kills or 0) >= 1 and math.max(2, killTier or 2) or 0
+	local byWin = WL.WinTier(wins)
+	if reaction == "hostile" and byKill == 0 then byWin = 0 end
+	return math.max(byKill, byWin)
+end
+
 -- the tier from what the Almanac knows: its research tier (1-4), then 50 / 200 kills
 function WL.TierFromKills(researchTier, kills)
 	kills = kills or 0
@@ -533,6 +558,34 @@ local function Copy(board)
 	return b
 end
 WL.CopyBoard = Copy
+
+-- (#59 part 2) a short checksum of the board, the same on both players' screens: owners are told
+-- apart as the mover's ("m"), the other player's ("o") or nobody's ("-"), since each screen calls
+-- itself "me". Covers every card (its creature, spikes, shield, frozen, stone, ice), the waiting
+-- ankh and the hidden traps. Both screens send it with each move and compare: a difference means
+-- the two games have drifted apart.
+function WL.BoardSum(board, mover)
+	local function O(o) if o == nil then return "-" end return o == mover and "m" or "o" end
+	local parts = {}
+	for i = 1, 9 do
+		local slot = board[i]
+		if slot then
+			local c = slot.card or {}
+			local sd = c.s or {}
+			parts[#parts + 1] = table.concat({ i, O(slot.owner), tostring(c.npc or c.name or "?"),
+				tostring(sd[1] or 0), tostring(sd[2] or 0), tostring(sd[3] or 0), tostring(sd[4] or 0),
+				(slot.shield and "S" or "") .. (slot.frozen and "F" or "") .. (slot.stone and "T" or "") .. (slot.ice and "I" or "") }, ",")
+		end
+	end
+	parts[#parts + 1] = "a" .. (board.ankh and O(board.ankh) or "")
+	if board.traps then
+		for i = 1, 9 do if board.traps[i] then parts[#parts + 1] = "t" .. i .. O(board.traps[i]) end end
+	end
+	local text = table.concat(parts, ";")
+	local h = 7
+	for k = 1, #text do h = (h * 31 + text:byte(k)) % 2147483647 end
+	return ("%x"):format(h)
+end
 
 -- the practice opponent: takes what it can, keeps strong sides toward open squares and the
 -- opponent's best cards, likes corners; `slip` (0..1) makes it miss the best move sometimes

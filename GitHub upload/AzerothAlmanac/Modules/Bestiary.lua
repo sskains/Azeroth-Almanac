@@ -421,6 +421,9 @@ local function CountKill(guid, npc)
 	local rec = ns.Store:Get("creature", npc)
 	if not rec then return end
 	local before = B:Tier(rec)
+	-- (#54) the Wild Gambit card for it, before this kill
+	local WG = ns.QoL and ns.QoL.WildGambit
+	local cardBefore = WG and WG.EarnedTier and WG.EarnedTier(npc, rec) or nil
 	rec.kills = (rec.kills or 0) + 1
 	-- (each character's own kills too, for the character-only Almanac)
 	local me = ns.CharKey()
@@ -430,7 +433,14 @@ local function CountKill(guid, npc)
 	B:AddSpot(rec, "kz", where)
 	if where.map and where.x then rec.lastKill = { map = where.map, x = where.x, y = where.y, t = time() } end
 	if fight then fight.deaths[guid] = npc end
-	TierCheck(npc, rec, before)
+	-- (#54) a card earned or raised: the card toast stands in for the tier toast (one toast, not two)
+	local cardAfter = cardBefore and WG.EarnedTier(npc, rec) or nil
+	local CT = ns.CardToast
+	if cardAfter and cardAfter > cardBefore and cardAfter >= 2 and CT and CT:Wanted() then
+		CT:Add(npc, cardBefore, cardAfter, rec.name)
+	else
+		TierCheck(npc, rec, before)
+	end
 	ns:Fire("KILL", npc, rec)
 	ns:Fire("CHANGED", "creature", npc)
 end
@@ -755,6 +765,7 @@ local function OnLoot()
 				rec.gc[ns.CharKey()] = (rec.gc[ns.CharKey()] or 0) + 1
 				rec.gather = rec.gather or {}
 				for item in pairs(c.items) do rec.gather[item] = (rec.gather[item] or 0) + 1 end
+				if ns.Gathering and ns.Gathering.Tally then ns.Gathering:Tally("skin", c.items) end
 			elseif not looted[guid] then
 				looted[guid] = true
 				rec.corpses = (rec.corpses or 0) + 1

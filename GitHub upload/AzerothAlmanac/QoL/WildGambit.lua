@@ -86,6 +86,7 @@ end
 -- `fallback` plays when the client hasn't got the first file
 local function Play(id, fallback)
 	if not (db.sound and id and PlaySoundFile) then return end
+	if game and game.replaying then return end -- (#50: a resumed game catching up is silent)
 	local ok, willPlay = pcall(PlaySoundFile, id, "SFX")
 	if fallback and not (ok and willPlay) then pcall(PlaySoundFile, fallback, "SFX") end
 end
@@ -283,7 +284,7 @@ function WG:SetHint(text)
 	frame.hintOrn:Layout(heading)
 end
 
-local function CardOf(npc, rec)
+local function CardOf(npc, rec, earned)
 	local B = A.Bestiary
 	local level = (rec.hi and rec.hi ~= 0 and rec.hi) or rec.lo or 1
 	local home = HomeZone(rec)
@@ -298,7 +299,7 @@ local function CardOf(npc, rec)
 	}
 	-- the creature's tier as the Almanac has it (Revered and Exalted by its group's kills: 50 and
 	-- 200 for most, 10 and 40 for bosses and rares)
-	local tier = B and B.FullTier and B:FullTier(rec) or WL.TierFromKills(B and B.Tier and B:Tier(rec) or 1, rec.kills)
+	local tier = earned or (B and B.FullTier and B:FullTier(rec) or WL.TierFromKills(B and B.Tier and B:Tier(rec) or 1, rec.kills))
 	local card = WL.Card(info, tier)
 	card.fav = WG:IsFavorite(npc) or nil
 	card.faction = rec.faction -- (Alliance / Horde creatures wear the crest)
@@ -336,31 +337,135 @@ function WG:SetFavorite(npc, on, replace)
 	return on and "added" or "removed"
 end
 
+-- (#54) the card you hold for a creature or NPC, or nil when it isn't earned yet
 function WG:CardFor(npc)
 	local rec = npc and A.Store and A.Store:Get("creature", npc)
-	if type(rec) == "table" and rec.name then return CardOf(npc, rec) end
+	if type(rec) == "table" and rec.name then
+		local tier = WG.EarnedTier(npc, rec)
+		if tier >= 2 then return CardOf(npc, rec, tier) end
+		return nil
+	end
+	local w = WG.Wins(npc)
+	if w then return WG.WinCard(npc, w) end
 end
 
 function WG:Collection()
 	local cards = {}
 	local B = A.Bestiary
+	local wins = WG.AllWins()
+	-- (#54) a creature's card is earned by the kill (Sighted is never a card), or by wins
 	for npc, rec in pairs(A.Store and A.Store:Shown("creature") or {}) do
 		if type(rec) == "table" and rec.name and not (B and B.IsObject and B:IsObject(rec)) then
-			cards[#cards + 1] = CardOf(npc, rec)
+			local tier = WG.EarnedTier(npc, rec)
+			if tier >= 2 then cards[#cards + 1] = CardOf(npc, rec, tier) end
+		end
+	end
+	-- friendly NPCs (never creatures in the Almanac): only by winning against them
+	for npc, w in pairs(wins) do
+		if type(w) == "table" and not (A.Store and A.Store:Get("creature", npc)) then
+			local c = WG.WinCard(npc, w)
+			if c then cards[#cards + 1] = c end
 		end
 	end
 	-- your companions (this character's)
 	if WG.PetCards and db then for _, c in ipairs(WG:PetCards()) do cards[#cards + 1] = c end end
-	-- a brand-new Almanac: a few meadow critters so there's always a hand to play
+	-- a new character: the meadow critters as Fought starter cards, so there's always a hand to
+	-- play; they leave as real cards come in
 	local fillers = { { 721, "Rabbit" }, { 2442, "Cow" }, { 620, "Chicken" }, { 4166, "Gazelle" }, { 1933, "Sheep" } }
 	local i = 1
 	while #cards < WL.HAND and fillers[i] do
 		local f = fillers[i]
-		cards[#cards + 1] = WL.Card({ npc = f[1], name = f[2], level = 1, type = "Critter" }, 1)
+		local c = WL.Card({ npc = f[1], name = f[2], level = 1, type = "Critter" }, 2)
+		c.starter = true
+		cards[#cards + 1] = c
 		i = i + 1
 	end
 	table.sort(cards, function(a, b) if a.total ~= b.total then return a.total > b.total end return (a.name or "") < (b.name or "") end)
 	return cards
+end
+
+---------------------------------------------------------------------------
+-- (#54) Earned cards: a creature's card comes with the first kill; an NPC's with the first win
+-- against it (friendly NPCs only that way; neutral ones whichever comes first; enemies by the kill,
+-- their wins counting once it's theirs). Wins per NPC: db.npcWins[npc] = { w, name, level, class,
+-- type, display, reaction ("friendly" / "neutral" / "hostile"), t }. Account-wide, like the deck.
+---------------------------------------------------------------------------
+
+function WG.AllWins()
+	if not db then return {} end
+	db.npcWins = db.npcWins or {}
+	return db.npcWins
+end
+function WG.Wins(npc) return npc and WG.AllWins()[npc] or nil end
+
+-- the tier a creature's card is at (0 or 1: not earned)
+function WG.EarnedTier(npc, rec)
+	local B = A.Bestiary
+	rec = rec or (A.Store and A.Store:Get("creature", npc))
+	local w = WG.Wins(npc)
+	local kills = type(rec) == "table" and (B and B.KillCount and B:KillCount(rec) or rec.kills) or 0
+	local killTier = type(rec) == "table" and B and B.FullTier and B:FullTier(rec) or nil
+	-- (a creature in the Almanac without a reaction on its wins is one you can fight: as an enemy)
+	local tier = WL.EarnedTier(killTier, kills, w and w.w or 0, w and w.reaction or "hostile")
+	if tier >= 2 and type(rec) == "table" then
+		-- (its starting tier, as the card will be built)
+		tier = math.max(tier, WL.MinTier({ class = rec.class, boss = rec.boss }))
+	end
+	return tier
+end
+
+-- a card for an NPC known only from games against it (a friendly NPC: no Creatures record)
+function WG.WinCard(npc, w)
+	local tier = WL.WinTier(w.w)
+	if tier < 2 then return nil end
+	local info = { npc = npc, name = w.name or "?", level = tonumber(w.level) or 1, class = w.class or "normal",
+		type = w.type, display = w.display, zoneN = 0, zoneE = 0, spotE = 0, spotS = 0 }
+	local card = WL.Card(info, tier)
+	card.fav = WG:IsFavorite(npc) or nil
+	card.wins = w.w
+	return card
+end
+
+-- a game won against a creature or NPC: its count, and a line (later its card toast) when that
+-- earns or raises its card
+function WG.AddWin(opp)
+	if not (opp and opp.npc) then return end
+	local had = WG:CardFor(opp.npc)
+	local before = had and had.tier or 0
+	local all = WG.AllWins()
+	local w = all[opp.npc] or { w = 0 }
+	all[opp.npc] = w
+	w.w = (w.w or 0) + 1
+	w.t = time()
+	w.name = opp.name or w.name
+	w.level = opp.level or w.level
+	w.class = opp.class or w.class
+	w.type = opp.type or w.type
+	w.display = opp.display or w.display
+	w.reaction = opp.reaction or w.reaction
+	local card = WG:CardFor(opp.npc)
+	local after = card and card.tier or 0
+	if after > before and card then
+		-- the card toast (or, with card toasts off, the normal alert)
+		if A.CardToast then pcall(A.CardToast.Add, A.CardToast, opp.npc, before, after, w.name) end
+		local c = WL.COLORS[after] or { 1, 1, 1 }
+		local tierText = ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, WL.TIERS[after])
+		Tell((before < 2 and "you've earned %s's card: %s." or "%s's card is now %s."):format(w.name or "?", tierText))
+	end
+	return w.w
+end
+
+-- creatures seen but not yet earned (the wanted list): { npc, name, display, type }
+function WG:Unearned()
+	local out = {}
+	local B = A.Bestiary
+	for npc, rec in pairs(A.Store and A.Store:Shown("creature") or {}) do
+		if type(rec) == "table" and rec.name and not (B and B.IsObject and B:IsObject(rec)) and WG.EarnedTier(npc, rec) < 2 then
+			out[#out + 1] = { npc = npc, name = rec.name, display = rec.display, type = rec.type }
+		end
+	end
+	table.sort(out, function(a, b) return a.name < b.name end)
+	return out
 end
 
 ---------------------------------------------------------------------------
@@ -626,7 +731,15 @@ function WG:OpponentFromUnit(unit)
 	local name = R(UnitName(unit))
 	if type(name) ~= "string" then return nil end
 	local rec = A.Store and A.Store:Get("creature", npc)
-	return { name = name, npc = npc, guid = guid, unit = unit,
+	-- (#54) what a card won from it needs: its standing with you, level, rank and type
+	local reaction = UnitReaction and R(UnitReaction(unit, "player"))
+	reaction = type(reaction) == "number" and (reaction >= 5 and "friendly" or reaction == 4 and "neutral" or "hostile") or nil
+	local level = UnitLevel and R(UnitLevel(unit))
+	local class = UnitClassification and R(UnitClassification(unit))
+	local ctype = UnitCreatureType and R(UnitCreatureType(unit))
+	return { name = name, npc = npc, guid = guid, unit = unit, reaction = reaction,
+		level = type(level) == "number" and level or nil, class = type(class) == "string" and class or nil,
+		type = type(ctype) == "string" and ctype or nil,
 		display = type(rec) == "table" and rec.display or nil }
 end
 
@@ -1907,7 +2020,6 @@ function SetCard(f, card)
 	f.face:SetDesaturated(tier == 1)
 	f.face:SetVertexColor(tier == 1 and 0.7 or 0.95, tier == 1 and 0.7 or 0.92, tier == 1 and 0.7 or 0.88)
 	-- creature
-	f.model:ClearModel()
 	if f.learning then f.learning = nil f.model:SetAlpha(ModelAlpha(f)) end
 	-- (0.69.1) a face learnt since the card was dealt (the Bestiary's record, or the match's lookup)
 	if not card.display and not card.hero and type(card.npc) == "number" and card.npc > 0 and A.Store then
@@ -1915,6 +2027,12 @@ function SetCard(f, card)
 		if type(rec) == "table" and rec.display then card.display = rec.display end
 	end
 	local display = card.sheep and SHEEP_DISPLAY or card.display
+	-- (Shannon, 2026-10-09: the Creatures page redraws as discoveries come in, up to twice a second;
+	-- a card already showing this creature keeps its model rather than loading it again)
+	local keep = display and not card.unit and f.modelDisplay == display and f.model:IsShown()
+	if not keep then f.model:ClearModel() end
+	f.modelDisplay = nil
+	f.modelKept = keep and true or false
 	if not card.sheep and card.unit and UnitExists and UnitExists(card.unit) and f.model.SetUnit and pcall(f.model.SetUnit, f.model, card.unit) then
 		-- your hero card: you (or your companion, out now)
 		f.model:Show()
@@ -1928,10 +2046,11 @@ function SetCard(f, card)
 				if p and not p.display and ok and type(display) == "number" and display > 0 then p.display = display end
 			end)
 		end
-	elseif display and f.model.SetDisplayInfo and pcall(f.model.SetDisplayInfo, f.model, display) then
+	elseif display and f.model.SetDisplayInfo and (keep or pcall(f.model.SetDisplayInfo, f.model, display)) then
+		f.modelDisplay = display
 		f.model:Show()
 		f.icon:Hide()
-		f.FitModel(f)
+		if not keep then f.FitModel(f) end
 	elseif card.hero then
 		-- someone else's hero: their class medallion (the game can't draw a player it can't see)
 		f.model:Hide()
@@ -2095,14 +2214,34 @@ function WG:Showcase(parent)
 	end)
 	function f:ShowCreature(npc)
 		local card = WG:CardFor(npc)
-		if not card then self:Hide() return end
+		-- (#54) not earned yet: the iron ring with the creature's model where its card would be
+		local Wd = W()
+		if not self.ring and Wd and Wd.IronRing then
+			self.ring = Wd.IronRing(self:GetParent(), 128)
+			self.ring:SetPoint("CENTER", self:GetParent(), "CENTER")
+			self.ring:SetFrameLevel(self:GetFrameLevel())
+			self.ring:Hide()
+		end
+		if not card then
+			self:Hide()
+			if self.ring and npc then
+				local rec = A.Store and A.Store:Get("creature", npc)
+				rec = type(rec) == "table" and rec or {}
+				local icon = Wd.TYPE_ICON and Wd.TYPE_ICON[rec.type or ""] or nil
+				self.ring:SetCreature(npc, rec.display, icon, { "Not yet earned", "Slay this creature to earn its card." })
+			elseif self.ring then
+				self.ring:Hide()
+			end
+			return
+		end
+		if self.ring then self.ring:Hide() end
 		SetCard(self, card)
 		-- no owner here: the crest gem in the card's quality colour
 		SetOwner(self, WL.COLORS[card.tier], false)
 		self.banner:SetVertexColor(1, 1, 1)
 		self.facing = 0.35
 		self:Show()
-		self:FitModel()
+		if not self.modelKept then self:FitModel() end
 	end
 	f:HookScript("OnShow", function(self) if self.card then self:FitModel() end end)
 	return f
@@ -3822,12 +3961,15 @@ function WG.RecordResult(forfeit)
 	local lost = (forfeit == "me") or (not forfeit and theirs > mine)
 	if won then p.w = p.w + 1 elseif lost then p.l = p.l + 1 else p.d = p.d + 1 end
 	g.result = { mine = mine, theirs = theirs, won = won, lost = lost, p = p, forfeit = forfeit }
+	-- (#54) a practice game won against a creature or NPC counts towards its card
+	if won and not g.pvp and not g.tutorial and g.opp and g.opp.npc then pcall(WG.AddWin, g.opp) end
 	return g.result
 end
 
 -- `forfeit`: "me" (you gave up) or "bot" (they did): that side loses whatever the board says
 local function EndGame(forfeit)
 	if game.over then return end
+	WG.SaveClear() -- (#50: nothing to resume)
 	if WG.DungeonEnd then pcall(WG.DungeonEnd, WG) end -- (0.67.0: a lasting dungeon card leaves the table)
 	local r = WG.RecordResult(forfeit)
 	forfeit = r.forfeit
@@ -3871,6 +4013,7 @@ function WG:CancelGame(chat, why)
 	local g = game
 	if not g or g.over then return end
 	g.over, g.cancelled = true, true
+	WG.SaveClear()
 	if chat then Tell(chat) end
 	frame.leave:Hide()
 	if frame.waitNote then frame.waitNote:Hide() end
@@ -3903,6 +4046,7 @@ end
 
 local function Play1(side, h, cell)
 	if game.pvp and side == "me" then WG:SendMove(h, cell) end
+	WG.SaveMove(side, "M", h, cell)
 	local entry = table.remove(game.hands[side], h)
 	local card = entry.card
 	-- (0.67.0) Gnomeregan's Backfire: the card blows up on its square, and its player goes again
@@ -3994,6 +4138,7 @@ function WG:Difficulty()
 end
 
 function WG:BotTurn()
+	if WG.resuming or (game and game.replaying) then return end -- (#50: the replayed moves include the gambler's)
 	if self:TutorialBotTurn() then return end
 	local g = game
 	if self:Paused() then
@@ -4249,6 +4394,7 @@ end
 -- carries out a class ability for `side` (on `cell`, and Pick Pocket's `cell2`)
 function WG:ApplyAbility(side, cell, cell2)
 	if game.pvp and side == "me" then WG:SendAbility(cell, cell2) end
+	WG.SaveMove(side, "U", cell, cell2)
 	local ab = game.ability[side]
 	local who = side == "me" and "You" or game.botName
 	game.used[side] = true
@@ -4886,7 +5032,10 @@ function WG:Begin(o)
 		used = {}, pvp = o.pvp, seq = 0,
 		reserves = { me = o.myReserves or {}, bot = o.theirReserves or {} },
 		tutorial = o.tutorial,
+		opp = o.opp, -- (#54: the creature or NPC played, for its wins)
 	}
+	-- (#50) the match is kept as it's played, so a /reload can pick it up again
+	if not o.tutorial and not o.resumed then pcall(WG.SaveStart, o) end
 	-- (started in combat: paused from the first move)
 	if UnitAffectingCombat and UnitAffectingCombat("player") then game.pause = { me = true } end
 	if frame.coach and not o.tutorial then frame.coach:Hide() frame.coach.hl:Hide() end
@@ -4987,12 +5136,25 @@ function WG:Start(pick)
 	local opp = self.nextOpponent or self:NearbyOpponent() or self:FallbackOpponent()
 	self.nextOpponent = nil
 	self.lastGame = { opp = opp }
+	-- (#54) an NPC plays stronger as your card for it climbs: a card of theirs a tier up for each
+	-- tier past Fought (their weakest first)
+	local held = opp and opp.npc and WG:CardFor(opp.npc)
+	for _ = 1, math.min(4, held and (held.tier - 2) or 0) do
+		local wi
+		for i, c in ipairs(theirs) do
+			if c.info and c.tier < 6 and (not wi or c.total < theirs[wi].total) then wi = i end
+		end
+		if not wi then break end
+		local up = WL.Card(theirs[wi].info, theirs[wi].tier + 1)
+		up.picked = theirs[wi].picked
+		theirs[wi] = up
+	end
 	local face
 	for _, c in ipairs(theirs) do if c.display then face = c.display break end end
 	self:Begin({ mine = mine, theirs = theirs, myReserves = myReserves, theirReserves = theirReserves, myClass = myClass, oppClass = botClass,
 		oppName = (opp and opp.name) or BOT_NAMES[rng(#BOT_NAMES)],
 		oppDisplay = (opp and opp.display) or (opp and (opp.unit or opp.npc) and opp) or face,
-		seed = seed, first = rng(2) == 1 and "me" or "bot" })
+		seed = seed, first = rng(2) == 1 and "me" or "bot", opp = opp })
 	-- a face learnt a moment later (a creature the Almanac hadn't drawn yet)
 	if opp and not opp.display then
 		local g = game
@@ -5099,6 +5261,14 @@ end
 local function Send(...)
 	local net = WG.net
 	if net and net.opp then SendTo(net.opp, ...) end
+end
+
+-- (#59 part 2) the two boards no longer match: the game is called off on both screens, nothing is
+-- counted ("step" is the reason every version reads as "out of step")
+function WG.Desync(gid, sender)
+	WG.desyncs = (WG.desyncs or 0) + 1
+	SendTo(game.pvp.opp, "X", gid, "step")
+	WG:CancelGame(("the boards no longer match %s's; the game is cancelled (not counted)."):format(Short(sender)), "The boards drifted apart.")
 end
 
 -- your setup again (S and every K), for an opponent whose copy went missing
@@ -5326,14 +5496,110 @@ function WG:TryBegin()
 	if first == "me" then Play(SND.challenge) end
 end
 
+-- (#59 part 2) the board as it will be once `side` plays hand card `h` on `cell` (or casts its
+-- spell), as WL.BoardSum: worked out on a copy, so the real board is untouched. nil if it can't be
+-- (the check is then skipped: an older copy sends none either, and never cancels a game by itself).
+function WG.MoveSum(side, h, cell)
+	local ok, sum = pcall(function()
+		local e = game.hands[side][h]
+		if not (e and e.card and cell and not game.board[cell]) then return nil end
+		local b = WL.CopyBoard(game.board)
+		WL.Place(b, cell, e.card, side)
+		return WL.BoardSum(b, side)
+	end)
+	return ok and sum or nil
+end
+function WG.SpellSum(side, cell, cell2)
+	local ok, sum = pcall(function()
+		local ab = game.ability[side]
+		local b = WL.CopyBoard(game.board)
+		-- (Pick Pocket trades hand cards: the board stays as it is)
+		if ab.key ~= "pickpocket" then WL.Use(b, ab, cell, side, cell2) end
+		return WL.BoardSum(b, side)
+	end)
+	return ok and sum or nil
+end
+
+-- (the checksum rides at the end: an older copy reads the fields before it and ignores it)
 function WG:SendMove(h, cell)
+	if game.replaying then return end -- (#50: a resumed game catching up sends nothing)
 	game.seq = game.seq + 1
-	SendTo(game.pvp.opp, "M", game.pvp.gid, game.seq, h, cell)
+	local m = { "M", game.pvp.gid, game.seq, h, cell, WG.MoveSum("me", h, cell) or "-" }
+	WG.KeepSent(m)
+	SendTo(game.pvp.opp, unpack(m))
 end
 
 function WG:SendAbility(cell, cell2)
+	if game.replaying then return end
 	game.seq = game.seq + 1
-	SendTo(game.pvp.opp, "U", game.pvp.gid, game.seq, cell or 0, cell2 or 0)
+	local m = { "U", game.pvp.gid, game.seq, cell or 0, cell2 or 0, WG.SpellSum("me", cell, cell2) or "-" }
+	WG.KeepSent(m)
+	SendTo(game.pvp.opp, unpack(m))
+end
+
+---------------------------------------------------------------------------
+-- (#50) A game in progress survives /reload: kept in db.resume as it's played (how it began, then
+-- every move and spell in order); on login it's set up again and the moves replayed, silently, then
+-- play carries on. A player match also asks the other side for any moves it missed meanwhile ("W",
+-- answered with the moves sent since, and asked back if they missed ours). Practice games keep for
+-- an hour, player matches for four and a half minutes (the other side gives up after five).
+-- Not kept: the tutorial, and a practice game once a dungeon event has fired (its effects run on
+-- timers and can't be replayed).
+---------------------------------------------------------------------------
+
+WG.RESUME_PRACTICE, WG.RESUME_PVP = 3600, 270
+
+-- a plain copy of saved data (cards and options: no frames, no functions)
+function WG.CopyData(v, seen)
+	if type(v) ~= "table" then return (type(v) == "function" or type(v) == "userdata") and nil or v end
+	seen = seen or {}
+	if seen[v] then return seen[v] end
+	if v.GetObjectType then return nil end -- (a frame)
+	local t = {}
+	seen[v] = t
+	for k, x in pairs(v) do
+		if type(k) ~= "table" then t[k] = WG.CopyData(x, seen) end
+	end
+	return t
+end
+
+function WG.SaveStart(o)
+	if not db then return end
+	local keep = WG.CopyData(o)
+	keep.opp = o.opp and { name = o.opp.name, npc = o.opp.npc, level = o.opp.level, class = o.opp.class, type = o.opp.type,
+		reaction = o.opp.reaction, display = o.opp.display } or nil
+	if type(keep.oppDisplay) == "table" then keep.oppDisplay = WG.CopyData(keep.oppDisplay) keep.oppDisplay.unit = nil end
+	if keep.pvp then keep.pvp = { opp = o.pvp.opp, gid = o.pvp.gid, sent = WG.CopyData(o.pvp.sent) } end
+	db.resume = { o = keep, moves = {}, sent = {}, t = time(), char = A.CharKey and A.CharKey() or nil }
+end
+
+function WG.SaveMove(side, kind, a, b)
+	local r = db and db.resume
+	if not r or not game or game.replaying or game.tutorial then return end
+	r.moves[#r.moves + 1] = { side, kind, a or 0, b or 0 }
+	r.t = time()
+end
+
+function WG.KeepSent(m)
+	local r = db and db.resume
+	if r and r.sent then r.sent[#r.sent + 1] = WG.CopyData(m) end
+	if game then game.sentMoves = game.sentMoves or {} game.sentMoves[#game.sentMoves + 1] = m end
+end
+
+function WG.SaveClear()
+	if db then db.resume = nil end
+end
+
+-- the other side asks for the moves it missed (`after`: the last move it has); and if it's missing
+-- ours or we're missing theirs, each side sends what the other lacks
+function WG.AnswerMissing(after)
+	local g = game
+	if not (g and g.pvp) then return end
+	for _, m in ipairs(g.sentMoves or {}) do
+		if (tonumber(m[3]) or 0) > (after or 0) then SendTo(g.pvp.opp, unpack(m)) end
+	end
+	-- (they're ahead of us: ask them for theirs)
+	if (after or 0) > (g.seq or 0) then SendTo(g.pvp.opp, "W", g.pvp.gid, g.seq or 0, "back") end
 end
 
 -- (StaticPopupDialogs is the game's own table: only our keys are added, never the table reassigned, which taints it)
@@ -5603,6 +5869,8 @@ local function OnMessage(text, sender)
 			if game.pvp.silentShown then game.pvp.silentShown = nil WG:OpponentSilent(false) end
 			if kind == "H" then return end
 			if kind == "R" then WG.Resend(game.pvp.opp, game.pvp.sent) return end
+			-- (#50) they came back from a /reload (or lost messages): the moves they're missing
+			if kind == "W" then WG.AnswerMissing(tonumber(f[4]) or 0) return end
 			if kind == "P" then
 				-- they're in combat (1) or out of it (0): the game waits for them
 				game.pause = game.pause or {}
@@ -5623,7 +5891,11 @@ local function OnMessage(text, sender)
 				game.seq = seq
 				if kind == "M" then
 					local h, cell = tonumber(f[5]), tonumber(f[6])
+					local sum = f[7] ~= "-" and f[7] or nil
 					if h and cell and game.hands.bot[h] and cell >= 1 and cell <= 9 and not game.board[cell] then
+						-- (#59 part 2) the boards must still agree once it's played
+						local mine = sum and WG.MoveSum("bot", h, cell)
+						if mine and mine ~= sum then WG.Desync(gid, sender) return end
 						Play1("bot", h, cell)
 					else
 						-- (a move this screen can't play: the two have drifted apart)
@@ -5644,6 +5916,9 @@ local function OnMessage(text, sender)
 						ok = a and b and WL.PocketOK(ab, a.card, b.card)
 					else ok = cell and WL.CanTarget(game.board, ab, cell, "bot") end
 					if ok then
+						local sum = f[7] ~= "-" and f[7] or nil
+						local mine = sum and WG.SpellSum("bot", cell, cell2)
+						if mine and mine ~= sum then WG.Desync(gid, sender) return end
 						WG:ApplyAbility("bot", cell, cell2)
 					else
 						SendTo(game.pvp.opp, "X", gid, "step")
@@ -5651,6 +5926,11 @@ local function OnMessage(text, sender)
 					end
 				end
 			end
+		elseif (kind == "M" or kind == "U" or kind == "W" or kind == "H" or kind == "P") and gid and gid ~= ""
+			and not (game and game.pvp and game.pvp.gid == gid) and not (net and net.gid == gid) then
+			-- (#50) a game this screen doesn't have (lost to a /reload that couldn't pick it up): say so,
+			-- so their side cancels now instead of waiting five minutes
+			SendTo(sender, "X", gid, "gone")
 		end
 		return
 	elseif (kind == "M" or kind == "U") and net.state ~= "playing" then
@@ -6240,7 +6520,59 @@ function WG:OnInitialize(saved)
 	if (db.table == "Leather" or db.table == "Tavern") and not db.tablePicked then db.table = "Dark" end
 end
 
+-- (#50) a game kept from before a /reload: set it up again and replay its moves
+function WG.Resume()
+	local r = db and db.resume
+	if not r then return false end
+	local o = r.o
+	local age = time() - (r.t or 0)
+	local mine = not r.char or not A.CharKey or r.char == A.CharKey()
+	if not (o and mine) or age > ((o.pvp and WG.RESUME_PVP) or WG.RESUME_PRACTICE) then WG.SaveClear() return false end
+	if not frame then Build() end
+	o = WG.CopyData(o)
+	o.resumed = true
+	if o.pvp then o.pvp.sent = o.pvp.sent or {} end
+	WG.resuming = true
+	local okBegin, errBegin = pcall(WG.Begin, WG, o)
+	WG.resuming = nil
+	if not okBegin then WG.SaveClear() error(errBegin) end
+	local g = game
+	g.replaying = true
+	local ok, err = pcall(function()
+		for _, m in ipairs(r.moves or {}) do
+			if g.over then break end
+			if m[2] == "M" then
+				g.selected = nil
+				Play1(m[1], m[3], m[4])
+			else
+				WG:ApplyAbility(m[1], m[3] ~= 0 and m[3] or nil, m[4] ~= 0 and m[4] or nil)
+			end
+		end
+	end)
+	g.replaying = nil
+	if not ok then
+		ns.Almanac.Debug("wild gambit resume: " .. tostring(err))
+		WG:CancelGame("the game from before your /reload couldn't be picked up again; it's cancelled (not counted).", "Couldn't be picked up after a /reload.")
+		return false
+	end
+	-- (the moves counted, ours kept to send again)
+	g.seq = #(r.moves or {})
+	g.sentMoves = WG.CopyData(r.sent or {})
+	Tell(o.pvp and ("back to your game against %s."):format(o.oppName or "your opponent") or "back to your game.")
+	if g.pvp then
+		WG:WatchOpponent()
+		-- (anything they sent while we were away, and anything of ours that never left)
+		SendTo(g.pvp.opp, "W", g.pvp.gid, g.seq)
+	elseif g.turn == "bot" then
+		WG:BotTurn()
+	end
+	return true
+end
+
 function WG:OnLogin()
+	-- (#50) first, before any message can arrive: a game kept from before a /reload
+	local okResume, errResume = pcall(WG.Resume)
+	if not okResume then WG.SaveClear() ns.Almanac.Debug("wild gambit resume: " .. tostring(errResume)) end
 	StaticPopupDialogs[POPUP] = {
 		text = "%s challenges you to |cff9be36bWild Gambit|r!\n\nYour Almanac's creatures against theirs.%s",
 		button1 = ACCEPT or "Accept", button2 = DECLINE or "Decline",
