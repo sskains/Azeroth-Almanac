@@ -34,13 +34,21 @@ local GAP = 2 * 3600
 local JUMP = 0.35
 -- (2026-10-09, Shannon: 1x 90% slower than first built, so a busy week can be followed; 8x added to skim)
 local PLAY_TIME = 80         -- seconds for the whole time lapse at 1x in the small pane
-local FULL_TIME = { today = 200, week = 300, month = 300, all = 300 } -- (#47) the full-size tab
+local FULL_TIME = { today = 200, yesterday = 200, week = 300, month = 300, all = 300 } -- (#47) the full-size tab
 local SPEEDS = { 1, 2, 4, 8 }
 local ZOOM_MAX = 3.5         -- (zoom to the journey: at most this much past the whole map)
 local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 local GHOST = { 0.6, 0.85, 1 }
 local MAX_POINTS = 800       -- the newest points in the frame (the oldest are left off)
 local GOLD = { 1, 0.82, 0.3 }
+
+-- a point's time on the 12-hour clock: "Oct 10 9:05 PM" (Shannon, 2026-10-10)
+function J.Stamp(t)
+	local d = date("*t", t)
+	local h = d.hour % 12
+	if h == 0 then h = 12 end
+	return ("%s %d:%02d %s"):format(date("%b %d", t), h, d.min, d.hour < 12 and "AM" or "PM")
+end
 -- the marks on the line (Modules/JourneyRecorder.lua's kinds)
 local PIN_ART = {
 	F = { kindArt = "flight", scale = 1.4 },
@@ -57,6 +65,7 @@ local PIN_ART = {
 
 J.RANGES = {
 	{ key = "today", label = L["Today"] },
+	{ key = "yesterday", label = L["Yesterday"] },
 	{ key = "week", label = L["Week"] },
 	{ key = "month", label = L["Month"] },
 	{ key = "all", label = L["All"] },
@@ -65,12 +74,23 @@ J.RANGES = {
 -- when a time frame starts: today from midnight; week and month the last 7 and 30 days
 function J.From(range)
 	local now = time()
-	if range == "today" then
+	if range == "today" or range == "yesterday" then
 		local d = date("*t", now)
-		return time({ year = d.year, month = d.month, day = d.day, hour = 0 })
+		local midnight = time({ year = d.year, month = d.month, day = d.day, hour = 0 })
+		if range == "yesterday" then
+			local y = date("*t", midnight - 3600) -- (an hour before midnight: yesterday, whatever the clocks did)
+			return time({ year = y.year, month = y.month, day = y.day, hour = 0 })
+		end
+		return midnight
 	elseif range == "week" then return now - 7 * 86400
 	elseif range == "month" then return now - 30 * 86400 end
 	return 0
+end
+
+-- when a time frame ends (nil: now); yesterday ends at today's midnight
+function J.To(range)
+	if range ~= "yesterday" then return nil end
+	return J.From("today")
 end
 
 -- the points from a time on, oldest first: { t, m, x, y, c, e, k } (e: the journal entry; k: how you
@@ -313,22 +333,37 @@ local function Saved()
 	return s.journeyHidden
 end
 
+-- (2026-10-10) where you stopped the time lapse (paused, scrubbed, or closed mid-play), per time
+-- frame, for the next time it opens; nil: the whole journey. Kept a day.
+function J.KeepPlace(range, frac)
+	local s = ns.db and ns.db.settings and ns.db.settings.window
+	if not s then return end
+	s.journeyAt = s.journeyAt or {}
+	s.journeyAt[range or "today"] = (frac and frac > 0.001 and frac < 0.999) and { frac, time() } or nil
+end
+function J.KeptPlace(range)
+	local s = ns.db and ns.db.settings and ns.db.settings.window
+	local e = s and s.journeyAt and s.journeyAt[range or "today"]
+	if type(e) ~= "table" or time() - (e[2] or 0) > 86400 then return nil end
+	return e[1]
+end
+
 function W.JourneyPane(parent, opts)
 	opts = opts or {}
 	local full = opts.full and true or false
 	local f = W.Inset(parent)
-	local state = { range = "today", everyone = false, char = nil, focus = nil, playing = false, clock = 0, speed = 1 }
+	local state = { range = "today", sel = {}, char = nil, focus = nil, playing = false, clock = 0, speed = 1 }
 
 	local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	title:SetPoint("TOPLEFT", 10, -8)
-	title:SetPoint("RIGHT", f, "RIGHT", -10, 0)
+	title:SetPoint("TOPLEFT", 10, -9)
+	title:SetPoint("RIGHT", f, "RIGHT", -230, 0) -- (the time frame and whose journey sit at the top right)
 	title:SetJustifyH("LEFT")
 	title:SetWordWrap(false)
 
 	-- the map, centred in the space between the title and the controls (full: a slider row too)
 	local BOTTOM = 62 -- (the slider row and the buttons, both sizes)
 	local stage = CreateFrame("Frame", nil, f)
-	stage:SetPoint("TOPLEFT", 8, -26)
+	stage:SetPoint("TOPLEFT", 8, -32)
 	stage:SetPoint("BOTTOMRIGHT", -8, BOTTOM)
 	if stage.SetClipsChildren then stage:SetClipsChildren(true) end -- (the zoomed map stays inside)
 	local map = W.ZoneMap(stage)
@@ -377,7 +412,7 @@ function W.JourneyPane(parent, opts)
 				if self.base then self:SetSize(self.base * 2.2, self.base * 2.2) end -- (a speck grows under the mouse)
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 				GameTooltip:SetText(p.e.s or "?", 1, 0.82, 0)
-				GameTooltip:AddLine(ns.CharName(p.c) .. "  |cff999999" .. date("%b %d %H:%M", p.t) .. "|r", 1, 1, 1)
+				GameTooltip:AddLine(ns.CharName(p.c) .. "  |cff999999" .. J.Stamp(p.t) .. "|r", 1, 1, 1)
 				GameTooltip:AddLine(L["Click: open this entry."], 0.6, 0.8, 1)
 				GameTooltip:Show()
 			end)
@@ -674,7 +709,7 @@ function W.JourneyPane(parent, opts)
 			elseif p.k == "F" then
 				hd:SetSize(size * 1.25, size * 1.25) -- (taking off: lifted)
 			end
-			hd.label:SetText(date("%b %d %H:%M", p.t) .. "  ·  " .. ZoneName(p.m))
+			hd.label:SetText(J.Stamp(p.t) .. "  ·  " .. ZoneName(p.m))
 			hd:Show()
 			local trail = prevBy[key]
 			for i = 1, 6 do
@@ -754,6 +789,17 @@ function W.JourneyPane(parent, opts)
 			local k = (GetTime() - f.fadeAt) / (f.fadeTime or 0.35)
 			if k >= 1 then map:SetAlpha(1) f.fadeAt = nil else map:SetAlpha(k) end
 		end
+		-- (2026-10-10) Play glows while there's a journey you haven't played since opening; the speed
+		-- shows big for a moment when it's changed
+		if f.playGlow then
+			local want = not state.playing and not state.played and #allPts > 1
+			f.playGlow:SetShown(want)
+			if want then f.playGlow:SetAlpha(0.35 + 0.45 * (0.5 + 0.5 * math.sin(GetTime() * 3.5))) end
+		end
+		if f.speedText and f.speedAt then
+			local k = (GetTime() - f.speedAt) / 0.6
+			if k >= 1 then f.speedAt = nil f.speedText:SetScale(1) else f.speedText:SetScale(1 + 0.5 * (1 - k)) end
+		end
 		if not state.playing then return end
 		state.clock = state.clock + elapsed * state.speed
 		local frac = math.min(1, state.clock / PlayTime())
@@ -769,7 +815,8 @@ function W.JourneyPane(parent, opts)
 			f.fadeTime = 0.8
 			Follow(last, true)
 			Reveal(last)
-			if f.play then f.play:SetText(L["Play"]) end
+			if f.PaintPlay then f.PaintPlay() end
+			J.KeepPlace(state.range, nil) -- (watched to the end: next time it opens on the whole journey)
 			Finish()
 		end
 	end)
@@ -782,44 +829,142 @@ function W.JourneyPane(parent, opts)
 		if full then J.Sound("play", 2, 1) end
 	end
 
-	-- the controls: the time frame, play / pause, me or everyone, speed (full) and a bigger view
-	local buttons = {}
-	local prev
-	for _, r in ipairs(J.RANGES) do
-		local b = W.Button(f, r.label, 58, function() state.range = r.key state.focus = nil f:Refresh(true) end)
-		b:SetPoint("BOTTOMLEFT", prev or f, prev and "BOTTOMRIGHT" or "BOTTOMLEFT", prev and 2 or 8, prev and 0 or 7)
-		b.key = r.key
-		buttons[#buttons + 1] = b
-		prev = b
+	-- the controls (2026-10-10, Shannon): the time frame as a drop-down (always Today when the pane
+	-- opens), a Play / Pause picture button that glows while there's a journey to play, Slower and
+	-- Faster round the speed (1x 2x 4x 8x, shown big for a moment when changed), me or everyone, and
+	-- a bigger view
+	local function RangeLabel()
+		for _, r in ipairs(J.RANGES) do if r.key == state.range then return r.label end end
+		return L["Today"]
 	end
-	f.play = W.Button(f, L["Play"], 64, function()
+	f.range = W.Dropdown(f, RangeLabel(), 92, function(self)
+		local items = { { title = true, text = L["Time frame"] } }
+		for _, r in ipairs(J.RANGES) do
+			items[#items + 1] = { text = r.label, selected = r.key == state.range, run = function()
+				state.range = r.key
+				state.focus = nil
+				f.range:SetText(r.label)
+				f:Refresh(false)
+			end }
+		end
+		W.Menu(self, items)
+	end)
+	f.range:SetPoint("TOPRIGHT", f, "TOPRIGHT", -6, -3)
+	local function PaintPlay()
+		local name = state.playing and "Journey_Pause" or "Journey_Play"
+		f.play.tex:SetTexture(MEDIA .. name)
+		f.play.hl:SetTexture(MEDIA .. name)
+		f.play:SetActive(true)
+	end
+	f.play = W.ViewButton(f, "Journey_Play", function()
+		return state.playing and L["Pause"] or L["Play"], state.playing and L["Stops where it is; Play goes on from there."] or L["Plays your journey as a time lapse."]
+	end, function()
 		if state.playing then
 			state.playing = false
-			f.play:SetText(L["Play"])
-			Reveal(last)
+			local at = math.min(1, state.clock / PlayTime())
+			Reveal(first + (last - first) * at)
+			J.KeepPlace(state.range, at)
 		else
 			-- (from where the slider stands, unless it's at the end)
 			local at = slider and slider:GetValue() / 1000 or 0
 			if at >= 0.999 then at = 0 end
 			state.clock = at * PlayTime()
 			state.playing = #pts > 0
+			state.played = true
 			if state.playing then Begin(at) end
-			f.play:SetText(L["Pause"])
 		end
+		PaintPlay()
 	end)
-	f.play:SetPoint("LEFT", prev, "RIGHT", 10, 0)
-	f.who = W.Button(f, L["Everyone"], 84, function() state.everyone = not state.everyone f:Refresh(true) end)
-	f.who:SetPoint("LEFT", f.play, "RIGHT", 4, 0)
+	f.play:SetSize(28, 28)
+	-- (Play, Slower, the speed, Faster: centred under the map)
+	local controls = CreateFrame("Frame", nil, f)
+	controls:SetSize(28 + 10 + 24 + 2 + 30 + 2 + 24, 28)
+	controls:SetPoint("BOTTOM", f, "BOTTOM", 0, 6)
+	f.play:SetPoint("LEFT", controls, "LEFT", 0, 0)
+	-- (a glow round Play: there's a journey to watch)
+	f.playGlow = f.play:CreateTexture(nil, "OVERLAY")
+	f.playGlow:SetTexture(GLOW)
+	f.playGlow:SetBlendMode("ADD")
+	f.playGlow:SetVertexColor(1, 0.82, 0.3)
+	f.playGlow:SetPoint("CENTER")
+	f.playGlow:SetSize(58, 58)
+	f.playGlow:Hide()
+	f.PaintPlay = PaintPlay
+	local function SetSpeed(step)
+		local i = 1
+		for k, v in ipairs(SPEEDS) do if v == state.speed then i = k end end
+		i = math.max(1, math.min(#SPEEDS, i + step))
+		if SPEEDS[i] == state.speed then return end
+		state.speed = SPEEDS[i]
+		f.speedText:SetText(state.speed .. "x")
+		f.speedAt = GetTime()
+		J.PlayNamed("speed")
+		f.slower:SetActive(i > 1)
+		f.faster:SetActive(i < #SPEEDS)
+	end
+	f.slower = W.ViewButton(f, "Journey_Slower", function() return L["Slower"], (L["Now %sx"]):format(state.speed) end, function() SetSpeed(-1) end)
+	f.slower:SetPoint("LEFT", f.play, "RIGHT", 10, 0)
+	f.speedText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.speedText:SetWidth(30)
+	f.speedText:SetPoint("LEFT", f.slower, "RIGHT", 2, 0)
+	f.speedText:SetText("1x")
+	f.faster = W.ViewButton(f, "Journey_Faster", function() return L["Faster"], (L["Now %sx"]):format(state.speed) end, function() SetSpeed(1) end)
+	f.faster:SetPoint("LEFT", f.speedText, "RIGHT", 2, 0)
+	f.slower:SetActive(false)
+	f.faster:SetActive(true)
+	f.speed = f.speedText
+	-- (2026-10-10, Shannon) whose journey: a drop-down of the account's characters with tick boxes;
+	-- Everyone ticks them all (again: back to the default). The default, each time the pane opens or
+	-- the character changes, is the character you're playing (or the one the page is showing).
+	local function Chars()
+		local keys = {}
+		for key in pairs(ns.db and ns.db.chars or {}) do keys[#keys + 1] = key end
+		table.sort(keys, function(a, b) return ns.CharName(a, true) < ns.CharName(b, true) end)
+		return keys
+	end
+	local function DefaultWho() return state.char or ns.CharKey() end
+	local function Picked()
+		local keys, n = {}, 0
+		for k in pairs(state.sel) do keys[#keys + 1] = k n = n + 1 end
+		return keys, n
+	end
+	local function WhoLabel()
+		local keys, n = Picked()
+		if n == 1 then return ns.CharName(keys[1], true) end
+		if n >= #Chars() then return L["Everyone"] end
+		return (L["%d characters"]):format(n)
+	end
+	local WhoMenu
+	WhoMenu = function(anchor)
+		local all = Chars()
+		local _, n = Picked()
+		local items = { { title = true, text = L["Whose journey"] } }
+		items[#items + 1] = { text = L["Everyone"], check = n >= #all, keep = true, run = function()
+			if n >= #all then state.sel = { [DefaultWho()] = true }
+			else state.sel = {} for _, k in ipairs(all) do state.sel[k] = true end end
+			f:Refresh(false)
+			WhoMenu(anchor)
+		end }
+		items[#items + 1] = { divider = true }
+		for _, k in ipairs(all) do
+			local r, g, b = ClassRGB(k)
+			items[#items + 1] = { text = ns.CharName(k, true), color = { r, g, b }, check = state.sel[k] == true, keep = true, run = function()
+				if state.sel[k] then
+					local _, left = Picked()
+					if left > 1 then state.sel[k] = nil end -- (someone always stays ticked)
+				else
+					state.sel[k] = true
+				end
+				f:Refresh(false)
+				WhoMenu(anchor)
+			end }
+		end
+		W.Menu(anchor, items)
+	end
+	f.who = W.Dropdown(f, WhoLabel(), 120, function(self) WhoMenu(self) end)
+	f.who:SetPoint("RIGHT", f.range, "LEFT", -4, 0)
+	PaintPlay()
 	do -- (#47, both sizes: the Journal's pane too)
-		-- (#47) 1x / 2x / 4x
-		f.speed = W.Button(f, "1x", 44, function()
-			local i = 1
-			for k, v in ipairs(SPEEDS) do if v == state.speed then i = k end end
-			state.speed = SPEEDS[i % #SPEEDS + 1]
-			f.speed:SetText(state.speed .. "x")
-			J.PlayNamed("speed")
-		end)
-		f.speed:SetPoint("LEFT", f.who, "RIGHT", 4, 0)
 		-- (#47) the scrub slider over the whole width, above the buttons
 		slider = CreateFrame("Slider", nil, f, BackdropTemplateMixin and "BackdropTemplate" or nil)
 		slider:SetOrientation("HORIZONTAL")
@@ -846,7 +991,7 @@ function W.JourneyPane(parent, opts)
 			if self.quiet then return end
 			-- the reader dragged it: stop playing, jump the heads there (no effects while scrubbing)
 			state.playing = false
-			f.play:SetText(L["Play"])
+			PaintPlay()
 			state.scrubbing = true
 			state.clock = frac * PlayTime()
 			f.fadeTime = 0.35
@@ -857,7 +1002,10 @@ function W.JourneyPane(parent, opts)
 				J.PlayNamed("scrub")
 			end
 		end)
-		slider:SetScript("OnMouseUp", function() state.scrubbing = nil end)
+		slider:SetScript("OnMouseUp", function(self)
+			state.scrubbing = nil
+			J.KeepPlace(state.range, self:GetValue() / 1000)
+		end)
 	end
 	if full then
 		f.summary = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -865,8 +1013,12 @@ function W.JourneyPane(parent, opts)
 		f.summary:SetShadowOffset(1, -1)
 		f.summary:Hide()
 	end
-	f.big = W.Button(f, L["Larger"], 70, function() if opts.onLarger then opts.onLarger() end end)
-	f.big:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -8, 7)
+	-- (2026-10-10, Shannon) Larger / Smaller as a picture button, like the playback ones
+	f.big = W.ViewButton(f, "Journey_Larger", function() return f.isLarge and L["Smaller"] or L["Larger"], f.isLarge and L["Back to the Journal's own size."] or L["The Journey over the whole page."] end,
+		function() if opts.onLarger then opts.onLarger() end end)
+	f.big:SetSize(28, 28)
+	f.big:SetActive(true)
+	f.big:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -8, 6)
 	f.big:SetShown(not full and opts.onLarger ~= nil)
 
 	-- (#48) Everyone mode: the names in class colours; click one to hide or show their line
@@ -878,7 +1030,6 @@ function W.JourneyPane(parent, opts)
 	local function Legend(keys)
 		for _, b in ipairs(legend.items) do b:Hide() end
 		if not keys then legend:Hide() return end
-		local hidden = Saved()
 		local x = 0
 		for i, key in ipairs(keys) do
 			local b = legend.items[i]
@@ -891,15 +1042,15 @@ function W.JourneyPane(parent, opts)
 				b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 				b.text:SetPoint("CENTER")
 				b:SetScript("OnClick", function(self)
-					local h = Saved()
-					h[self.key] = not h[self.key] or nil
+					-- (2026-10-10: the ticks in the drop-down decide; a click here unticks them)
+					state.sel[self.key] = nil
 					J.PlayNamed("legend")
 					f:Refresh(false)
 				end)
 				b:SetScript("OnEnter", function(self)
 					GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
 					GameTooltip:SetText(ns.CharName(self.key), 1, 1, 1)
-					GameTooltip:AddLine(Saved()[self.key] and L["Click: show their line."] or L["Click: hide their line."], 0.6, 0.8, 1)
+					GameTooltip:AddLine(L["Click: hide their line (tick them again in the drop-down)."], 0.6, 0.8, 1)
 					GameTooltip:Show()
 				end)
 				b:SetScript("OnLeave", GameTooltip_Hide)
@@ -907,7 +1058,7 @@ function W.JourneyPane(parent, opts)
 			end
 			b.key = key
 			local r, g, bl = ClassRGB(key)
-			local off = hidden[key]
+			local off = false
 			b.text:SetText(ns.CharName(key, true))
 			b.text:SetTextColor(off and 0.45 or r, off and 0.45 or g, off and 0.45 or bl)
 			b:SetWidth(b.text:GetStringWidth() + 12)
@@ -921,10 +1072,15 @@ function W.JourneyPane(parent, opts)
 	end
 
 	function f:IsPlaying() return state.playing end
-	function f:SetLarge(on) f.big:SetText(on and L["Smaller"] or L["Larger"]) end
+	function f:SetLarge(on)
+		f.isLarge = on and true or false
+		local name = MEDIA .. (on and "Journey_Smaller" or "Journey_Larger")
+		f.big.tex:SetTexture(name)
+		f.big.hl:SetTexture(name)
+	end
 
-	-- whose journey: a character from the header, else you (or everyone)
-	function f:SetCharacter(key) state.char = key state.focus = nil end
+	-- whose journey: a character from the header, else you; picking one starts the ticks over
+	function f:SetCharacter(key) state.char = key state.focus = nil state.sel = { [key or ns.CharKey()] = true } end
 
 	function f:Focus(entry)
 		state.focus = entry and entry.m and entry.x and entry or nil
@@ -1092,6 +1248,14 @@ function W.JourneyPane(parent, opts)
 					local jumped = Jumped(q, p)
 					if jumped == nil then near = ((px - q.px) ^ 2 + (py - q.py) ^ 2) <= JUMP * JUMP
 					else near = not jumped end
+					-- (2026-10-10, Shannon) crossing into another zone joins line to line, never a portal
+					-- swirl (the zone's own map coordinates made the step look like a jump)
+					-- (a real teleport, more than 1500 yards across the continent, still swirls)
+					if not near and q.m ~= p.m then
+						local x1, y1 = Yards(q.m, q.x, q.y)
+						local x2, y2 = Yards(p.m, p.x, p.y)
+						near = not (x1 and x2) or math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2) < 1500
+					end
 				end
 				-- (age fade: the newest stretch full strength, the oldest at about a third)
 				local fade = 1 - 0.65 * (tLast - p.t) / math.max(1, tLast - tFirst)
@@ -1141,28 +1305,32 @@ function W.JourneyPane(parent, opts)
 		nl, nb = 0, 0
 		local scope = ns.ScopeChar()
 		-- (full: Everyone works for the selected character's account too)
-		local who
-		if full then who = scope or ((not state.everyone) and (state.char or ns.CharKey())) or nil
-		else who = scope or state.char or ((not state.everyone) and ns.CharKey()) or nil end
-		f.who:SetShown(not scope and (full or not state.char))
-		if full then f.who:SetText(state.everyone and L["One character"] or L["Everyone"])
-		else f.who:SetText(state.everyone and L["Only me"] or L["Everyone"]) end
-		for _, b in ipairs(buttons) do
-			if b.key == state.range then b:LockHighlight() else b:UnlockHighlight() end
-		end
+		if not next(state.sel) then state.sel = { [DefaultWho()] = true } end
+		local picked, npicked = Picked()
+		local who = scope or (npicked == 1 and picked[1]) or nil
+		f.who:SetShown(not scope)
+		f.who:SetText(WhoLabel())
+		f.range:SetText(RangeLabel())
 		local all = J.Points(J.From(state.range), who)
-		-- (#48) Everyone mode: the legend of names; hidden characters' points left out
+		-- (yesterday: up to today's midnight)
+		local to = J.To(state.range)
+		if to then
+			local kept = {}
+			for _, p in ipairs(all) do if p.t < to then kept[#kept + 1] = p end end
+			all = kept
+		end
+		-- several ticked: only theirs, and the legend of names in class colours
 		if not who then
-			local seen, keys = {}, {}
-			for _, p in ipairs(all) do if p.c and not seen[p.c] then seen[p.c] = true keys[#keys + 1] = p.c end end
+			local kept, seen, keys = {}, {}, {}
+			for _, p in ipairs(all) do
+				if p.c and state.sel[p.c] then
+					kept[#kept + 1] = p
+					if not seen[p.c] then seen[p.c] = true keys[#keys + 1] = p.c end
+				end
+			end
+			all = kept
 			table.sort(keys, function(a, b) return ns.CharName(a, true) < ns.CharName(b, true) end)
 			Legend(#keys > 1 and keys or nil)
-			local hidden = Saved()
-			if next(hidden) then
-				local kept = {}
-				for _, p in ipairs(all) do if not hidden[p.c] then kept[#kept + 1] = p end end
-				all = kept
-			end
 		else
 			Legend(nil)
 		end
@@ -1173,7 +1341,7 @@ function W.JourneyPane(parent, opts)
 		elseif #all > 0 then shown = Continent(all[#all].m) end
 		local rangeLabel
 		for _, r in ipairs(J.RANGES) do if r.key == state.range then rangeLabel = r.label end end
-		local whoText = who and ns.CharName(who) or L["Everyone"]
+		local whoText = who and ns.CharName(who) or WhoLabel()
 		f.whoText, f.rangeLabel = whoText, rangeLabel
 		allPts = all
 		first, last = (all[1] and all[1].t) or 0, (all[#all] and all[#all].t) or 0
@@ -1201,23 +1369,43 @@ function W.JourneyPane(parent, opts)
 		f.play:SetEnabled(#all > 0)
 		if slider then slider:SetEnabled(#all > 1) end
 		if play then
-			state.clock, state.playing = 0, true
-			f.play:SetText(L["Pause"])
+			state.clock, state.playing, state.played = 0, true, true
+			PaintPlay()
 			SetSlider(0)
 			Begin(0)
 			Reveal(first)
 		else
 			state.playing = false
-			f.play:SetText(L["Play"])
-			SetSlider(1)
-			for _, p in ipairs(all) do p.fired = true end
-			Reveal(last)
+			PaintPlay()
+			-- (2026-10-10) where you left off (paused or scrubbed, this time frame), else the whole journey
+			local at = (not state.focus) and #all > 1 and J.KeptPlace(state.range) or 1
+			local upTo = first + (last - first) * at
+			state.clock = at * PlayTime()
+			SetSlider(at)
+			for _, p in ipairs(all) do p.fired = p.t <= upTo end
+			if at < 1 then
+				local m
+				for i = #all, 1, -1 do if all[i].t <= upTo then m = all[i].m break end end
+				if m and m ~= f.shownMap then Build(m, all) end
+			end
+			Reveal(upTo)
 		end
 	end
 
 	-- redraw at the new size once the pane has been laid out (and when it grows or shrinks)
 	f:SetScript("OnSizeChanged", function() if f:IsVisible() then C_Timer.After(0, function() f:Refresh(false) end) end end)
-	-- the time lapse plays each time the pane opens
-	f:SetScript("OnShow", function() C_Timer.After(0, function() if f:IsVisible() then f:Refresh(true) end end) end)
+	-- (2026-10-10, Shannon) opening the pane: Today, at rest, where you left off (else the whole
+	-- journey), Play glowing; closing it mid-play keeps the place
+	f:SetScript("OnShow", function()
+		state.range, state.played = "today", false
+		state.sel = { [state.char or ns.CharKey()] = true }
+		C_Timer.After(0, function() if f:IsVisible() then f:Refresh(false) end end)
+	end)
+	f:SetScript("OnHide", function()
+		if state.playing then
+			state.playing = false
+			J.KeepPlace(state.range, math.min(1, state.clock / PlayTime()))
+		end
+	end)
 	return f
 end

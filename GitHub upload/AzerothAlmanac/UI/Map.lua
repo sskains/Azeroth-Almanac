@@ -308,6 +308,52 @@ function W.ZoneMap(parent)
 			p.isPlace = e.place
 			p:Show()
 		end
+		self:FollowPlayer()
+	end
+
+	-- (Shannon, 2026-10-10) the "you are here" arrow moves with you: while the map is shown and has
+	-- your arrow on it (Quests, Places), it follows your position and facing ten times a second, on
+	-- this map only (walk off it and the arrow hides until you're back). Nothing else is redrawn.
+	local follow, since = nil, 0
+	local function Tick(_, elapsed)
+		since = since + elapsed
+		if since < 0.1 then return end
+		since = 0
+		if not (follow and follow:IsShown() and f.map and C_Map and C_Map.GetBestMapForUnit) then return end
+		local map = Call(C_Map.GetBestMapForUnit, "player")
+		local pos = map == f.map and C_Map.GetPlayerMapPosition and Call(C_Map.GetPlayerMapPosition, map, "player")
+		local x, y
+		if pos then
+			local ok, a, b = pcall(pos.GetXY, pos)
+			if ok and a and not ns.IsSecret(a) then x, y = a * 100, b * 100 end
+		end
+		if not x then follow.icon:SetAlpha(0) follow:EnableMouse(false) return end
+		follow.icon:SetAlpha(1)
+		follow:EnableMouse(true)
+		local w, h = f.gridW or f:GetWidth(), f.gridH or f:GetHeight()
+		if x ~= follow.lastX or y ~= follow.lastY then
+			follow.lastX, follow.lastY = x, y
+			follow:ClearAllPoints()
+			follow:SetPoint("CENTER", pinLayer, "TOPLEFT", w * x / 100, -h * y / 100)
+		end
+		local facing = GetPlayerFacing and ns.Readable(GetPlayerFacing())
+		if type(facing) == "number" and facing ~= follow.lastFacing and follow.icon.SetRotation then
+			follow.lastFacing = facing
+			pcall(follow.icon.SetRotation, follow.icon, facing)
+		end
+	end
+	function f:FollowPlayer()
+		follow = nil
+		for _, p in ipairs(pins) do
+			local e = p:IsShown() and p.entry
+			if e and (e.player or e.icon == "Interface\\WorldMap\\WorldMapArrow") then follow = p break end
+		end
+		if follow then
+			follow.lastX, follow.lastY, follow.lastFacing = nil, nil, nil
+			pinLayer:SetScript("OnUpdate", Tick)
+		else
+			pinLayer:SetScript("OnUpdate", nil)
+		end
 	end
 
 	-- the selected place's own pin (e.place) hides while another place is previewed

@@ -8,7 +8,7 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "0.68.9"
+ns.VERSION = "0.69.0"
 -- (0.69.0) the Almanac's own art: the logo (a closed crimson journal, its gold compass) and the journal
 -- badge (the open journal, a page burning with gold writing), for journal entries
 ns.ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_Almanac"
@@ -359,7 +359,7 @@ StaticPopupDialogs.AZEROTHALMANAC_RESET = {
 	timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
 }
 
-local DEV_COMMANDS = { maptest = true, art = true, toast = true, atlascheck = true, ejscan = true, wgdungeon = true, wgdebug = true, seeddungeons = true, whatis = true, cards = true, cardtoast = true, ringzoom = true }
+local DEV_COMMANDS = { art = true, toast = true, atlascheck = true, ejscan = true, wgdungeon = true, whatis = true, cards = true, cardtoast = true, ringzoom = true }
 
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
@@ -437,9 +437,6 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 	elseif cmd == "where" then
 		-- (0.69.1) what the game says about where you are (dungeons it won't name)
 		if ns.Dungeons and ns.Dungeons.Report then ns.Dungeons:Report() end
-	elseif cmd == "maptest" then
-		if ns.MapTest then ns.MapTest:Command(rest)
-		else ns.Print("The map test is a new file: exit and restart the game once to load it.") end
 	elseif cmd == "nodes" or cmd == "gathermap" then
 		local m = ns.db.settings.nodes
 		if rest == "button" then
@@ -465,10 +462,6 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		if ns.CardToast then ns.CardToast:Test(rest) end
 	elseif cmd == "atlascheck" then
 		ns.ArtScan:AtlasCheck()
-	elseif cmd == "seeddungeons" then
-		if ns.DevSeed then ns.DevSeed:Command(rest) end
-	elseif cmd == "wgdebug" then
-		if ns.WildGambit and ns.WildGambit.DebugPanel then ns.WildGambit:DebugPanel() end
 	elseif cmd == "wgdungeon" then
 		if ns.WildGambit and ns.WildGambit.DebugDungeon then ns.WildGambit:DebugDungeon(rest) end
 	elseif cmd == "ejscan" then

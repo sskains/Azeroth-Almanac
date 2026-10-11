@@ -508,6 +508,10 @@ local function TreeRows()
 	return rows, total, listed
 end
 
+-- the classes with a painted crest (Media\\Crest_<CLASS>), for the "On my characters" cards
+local CREST_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true,
+	ROGUE = true, SHAMAN = true, WARLOCK = true, WARRIOR = true }
+
 -- the cards
 local function Card(icon, name, count, new, tip, action, plain)
 	return { icon = icon, name = name, plain = plain or name, count = tostring(count) .. NewText(new), tip = tip, action = action }
@@ -593,11 +597,14 @@ local function CardRows()
 			local c = ns.db.chars[key]
 			local n = 0
 			for _ in pairs(c.items) do n = n + 1 end
-			local cls = (c.classFile or ""):lower():gsub("^%l", string.upper)
-			local icon = W.FindIcon({ "ClassIcon_" .. cls, "INV_Misc_Bag_08" })
+			-- (Shannon, 2026-10-10: the class's painted crest, as on the Characters page)
+			local crest = c.classFile and CREST_CLASSES[c.classFile]
+			local icon = crest and (MEDIA .. "Crest_" .. c.classFile) or W.FindIcon({ "INV_Misc_Bag_08" })
 			local name = ns.CharName(key)
-			cards[#cards + 1] = Card(icon, name, n, 0, (L["What %s carries now (bags, bank, worn)"]):format(ns.CharName(key, true)),
+			local card = Card(icon, name, n, 0, (L["What %s carries now (bags, bank, worn)"]):format(ns.CharName(key, true)),
 				function() OpenCard(name, function(id) return c.items[id] ~= nil end) end, ns.CharName(key, true))
+			card.crop = crest and 0.13 or nil
+			cards[#cards + 1] = card
 		end
 		Pairs(cards)
 	end
@@ -646,7 +653,7 @@ end
 
 function page:Build(parent, header)
 	MakeCard(parent)
-	view = Win().itemsView == "list" and "list" or "cards"
+	view = "cards" -- (Shannon, 2026-10-10: each session starts on the cards; List holds until you log out)
 	-- (the Quality and "Owned now" dropdowns are gone: the cards do their job, #55)
 	local search = W.Search(header, 180, function(text)
 		filter = text
@@ -682,7 +689,7 @@ function page:Build(parent, header)
 	crumbText:SetPoint("LEFT", backBtn, "RIGHT", 4, 0)
 	crumbText:SetJustifyH("LEFT")
 	crumbText:SetWordWrap(false)
-	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() cardFilter, crumb, view = nil, nil, "list" Win().itemsView = view page:Refresh() end)
+	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() cardFilter, crumb, view = nil, L["All items"], "list" Win().itemsView = view page:Refresh() end)
 	listBtn:SetPoint("RIGHT", -2, 0)
 	cardsBtn = W.ViewButton(cardBar, "View_Cards", L["Cards"], function() filter = "" search:SetText("") BackToCards() end)
 	cardsBtn:SetPoint("RIGHT", listBtn, "LEFT", -4, 0)

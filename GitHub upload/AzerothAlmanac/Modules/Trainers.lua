@@ -109,6 +109,63 @@ function T:Description(lines)
 end
 
 -- a spell's or recipe's record, merged quietly (spells are found in bulk; the trainer gets the journal line)
+---------------------------------------------------------------------------
+-- (Shannon's screenshots, 2026-10-10) one name per profession
+--   WoW Forever's trainers carry rank titles ("<Junior Skinning Trainer>"), and its Camping recipes
+--   (Basic Campfire) open a profession window with no profession name: they sorted as a
+--   profession of their own ("Junior Skinning") or a blank one. The rank word comes off, and a
+--   recipe without a profession takes the one its tooltip asks for ("Requires Cooking (1)"), else
+--   the window's other names for it; a window that names none at all is Cooking's (the only one
+--   seen doing it: its everyday meals and Camping recipes).
+---------------------------------------------------------------------------
+
+local RANK_WORDS = { "Grand Master ", "Master ", "Artisan ", "Expert ", "Journeyman ", "Apprentice ", "Junior " }
+function T.CleanProfession(name)
+	if type(name) ~= "string" then return nil end
+	name = name:gsub("%s*[Tt]rainer$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+	for _, w in ipairs(RANK_WORDS) do
+		if name:sub(1, #w) == w then name = name:sub(#w + 1) break end
+	end
+	return name ~= "" and name or nil
+end
+
+-- the profession a recipe's tooltip asks for ("Requires Cooking (1)"), or nil
+local function ProfessionFromTip(tip)
+	for _, line in ipairs(type(tip) == "table" and tip or {}) do
+		local p = type(line.l) == "string" and line.l:match("^Requires (.-) %(%d+%)$")
+		if p and not p:find("[Ll]evel") then return T.CleanProfession(p) end
+	end
+end
+T.ProfessionFromTip = ProfessionFromTip
+local NAMELESS = "Cooking"
+
+-- put records made before the fix right: "skill:Junior Skinning" -> "skill:Skinning", "skill:" ->
+-- the profession the recipe's tooltip asks for (else the trainer's)
+function T:OnInitialize(db)
+	local found = db and db.found or {}
+	local function Fix(rec)
+		if type(rec) ~= "table" or type(rec.group) ~= "string" then return end
+		local v = rec.group:match("^skill:(.*)$")
+		if not v then return end
+		local clean = T.CleanProfession(v) or ProfessionFromTip(rec.tip) or NAMELESS
+		rec.group = "skill:" .. clean
+	end
+	for _, rec in pairs(found.spell or {}) do Fix(rec) end
+	for _, rec in pairs(found.trainer or {}) do Fix(rec) end
+	for _, c in pairs(db and db.chars or {}) do
+		local sk = type(c) == "table" and c.skills
+		if type(sk) == "table" then
+			for name, v in pairs(sk) do
+				local clean = T.CleanProfession(name)
+				if clean ~= name then
+					sk[name] = nil
+					if clean and not sk[clean] then sk[clean] = v end
+				end
+			end
+		end
+	end
+end
+
 local function Spell(id, fields)
 	local rec = ns.Store:Get("spell", id)
 	if rec and rec.c and rec.c[ns.CharKey()] then
@@ -133,7 +190,9 @@ function T:ReadTrainer()
 	local filters = {}
 	if GetTrainerServiceTypeFilter and SetTrainerServiceTypeFilter then
 		for _, f in ipairs({ "available", "unavailable", "used" }) do
-			filters[f] = Call(GetTrainerServiceTypeFilter, f)
+			-- (the filter answers true/false on newer clients, 1/0 or nil on older ones: 0 is "off", not "on")
+			local v = Call(GetTrainerServiceTypeFilter, f)
+			filters[f] = v == true or v == 1
 			if not filters[f] then pcall(SetTrainerServiceTypeFilter, f, 1) end
 		end
 	end
@@ -166,7 +225,7 @@ function T:ReadTrainer()
 	local group
 	if profession then
 		-- "Blacksmithing" from the services' skill requirement, or from the title ("<Blacksmithing Trainer>")
-		skillName = skillName or (title and title:gsub("%s*[Tt]rainer$", ""):gsub("^Master%s+", ""):gsub("^Expert%s+", ""))
+		skillName = T.CleanProfession(skillName) or T.CleanProfession(title)
 		group = "skill:" .. (skillName or "?")
 	else
 		group = "class:" .. (classFile or "?")
@@ -241,7 +300,7 @@ function T:ReadProfession()
 	local me = Me()
 	if not me then return end
 	local prof = Call(C_TradeSkillUI.GetBaseProfessionInfo)
-	local profName = type(prof) == "table" and R(prof.professionName) or nil
+	local profName = type(prof) == "table" and (T.CleanProfession(R(prof.professionName)) or T.CleanProfession(R(prof.parentProfessionName))) or nil
 	local ok, ids = pcall(C_TradeSkillUI.GetAllRecipeIDs)
 	if not ok or type(ids) ~= "table" then return end
 	local added = 0
@@ -257,8 +316,13 @@ function T:ReadProfession()
 			end
 			local existing = ns.Store:Get("spell", id)
 			local okT, data = pcall(C_TooltipInfo and C_TooltipInfo.GetSpellByID or error, id)
-			Spell(id, { name = R(info.name), icon = R(info.icon), group = profName and ("skill:" .. profName) or (existing and existing.group),
-				tip = okT and TipLines(data) or nil,
+			local tip = okT and TipLines(data) or nil
+			-- (no profession name, as with Camping: the one its tooltip asks for, else the game's
+			-- skill line for the recipe, else Cooking's)
+			local line = not profName and C_TradeSkillUI.GetTradeSkillLineForRecipe and select(2, Call(C_TradeSkillUI.GetTradeSkillLineForRecipe, id)) or nil
+			local prof_ = profName or ProfessionFromTip(tip) or T.CleanProfession(line) or NAMELESS
+			Spell(id, { name = R(info.name), icon = R(info.icon), group = prof_ and ("skill:" .. prof_) or (existing and existing.group),
+				tip = tip,
 				cat = cat, reagents = reagents, made = made, makes = n and n > 1 and n or nil })
 			if not me.spells[id] then
 				me.spells[id] = 0

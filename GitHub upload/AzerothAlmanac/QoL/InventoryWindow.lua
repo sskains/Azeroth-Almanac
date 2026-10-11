@@ -225,6 +225,9 @@ local FACTION_BY_RACE = {
 }
 
 local function SetClassIcon(texture, c) return ns.SetClassIcon(texture, c.class) end
+-- the classes with a painted crest (Media\\Crest_<CLASS>), as the Characters list shows them
+local CREST_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true,
+	ROGUE = true, SHAMAN = true, WARLOCK = true, WARRIOR = true }
 
 -- The live portrait for the character you're playing; race art (or the class icon) for the rest.
 local function SetPortrait(texture, c)
@@ -331,6 +334,17 @@ local function MakePortrait(parent, size)
 			self.faction:Show()
 		else
 			self.faction:Hide()
+		end
+		-- (Shannon, 2026-10-10) the painted class crest, as in the Characters list on the left, for every
+		-- character (the live model only for a class without a crest)
+		local crest = type(c.class) == "string" and CREST_CLASSES[c.class:upper()]
+		if crest then
+			if self.model then self.model:Hide() end
+			self.art:Show()
+			self.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Crest_" .. c.class:upper())
+			self.art:SetTexCoord(0.13, 0.87, 0.13, 0.87)
+			self.art:SetDesaturated(false)
+			return
 		end
 		local isMe = c.key == INV:Me().key
 		local model = isMe and Model()

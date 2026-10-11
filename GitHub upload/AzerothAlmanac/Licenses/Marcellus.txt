@@ -1,0 +1,9 @@
+Marcellus font, used for the dungeon and raid name plates (Media\DungeonNames_*.tga, made by
+tools\wordart.py). Only pictures of the lettering are shipped, not the font itself.
+
+Marcellus
+Copyright (c) 2012, Brian J. Bonislawsky DBA Astigmatic (AOETI) (astigma@astigmatic.com),
+with Reserved Font Names "Marcellus".
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license is available with a FAQ at: https://openfontlicense.org

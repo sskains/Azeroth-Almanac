@@ -6,9 +6,38 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
-## Unreleased (/reload; the zone pictures are new textures: full game restart)
+## 0.69.0 test build (/reload; the zone pictures, cobwebs and name plates are new textures: full game restart)
 
 - [ ] Places zone pictures (full game restart): Ashenvale, Azshara, Darkshore, Felwood, Moonglade, Teldrassil, Burning Steppes, Dun Morogh, Duskwood, Ironforge, Orgrimmar, Searing Gorge, Stranglethorn Vale, The Barrens and Thunder Bluff show their paintings on their cards (the name readable over the darker left side, no dark smudge at the card's edges), matching the look of Elwynn Forest, Stormwind City and Westfall; a zone with no picture yet still shows the default card; the game's names match ("The Barrens", "Orgrimmar").
+- [ ] **Bag to auction, several stacks:** (full game restart: four new Journey textures.) Alt+Right-click a stack of something nobody else lists, post it; Alt+Right-click a second stack: the same price as yours (chat: "your own listing at ..."), not 1% lower. Something others list cheaper: 1% under them.
+- [ ] **Card toast spot:** a new card's toast sits about 100 px right of where it was, fully on screen.
+- [ ] **Maps follow you:** Quests > a quest in your current zone: walk and turn; the arrow on its map moves and turns with you. Places > your zone: the same. Walk into another zone: the arrow hides on the old map. No stutter.
+- [ ] **Wild Gambit after combat:** in a game, pull a mob: the table tucks away; kill it: the bar says "Paused: back in 3... 2... 1", then the table comes back. Pull again during the countdown: stays paused. Tuck it away yourself (the "-" button, now visible top right beside X) before a fight: it stays tucked away after. The bar shows the Wild Gambit icon.
+- [ ] **Windows in front:** with the Almanac open, open Wild Gambit (and Gem Match, Murloc Tac Toe): it opens in front; click the Almanac: it comes in front.
+- [ ] **Find a match:** press it: "Stop looking"; press again: stops (chat: stopped looking). While a found player is being asked ("Found X, asking them to play..."): still "Stop looking", and it stops without "looking again" later. No "No player named 'Zipporah ...'" lines for your own characters.
+- [ ] **Journey controls:** Journal / Characters > Journey: opens on Today, not playing, the whole day drawn, Play glowing. Play: plays (Pause icon); Pause; close and reopen: back where you paused (that zone). Slower / Faster: the speed text pops bigger and reads 1x .. 8x. The time frame drop-down: Today / Week / Month / All. Icons readable (gold on, grey off).
+- [ ] **Journey, second pass:** (full game restart: two more textures, Journey_Larger / Journey_Smaller.) Top right of the pane: whose journey (your name) and the time frame (Today); the title doesn't run under them. Time frame lists Today, Yesterday, Week, Month, All; Yesterday shows only yesterday. Whose journey: tick boxes for each character in class colours, Everyone ticks all (menu stays open while ticking); tick two: both lines and the legend; reopen: just you again. Playback buttons centred under the map; Larger / Smaller picture at the bottom right swaps when enlarged. Westfall into Duskwood: one line across the border, no purple swirls; a hearth or portal still shows its mark.
+- [ ] **Characters crests:** the Characters list shows each character's painted class crest in its class-coloured ring (as on the Journal's First to find), yours too, with the faction banner; nothing cut off or square at the corners.
+- [ ] **Dungeon name plates:** (full game restart: the name sheet changed.) Dungeons page cards and header: names in capitals, gold fading darker at the foot, worn and chipped, inside the plate's corners; two lines for long names. Raids (Molten Core, Onyxia's Lair, Blackwing Lair, Zul'Gurub, both Ahn'Qiraj, Naxxramas) and Upper Blackrock Spire in deep orange. Readable at card size.
+- [ ] **Characters Story tab:** three medallions (level number in gold ring, class crest in class colour with race and class under it, faction banner with "joined ..." under it); four chips under them (slain, quests done, zones, dungeons) with paintings; cards of what they found first ("263 found first"), no heading; click one: the Journal for that character and kind. No Realm, Last played, Last seen in, Levels.
+- [ ] **Character plate crest:** Characters, pick anyone (yourself too): the big round portrait at the top shows their class crest, as in the list, ring in class colour, faction banner bottom right.
+- [ ] **Creatures text size:** scroll the Creatures cards up and down: Beast, Critter, Humanoid ... always the same large size; the mastery cards' names the same small size.
+- [ ] **Back arrow:** Creatures: Show all, or the List button: "Creatures › All creatures" with the red back arrow, which returns to the cards. Items and Recipes List buttons: "Items › All items", "Recipes › All recipes". On the Creatures cards, no spyglass, paw or dragon floating in the gaps between sections after switching from the list.
+- [ ] **Cards each session:** switch Creatures, Items and Recipes to List, /reload: each opens on Cards again.
+- [ ] **Heal Assist:** no "secret number value" error at HealAssist.lua:1449 with Heal Assist on (player frame icons still sit right).
+- [ ] **Cobwebs (full restart: new textures):** Dungeons page and Wild Gambit dungeon cards: 1 to 3 webs per card, in different corners of the doorway (top ones tucked under the arch), each a different size and slight turn, under the stone; different cards differ; the same card looks the same each time it opens. No webs left halfway down the sides (the old baked-in ones).
+- [ ] **Name plates fit:** every dungeon / raid name stays inside its plate, clear of the corner ornaments (long names on two lines: Shadowfang Keep, Razorfen Downs, Upper Blackrock Spire ...).
+- [ ] **Items "On my characters":** each character's card shows its class crest (no square rim showing).
+- [ ] **People, a trainer you've learned from** (e.g. Therum Deepforge): open their training window once, then on People the list includes what you've learned, grey with a green tick on the icon's corner; the legend shows the tick by "grey learned".
+- [ ] **People, Wild Gambit first:** any person: the Wild Gambit logo heads the page, with Their card, the wins bar and the note under it, then Training / merchant / quests. A person with nothing else recorded still says "Nothing more recorded".
+- [ ] **Gem Match byline:** "Azeroth Almanac" in the window's bottom-left corner (as on Wild Gambit and Murloc Tac Toe), not under the title; readable, not hidden behind the board's frame.
+- [ ] **Journey 12-hour times:** the label over the map while it plays and a dot's tooltip read like "Oct 10 9:05 PM" (12:xx AM after midnight, 12:xx PM at noon).
+- [ ] **Page order:** the window's tab strip and the minimap button's menu both read Journal, Characters, Places, Dungeons, Quests, People, Creatures, Items, Gathering, Recipes; each tab opens its own page; the window still opens on the page you last had.
+- [ ] **Gambit Tutor's face:** start the tutorial: the Tutor's portrait (header and the clasp on its cards) is a wisp's face, not the die or a blank / question mark.
+- [ ] **Clean-up (0.69.0):** `/aa maptest`, `/aa seeddungeons`, `/aa wgdebug` answer as unknown commands; no errors at login; the Dungeons page shows only dungeons you really found (any seeded test dungeons gone); `/aa art` still works with debug on.
+- [ ] **Herbs never treasure:** Gathering: Earthroot is under Herbalism (Kind: Herb), not Treasure; Treasure holds only chests and lockboxes. Its page's "Where" row shows the painted Places picture (also a creature's "Where" on Creatures).
+- [ ] **Recipes professions:** no blank card at the top: Cooking's card (cooking painting) includes Charred Wolf Meat, Herb Baked Egg, Basic Campfire; no "Junior Skinning" card: Skinning (its recipe under Apprentice). Open the cooking window once: nothing new goes blank. Your characters' Cooking bars show real skill, not 0 / 0.
+- [ ] **Upgrades for plain gear:** wearing Novice's Pants (or any white piece), look at a white piece with more armor (Frayed Pants): the green arrow in your bags and "Upgrade for you (<tree>): +2 Armor" on its tooltip. One with less armor: no arrow. A green item with real stats still shows a percentage.
 - [x] **Gem Match scores across versions (#59 part 1):** scores shared and read with Asia (passed 2026-10-09).
 - [ ] **Wild Gambit menu icon:** right-click a creature's or player's portrait: "Play Wild Gambit" has the Wild Gambit logo in front, sized like the text, not cut off. Hunter / warlock: the pet portrait's "Add to Wild Gambit deck" (or "Discard its Wild Gambit card") too.
 - [ ] **Journey zone by zone:** open the Journey (Journal pane, or Characters > Journey) on a day you crossed zones. Play: it starts on your first zone's map; as the line crosses into the next zone, that map fades in with its name over it and the line continues; at the end it pulls back to the continent (a slower fade) with the whole line, ripples and summary. Drag the slider back and forth: the map follows the zone at that moment; at the far right, the continent. Everyone mode with two characters in different zones: the map doesn't flicker (it switches at most every 1.5 s). Dungeons: their own map if the client draws it.
@@ -54,7 +83,6 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 - [ ] **Zoom and resting state:** Week or Month over several zones: the map is zoomed onto the area you travelled (not the whole continent), the route centred, no empty edges. After the run: the line, small specks for discoveries (bigger under the mouse), pins only for flights, boats, hearths, dungeons and deaths (no swirls), one small head per character on their last spot. No blobs of overlapping pins. No straight lines between places you teleported or hearthed between; earlier days' line dimmer than today's.
 - [ ] **Effects (#49):** take-off glow, landing dust, hearth pillar, portal swirl, death ripple and shake, a light at resurrection; discovery rings in alert colours, a big zone name over the map on a new zone, extra burst for epic finds, a gold column for level 60. The end: three gold ripples and the summary line. Settings: effects off = none; lighter = no small rings, no shake.
 - [ ] **Sounds (#49):** on the Journey tab only (the Journal stays quiet); not more than one every 0.4 s; at 4x only the big ones. `/aa journey sounds` plays them all with their names; pick better ones with `/aa journey sound flight <file ID>` and tell me which IDs you like.
-
 - [ ] **Version marks (#59)** (needs Asia on this version too, or two accounts): after a minute in the same guild / group, open Wild Gambit > Challenge and type her name (or target her): a green dot and "same version". Her challenge pop-up on your screen shows the same. With someone on an older copy (no mark known): no line, as before.
 - [ ] **Version clash messages (#59):** (only testable with an older copy, e.g. the zip from before 0.69) challenge them in Wild Gambit: you are told they have an older Wild Gambit and need to update; in Murloc Tac Toe too. Nothing else changes in a normal game: play one Wild Gambit match and one Murloc Tac Toe game with Asia start to finish.
 
@@ -83,7 +111,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 - [ ] A merchant (an innkeeper): For sale heading with "Honored · 8 visits · stock checked 4 days ago" under it, the stock as before; the portrait's tooltip also shows standing, visits, stock checked. Someone who trains and sells shows Training first.
 - [ ] Someone with nothing recorded (a banker): a short line says what will appear; no empty headings.
 - [ ] Dungeon cards, abandoned (full game restart): the names look worn (darker patches, chips, scratches) but still read; cracks and grime on the stone, moss on a few ledges, cobwebs in both upper corners of the doorway (the picture shows through them); stains and scorch spots on the parchment edge. Wild Gambit's event card the same.
-- [ ] Hall of Thanes: one card only, "The Hall of Thanes", with "levels 13-20" and the word-art name. (`/aa seeddungeons clear` with /aa debug on removes the seeded records for good.)
+- [x] (retired: the tool was removed in 0.69.0) Hall of Thanes: one card only, "The Hall of Thanes", with "levels 13-20" and the word-art name. (`/aa seeddungeons clear` with /aa debug on removes the seeded records for good.)
 - [ ] Dungeon cards, edges (full game restart): no tan strip between the parchment border and the stone on any side; the border's outer edge is ragged and darker at the very edge, the page showing through its nicks; a soft shadow down and right of each card, following its shape (not a box); hovering still grows the card with its shadow. Wild Gambit's event card the same.
 - [ ] Dungeon cards (#31 to #33, full game restart): Dungeons > Collection: each card has the worn parchment edge (like a creature card's), the plaque is dark with a bronze rim, the name in gold word art (long names on two lines; raids redder); nothing cut off, no pink. A dungeon's page: the name at the top in word art (a boss's tab: the plain boss name). Wild Gambit (/aa wgdungeon in a practice game): the event card's plaque shows the dungeon's word-art name; the event's name sits under the card, above its rules; the small corner card still shows the name.
 - [ ] In the Hall of Thanes: its card swirls without hovering; `/aa where` prints the game's instance info, zone and map, and "Cards that swirl: Hall of Thanes". Outside any dungeon: "none".
@@ -150,7 +178,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 ## 0.68.3 (full game restart: new file)
 
 - [ ] Dungeon maps end at the picture's edge, no black band under it; portraits in the same spots.
-- [ ] `/aa seeddungeons` again: bosses have their names (Kresh, Deviate Faerie Dragon), and a boss's Abilities, Loot and Other tabs are full (health, defenses, drops with counts, money, skinning where it applies).
+- [x] (retired: the tool was removed in 0.69.0) `/aa seeddungeons` again: bosses have their names (Kresh, Deviate Faerie Dragon), and a boss's Abilities, Loot and Other tabs are full (health, defenses, drops with counts, money, skinning where it applies).
 - [ ] A boss's Where (Other tab, or the Creatures page) shows its dungeon; clicking it opens the dungeon.
 
 ## 0.68.2 (/reload)
@@ -169,9 +197,9 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## 0.68.0 (full game restart: new files)
 
-- [ ] `/aa debug`, `/aa seeddungeons`: the Dungeons page's Collection shows every dungeon and raid as cards, four to a row; hover grows one; captions show levels and bosses killed; the header says found of 29.
+- [x] (retired: the tool was removed in 0.69.0) `/aa debug`, `/aa seeddungeons`: the Dungeons page's Collection shows every dungeon and raid as cards, four to a row; hover grows one; captions show levels and bosses killed; the header says found of 29.
 - [ ] Click a card: the dungeon tab opens on it; its floors with boss portraits (or its journal art when no floor draws); click a portrait: Abilities, Loot, Other fill (bosses at 0, 1, 3, 10, 40 kills show different amounts); Overview goes back to the dungeon.
-- [ ] Your own records (Ragefire Chasm, Oggleflint) unchanged; `/aa seeddungeons clear` removes the test data and the page shows only what you really found.
+- [x] (retired: the tool was removed in 0.69.0) Your own records (Ragefire Chasm, Oggleflint) unchanged; `/aa seeddungeons clear` removes the test data and the page shows only what you really found.
 
 ## 0.67.4 (/reload)
 
@@ -190,7 +218,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## 0.67.1 (full game restart: a new file)
 
-- [ ] `/aa debug`, then `/aa wgdebug` (or the Dungeons button at the table's top right): the panel opens and can be dragged; Escape closes it.
+- [x] (retired: the tool was removed in 0.69.0) `/aa debug`, then `/aa wgdebug` (or the Dungeons button at the table's top right): the panel opens and can be dragged; Escape closes it.
 - [ ] In a practice game, each button fires its event; buttons grey out while the board is busy or the event would do nothing; the status line names the fired event.
 
 ## 0.67.0 (full game restart: new files and textures)
@@ -586,7 +614,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 - [ ] Likely cause: the XML pin templates name `AzerothAlmanacNodePinMixin` / `AzerothAlmanacTownsfolkPinMixin`, which were only created at login, after the XML loaded. Both mixins now exist from file load and get the map's pin methods mixed in later. Townsfolk pins (never confirmed in game) use the same fix.
 - [ ] **0.17.7:** with pins drawing, combat spammed "the game blocked Frame:SetPassThroughButtons()": the map canvas sets mouse pass-through on each pin it places, which is protected in combat. Both pin mixins now override `SetPassThroughButtons` / `SetPropagateMouseClicks` / `SetPropagateMouseMotion` with no-ops (the HandyNotes / TomTom fix; our pins hand the mouse to a child button). The blocked-action warning now prints once per function per session (still recorded in `AzerothAlmanacDB.diag`).
-- [ ] The node provider's refresh is now caught: errors are kept and shown by `/aa maptest` with the spot / pin counts for the open map (records, asked for, actually on the map) and the townsfolk pin count.
+- [x] (retired: the tool was removed in 0.69.0) The node provider's refresh is now caught: errors are kept and shown by `/aa maptest` with the spot / pin counts for the open map (records, asked for, actually on the map) and the townsfolk pin count.
 
 ## 36. Chest icon (2026-10-04, version 0.17.8)
 

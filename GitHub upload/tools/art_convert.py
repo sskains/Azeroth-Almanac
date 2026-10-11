@@ -20,7 +20,8 @@
   python art_convert.py roundicon <out folder>            (0.69.2) the slightly rounded icon's mask (64 px) and ring (128 px): Icon_Mask.tga, Icon_Ring.tga
   python art_convert.py banner <in.jpg> <out.tga> [W H] [edge=0.05]   (0.69.2) a wide zone picture, no keying: near-black painted borders trimmed, cropped to
                                                          the W:H shape, resized, opaque (default 512 x 128)
-  python art_convert.py ruin <Frame_Dungeon.tga> <out.tga>      (0.69.1) a see-through overlay for the dungeon arch: cracks,
+  python art_convert.py cobweb <FX_Cobweb.tga>                  (2026-10-10) three corner cobwebs on one sheet, for the cards
+  python art_convert.py ruin <Frame_Dungeon.tga> <out.tga> [nowebs]      (0.69.1) a see-through overlay for the dungeon arch: cracks,
                                                          dirt and soot on the stone, moss, cobwebs in the doorway (scipy)
   python art_convert.py parchment <frame.png> <out.tga> [W H] [shadow=<out.tga>]   (0.69.0, #33) a creature card frame on
                                                          magenta -> only its painted parchment border (the
@@ -423,7 +424,7 @@ def parchment(src, dst, w=256, h=512, depth=34, dark=135, shadow=None):
         write_tga(Image.fromarray(sh.astype(np.uint8), "RGBA").resize((w, h), Image.LANCZOS), shadow)
         print(f"shadow -> {shadow} (pad {SHADOW_PAD} of the card each way)")
 
-def ruin(src, dst, seed=11):
+def ruin(src, dst, seed=11, webs=True):
     """(0.69.1) a see-through overlay for the dungeon card's stone arch (Media\\Frame_Dungeon): cracks,
     dirt and soot on the stone only, a little moss, and cobwebs in the doorway's upper corners. Same size
     as the frame; drawn over it."""
@@ -475,7 +476,8 @@ def ruin(src, dst, seed=11):
     put(np.ones((HH, WW, 3)) * np.array([70, 92, 38]), np.clip(moss, 0, 0.75))
     # cobwebs in the doorway's two upper corners (where the arch meets the pillars)
     wy, wx = np.where(window)
-    if len(wy):
+    # (2026-10-10, DESIGN 73: the webs moved to the card, 1-3 in the doorway's corners, FX_Cobweb)
+    if len(wy) and webs:
         top, bot = wy.min(), wy.max()
         web = Image.new("L", (WW, HH), 0)
         dw = ImageDraw.Draw(web)
@@ -506,6 +508,48 @@ def ruin(src, dst, seed=11):
     img = Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.clip(out[..., 3] * 255, 0, 255)]).astype(np.uint8), "RGBA")
     write_tga(img.resize((W, H), Image.LANCZOS), dst)
     print(f"ruin overlay {W} x {H} -> {dst}")
+
+def cobweb(dst, seed=5):
+    """(2026-10-10, DESIGN 73) FX_Cobweb.tga: three corner cobwebs side by side (1024 x 256, the fourth
+    quarter empty), each spun from its cell's top left corner out into the cell: strands fanning from
+    the corner, rings joining them that sag a little toward it, a few broken threads. White, to be
+    tinted; the card mirrors them by texture coordinates for the other corners."""
+    from PIL import ImageDraw
+    rng = np.random.default_rng(seed)
+    C, S = 256, 4
+    sheet = Image.new("L", (C * 4 * S, C * S), 0)
+    d = ImageDraw.Draw(sheet)
+    for v in range(3):
+        ox = v * C * S
+        R = C * S * rng.uniform(0.88, 0.97)
+        n = int(rng.integers(7, 10))
+        # strands fanning evenly across the corner (a little jitter), each its own length
+        angs = np.radians(np.linspace(3, 87, n) + rng.normal(0, 2.5, n))
+        lens = R * rng.uniform(0.8, 1.0, n)
+        for a_, l_ in zip(angs, lens):
+            d.line((ox, 0, ox + np.cos(a_) * l_, np.sin(a_) * l_), fill=240, width=S + 1)
+        # rings: from strand to strand, each span sagging toward the corner (a curve, not a straight line)
+        rings = np.linspace(0.14, 0.92, int(rng.integers(6, 9))) + rng.normal(0, 0.02, 1)
+        for ring in rings:
+            for j in range(n - 1):
+                if rng.random() < 0.06:
+                    continue  # (a broken span here and there)
+                r1, r2 = ring * lens[j] / R * R, ring * lens[j + 1] / R * R
+                p1 = (ox + np.cos(angs[j]) * r1, np.sin(angs[j]) * r1)
+                p2 = (ox + np.cos(angs[j + 1]) * r2, np.sin(angs[j + 1]) * r2)
+                sag = rng.uniform(0.1, 0.22)
+                pts = []
+                for t in np.linspace(0, 1, 9):
+                    x = p1[0] + (p2[0] - p1[0]) * t
+                    y = p1[1] + (p2[1] - p1[1]) * t
+                    k = sag * 4 * t * (1 - t)       # (pulled toward the corner most in the middle)
+                    pts.append((x + (ox - x) * k, y + (0 - y) * k))
+                d.line(pts, fill=int(rng.uniform(185, 225)), width=S // 2 + 1 + (ring > 0.55))
+    img = sheet.filter(ImageFilter.GaussianBlur(S * 0.35)).resize((C * 4, C), Image.LANCZOS)
+    a = np.asarray(img).astype(float)
+    rgba = np.dstack([np.full(a.shape, 232), np.full(a.shape, 228), np.full(a.shape, 220), np.clip(a * 1.1, 0, 255)]).astype(np.uint8)
+    write_tga(Image.fromarray(rgba, "RGBA"), dst)
+    print(f"cobwebs 1024 x 256 -> {dst}")
 
 def roundicon(folder):
     """Icon_Mask.tga (white rounded square, for a mask texture) and Icon_Ring.tga (its thin edge, white, to be tinted):
@@ -587,7 +631,9 @@ if __name__ == "__main__":
         eg = [v[5:] for v in sys.argv[4:] if v.startswith("edge=")]
         banner(sys.argv[2], sys.argv[3], *(int(v) for v in nums[:2]), edge=float(eg[0]) if eg else 0.0)
     elif sys.argv[1] == "ruin":
-        ruin(sys.argv[2], sys.argv[3])
+        ruin(sys.argv[2], sys.argv[3], webs="nowebs" not in sys.argv[4:])
+    elif sys.argv[1] == "cobweb":
+        cobweb(sys.argv[2])
     elif sys.argv[1] == "round":
         round_art(sys.argv[2], sys.argv[3], *(int(v) for v in sys.argv[4:5]))
     else:

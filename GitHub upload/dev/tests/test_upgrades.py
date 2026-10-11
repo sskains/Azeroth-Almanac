@@ -29,6 +29,9 @@ ITEMS = {
 	[14] = { "Green Linen Bracers", 4, 1, "INVTYPE_WRIST", 7, 2, { ITEM_MOD_SPIRIT_SHORT = 1 } },
 	[15] = { "Robe of the Rogue Guild", 4, 1, "INVTYPE_ROBE", 1, 2, { ITEM_MOD_INTELLECT_SHORT = 30 } },
 	[16] = { "Robe of the Magi", 4, 1, "INVTYPE_ROBE", 1, 2, { ITEM_MOD_INTELLECT_SHORT = 30 } },
+	[17] = { "Novice's Pants", 4, 1, "INVTYPE_LEGS", 1, 1, { RESISTANCE0_NAME = 2 } },
+	[18] = { "Frayed Pants", 4, 1, "INVTYPE_LEGS", 1, 2, { RESISTANCE0_NAME = 4 } },
+	[19] = { "Torn Pants", 4, 1, "INVTYPE_LEGS", 1, 2, { RESISTANCE0_NAME = 1 } },
 }
 -- the game's tooltip data: two robes limited to classes
 TIPS = { [15] = "Classes: Rogue", [16] = "Classes: Mage, Priest" }
@@ -129,6 +132,17 @@ check(p.eval("BTN.aaUpgrade ~= nil and BTN.aaUpgrade:IsShown()"), "a better robe
 check(p.eval("BTN2.aaUpgrade ~= nil and BTN2.aaUpgrade:IsShown()"), "mail in your bag that's better for Bob: the (gold) arrow on its icon")
 p.lua("A.db.settings.upgrades.on = false U:Forget() U:PaintBags()")
 check(not p.eval("BTN.aaUpgrade:IsShown()"), "switched off: the bag arrows go")
+
+# (Shannon's screenshot) plain white gear: Frayed Pants (4 armor) over the worn Novice's Pants (2 armor)
+p.lua("ME.gear[7] = 17 A.db.settings.upgrades.on = true U:Forget()")
+r = p.eval("R(18)")
+check(r is not None and r.me is not None and r.me.armor == 2, "Frayed Pants (4 armor) over Novice's Pants (2): an upgrade, decided by armor")
+lines = p.eval("(function() local t = {} for _, l in ipairs(U:Lines(18)) do t[#t + 1] = l[1] end return table.concat(t, ' / ') end)()")
+check("+2 Armor" in lines and "%" not in lines.split("+2 Armor")[0][-8:], "the tooltip says \"+2 Armor\" (%s)" % lines)
+check(p.eval("R(19) and R(19).me") is None, "Torn Pants (1 armor): not an upgrade")
+check(p.eval("R(17) and R(17).me") is None, "the pants you wear: not an upgrade")
+p.lua("ME.gear[7] = nil U:Forget()")
+check(p.eval("R(18) and R(18).me and R(18).me.empty"), "nothing on your legs: plain pants fill \"an empty slot\"")
 
 # items only some classes can use
 p.lua("A.db.settings.upgrades.on = true")

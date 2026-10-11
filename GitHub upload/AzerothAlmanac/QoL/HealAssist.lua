@@ -1420,6 +1420,7 @@ local function NameDrop(f)
 	local nm = f.name or f.Name or (f == PlayerFrame and _G.PlayerName) or nil
 	if not (nm and nm.GetBottom and f.GetTop) then return 0 end
 	local top, bottom = f:GetTop(), nm:GetBottom()
+	if A.IsSecret(top) or A.IsSecret(bottom) then return 0 end -- (secret positions: see Pos below)
 	if not (top and bottom) then return 0 end
 	local drop = top - bottom * (nm:GetEffectiveScale() / f:GetEffectiveScale())
 	return (drop > 0 and drop < 60) and drop or 0
@@ -1442,9 +1443,13 @@ local function HealthBarOf(f)
 	end
 end
 
+-- (Shannon's error report, 2026-10-10) a frame's position can be a secret number on WoW Forever
+-- (a health bar placed by secret values): arithmetic on it errors, so it's treated as unknown
+local function Pos(v) return (type(v) == "number" and not A.IsSecret(v)) and v or nil end
+
 local function HealthDrop(f)
 	local bar = HealthBarOf(f)
-	local top, btop = f:GetTop(), bar and bar:GetTop()
+	local top, btop = Pos(f:GetTop()), bar and Pos(bar:GetTop())
 	if not (top and btop) then return nil end
 	local drop = top - btop * (bar:GetEffectiveScale() / f:GetEffectiveScale())
 	return (drop >= 0 and drop < 80) and drop or nil
@@ -1457,7 +1462,7 @@ local BADGE_ROOM = 40
 -- how far right of a pet's frame its owner's frame ends (in the pet frame's units), so the pet's
 -- icons start in the same column as the owner's (0.65.4)
 local function PetShift(ownerFrame, petFrame)
-	local or_, pr = ownerFrame and ownerFrame:GetRight(), petFrame and petFrame:GetRight()
+	local or_, pr = ownerFrame and Pos(ownerFrame:GetRight()), petFrame and Pos(petFrame:GetRight())
 	if not (or_ and pr) then return 0 end
 	local d = or_ * ownerFrame:GetEffectiveScale() / petFrame:GetEffectiveScale() - pr
 	return (d > 0 and d < 300) and d or 0

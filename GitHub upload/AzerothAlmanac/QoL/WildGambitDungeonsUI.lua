@@ -249,8 +249,9 @@ local function Card()
 	c.frameArt:SetAllPoints()
 	-- (0.69.1) the abandoned look of the Dungeons page's cards: cracks, dirt, moss, cobwebs
 	c.ruin = c:CreateTexture(nil, "ARTWORK", nil, 1)
-	c.ruin:SetTexture(MEDIA .. "Card_Ruin")
+	c.ruin:SetTexture(MEDIA .. "Card_Ruin_Clean") -- (2026-10-10: the webs are the card's own, W.CardWebs)
 	c.ruin:SetAllPoints()
+	if A.Widgets and A.Widgets.CardWebs then c.webs = A.Widgets.CardWebs(c, "BORDER", 4) end
 	-- the torches: a glow on each flame, a softer one on the stone round it; each flickers on its own
 	c.torches = {}
 	for i, at in ipairs(TORCH) do
@@ -366,6 +367,7 @@ local function Reveal(side, def, lasting)
 		c.art:SetTexCoord(0.14, 0.86, 0, 1)
 	end
 	c.title:SetText(def.dungeon)
+	if c.webs then c.webs:Set(def.dungeon, ART_L * CARD_W, ART_T * CARD_H, ART_R * CARD_W, ART_B * CARD_H) end
 	local W = A.Widgets
 	local inner = W and W.PLATE_INNER or { 0.84, 0.7 }
 	local art = W and W.SetNameArt and W.SetNameArt(c.nameArt, def.dungeon, ((ART_R - ART_L) * CARD_W + 6) * inner[1], ((PLQ_B - PLQ_T) * CARD_H + 6) * inner[2])

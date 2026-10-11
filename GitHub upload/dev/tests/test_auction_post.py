@@ -170,6 +170,36 @@ p.lua("HandleModifiedItemClick = HandleModifiedItemClick")
 p.lua("A.QoL.AuctionPost.OnModifiedClick('link', ItemLocation:CreateFromBagAndSlot(0, 1)) RunTimers(3)")
 check(p.eval("SELLF.PriceInput.amount") == 59, "from the bag's own Alt-click (HandleModifiedItemClick, with the item's place): priced")
 
+# (Shannon, 2026-10-10) a second stack never goes under your own first one
+p = newah()
+p.lua("""
+RESULTS = { { unitPrice = 60, containsOwnerItem = true }, { unitPrice = 70 } }
+C_AuctionHouse = { GetNumCommoditySearchResults = function() return #RESULTS end,
+	GetCommoditySearchResultInfo = function(id, i) return RESULTS[i] end }
+MousePress() RunTimers(3)
+""")
+check(p.eval("SELLF.PriceInput.amount") == 60, "your own listing is the cheapest (60c, others 70c): matched, not undercut")
+p = newah()
+p.lua("""
+RESULTS = { { unitPrice = 60 }, { unitPrice = 65, containsOwnerItem = true } }
+C_AuctionHouse = { GetNumCommoditySearchResults = function() return #RESULTS end,
+	GetCommoditySearchResultInfo = function(id, i) return RESULTS[i] end }
+MousePress() RunTimers(3)
+""")
+check(p.eval("SELLF.PriceInput.amount") == 59, "someone else is cheaper (60c): 1% under them (59c)")
+# a client whose results don't say whose they are: what you just posted counts as yours
+p = newah()
+p.lua("""
+C_AuctionHouse = nil
+MousePress() RunTimers(3)
+FireEvent("AUCTION_HOUSE_AUCTION_CREATED")
+-- the second stack: the game's lowest live price is now your own 59c
+AuctionHouseFrame.SetPostItem = function(self, loc) SELLF.item = loc self.mode = 2 SELLF.PriceInput.amount = 0
+	C_Timer.After(0.5, function() SELLF.PriceInput.amount = 59 FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED") end) end
+RunTimers(2) MousePress() RunTimers(3)
+""")
+check(p.eval("SELLF.PriceInput.amount") == 59, "second stack after posting the first at 59c: stays 59c, not 58c")
+
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

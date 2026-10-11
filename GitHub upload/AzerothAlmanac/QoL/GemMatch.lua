@@ -930,8 +930,9 @@ local function Build()
 	frame:SetSize(16 + FRAME_SIZE + 14 + PANEL_W + 16, 62 + FRAME_SIZE + 16)
 	Backdrop(frame, { 0.035, 0.03, 0.025, 0.97 }, { 0.4, 0.32, 0.16, 1 })
 	frame:SetPoint("CENTER")
-	-- same layer as the game's windows: whichever was clicked last is in front
-	frame:SetFrameStrata("MEDIUM")
+	-- the Almanac's layer (HIGH): opened over the Almanac it comes in front; whichever was clicked
+	-- last is in front (Shannon, 2026-10-10; it was MEDIUM, behind the Almanac)
+	frame:SetFrameStrata("HIGH")
 	frame:SetToplevel(true)
 	frame:HookScript("OnShow", frame.Raise)
 	frame:SetClampedToScreen(true)
@@ -1296,9 +1297,10 @@ local function Build()
 		hide = { titleBg, icon, title }, close = close, byline = sub })
 	-- the corner icon bigger, in the gold elite frame, as in Wild Gambit
 	ns.GoldEmblem(frame, GetIcon(7910) or "Interface\\Icons\\INV_Misc_Gem_01")
-	-- the byline ("Azeroth Almanac") would sit behind the bigger icon: to its right instead
+	-- the byline ("Azeroth Almanac") in the bottom-left corner, as in Wild Gambit and Murloc Tac Toe
+	-- (Shannon, 2026-10-10; it used to sit under the title, to the right of the big icon)
 	sub:ClearAllPoints()
-	sub:SetPoint("TOPLEFT", frame, "TOPLEFT", 172, -31)
+	sub:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 8)
 	frame:SetScript("OnUpdate", function(_, elapsed) if board then Step(elapsed) end end)
 	frame:SetScript("OnHide", function() SetPaused(true) end)
 end

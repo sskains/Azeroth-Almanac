@@ -227,7 +227,7 @@ local function Describe(rec, isFish)
 			local g, s = rec.z and rec.z[map] or 0, rec.sz and rec.sz[map] or 0
 			local note = g > 0 and (L["gathered %s"]):format(ns.Times(g)) or ""
 			if s > 0 then note = note .. (g > 0 and NOTE .. "  ·  " or NOTE) .. (L["sighted %s"]):format(ns.Times(s)) .. "|r" end
-			zones[#zones + 1] = { name = ZoneName(map) or (L["map %d"]):format(map), icon = W.KindIcon("zone"), note = note,
+			zones[#zones + 1] = { name = ZoneName(map) or (L["map %d"]):format(map), icon = W.KindArt("zone"), note = note,
 				tip = L["Click to see every spot on the map."], onClick = function() page:ShowOnMap(map) end }
 		end
 		table.sort(zones, function(x, y) return x.name < y.name end)
@@ -273,7 +273,7 @@ local function DescribeSkinItem(id, e)
 	for map, z in pairs(SkinZones(e)) do
 		local names = {}
 		for i, n in ipairs(z.names) do if i <= 3 then names[#names + 1] = n end end
-		zones[#zones + 1] = { name = ZoneName(map) or (L["map %d"]):format(map), icon = W.KindIcon("zone"),
+		zones[#zones + 1] = { name = ZoneName(map) or (L["map %d"]):format(map), icon = W.KindArt("zone"),
 			note = NOTE .. table.concat(names, ", ") .. (#z.names > 3 and " ..." or "") .. "|r",
 			tip = L["Click to see where you killed them on the map."], onClick = function() page:ShowOnMap(map) end }
 	end

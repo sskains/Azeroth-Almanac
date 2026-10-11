@@ -1,6 +1,6 @@
 -- Characters page: every character on the account. Since 0.18.0 it also holds what the separate
 -- My Characters window showed (QoL\InventoryWindow.lua draws those parts):
---   list:   portrait (yours from the game, the others' class emblem, both with the faction banner),
+--   list:   the class's painted crest (Media\Crest_<CLASS>, 2026-10-10) with the faction banner,
 --           name and level, race / class / zone, gold, rested XP, last played. Right-click: hide or
 --           remove a character. "Show hidden characters" under the list.
 --   header: search across every character's items, account gold.
@@ -39,48 +39,181 @@ local function Faction(c)
 end
 
 ---------------------------------------------------------------------------
--- Story tab (what the page always showed)
+-- Story tab (2026-10-10, Shannon: pictures, not a wall of text)
+--   The hero row: three medallions, the level (a gold ring round the number), the class (its painted
+--   crest in the class colour) and the faction (its banner), with race and class, the faction and
+--   when they joined the Almanac under them; a strip of their adventure under that (creatures slain,
+--   quests done, zones, dungeons), each with its painting. Then what they found first, as cards with
+--   the Almanac's paintings (click: their journal of that kind). No realm (WoW Forever has none: the
+--   second name is a surname), nothing the plate above already says (where they are, when played),
+--   no level list.
 ---------------------------------------------------------------------------
+
+-- the classes with a painted crest (Media\\Crest_<CLASS>): the list and the hero row
+local CREST = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true,
+	ROGUE = true, SHAMAN = true, WARLOCK = true, WARRIOR = true }
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+-- what they found first, in the Journal's order (kind, label)
+local FIRSTS = {
+	{ "zone", L["Zones"] }, { "subzone", L["Places"] }, { "instance", L["Dungeons"] }, { "creature", L["Creatures"] },
+	{ "item", L["Items"] }, { "quest", L["Quests"] }, { "merchant", L["Merchants"] }, { "trainer", L["Trainers"] },
+	{ "townsfolk", L["People"] }, { "flight", L["Flight paths"] }, { "node", L["Gathering"] }, { "fishing", L["Fishing waters"] },
+	{ "mailbox", L["Mailboxes"] },
+}
+
+local hero
+local function Medallion(parent, size)
+	local m = CreateFrame("Frame", nil, parent)
+	m:SetSize(size, size)
+	m.ring = m:CreateTexture(nil, "BACKGROUND")
+	m.ring:SetTexture(CIRCLE)
+	m.ring:SetPoint("TOPLEFT", -3, 3)
+	m.ring:SetPoint("BOTTOMRIGHT", 3, -3)
+	m.disc = m:CreateTexture(nil, "BORDER")
+	m.disc:SetTexture(CIRCLE)
+	m.disc:SetAllPoints()
+	m.disc:SetVertexColor(0.08, 0.06, 0.04, 1)
+	m.icon = m:CreateTexture(nil, "ARTWORK")
+	m.icon:SetAllPoints()
+	if m.CreateMaskTexture then
+		m.mask = m:CreateMaskTexture()
+		m.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+		m.mask:SetAllPoints(m.icon)
+		m.icon:AddMaskTexture(m.mask)
+	end
+	m.big = m:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+	m.big:SetPoint("CENTER", 0, 1)
+	m.label = m:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	m.label:SetPoint("TOP", m, "BOTTOM", 0, -8)
+	m.sub = m:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	m.sub:SetPoint("TOP", m.label, "BOTTOM", 0, -2)
+	return m
+end
+
+local function Hero(parent)
+	if hero then return hero end
+	hero = CreateFrame("Frame", nil, parent)
+	hero:SetSize(10, 10)
+	hero.meds = { Medallion(hero, 64), Medallion(hero, 64), Medallion(hero, 64) }
+	hero.chips = {}
+	for i = 1, 4 do
+		local c = CreateFrame("Frame", nil, hero)
+		c:SetSize(10, 30)
+		c.bg = c:CreateTexture(nil, "BACKGROUND")
+		c.bg:SetAllPoints()
+		c.bg:SetColorTexture(0, 0, 0, 0.35)
+		c.edge = c:CreateTexture(nil, "BACKGROUND", nil, -1)
+		c.edge:SetPoint("TOPLEFT", -1, 1)
+		c.edge:SetPoint("BOTTOMRIGHT", 1, -1)
+		c.edge:SetColorTexture(0.45, 0.35, 0.18, 0.8)
+		c.icon = c:CreateTexture(nil, "ARTWORK")
+		c.icon:SetSize(26, 26)
+		c.icon:SetPoint("LEFT", 2, 0)
+		c.num = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		c.num:SetPoint("LEFT", c.icon, "RIGHT", 6, 5)
+		c.what = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		c.what:SetPoint("TOPLEFT", c.num, "BOTTOMLEFT", 0, -1)
+		hero.chips[i] = c
+	end
+	return hero
+end
+
+-- the hero row's contents for one character; returns the frame and its height for a width
+local function FillHero(parent, key, c)
+	local h = Hero(parent)
+	local level, crest, faction = h.meds[1], h.meds[2], h.meds[3]
+	-- level: the number in a gold ring
+	level.ring:SetVertexColor(1, 0.78, 0.25)
+	level.icon:Hide()
+	level.big:SetText(tostring(c.level or "?"))
+	level.label:SetText(L["Level"])
+	level.sub:SetText("")
+	-- class: the crest in the class colour (or the game's class circle)
+	local r, g, b = ClassColor(c.classFile)
+	crest.ring:SetVertexColor(r, g, b)
+	crest.icon:Show()
+	crest.big:SetText("")
+	if c.classFile and CREST[c.classFile] then
+		crest.icon:SetTexture(MEDIA .. "Crest_" .. c.classFile)
+		crest.icon:SetTexCoord(0.13, 0.87, 0.13, 0.87)
+	else
+		local coords = c.classFile and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[c.classFile]
+		crest.icon:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
+		if coords then crest.icon:SetTexCoord(unpack(coords)) end
+	end
+	crest.label:SetText(("|cff%02x%02x%02x%s|r"):format(r * 255, g * 255, b * 255, c.class or "?"))
+	crest.sub:SetText(c.race or "")
+	-- faction: its banner
+	local f = Faction(c)
+	faction.ring:SetVertexColor(f == "Horde" and 0.75 or 0.25, f == "Horde" and 0.15 or 0.45, f == "Horde" and 0.1 or 0.85)
+	faction.big:SetText("")
+	faction.icon:Show()
+	if not W.SetFactionBadge(faction.icon, f) then faction.icon:Show() W.SetIcon(faction.icon, { "INV_Misc_QuestionMark" }) end
+	faction.label:SetText(f and L[f] or "?")
+	faction.sub:SetText((L["joined %s"]):format(ns.DateText(c.firstSeen)))
+	-- the adventure strip
+	local M = ns.Milestones
+	local st = M and M.Stats and M:Stats(key) or {}
+	local chips = {
+		{ W.KindArt("creature"), st.kills or 0, L["slain"] },
+		{ W.KindArt("quest"), ns.Quests:DoneCount(key) or 0, L["quests done"] },
+		{ W.KindArt("zone"), st.zone or 0, L["zones"] },
+		{ W.KindArt("instance"), st.instance or 0, L["dungeons"] },
+	}
+	for i, ch in ipairs(chips) do
+		local chip = h.chips[i]
+		chip.icon:SetTexture(ch[1])
+		chip.num:SetText(BreakUpLargeNumbers and BreakUpLargeNumbers(ch[2]) or tostring(ch[2]))
+		chip.what:SetText(ch[3])
+	end
+	return h, function(width)
+		-- the medallions spread across the width; the strip under them, four equal chips
+		local step = width / 3
+		for i, m in ipairs(h.meds) do
+			m:ClearAllPoints()
+			m:SetPoint("TOP", h, "TOPLEFT", step * (i - 0.5), -8)
+		end
+		local cw = math.floor((width - 3 * 6) / 4)
+		for i, chip in ipairs(h.chips) do
+			chip:ClearAllPoints()
+			chip:SetSize(cw, 32)
+			chip:SetPoint("TOPLEFT", h, "TOPLEFT", (i - 1) * (cw + 6), -(8 + 64 + 46))
+		end
+		h:SetSize(width, 8 + 64 + 46 + 32 + 4)
+		return 8 + 64 + 46 + 32 + 4
+	end
+end
 
 local function Describe(item)
 	local key, c = item.key, item.c
-	local b = { { "banner", L["General"] } }
-	b[#b + 1] = { "stat", L["Level"], tostring(c.level or "?") }
-	b[#b + 1] = { "stat", L["Race and class"], (c.race or "?") .. " " .. (c.class or "") }
-	b[#b + 1] = { "stat", L["Faction"], c.faction or "?" }
-	b[#b + 1] = { "stat", L["Realm"], c.realm or "?" }
-	b[#b + 1] = { "stat", L["Joined the Almanac"], ns.DateText(c.firstSeen) }
-	b[#b + 1] = { "stat", L["Last played"], ns.AgoText(c.lastSeen) }
-	b[#b + 1] = { "stat", L["Last seen in"], c.zone or "?" }
-	b[#b + 1] = { "stat", L["Quests done"], tostring(ns.Quests:DoneCount(key)) }
-
-	b[#b + 1] = { "banner", L["First to discover"] }
-	local any = false
-	local kinds = {}
-	for kind in pairs(ns.db.found) do kinds[#kinds + 1] = kind end
-	table.sort(kinds)
-	for _, kind in ipairs(kinds) do
+	local b = {}
+	local h, height = FillHero(detail and detail.scroll or UIParent, key, c)
+	b[#b + 1] = { "frame", h, height }
+	-- what they found first: a card each, with its painting; click for their journal of that kind
+	local cards = {}
+	for _, k in ipairs(FIRSTS) do
+		local kind = k[1]
 		local n = 0
-		for _, rec in pairs(ns.db.found[kind]) do if rec.b == key then n = n + 1 end end
+		for _, rec in pairs(ns.db.found[kind] or {}) do if rec.b == key then n = n + 1 end end
 		if n > 0 then
-			any = true
-			local k = W.KIND[kind]
-			b[#b + 1] = { "stat", k and k.label or kind, tostring(n) }
+			cards[#cards + 1] = { name = k[2], icon = W.KindArt(kind), note = (L["%s found first"]):format(BreakUpLargeNumbers and BreakUpLargeNumbers(n) or n),
+				tip = (L["%s found these before any of your other characters."]):format(ns.CharName(key, true)) .. "\n" .. L["Click to see them in their journal."],
+				onClick = function()
+					local p = ns.UI:GetPage("journal")
+					ns.UI:Open("journal")
+					if p then
+						if p.SetCharacter then p:SetCharacter(key) end
+						if p.SetKind then p:SetKind(kind) end
+					end
+				end }
 		end
 	end
-	if not any then b[#b + 1] = { "small", L["Nothing yet."] } end
-
-	b[#b + 1] = { "banner", L["Levels"] }
-	local levels = {}
-	for lvl, info in pairs(c.levels or {}) do levels[#levels + 1] = { lvl = lvl, info = info } end
-	table.sort(levels, function(x, y) return x.lvl > y.lvl end)
-	if #levels == 0 then
-		b[#b + 1] = { "small", L["Levels gained from now on are recorded here, with where you were."] }
+	b[#b + 1] = { "gap", 6 }
+	if #cards > 0 then
+		b[#b + 1] = { "slots", cards, cards = true }
 	else
-		for _, l in ipairs(levels) do
-			local place = (l.info.s and l.info.s ~= "") and (l.info.s .. ", " .. (l.info.z or "")) or (l.info.z or "?")
-			b[#b + 1] = { "stat", (L["Level %d"]):format(l.lvl), place .. "  |cff999999" .. ns.DateText(l.info.t) .. "|r" }
-		end
+		b[#b + 1] = { "small", L["Nothing found first yet: what this character finds before any other shows here."] }
 	end
 	return b
 end
@@ -118,9 +251,16 @@ local function DressRow(row)
 	row.badge:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 7, -4)
 end
 
+-- (Shannon, 2026-10-10) the painted class crests, as in the Journal's First to find, for every
+-- character (you too); the game's portrait and class circles only for a class without a crest
 local function SetFace(texture, key, c, ringOwner)
 	if ringOwner and ringOwner.SetRing then ringOwner:SetRing(ClassColor(c.classFile)) end
 	texture:SetDesaturated(false)
+	if c.classFile and CREST[c.classFile] then
+		texture:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Crest_" .. c.classFile)
+		texture:SetTexCoord(0.13, 0.87, 0.13, 0.87) -- (the crest's own painted rim stays under the ring)
+		return
+	end
 	if key == ns.CharKey() and SetPortraitTexture then
 		texture:SetTexCoord(0, 1, 0, 1)
 		SetPortraitTexture(texture, "player")
@@ -430,8 +570,8 @@ function page:Refresh()
 		local changed = journeyPane.charKey ~= found.key
 		journeyPane.charKey = found.key
 		journeyPane:SetCharacter(found.key)
-		if not journeyPane:IsShown() then journeyPane:Show() -- (its OnShow plays the time lapse)
-		elseif changed then journeyPane:Refresh(true) end
+		if not journeyPane:IsShown() then journeyPane:Show() -- (its OnShow shows today's journey, Play glowing)
+		elseif changed then journeyPane:Refresh(false) end
 		return
 	end
 	if journeyPane then journeyPane:Hide() end

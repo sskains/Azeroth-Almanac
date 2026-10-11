@@ -17,6 +17,11 @@
 -- it on a modified click, with the item's location), the old bags' buttons (ContainerFrame<n>Item<m>),
 -- and any Alt+right mouse press over a bag slot (GLOBAL_MOUSE_DOWN). One click is acted on once.
 -- /aa ahpost says what it sees.
+-- (Shannon, 2026-10-10) Never under yourself: posting a second stack (or a second copy) of something
+-- you just listed found your own auction as the lowest and went 1% under it, stack after stack. The
+-- lowest live price is now the lowest that isn't yours (the search results' containsOwnerItem);
+-- when your own listing is the cheapest, the new one matches it. Prices you post this session are
+-- remembered too, for a client whose results don't say whose they are.
 
 local _, A = ...
 local ns = A.QoL
@@ -28,6 +33,7 @@ local keys                      -- the Enter listener while an item waits to be 
 local hooked = {}
 local lastAt = { t = 0 }        -- (one click, several ways in: acted on once)
 local seen = { mouse = 0, modified = 0 }
+local posted = {}               -- itemID -> the unit price you last posted it at (this session)
 
 local function On() return not (ns.db and ns.db.auction and ns.db.auction.altPost == false) end
 local function Tell(msg) ns.Print("|cff9be36bAuction House:|r " .. msg) end
@@ -113,6 +119,37 @@ local function NewInSlot()
 	end
 end
 
+local function ItemIDOf(link) return tonumber(tostring(link or ""):match("item:(%d+)")) end
+
+-- the live listings for the item from the game's search: the lowest unit price that isn't yours,
+-- and the lowest of your own (nil when the client doesn't say, or nothing is listed)
+local function LiveLows(sf, id)
+	local AHC = C_AuctionHouse
+	if not (AHC and id) then return nil end
+	local others, own
+	local function Look(price, mine)
+		if not price or price <= 0 then return end
+		if mine then own = math.min(own or price, price) else others = math.min(others or price, price) end
+	end
+	local commodity = sf and AuctionHouseFrame and sf == AuctionHouseFrame.CommoditiesSellFrame
+	if commodity and AHC.GetNumCommoditySearchResults and AHC.GetCommoditySearchResultInfo then
+		local ok, n = pcall(AHC.GetNumCommoditySearchResults, id)
+		for i = 1, ok and tonumber(n) or 0 do
+			local okI, r = pcall(AHC.GetCommoditySearchResultInfo, id, i)
+			if okI and type(r) == "table" then Look(r.unitPrice, r.containsOwnerItem) end
+		end
+	elseif AHC.GetNumItemSearchResults and AHC.GetItemSearchResultInfo and AHC.MakeItemKey then
+		local okK, key = pcall(AHC.MakeItemKey, id)
+		local ok, n = pcall(AHC.GetNumItemSearchResults, okK and key or nil)
+		for i = 1, ok and tonumber(n) or 0 do
+			local okI, r = pcall(AHC.GetItemSearchResultInfo, key, i)
+			if okI and type(r) == "table" then Look(r.buyoutAmount and r.buyoutAmount / math.max(r.quantity or 1, 1), r.containsOwnerItem) end
+		end
+	end
+	return others, own
+end
+AH.LiveLows = LiveLows
+
 -- the price: 1% under what the game found live (once its search is back), else under the last scan.
 -- Run for the first few seconds after the item goes in (the game's search can land late and reset
 -- its price); after that a price you type is left alone.
@@ -122,8 +159,19 @@ local function NewFill(final)
 	if not sf then return end
 	local live = PriceOf(sf)
 	local each, low, from
+	local id = ItemIDOf(pending.link)
+	local others, own = LiveLows(sf, id)
 	if live and live > 0 and live ~= pending.set then
-		each, low, from = Undercut(live), live, "lowest listed now"
+		if own and (not others or own <= others) then
+			-- your own listing is the cheapest: match it, don't go under yourself
+			each, low, from = own, own, "your own listing at"
+		elseif others then
+			each, low, from = Undercut(others), others, "lowest listed now"
+		elseif posted[id] and live >= posted[id] then
+			each, low, from = posted[id], posted[id], "what you just listed it at"
+		else
+			each, low, from = Undercut(live), live, "lowest listed now"
+		end
 	elseif not pending.set then
 		each, low = AH.UnitPrice(pending.link)
 		from = "last scan"
@@ -431,7 +479,11 @@ function AH:OnLogin()
 		if event == "AUCTION_HOUSE_CLOSED" then
 			Done()
 		elseif event == "AUCTION_HOUSE_AUCTION_CREATED" then
-			if pending and pending.kind == "new" then Done() end
+			if pending and pending.kind == "new" then
+				local id = ItemIDOf(pending.link)
+				if id and pending.set then posted[id] = pending.set end
+				Done()
+			end
 		elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" or event == "ITEM_SEARCH_RESULTS_UPDATED" then
 			-- (the game's live price has arrived: ours goes under it, a moment after the game sets it)
 			if pending and pending.kind == "new" and GetTime() - (pending.at or 0) < 4 then C_Timer.After(0.1, function() NewFill(false) end) end

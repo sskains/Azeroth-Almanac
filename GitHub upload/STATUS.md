@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.69.0 (Unreleased)** · 2026-10-08 · WoW Forever beta (interface 16001)
+**Version 0.69.0** (test build for testers) · 2026-10-10 · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
@@ -105,7 +105,7 @@ Not released yet: nobody outside the two of us has the addon, so changes need no
   - Hand sizing (0.46.9): six cards at about 0.69 keep their spikes clear; growth as cards leave.
   - Stealth look: smoke layers rise, badge at the frame's left edge; the zoomed hidden card keeps it.
   - "Blocked from an action" popup (SpellStopCasting on Escape / logout): fixed in 0.49.1 (StaticPopupDialogs was being reassigned). Confirm it no longer appears; db.diag keeps the latest 30 blocks.
-- **Open:** Tutor portrait art (a dice icon now); Logo_MurlocTacToe / Logo_GemMatch art for the flight prompt; Dark Portal board with new art.
+- **Open:** Logo_MurlocTacToe / Logo_GemMatch art for the flight prompt; Dark Portal board with new art.
 
 ## Review fixes (0.62.0 - 0.64.1, 2026-10-07) 🧪
 
@@ -115,5 +115,5 @@ Decided 2026-10-07: the Combat Journal companion is dropped; chat item links don
 
 ## Housekeeping
 
-- `dev/AlmanacProbe` can be removed once nothing needs it.
+- Removed in 0.69.0: `dev/AlmanacProbe`, `/aa maptest`, `/aa seeddungeons` and `/aa wgdebug` (the code is in git history). `/aa art` (ArtScan) stays for art work.
 - Tasks: GitHub Issues and the project board (`docs/ROADMAP.md`). History: `CHANGELOG.md`. Design: `docs/DESIGN.md`. In-game checks: `docs/TEST_CHECKLIST.md`.

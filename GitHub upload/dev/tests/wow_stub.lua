@@ -18,7 +18,10 @@ function Mock(name)
 		if k == "RegisterEvent" then return function(self, ev) self._events = self._events or {} self._events[ev] = true end end
 		if k == "SetScript" or k == "HookScript" then return function(self, ev, fn) self._scripts[ev] = fn end end
 		if k == "GetScript" then return function(self, ev) return self._scripts[ev] end end
-		if k == "SetTexture" or k == "SetAtlas" then return function() return true end end
+		if k == "SetTexture" or k == "SetAtlas" then return function(self, v) if k == "SetTexture" then self._tex = v end return true end end
+		if k == "SetFrameLevel" then return function(self, v) self._level = v end end
+		if k == "SetFrameStrata" then return function(self, v) self._strata = v end end
+		if k == "GetFrameStrata" then return function(self) return self._strata or "MEDIUM" end end
 		if k == "GetText" then return function(self) return self._text or "" end end
 		if k == "SetText" then return function(self, v) self._text = v end end
 		if k == "GetFont" then return function() return "Fonts\\FRIZQT__.TTF", 12, "" end end

@@ -44,7 +44,7 @@ docs/ROADMAP.md   how work is tracked (GitHub Issues + project board) and what's
 docs/TEST_CHECKLIST.md   everything that still needs confirming in game
 CHANGELOG.md      what changed in each version
 docs/ArtCatalogue.md   every game atlas, font and layout recorded in game with /aa artlog
-dev/AlmanacProbe/ the early API probe addon (development only)
+dev/tests/        offline tests (Python + lupa): python3 dev/tests/test_<name>.py
 STATUS.md         where the project stands
 ```
 

@@ -97,6 +97,26 @@ bt = p.eval("BlockText(SPELL_BLOCKS)")
 check("Can make now=2" in bt, "Can make now counts this character's bags and bank (2)")
 p.lua("RP:ShowOnly('skill:First Aid')")
 check(p.eval("Find(function(r) return r.id == 3275 end) ~= nil") and p.eval("Find(function(r) return r.id == 2330 end) == nil"), "ShowOnly opens one profession")
+# (Shannon's screenshots, 2026-10-10) "Junior Skinning" and a blank profession (Cooking's window)
+T = "A.Trainers"
+check(p.eval(T + '.CleanProfession("Junior Skinning Trainer")') == "Skinning", "\"Junior Skinning Trainer\" is Skinning")
+check(p.eval(T + '.CleanProfession("Expert Cooking")') == "Cooking" and p.eval(T + '.CleanProfession("")') is None, "rank words come off; a blank name is no name")
+p.lua("""
+FIX = { found = { spell = {
+	[1] = { name = "Skinning", group = "skill:Junior Skinning" },
+	[2] = { name = "Basic Campfire", group = "skill:", tip = { { l = "Craft a Basic Campfire." }, { l = "Requires Cooking (1)" } } },
+	[3] = { name = "Charred Wolf Meat", group = "skill:" },
+	[4] = { name = "Linen Bandage", group = "skill:First Aid" },
+}, trainer = { [9] = { group = "skill:Junior Skinning" } } }, chars = { x = { skills = { [""] = { rank = 0 }, ["Junior Skinning"] = { rank = 5 } } } } }
+A.Trainers:OnInitialize(FIX)
+""")
+g = lambda i: p.eval("FIX.found.spell[%d].group" % i)
+check(g(1) == "skill:Skinning" and p.eval("FIX.found.trainer[9].group") == "skill:Skinning", "old Junior Skinning records move to Skinning")
+check(g(2) == "skill:Cooking", "a blank-profession recipe takes the profession its tooltip asks for (Cooking)")
+check(g(3) == "skill:Cooking", "a blank one with no tooltip line is Cooking's (the window that names none)")
+check(g(4) == "skill:First Aid", "the rest stay as they were")
+check(p.eval('FIX.chars.x.skills[""] == nil and FIX.chars.x.skills.Skinning and FIX.chars.x.skills.Skinning.rank == 5'), "characters' skills lose the blank and the rank word")
+
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

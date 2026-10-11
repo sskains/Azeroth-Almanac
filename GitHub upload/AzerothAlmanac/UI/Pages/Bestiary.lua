@@ -311,7 +311,7 @@ local function Describe(npc, rec)
 	local zs = {}
 	for _, z in ipairs(zones) do
 		local kills = #B:Spots(rec, "kz", z.map)
-		zs[#zs + 1] = { name = z.name, icon = W.KindIcon("zone"),
+		zs[#zs + 1] = { name = z.name, icon = W.KindArt("zone"),
 			note = (L["seen %s"]):format(ns.Times(z.n)) .. (kills > 0 and ("  ·  " .. (L["killed in %d spots"]):format(kills)) or ""),
 			tip = z.known and L["Click to open in Places, with where it was seen and killed on the map."] or nil,
 			onClick = z.known and function() local p = ns.UI:GetPage("places") if p then p:ShowZone(z.map, npc) end end or nil }
@@ -880,7 +880,7 @@ local function PaintBar()
 end
 
 function page:Build(parent, header)
-	view = Win().bestiaryView or "cards"
+	view = "cards" -- (Shannon, 2026-10-10: each session starts on the cards; List holds until you log out)
 	if view ~= "list" then view = "cards" end
 	-- (#52) the Type, Zone and Tier dropdowns gave way to the cards; search stays, and typing from
 	-- the cards opens the full list
@@ -921,7 +921,7 @@ function page:Build(parent, header)
 	crumbText = cardBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	crumbText:SetPoint("LEFT", backBtn, "RIGHT", 4, 0)
 	crumbText:SetJustifyH("LEFT")
-	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() view, crumb = "list", nil tierFilter, kindFilter, zoneFilter = nil, nil, nil SaveView() page:Refresh() end)
+	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() view, crumb = "list", L["All creatures"] tierFilter, kindFilter, zoneFilter = nil, nil, nil SaveView() page:Refresh() end)
 	listBtn:SetPoint("RIGHT", -2, 0)
 	cardsBtn = W.ViewButton(cardBar, "View_Cards", L["Cards"], function() filter = "" BackToCards() end)
 	cardsBtn:SetPoint("RIGHT", listBtn, "LEFT", -4, 0)
@@ -1006,8 +1006,7 @@ function page:Build(parent, header)
 					collapsedCards[r.key] = (not collapsedCards[r.key]) or nil
 					page:Refresh()
 				elseif r.card == "all" then
-					OpenCard(nil, nil, nil, nil)
-					crumb = nil PaintBar()
+					OpenCard(L["All creatures"], nil, nil, nil) -- (with the back arrow, as on Items: Shannon, 2026-10-10)
 				elseif r.card == "zone" then
 					OpenCard(r.z.name, nil, nil, r.z.map)
 				end

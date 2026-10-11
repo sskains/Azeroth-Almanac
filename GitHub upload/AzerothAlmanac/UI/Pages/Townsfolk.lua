@@ -211,7 +211,7 @@ local function TrainingSlots(npc, t)
 		local need = (prof and rec.skill and (L["Skill %d"]):format(rec.skill)) or (rec.lvl and (L["Level %d"]):format(rec.lvl)) or nil
 		local price = cost and (cost > 0 and ns.MoneyText(cost) or L["free"]) or nil
 		slots[#slots + 1] = {
-			spell = id, icon = rec.icon, color = TRAIN_COLOR[st],
+			spell = id, icon = rec.icon, color = TRAIN_COLOR[st], done = st == "known",
 			name = (rec.name or "?") .. (rec.rank and ("  |cff999999" .. rec.rank .. "|r") or ""),
 			note = (need and price) and (need .. "   " .. price) or need or price,
 			extra = prof and L["Click to open in Recipes. Shift-click to link it."] or L["Shift-click to link it."],
@@ -236,6 +236,32 @@ local function DescribePerson(p)
 	local m = p.recs.merchant
 	local t = p.recs.trainer
 
+	-- (#54) their Wild Gambit card: earned only by winning games against them. (Shannon, 2026-10-10:
+	-- first on every person, under the game's own logo, so it's found at a glance)
+	local WG = ns.QoL and ns.QoL.WildGambit
+	local WL = ns.QoL and ns.QoL.WildLogic
+	if WG and WG.Wins and WL and WL.WinsFor then
+		local won = WG.Wins(p.npc)
+		local wins = won and won.w or 0
+		local card = WG:CardFor(p.npc)
+		local tier = card and card.tier or 1
+		local nextAt = WL.WinsFor(tier)
+		b[#b + 1] = { "logo", "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit", 128, 64 }
+		local c = WL.COLORS[tier] or { 1, 1, 1 }
+		local tierText = card and ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, WL.TIERS[tier]) or (NOTE .. L["Not yet earned"] .. "|r")
+		b[#b + 1] = { "stat", L["Their card"], tierText }
+		if nextAt then
+			b[#b + 1] = { "skillbar", nil, wins, nextAt, (L["%d / %d"]):format(wins, nextAt) .. "  ·  "
+				.. (L["%s to %s"]):format(ns.N(nextAt - wins, "win", "wins"), WL.TIERS[math.max(2, tier + 1)]) }
+		else
+			b[#b + 1] = { "skillbar", nil, 1, 1, ns.N(wins, "win", "wins") .. "  ·  " .. WL.TIERS[6] }
+		end
+		b[#b + 1] = { "small", NOTE .. (card and L["Each win against them counts towards a better card (1, 3, 5, 10 and 20 wins). They play stronger as it climbs."]
+			or L["Win a game of Wild Gambit against them to earn their card: right-click their portrait and choose Play Wild Gambit."]) .. "|r" }
+	end
+
+	local wgBlocks = #b
+
 	-- what they teach you (class spells, weapon skills, riding, recipes): only what they've shown you
 	if t then
 		local slots = TrainingSlots(p.npc, t)
@@ -243,7 +269,7 @@ local function DescribePerson(p)
 		if #slots > 0 then
 			b[#b + 1] = { "slots", slots }
 			b[#b + 1] = { "small", "|cff40c040" .. L["green"] .. "|r " .. L["can learn now"] .. "   |cffe03030" .. L["red"] .. "|r "
-				.. L["not yet"] .. "   |cff999999" .. L["grey"] .. "|r " .. L["learned"] .. "  " .. L["(for the character you're playing)"] }
+				.. L["not yet"] .. "   |TInterface\\RaidFrame\\ReadyCheck-Ready:14|t|cff999999" .. L["grey"] .. "|r " .. L["learned"] .. "  " .. L["(for the character you're playing)"] }
 		else
 			b[#b + 1] = { "small", L["Open their training window to record what they teach."] }
 		end
@@ -280,29 +306,7 @@ local function DescribePerson(p)
 		b[#b + 1] = { "slots", { { name = node, icon = W.FindIcon(FLIGHT_ICON), note = L["Flight master here"],
 			tip = L["Click to open this flight path."], onClick = function() page:ShowNode(node) end } } }
 	end
-	if #b == 0 then b[#b + 1] = { "small", L["Nothing more recorded for them yet: what they teach, sell or ask of you shows here once you've seen it."] } end
-	-- (#54) their Wild Gambit card: earned only by winning games against them
-	local WG = ns.QoL and ns.QoL.WildGambit
-	local WL = ns.QoL and ns.QoL.WildLogic
-	if WG and WG.Wins and WL and WL.WinsFor then
-		local won = WG.Wins(p.npc)
-		local wins = won and won.w or 0
-		local card = WG:CardFor(p.npc)
-		local tier = card and card.tier or 1
-		local nextAt = WL.WinsFor(tier)
-		b[#b + 1] = { "banner", L["Wild Gambit"] }
-		local c = WL.COLORS[tier] or { 1, 1, 1 }
-		local tierText = card and ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, WL.TIERS[tier]) or (NOTE .. L["Not yet earned"] .. "|r")
-		b[#b + 1] = { "stat", L["Their card"], tierText }
-		if nextAt then
-			b[#b + 1] = { "skillbar", nil, wins, nextAt, (L["%d / %d"]):format(wins, nextAt) .. "  ·  "
-				.. (L["%s to %s"]):format(ns.N(nextAt - wins, "win", "wins"), WL.TIERS[math.max(2, tier + 1)]) }
-		else
-			b[#b + 1] = { "skillbar", nil, 1, 1, ns.N(wins, "win", "wins") .. "  ·  " .. WL.TIERS[6] }
-		end
-		b[#b + 1] = { "small", NOTE .. (card and L["Each win against them counts towards a better card (1, 3, 5, 10 and 20 wins). They play stronger as it climbs."]
-			or L["Win a game of Wild Gambit against them to earn their card: right-click their portrait and choose Play Wild Gambit."]) .. "|r" }
-	end
+	if #b == wgBlocks then b[#b + 1] = { "small", L["Nothing more recorded for them yet: what they teach, sell or ask of you shows here once you've seen it."] } end
 	if not p.x then b[#b + 1] = { "small", L["Talk to them to record exactly where they stand."] } end
 	return b
 end

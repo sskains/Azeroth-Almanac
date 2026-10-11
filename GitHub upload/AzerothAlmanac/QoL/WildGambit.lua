@@ -2354,8 +2354,11 @@ local function Build()
 	frame:SetBackdropColor(0.035, 0.03, 0.025, 0.97)
 	frame:SetBackdropBorderColor(0.4, 0.32, 0.16, 1)
 	frame:SetPoint("CENTER")
-	frame:SetFrameStrata("MEDIUM")
+	-- (Shannon, 2026-10-10) the Almanac's own layer, and in front when it opens: opened over the
+	-- Almanac it used to load behind it
+	frame:SetFrameStrata("HIGH")
 	frame:SetToplevel(true)
+	frame:HookScript("OnShow", frame.Raise)
 	frame:SetClampedToScreen(true)
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
@@ -3335,6 +3338,8 @@ local function Build()
 	mini:SetNormalTexture("Interface\\Buttons\\UI-Panel-SmallerButton-Up")
 	mini:SetPushedTexture("Interface\\Buttons\\UI-Panel-SmallerButton-Down")
 	mini:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
+	-- (Shannon, 2026-10-10: it worked but couldn't be seen) above the native frame's stone border, with the close button
+	mini:SetFrameLevel(frame:GetFrameLevel() + 52) -- (NativeWindow: the border at +50, its buttons at +52)
 	mini:SetScript("OnClick", function() WG:Collapse("float") end)
 	mini:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -4715,8 +4720,10 @@ function WG:PaintLobby()
 	end
 	tp.diff.text:SetText(("Difficulty: |cffffffff%s|r  >"):format(self:Difficulty().name))
 	local tf = lobby.tiles.match
-	frame.find:SetText(self.queue and "Stop looking" or "Find a match")
-	if not self.queue then tf.name:SetText("|cff999999Your guild, group, Almanac players\nyou've met, and the realm.|r") end
+	frame.find:SetText(self:Looking() and "Stop looking" or "Find a match")
+	if self.net and self.net.auto and self.net.state == "inviting" then
+		tf.name:SetText(("|cffffd100Found %s|r\n|cff999999asking them to play...|r"):format(Short(self.net.opp)))
+	elseif not self.queue then tf.name:SetText("|cff999999Your guild, group, Almanac players\nyou've met, and the realm.|r") end
 	-- what you played last glows
 	for key, t in pairs(lobby.tiles) do t.glow:SetShown(db.lastMode == key) end
 	-- your record
@@ -5273,8 +5280,28 @@ function WG.Pump()
 	C_Timer.After(sent and 0.12 or 1, WG.Pump)
 end
 
+-- (Shannon's screenshot, 2026-10-10) the game's "No player named 'X' is currently playing." for a
+-- whisper Wild Gambit sent in the last 10 seconds (someone you've met who's offline now) is left
+-- out of chat: it's the Almanac asking, not you
+WG.whispered = {}
+local notFoundPattern
+local function NotFoundFilter(_, _, text)
+	if type(text) ~= "string" or not ERR_CHAT_PLAYER_NOT_FOUND_S then return false end
+	if not notFoundPattern then
+		notFoundPattern = "^" .. ERR_CHAT_PLAYER_NOT_FOUND_S:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)") .. "$"
+	end
+	local who = text:match(notFoundPattern)
+	if not who then return false end
+	local key = who:gsub("[%s%-]", ""):lower()
+	local at = WG.whispered[key]
+	return at ~= nil and GetTime() - at < 10
+end
+if ChatFrame_AddMessageEventFilter then pcall(ChatFrame_AddMessageEventFilter, "CHAT_MSG_SYSTEM", NotFoundFilter) end
+WG.NotFoundFilter = NotFoundFilter
+
 local function SendTo(target, ...)
 	if not (target and C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
+	WG.whispered[tostring(target):gsub("[%s%-]", ""):lower()] = GetTime()
 	local box = WG.outbox
 	box[#box + 1] = { to = target, text = WG.ProtoFor(target) .. "|" .. table.concat({ ... }, "|") }
 	if not WG.pumping then WG.Pump() end
@@ -5718,8 +5745,34 @@ local function Broadcast(msg)
 	if id then pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, "CHANNEL", id) end
 end
 
+-- (Shannon, 2026-10-10) looking includes the moment a looker has been found and asked (an
+-- "auto" challenge waiting for its answer): the button says Stop looking all through, and stops it
+-- (no "didn't answer; looking again" after)
+function WG:Looking()
+	local net = self.net
+	return self.queue ~= nil or (net ~= nil and net.auto and net.state == "inviting") or false
+end
+
+-- your own characters never get a "who's looking?" whisper (an alt that's offline answered with
+-- "No player named ... is currently playing")
+local function MyOwn(name)
+	local key = WG.FullKey(name)
+	for k in pairs(A.db and A.db.chars or {}) do
+		if WG.FullKey(k) == key then return true end
+	end
+	return false
+end
+WG.MyOwn = MyOwn
+
 function WG:FindMatch()
-	if self.queue then self:StopLooking() return end
+	if self:Looking() then
+		local net = self.net
+		if net and net.auto and net.state == "inviting" then Send("X", net.gid) self.net = nil end
+		self:StopLooking(true)
+		Tell("stopped looking for a match.")
+		if frame and frame.lobby and frame.lobby:IsVisible() then self:PaintLobby() end
+		return
+	end
 	if game and game.pvp and not game.over then Tell("finish your game first (or Leave).") return end
 	if self.net then self:Leave() end
 	local cards = frame.collection or self:Collection()
@@ -5733,7 +5786,7 @@ function WG:FindMatch()
 	for i, rec in ipairs(peers) do
 		if i > 20 then break end
 		C_Timer.After(1.1 * i, function() -- (one a second: the game's addon-message allowance)
-			if self.queue == q and rec.n then SendTo(rec.n, "Q", "-", q.best) end
+			if self.queue == q and rec.n and not MyOwn(rec.n) then SendTo(rec.n, "Q", "-", q.best) end
 		end)
 	end
 	-- and the guild / group / realm every 15 seconds while looking
@@ -5775,6 +5828,7 @@ local function OnLooker(sender, best)
 			end
 		end)
 		WG:PaintPick()
+		if frame and frame.lobby and frame.lobby:IsVisible() then WG:PaintLobby() end
 	elseif not q.asked[theirs] then
 		-- make sure they know about me (they may only have heard me on a channel they're not on)
 		q.asked[theirs] = true
@@ -6020,7 +6074,9 @@ WG.OnMessage = OnMessage -- (moves that came early are replayed through it once 
 do -- (its own block, its helpers in one table: the file is at Lua's limit of locals)
 local TU = {}
 TU.NAME = "The Gambit Tutor"
-TU.FACE = "Interface\\Icons\\INV_Misc_Dice_01"
+-- (Shannon, 2026-10-10) the Tutor is a wisp: the game draws its face from the Wisp's own 3D model
+-- (creature 3681, display 10045, as in Teldrassil); the die only if this client can't draw a face
+TU.FACE = SetPortraitTextureFromCreatureDisplayID and 10045 or "Interface\\Icons\\INV_Misc_Dice_01"
 WG.TUTOR_DIFF = { key = "tutor", name = "Tutor", slip = 0.6, pool = 8, threat = false, spell = 0, weaker = 0 }
 
 function TU.TutorCard(base, s, picked)
@@ -6291,6 +6347,9 @@ function WG:Paused()
 end
 function WG:PausedNote()
 	local who = self:Paused()
+	if who == "me" and self.returningAt then
+		return ("Paused: back in %d..."):format(math.max(1, math.ceil(self.returningAt - GetTime())))
+	end
 	if who == "me" then return "Paused: you're in combat." end
 	if who == "opp" then return ("Paused: %s is in combat."):format(game.botName or "your opponent") end
 end
@@ -6308,8 +6367,9 @@ local function Dock()
 	d.icon = d:CreateTexture(nil, "ARTWORK")
 	d.icon:SetSize(36, 36)
 	d.icon:SetPoint("LEFT", 9, 0)
-	d.icon:SetTexture("Interface\\Icons\\INV_10_Inscription_DarkmoonCards_Wild_Earth")
-	d.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	-- (Shannon, 2026-10-10) the painted Wild Gambit icon, as on the window and the menus
+	d.icon:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit")
+	d.icon:SetTexCoord(0, 1, 0, 1)
 	d.title = d:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	d.title:SetPoint("TOPLEFT", d.icon, "TOPRIGHT", 8, -2)
 	d.title:SetPoint("RIGHT", -10, 0)
@@ -6501,7 +6561,27 @@ function WG:OpponentSilent(on)
 end
 
 -- combat starts or ends (PLAYER_REGEN_DISABLED / ENABLED)
+-- (Shannon, 2026-10-10) the end of combat waits WG.RETURN_DELAY seconds before the game unpauses
+-- and the table comes back, so you can finish what you're doing (loot, bandage); combat again in
+-- that time cancels it. A table you tucked away yourself stays tucked away.
+WG.RETURN_DELAY = 3
+local combatSeq = 0
 function WG:CombatChanged(on)
+	combatSeq = combatSeq + 1
+	if not on and (WG.RETURN_DELAY or 0) > 0 and not self.returning then
+		local seq = combatSeq
+		self.returningAt = GetTime() + WG.RETURN_DELAY
+		C_Timer.After(WG.RETURN_DELAY, function()
+			if seq ~= combatSeq then return end -- (combat again meanwhile)
+			if UnitAffectingCombat and UnitAffectingCombat("player") then return end
+			self.returning, self.returningAt = true, nil
+			self:CombatChanged(false)
+			self.returning = nil
+		end)
+		self:PaintDock()
+		return
+	end
+	self.returningAt = nil
 	local g = game
 	if g and not g.over then
 		g.pause = g.pause or {}
@@ -6732,7 +6812,7 @@ do
 		SetCard = SetCard, SetOwner = SetOwner, Deal = Deal, Vanish = Vanish, Flash = Flash,
 		PutOnBoard = PutOnBoard, BoardPlace = BoardPlace, SlotCenter = SlotCenter, Note = Note, Tell = Tell,
 		Play = Play, ShowHands = ShowHands, PaintEffects = PaintEffects, EndGame = EndGame, Reborn = Reborn,
-		Refresh = function() Refresh() end, Short = function(n) return Short(n) end,
+		Refresh = function() Refresh() end, Short = function(n) return Short(n) end, OnLooker = OnLooker,
 		CW = CW, CH = CH, BW = BW, BH = BH, BOARD_TOP = BOARD_TOP, ART_X = ART_X, ART_Y = ART_Y, GOLD = GOLD,
 	}
 end

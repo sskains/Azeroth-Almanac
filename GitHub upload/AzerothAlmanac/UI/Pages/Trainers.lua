@@ -754,7 +754,7 @@ local function FillRecipeRow(row, r)
 end
 
 function page:Build(parent, header)
-	view = Win().recipesView == "list" and "list" or "cards"
+	view = "cards" -- (Shannon, 2026-10-10: each session starts on the cards; List holds until you log out)
 	local search = W.Search(header, 200, function(text)
 		filter = text or ""
 		-- (search looks through everything: the whole list, from the cards too)
@@ -789,7 +789,7 @@ function page:Build(parent, header)
 	crumbText:SetPoint("LEFT", backBtn, "RIGHT", 4, 0)
 	crumbText:SetJustifyH("LEFT")
 	crumbText:SetWordWrap(false)
-	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() cardFilter, crumb, view = nil, nil, "list" Win().recipesView = view page:Refresh() end)
+	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() cardFilter, crumb, view = nil, L["All recipes"], "list" Win().recipesView = view page:Refresh() end)
 	listBtn:SetPoint("RIGHT", -2, 0)
 	cardsBtn = W.ViewButton(cardBar, "View_Cards", L["Cards"], function() filter = "" search:SetText("") BackToCards() end)
 	cardsBtn:SetPoint("RIGHT", listBtn, "LEFT", -4, 0)

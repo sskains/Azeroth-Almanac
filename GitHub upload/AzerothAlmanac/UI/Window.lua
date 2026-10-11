@@ -17,10 +17,18 @@ local aliases = {}
 function UI:RegisterAlias(key, to) aliases[key] = to end
 function UI:GetPage(key) return pages[aliases[key] or key] end
 
+-- the pages' order on the window's tabs and the minimap button's menu (Shannon, 2026-10-10): you, where
+-- you go, what you do there, who you meet, what you collect, what you make. It decides over a page's own
+-- `order` (kept as the fallback for a page not listed here), so no page file has to change.
+UI.PAGE_ORDER = { "journal", "characters", "places", "dungeons", "quests", "townsfolk", "bestiary", "items", "gathering", "trainers" }
+local RANK = {}
+for i, key in ipairs(UI.PAGE_ORDER) do RANK[key] = i end
+local function Rank(def) return RANK[def.key] or 100 + (def.order or 99) end
+
 function UI:RegisterPage(def)
 	pages[def.key] = def
 	order[#order + 1] = def
-	table.sort(order, function(a, b) return (a.order or 99) < (b.order or 99) end)
+	table.sort(order, function(a, b) return Rank(a) < Rank(b) end)
 end
 
 local function SavePosition()
@@ -182,6 +190,7 @@ local function Build()
 	frame:SetSize(WIDTH, HEIGHT)
 	frame:SetFrameStrata("HIGH")
 	frame:SetToplevel(true)
+	frame:HookScript("OnShow", frame.Raise) -- (a window opened comes in front: the games share this layer)
 	frame:SetClampedToScreen(true)
 	frame:SetMovable(true)
 	frame:EnableMouse(true)

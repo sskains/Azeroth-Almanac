@@ -62,7 +62,7 @@ Rules:
 - **People page redesign** (added 2026-10-07): the detail panel and its sub-panel show what this person can teach or sell you; facts about the person move to the name plate panel or a tab of their own.
 - **Spells & Recipes becomes Professions** (added 2026-10-07): a tree of every recipe you've come across, by profession and specialisation, showing which you've learned and which you've found but not yet got.
 - Dark Portal board, returning with new art.
-- Remaining art: Tutor portrait; Murloc Tac Toe and Gem Match logos for the flight prompt.
+- Remaining art: Murloc Tac Toe and Gem Match logos for the flight prompt.
 - Probe leftovers: level-up, death and the damage meter's Deaths view, a real interrupt, the active world event.
 - Travels: your trail on the map (design done, draw test passed).
 

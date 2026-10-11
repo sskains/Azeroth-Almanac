@@ -1055,7 +1055,14 @@ function W.List(parent, opts)
 					-- (a recycled row keeps nothing a page drew on it: banner cards, half cards)
 					if row.banner then row.banner:Hide() end
 					for _, c in ipairs(row.halves or {}) do c:Hide() end
+					-- (Shannon's screenshot, 2026-10-10: a list row's tier badge, elite dragon and faction crest
+					-- showed in the gaps between the Creatures cards) the pages' own marks hide too
+					for _, k in ipairs({ "tierTex", "dragon", "faction", "badge" }) do
+						local t = row[k]
+						if type(t) == "table" and t.Hide then t:Hide() end
+					end
 					if ns.New and ns.New.HeaderButton then ns.New:HeaderButton(row, nil) end
+					if ns.New and ns.New.MarkRow then ns.New:MarkRow(row, false) end
 				else
 					if row.SetSpacer and row.spacer then row:SetSpacer(false) end
 					row.item, row.index = data[index], index
@@ -1519,7 +1526,11 @@ function W.FillPairCard(c, o, PAIR_H)
 		c.art:Show()
 		c.icon:Hide()
 		-- (Asia's banner lettering: the game's large gold font, as on the Places cards)
+		-- (Shannon, 2026-10-10: the size jumped while scrolling) a card recycled from a plain one keeps the
+		-- font set on it outright, which a font object doesn't replace: set the large font outright too
 		c.name:SetFontObject(GameFontNormalLarge)
+		local font, size, flags = GameFontNormalLarge:GetFont()
+		if font then c.name:SetFont(font, size, flags or "") end
 		c.name:SetTextColor(GameFontNormalLarge:GetTextColor())
 		c.name:SetWordWrap(false)
 		c.name:ClearAllPoints()
@@ -1533,7 +1544,8 @@ function W.FillPairCard(c, o, PAIR_H)
 		c.art:Hide()
 		c.icon:Show()
 		c.icon:SetTexture(o.icon)
-		c.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		local cr = o.crop or 0.08 -- (a class crest cuts its own painted rim)
+		c.icon:SetTexCoord(cr, 1 - cr, cr, 1 - cr)
 		c.icon:SetSize(PAIR_H - 8, PAIR_H - 8)
 		-- (Asia's journal look: solid on the left, fading to nothing under the words)
 		if CreateColor then pcall(c.icon.SetGradient, c.icon, "HORIZONTAL", CreateColor(1, 1, 1, 1), CreateColor(1, 1, 1, 0)) end
@@ -1976,6 +1988,12 @@ local function Slot(parent)
 	f.count = f:CreateFontString(nil, "OVERLAY", nil, 2)
 	f.count:SetFontObject(W.Font("NumberFontNormalSmall", "NumberFontNormal", "GameFontHighlightSmall"))
 	f.count:SetPoint("BOTTOMRIGHT", f.icon, "BOTTOMRIGHT", -1, 1)
+	-- (2026-10-10) a green tick on the icon's corner: something you've already done (a spell you've trained)
+	f.tick = f:CreateTexture(nil, "OVERLAY", nil, 3)
+	f.tick:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+	f.tick:SetSize(18, 18)
+	f.tick:SetPoint("BOTTOMRIGHT", f.icon, "BOTTOMRIGHT", 4, -4)
+	f.tick:Hide()
 	-- (0.69.1) a character's slot (e.ring / e.faction): the icon round, the carved class ring over its
 	-- edge (Media\Ring_Class, tinted), the faction banner tucked on the bottom right; made on first use
 	function f:Character(ring, faction)
@@ -2204,6 +2222,7 @@ local function FillSlot(f, e)
 	f:Character(e.ring, e.faction)
 	if f.useCard then f.card:SetDesaturated(e.grey and true or false) f.card:SetAlpha(e.grey and 0.6 or 1) end
 	f.count:SetText(e.count and e.count > 1 and tostring(e.count) or "")
+	f.tick:SetShown(e.done and true or false)
 	f.name:SetFontObject(e.number and W.Font("NumberFontNormal", "GameFontHighlight") or GameFontHighlightSmall)
 	if f.icon.SetDesaturated then f.icon:SetDesaturated(e.grey and true or false) end
 	f.name:SetText((e.color or color or "|cffffffff") .. (name or "?") .. "|r")
@@ -2350,7 +2369,7 @@ function W.Detail(parent, top, style)
 		child:SetPoint("TOPLEFT", inner, -inner)
 		child:SetSize(1, 1)
 	end
-	local pools = { text = {}, banner = {}, ornate = {}, stat = {}, bar = {}, skillbar = {}, slot = {} }
+	local pools = { text = {}, banner = {}, ornate = {}, stat = {}, bar = {}, skillbar = {}, slot = {}, logo = {} }
 	local used = {}
 
 	-- the dark reward band of the quest log, drawn behind every block after { "band" }
@@ -2505,6 +2524,33 @@ function W.Detail(parent, top, style)
 					y = y + 24 + 8
 					stripe = 0
 				end
+			elseif kind == "logo" then
+				-- (2026-10-10) a heading drawn as artwork: { "logo", texture, width, height, detail }
+				-- (Wild Gambit's own logo, so its section is known at a glance), with the banner's rule under it
+				local lg = Take("logo", function()
+					local fr = CreateFrame("Frame", nil, child)
+					fr.art = fr:CreateTexture(nil, "ARTWORK")
+					fr.art:SetPoint("LEFT", 0, 0)
+					fr.detail = fr:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+					fr.detail:SetPoint("BOTTOMRIGHT", -4, 6)
+					fr.line = fr:CreateTexture(nil, "ARTWORK")
+					fr.line:SetColorTexture(0.45, 0.36, 0.18, 0.4)
+					fr.line:SetHeight(1)
+					fr.line:SetPoint("BOTTOMLEFT", 0, -2)
+					fr.line:SetPoint("BOTTOMRIGHT", 0, -2)
+					return fr
+				end)
+				local lw, lh = block[3] or 128, block[4] or 64
+				if y > 0 then y = y + 8 end
+				lg:ClearAllPoints()
+				lg:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
+				lg:SetPoint("RIGHT", child, "RIGHT", -2, 0)
+				lg:SetHeight(lh)
+				lg.art:SetTexture(block[2])
+				lg.art:SetSize(lw, lh)
+				lg.detail:SetText(block[5] or "")
+				y = y + lh + 8
+				stripe = 0
 			elseif kind == "stat" then
 				local r = Take("stat", function()
 					local r = CreateFrame("Frame", nil, child)
@@ -2754,6 +2800,14 @@ function W.Menu(anchor, items)
 			row.ruleBottom:SetPoint("BOTTOMRIGHT", row.plate, "BOTTOMRIGHT")
 			row.ruleBottom:SetHeight(1)
 			row.ruleBottom:SetColorTexture(1, 0.82, 0, 0.55)
+			-- (item.check: a tick box, the game's own)
+			row.box = row:CreateTexture(nil, "ARTWORK")
+			row.box:SetSize(20, 20)
+			row.box:SetPoint("LEFT", 1, 0)
+			row.box:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
+			row.tick = row:CreateTexture(nil, "OVERLAY")
+			row.tick:SetAllPoints(row.box)
+			row.tick:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
 			menu.rows[i] = row
 		end
 		-- item.section = true: a divider with the section's name on a plate (not clickable);
@@ -2772,7 +2826,14 @@ function W.Menu(anchor, items)
 			row.ruleTop:SetPoint("TOPRIGHT", row.plate, "TOPRIGHT")
 		end
 		row.text:ClearAllPoints()
-		if section then row.text:SetPoint("CENTER", 0, 0) else row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0) end
+		local boxed = item.check ~= nil and not section
+		row.box:SetShown(boxed)
+		row.tick:SetShown(boxed and item.check == true)
+		if section then row.text:SetPoint("CENTER", 0, 0)
+		elseif boxed and not item.icon then row.text:SetPoint("LEFT", row.box, "RIGHT", 4, 0)
+		else row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0) end
+		if boxed and item.icon then row.icon:ClearAllPoints() row.icon:SetPoint("LEFT", row.box, "RIGHT", 4, 0)
+		else row.icon:ClearAllPoints() row.icon:SetPoint("LEFT", 2, 0) end
 		if item.icon then W.SetIcon(row.icon, item.icon) end
 		-- (item.portraitUnit: that unit's own portrait, e.g. you for Characters)
 		if item.portraitUnit and SetPortraitTexture then pcall(SetPortraitTexture, row.icon, item.portraitUnit) end
@@ -2785,8 +2846,15 @@ function W.Menu(anchor, items)
 		if round then row.ring:SetVertexColor(item.ring[1], item.ring[2], item.ring[3]) end
 		row.text:SetFontObject((item.title or section) and GameFontNormal or GameFontHighlight)
 		row.text:SetText(item.text)
-		if item.selected then row.text:SetTextColor(1, 0.82, 0) elseif not (item.title or section) then row.text:SetTextColor(1, 1, 1) end
+		if item.color then row.text:SetTextColor(item.color[1], item.color[2], item.color[3])
+		elseif item.selected then row.text:SetTextColor(1, 0.82, 0) elseif not (item.title or section) then row.text:SetTextColor(1, 1, 1) end
+		-- (item.keep: the menu stays open, e.g. tick boxes; run() draws it again with W.Menu)
 		row:SetScript("OnClick", item.run and function()
+			if item.keep then
+				if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+				item.run()
+				return
+			end
 			menu:Hide()
 			catcher:Hide()
 			item.run()
@@ -2795,7 +2863,7 @@ function W.Menu(anchor, items)
 		row:Show()
 		local col = math.floor((i - 1) / perCol) + 1
 		local w = row.text:GetStringWidth()
-		w = (type(w) == "number" and w or 0) + (item.icon and 56 or 30)
+		w = (type(w) == "number" and w or 0) + (item.icon and 56 or 30) + (item.check ~= nil and 24 or 0)
 		colWidth[col] = math.max(colWidth[col] or 140, w)
 	end
 	local x = 8

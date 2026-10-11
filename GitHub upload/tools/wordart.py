@@ -1,12 +1,15 @@
 """
 Azeroth Almanac - dungeon and raid names as word art (0.69.0, #31).
 
-Renders every name in the Wild Gambit dungeon list (QoL/WildGambitDungeons.lua) in the LifeCraft font
-(dafont, donationware, by Eliot Truelove; credit in AzerothAlmanac/Licenses/LifeCraft.txt): a gold
-gradient, a bevel lit from the top left, a dark bronze outline and a soft shadow. Raids are a deeper
-red-gold. The font file is not shipped: only the finished pictures are.
+Renders every name in the Wild Gambit dungeon list (QoL/WildGambitDungeons.lua) in capitals, in the
+Marcellus font (Astigmatic / Brian J. Bonislawsky, SIL Open Font License 1.1; credit in
+AzerothAlmanac/Licenses/Marcellus.txt; Shannon's pick, 2026-10-10, over Friz Quadrata which we can't
+ship pictures of): a smooth gold gradient (pale at the top of the letters, deep amber at the foot), a
+dark bronze outline, a soft shadow below, and worn gilding (chipped edges, nicks, scratches, grime).
+Anything for more than five players (the raids, and Upper Blackrock Spire's ten) is a deep orange.
+The font file is not shipped: only the finished pictures are. (Until 2026-10-10: LifeCraft, with a bevel.)
 
-Usage: python wordart.py <LifeCraft_Font.ttf> [<addon folder>]
+Usage: python wordart.py <Marcellus-Regular.ttf or .woff> [<addon folder>]
   (default addon folder: ../AzerothAlmanac next to this tool)
 
 Writes:
@@ -25,8 +28,9 @@ DISTRESS = True    # (0.69.1) weathered, abandoned gilding (see distress)
 # names the game uses that differ from the list's (GetInstanceInfo), drawn too
 ALIASES = {"Blackrock Spire": False, "Sunken Temple": False}
 
-GOLD = ((255, 244, 190), (240, 190, 70), (150, 85, 20))
-RAID = ((255, 222, 170), (232, 128, 52), (128, 36, 14))
+GOLD = ((255, 248, 205), (255, 206, 90), (178, 100, 24))
+RAID = ((255, 226, 170), (255, 140, 36), (160, 52, 8))     # deep orange: more than five players
+BIG = {"Upper Blackrock Spire"}                            # (not a raid in the list, but ten players)
 
 
 def write_tga(img, path):
@@ -39,7 +43,7 @@ def write_tga(img, path):
 
 def lines_of(name):
     """long names on two lines, split at the space nearest the middle"""
-    if len(name) <= 14 or " " not in name:
+    if len(name) <= 11 or " " not in name:
         return [name]
     spaces = [i for i, ch in enumerate(name) if ch == " "]
     cut = min(spaces, key=lambda i: abs(i - len(name) / 2))
@@ -48,7 +52,7 @@ def lines_of(name):
 
 def render(font_path, name, colours, size=SIZE):
     f = ImageFont.truetype(font_path, size)
-    rows = lines_of(name)
+    rows = lines_of(name.upper())
     pad = size // 3
     gap = int(size * 0.08)
     boxes = [f.getbbox(r) for r in rows]
@@ -75,8 +79,8 @@ def render(font_path, name, colours, size=SIZE):
     top_c, mid_c, bot_c = (np.array(c, float) for c in colours)
     t = ys[..., None]
     g = np.where(t < 0.5, top_c + (mid_c - top_c) * (t / 0.5), mid_c + (bot_c - mid_c) * ((t - 0.5) / 0.5))
-    hl = shade[..., None] - 0.5
-    col = np.clip(g + hl * np.where(hl > 0, 300, 240), 0, 255)
+    # (2026-10-10: no bevel, the smooth gradient alone, as in the mock-up Shannon chose)
+    col = np.clip(g, 0, 255)
 
     def dil(img, r):
         return img.filter(ImageFilter.MaxFilter(r * 2 + 1))
@@ -104,9 +108,9 @@ def render(font_path, name, colours, size=SIZE):
 
 
 def distress(name, col, a, size):
-    """(0.69.1) an abandoned, weathered look: tarnish (a little colour drained), dark grime pooled in
-    blotches and down the letters like old drips, chips in the gilding (the dark outline shows through)
-    and a few fine scratches. Seeded by the name, so a re-run gives the same marks."""
+    """(2026-10-10) worn gilding, as in the mock-up: chips bitten out of the letters' edges, a few nicks
+    and fine scratches through them, and soft blotches of grime with a fine grain. Seeded by the name,
+    so a re-run gives the same marks, and each name wears differently."""
     import zlib
     from scipy import ndimage
     H, W = a.shape
@@ -114,26 +118,26 @@ def distress(name, col, a, size):
     def noise(sig):
         n = ndimage.gaussian_filter(rng.random((H, W)), sig)
         return (n - n.min()) / max(1e-6, n.max() - n.min())
-    grey = col.mean(axis=2, keepdims=True)
-    col = col * 0.7 + grey * 0.3                                        # tarnish
-    grime = np.clip((noise(size * 0.10) - 0.35) / 0.35, 0, 1)
-    drip = np.clip((ndimage.gaussian_filter(rng.random((1, W)), 1.2).repeat(H, 0) - 0.55) / 0.2, 0, 1)
-    drip *= np.linspace(0.2, 1.0, H)[:, None]                            # (heavier toward the foot)
-    m = np.clip(0.65 * grime + 0.5 * drip, 0, 0.8)[..., None]
-    col = col * (1 - m) + np.array([58, 40, 22]) * m
-    chips = np.clip((noise(size * 0.02) - 0.7) / 0.06, 0, 1)
-    a = a * (1 - 0.9 * chips)
-    # fine scratches across the letters
+    # chips on the rim (the outline shows through)
+    inner = ndimage.grey_erosion(a, size=(max(3, size // 15),) * 2)
+    rim = np.clip(a - inner, 0, 1)
+    chips = (noise(size * 0.05) < 0.28).astype(float)
+    a = a * (1 - rim * chips)
+    # nicks and scratches
     sc = Image.new("L", (W, H), 0)
     d = ImageDraw.Draw(sc)
-    for _ in range(max(3, W // 60)):
+    for _ in range(max(3, W * H // 9000)):
         x0, y0 = rng.uniform(0, W), rng.uniform(0, H)
-        ang = rng.uniform(-0.6, 0.6) + (0 if rng.random() < 0.5 else np.pi / 2)
-        ln = rng.uniform(size * 0.4, size * 1.2)
-        d.line((x0, y0, x0 + np.cos(ang) * ln, y0 + np.sin(ang) * ln), fill=200, width=1)
-    scr = np.asarray(sc).astype(float)[..., None] / 255
-    col = col * (1 - 0.55 * scr)
-    return np.clip(col, 0, 255), a
+        ln, ang = rng.uniform(size * 0.12, size * 0.35), rng.uniform(-0.6, 0.6)
+        d.line((x0, y0, x0 + np.cos(ang) * ln, y0 + np.sin(ang) * ln), fill=255, width=int(rng.choice([1, 2])))
+    for _ in range(max(6, W * H // 1500)):
+        x0, y0, r = rng.uniform(0, W), rng.uniform(0, H), float(rng.choice([1, 1, 2]))
+        d.ellipse((x0 - r, y0 - r, x0 + r, y0 + r), fill=255)
+    a = a * (1 - 0.85 * np.asarray(sc).astype(float) / 255)
+    # grime and grain (a gentle darkening, never below about three quarters)
+    k = (0.76 + 0.24 * noise(size * 0.12)) * (0.88 + 0.12 * noise(0.8))
+    col = col * k[..., None]
+    return np.clip(col, 0, 255), np.clip(a, 0, 1)
 
 
 def dungeon_names(addon):
@@ -142,7 +146,7 @@ def dungeon_names(addon):
     for line in src.splitlines():
         mt = re.search(r'dungeon = "([^"]+)"', line)
         if mt:
-            names[mt.group(1)] = "raid = true" in line
+            names[mt.group(1)] = "raid = true" in line or mt.group(1) in BIG
     for n, raid in ALIASES.items():
         names.setdefault(n, raid)
     return names
@@ -181,7 +185,8 @@ def main(font_path, addon):
         print(f"DungeonNames_{i}.tga: {SHEET_W} x {sh}, {len(items)} names")
     with open(os.path.join(addon, "Data", "DungeonNames.lua"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f"-- Generated by tools/wordart.py on {datetime.date.today()}: dungeon and raid names as word art in the\n")
-        f.write("-- LifeCraft font (Eliot Truelove; Licenses\\LifeCraft.txt). Do not edit by hand.\n")
+        f.write("-- Marcellus font (Astigmatic, SIL OFL 1.1; Licenses\\Marcellus.txt), capitals, worn gilding; more than five\n")
+        f.write("-- players in deep orange. Do not edit by hand.\n")
         f.write("-- [lower-case name] = { sheet (Media\\DungeonNames_<n>), left, right, top, bottom, width, height }\n")
         f.write("local _, ns = ...\nns.DungeonNames = {\n" + "\n".join(lines) + "\n}\n")
     print(f"{len(pics)} names")

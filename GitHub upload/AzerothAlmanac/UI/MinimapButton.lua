@@ -88,16 +88,16 @@ end
 local function MenuItems()
 	return {
 		{ title = true, icon = ns.ICON, text = L["Azeroth Almanac"] },
+		-- every page, in the window's tab order (ns.UI.PAGE_ORDER, 2026-10-10)
 		{ icon = ns.JOURNAL_ICON, text = L["Journal"], run = function() ns.UI:Open("journal") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Places", text = Named(L["Places"], "places"), run = function() ns.UI:Open("places") end },
 		{ icon = W.KIND.character.icon, portraitUnit = "player", text = L["Characters"], run = function() ns.UI:Open("characters") end },
-		-- (every page, 0.64.0)
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Places", text = Named(L["Places"], "places"), run = function() ns.UI:Open("places") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Dungeons", text = Named(L["Dungeons"], "dungeons"), run = function() ns.UI:Open("dungeons") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Quests", text = Named(L["Quests"], "quests"), run = function() ns.UI:Open("quests") end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", text = Named(L["People"], "townsfolk"), run = function() ns.UI:Open("townsfolk") end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Creatures", text = Named(L["Creatures"], "bestiary"), run = function() ns.UI:Open("bestiary") end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Items", text = Named(L["Items"], "items"), run = function() ns.UI:Open("items") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Quests", text = Named(L["Quests"], "quests"), run = function() ns.UI:Open("quests") end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Gathering", text = Named(L["Gathering"], "gathering"), run = function() ns.UI:Open("gathering") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Dungeons", text = Named(L["Dungeons"], "dungeons"), run = function() ns.UI:Open("dungeons") end },
-		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", text = Named(L["People"], "townsfolk"), run = function() ns.UI:Open("townsfolk") end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Recipes", text = Named(L["Recipes"], "trainers"), run = function() ns.UI:Open("trainers") end },
 		-- the mini games under their own plate, Z to A
 		{ section = true, text = L["Mini Games"] },

@@ -137,10 +137,66 @@ function W.SetNameArt(tex, name, maxW, maxH)
 	return true
 end
 
+-- (2026-10-10, DESIGN 73, Shannon's rule of 2026-10-09) cobwebs in the doorway: 1 to 3 per card, each
+-- in its own corner (the top ones tucked where the arch meets the pillars), each its own size (18-32%
+-- of the doorway's width), turn (+-10 degrees), small offset and transparency (0.75-0.95), one of the
+-- three webs on Media\FX_Cobweb mirrored for its corner. Seeded by the dungeon's name, so a card keeps
+-- its webs. The webs left the ruin overlay (Card_Ruin_Clean).
+--   local webs = W.CardWebs(parent, layer, sublevel)
+--   webs:Set(name, left, top, right, bottom)   -- the doorway, in the parent's units from its top left
+local function Hash(s)
+	local h = 5381
+	for i = 1, #(s or "") do h = (h * 33 + s:byte(i)) % 2147483647 end
+	return h
+end
+function W.CardWebs(parent, layer, sub)
+	local o = { tex = {} }
+	for i = 1, 3 do
+		local t = parent:CreateTexture(nil, layer or "BORDER", nil, sub or 4)
+		t:SetTexture(MEDIA .. "FX_Cobweb")
+		t:SetVertexColor(0.93, 0.91, 0.86)
+		t:Hide()
+		o.tex[i] = t
+	end
+	function o:Set(name, l, t, r, b)
+		for _, tx in ipairs(self.tex) do tx:Hide() end
+		if not name then return end
+		local seed = Hash(name:lower())
+		local function Rand() seed = (seed * 1103515245 + 12345) % 2147483648 return seed / 2147483648 end
+		local n = 1 + math.floor(Rand() * 3)
+		local corners = { "TL", "TR", "BL", "BR" }
+		for i = 4, 2, -1 do local j = 1 + math.floor(Rand() * i) corners[i], corners[j] = corners[j], corners[i] end
+		local dw = r - l
+		local curve = t + (b - t) * 0.36 -- (the top corners: where the arch meets the pillars)
+		for i = 1, n do
+			local tx, c = self.tex[i], corners[i]
+			local size = dw * (0.18 + 0.14 * Rand())
+			local variant = math.floor(Rand() * 3) -- (one of the sheet's three webs)
+			local u0, u1 = variant * 0.25, variant * 0.25 + 0.25
+			local right, bottom = c == "TR" or c == "BR", c == "BL" or c == "BR"
+			-- (mirrored by texture coordinates: the web is spun from its cell's top left corner)
+			local ul, ur = right and u1 or u0, right and u0 or u1
+			local vt, vb = bottom and 1 or 0, bottom and 0 or 1
+			tx:SetTexCoord(ul, ur, vt, vb)
+			local ox, oy = dw * 0.03 * Rand(), dw * 0.03 * Rand()
+			local x = right and (r - ox) or (l + ox)
+			local y = bottom and (b - oy) or (curve + oy)
+			tx:ClearAllPoints()
+			tx:SetSize(size, size)
+			tx:SetPoint((bottom and "BOTTOM" or "TOP") .. (right and "RIGHT" or "LEFT"), parent, "TOPLEFT", x, -y)
+			if tx.SetRotation then pcall(tx.SetRotation, tx, math.rad(-10 + 20 * Rand())) end
+			tx:SetAlpha(0.75 + 0.2 * Rand())
+			tx:Show()
+		end
+		self.count = n
+	end
+	return o
+end
+
 -- (0.69.0, #32) the name plate in the plaque: carved stone with Celtic-knot corners round a recessed
 -- panel (Media\Plate_DungeonName, 512 x 256), so the gold word art stands out. Returns the texture;
 -- anchor it over the plaque. W.PLATE_INNER: the share of it the lettering may use (inside the rim).
-W.PLATE_INNER = { 0.84, 0.70 }
+W.PLATE_INNER = { 0.66, 0.64 } -- (2026-10-10: inside the corner ornaments; the capitals reached onto them at 0.84)
 function W.NamePlate(parent, layer)
 	local t = parent:CreateTexture(nil, layer or "BORDER", nil, 4)
 	t:SetTexture(MEDIA .. "Plate_DungeonName")
@@ -209,8 +265,9 @@ function W.DungeonCard(parent, width)
 	-- (0.69.1) abandoned: cracks, dirt, soot and moss on the stone, cobwebs in the doorway's corners
 	-- (Media\Card_Ruin, art_convert.py ruin), and the scene a touch dimmer and duller
 	c.ruin = arch:CreateTexture(nil, "ARTWORK", nil, 1)
-	c.ruin:SetTexture(MEDIA .. "Card_Ruin")
+	c.ruin:SetTexture(MEDIA .. "Card_Ruin_Clean") -- (2026-10-10: the webs are the card's own now, W.CardWebs)
 	c.ruin:SetAllPoints()
+	c.webs = W.CardWebs(arch, "BORDER", 4)
 	c.art:SetVertexColor(0.9, 0.86, 0.8)
 	-- (0.69.0, #32) the dark name plate in the plaque's hole, under the stone
 	c.plate = W.NamePlate(arch, "BORDER")
@@ -306,6 +363,7 @@ function W.DungeonCard(parent, width)
 		self.dname = rec and rec.name
 		local art = W.SetNameArt(self.nameArt, rec and rec.name, self.nameBox[1], self.nameBox[2])
 		self.name:SetShown(not art)
+		self.webs:Set(rec and rec.name or tostring(id), ART_L * w, ART_T * h, ART_R * w, ART_B * h)
 		self.id = id
 	end
 	return c

@@ -78,6 +78,18 @@ check(p.eval("Has(function(r) return r.skin == 2318 end) ~= nil") and p.eval("Ha
 p.lua("GP:ShowNode('Battered Chest')")
 check(p.eval("Has(function(r) return r.node == 'Battered Chest' end) ~= nil"), "ShowNode opens its profession card")
 p.lua("Draw()")
+# (Shannon's screenshot) Earthroot taken for a chest: its Herbalism lock makes it a herb
+p.lua("""
+A.DB.objectLock = A.DB.objectLock or {}
+A.DB.objectLock[1619] = { 2, 15 }
+ER = { name = "Earthroot", kind = "chest", ids = { [1619] = true } }
+ER_FIXED = A.Gathering:FixKind(ER)
+BOX = { name = "Battered Chest", kind = "chest", ids = { [2843] = true } }
+""")
+check(p.eval("ER_FIXED == true and ER.kind == 'herb'"), "Earthroot recorded as a chest becomes a herb (it needs Herbalism)")
+check(p.eval("A.Gathering:Prof(ER)") == "herb", "...and goes under Herbalism")
+check(p.eval("A.Gathering:FixKind(BOX) == nil and BOX.kind == 'chest'"), "a real chest stays treasure")
+
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

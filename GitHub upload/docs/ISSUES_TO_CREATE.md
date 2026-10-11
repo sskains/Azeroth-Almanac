@@ -231,7 +231,7 @@ Steps:
 6) Account mode and legend; settings (recorder on / off, markers, forget a day / all).
 ```
 
-### 20. Remove dev/AlmanacProbe
+### 20. Remove dev/AlmanacProbe (done 2026-10-10, 0.69.0)
 **Labels:** `chore`
 ```
 The probe addon in dev/AlmanacProbe can go once the probe leftovers issue is done.

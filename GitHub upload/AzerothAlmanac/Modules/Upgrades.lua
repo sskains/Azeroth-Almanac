@@ -12,7 +12,8 @@
 --      one-handers for a character that fights with two against the weaker of the two; a two-hander
 --      against main and off hand together.
 -- A rough guide, said so in the tooltip.
--- U:For(item) -> { me = { pct, spec, level } | nil, others = { { c, spec, pct, level, reach, note } } }
+-- U:For(item) -> { me = { pct, spec, level, empty, armor } | nil, others = { { c, spec, pct, level, empty, armor, reach, note } } }
+-- (armor: set when armor decided it, for plain gear the spec's stats can't tell apart; shown "+2 Armor")
 
 local _, ns = ...
 local L = ns.L
@@ -247,7 +248,7 @@ local function WornLink(c, slot)
 end
 
 -- the score to beat for c in the item's slot (0: empty), or nil if unknown (stats not in yet)
-local function Current(c, equipLoc, class, tree)
+local function Current(c, equipLoc, class, tree, scorer)
 	local slots = SLOTS[equipLoc or ""]
 	if not slots then return nil end
 	-- (is anything worn there at all? an empty slot is only "an empty slot" when nothing is)
@@ -261,7 +262,7 @@ local function Current(c, equipLoc, class, tree)
 		local s = Stats(link)
 		-- (worn, but the game hasn't told us its stats yet: unknown, never "an empty slot")
 		if not s or not next(s) then return nil end
-		return U.Score(link, class, tree)
+		return (scorer or U.Score)(link, class, tree)
 	end
 	local mh = WornLink(c, 16)
 	local _, mhLoc = mh and Instant(mh)
@@ -295,7 +296,13 @@ local function Current(c, equipLoc, class, tree)
 	return Of(slots[1])
 end
 
--- how much better for c (a fraction; nil: not an upgrade, or not known yet), and the level it needs
+-- an item's armor (plain white gear has nothing else)
+local function ArmorOf(link) local s = Stats(link) return s and s.armor or 0 end
+
+-- how much better for c (a fraction; nil: not an upgrade, or not known yet), the level it needs,
+-- whether the slot is empty, and the armor gained when armor decided it
+-- (Shannon's screenshot, Frayed Pants 4 armor over Novice's Pants 2: plain white gear scores
+-- nothing on a spec's stats, so when the stats can't tell the two apart, the armor does)
 local function Better(c, item, isMe)
 	local id, equipLoc, classID, subID = Instant(item)
 	if not id or not SLOTS[equipLoc or ""] then return nil end
@@ -305,16 +312,30 @@ local function Better(c, item, isMe)
 	local full = Full(item)
 	local link = (full and full.link) or AsLink(type(item) == "string" and item or id)
 	local score = U.Score(link, c.class, tree)
-	if not score or score <= 0 then return nil end
+	if not score then return nil end
 	local now = Current(c, equipLoc, c.class, tree)
 	if not now then return nil end
 	local empty = now <= 0 and not U.lastWorn
-	-- (something worn that scores nothing for this spec: compared by a floor, never "an empty slot")
-	local base = empty and 0 or math.max(now, 1)
-	local pct = empty and 1 or (score - base) / base
+	local pct, armor
+	if empty then
+		-- (anything with a stat for the spec, or armor, beats nothing)
+		if score <= 0 and ArmorOf(link) <= 0 then return nil end
+		pct = 1
+	elseif (score < 1 and now < 1) or math.abs(score - now) < 0.001 then
+		-- the spec's stats can't tell them apart (no stats worth a point, or equal): more armor wins
+		local mine = ArmorOf(link)
+		local worn = Current(c, equipLoc, c.class, tree, ArmorOf)
+		if not worn or mine <= 0 then return nil end
+		pct = (mine - worn) / math.max(worn, 1)
+		armor = mine - worn
+	else
+		if score <= 0 then return nil end
+		-- (something worn that scores nothing for this spec: compared by a floor, never "an empty slot")
+		pct = (score - math.max(now, 1)) / math.max(now, 1)
+	end
 	if pct < THRESHOLD then return nil end
 	local need = full and full.minLevel or 0
-	return pct, specName, (need > (c.level or 1)) and need or nil, empty
+	return pct, specName, (need > (c.level or 1)) and need or nil, empty, armor
 end
 
 ---------------------------------------------------------------------------
@@ -366,16 +387,16 @@ function U:For(item)
 	if not me then return nil end
 	local id = Instant(item)
 	local result = { others = {} }
-	local pct, spec, level, empty = Better(me, item, true)
-	if pct then result.me = { pct = pct, spec = spec, level = level, empty = empty } end
+	local pct, spec, level, empty, armor = Better(me, item, true)
+	if pct then result.me = { pct = pct, spec = spec, level = level, empty = empty, armor = armor } end
 	local full = Full(item)
 	local bop = full and full.bind == 1
 	local inv = INV()
 	for _, c in ipairs(inv and inv.Characters and inv:Characters(false) or {}) do
 		if c.key ~= me.key then
-			local p, s, lvl, emp = Better(c, item, false)
+			local p, s, lvl, emp, arm = Better(c, item, false)
 			if p then
-				local entry = { c = c, pct = p, spec = s, level = lvl, empty = emp }
+				local entry = { c = c, pct = p, spec = s, level = lvl, empty = emp, armor = arm }
 				-- (only a character it can reach: same realm and faction, and a copy that isn't bound)
 				local reachable = c.realm == me.realm and c.faction == me.faction
 				if reachable then
@@ -408,7 +429,11 @@ function U:RowMark(item)
 	end
 end
 
-local function Pct(p, empty) return empty and L["an empty slot"] or ("+%d%%"):format(math.floor(p * 100 + 0.5)) end
+local function Pct(p, empty, armor)
+	if empty then return L["an empty slot"] end
+	if armor then return (L["+%d Armor"]):format(armor) end
+	return ("+%d%%"):format(math.floor(p * 100 + 0.5))
+end
 local function Name(c) return ns.CharName and c.key and ns.CharName(c.key, true) or c.name or "?" end
 
 -- the lines for a tooltip or the item page: { text, r, g, b }
@@ -417,14 +442,14 @@ function U:Lines(item)
 	if not r then return {} end
 	local out = {}
 	if r.me then
-		local t = (L["Upgrade for you (%s): %s"]):format(r.me.spec or "?", Pct(r.me.pct, r.me.empty))
+		local t = (L["Upgrade for you (%s): %s"]):format(r.me.spec or "?", Pct(r.me.pct, r.me.empty, r.me.armor))
 		if r.me.level then t = t .. "  ·  " .. (L["at level %d"]):format(r.me.level) end
 		out[#out + 1] = { self.Arrow(false) .. " " .. t .. "  |cff999999·  " .. L["rough guide"] .. "|r", 0.6, 0.9, 0.4 }
 	end
 	for _, o in ipairs(r.others) do
 		local who = ("%s (%s)"):format(Name(o.c), o.spec or "?")
 		if o.reach then
-			local t = (L["Upgrade for %s: %s"]):format(who, Pct(o.pct, o.empty)) .. "  ·  " .. o.reach
+			local t = (L["Upgrade for %s: %s"]):format(who, Pct(o.pct, o.empty, o.armor)) .. "  ·  " .. o.reach
 			if o.level then t = t .. "  ·  " .. (L["at level %d"]):format(o.level) end
 			out[#out + 1] = { self.Arrow(true) .. " " .. t, 1, 0.8, 0.25 }
 		else

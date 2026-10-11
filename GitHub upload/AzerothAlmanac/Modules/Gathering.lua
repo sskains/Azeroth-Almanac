@@ -286,6 +286,7 @@ local function OnLoot()
 				if kind and kind ~= "fish" or not rec.kind then rec.kind = okind end
 				rec.ids = rec.ids or {}
 				rec.ids[o.id] = true
+				G:FixKind(rec)
 				Fill(rec, o.items, where)
 				G:Tally(G:Prof(rec), o.items)
 				Skill(rec, rec.kind)
@@ -518,6 +519,7 @@ local function PickedChest()
 		rec.kind = rec.kind or "chest"
 	end
 	if id then rec.ids = rec.ids or {} rec.ids[id] = true end
+	G:FixKind(rec)
 	return rec, name
 end
 
@@ -580,6 +582,20 @@ local function KindOf(name)
 	if k == "herb" or k == "ore" or k == "chest" then return k end
 end
 
+-- (Shannon's screenshot: Earthroot under Treasure) a herb or vein is one whatever opened it: picked
+-- without the gathering cast being seen, or taken for a chest at first, it still needs Herbalism or
+-- Mining. The skill it needs (the database's lock, or the game's tooltip) or its name says which.
+function G:FixKind(rec)
+	if type(rec) ~= "table" or rec.kind == "herb" or rec.kind == "ore" then return end
+	local skill = self:Needs(rec)
+	local k = (skill == 2 and "herb") or (skill == 3 and "ore") or nil
+	if not k and rec.name then
+		local named = KindOf(rec.name)
+		if named == "herb" or named == "ore" then k = named end
+	end
+	if k then rec.kind = k return true end
+end
+
 -- everything the object can hold is a quest item (by the Classic records)
 local function QuestOnlyObject(id)
 	local list = ns.ItemDB and ns.ItemDB:ObjectLoot(id) or {}
@@ -612,6 +628,7 @@ function G:Sight()
 	if not rec then return end
 	rec.kind = rec.kind or kind
 	if id then rec.ids = rec.ids or {} rec.ids[id] = true end
+	G:FixKind(rec)
 	rec.sighted = (rec.sighted or 0) + 1
 	if where.map then
 		rec.sz = rec.sz or {}
@@ -632,6 +649,7 @@ local function Tidy()
 	local nodes = ns.Store:All("node")
 	local removed = false
 	for name, rec in pairs(nodes) do
+		if G:FixKind(rec) then removed = true end
 		if rec.kind ~= "herb" and rec.kind ~= "ore" and OnlyQuestItems(rec.items) then nodes[name] = nil removed = true end
 	end
 	if removed then ns:Fire("CHANGED", "node") end

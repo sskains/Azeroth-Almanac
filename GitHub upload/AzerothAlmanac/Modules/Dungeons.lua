@@ -10,6 +10,24 @@
 local _, ns = ...
 local L = ns.L
 local D = ns:NewModule("Dungeons")
+
+-- (2026-10-10) the dungeon seeder (/aa seeddungeons, a development tool) is gone: any test records it
+-- left (marked `seeded`) come out once, at load. Nothing you recorded yourself is touched.
+function D:OnInitialize(db)
+	if not db or db.seedCleared then return end
+	db.seedCleared = true
+	local found = db.found or {}
+	for id, rec in pairs(found.instance or {}) do
+		if type(rec) == "table" then
+			if rec.seeded then found.instance[id] = nil
+			else for k, b in pairs(rec.bosses or {}) do if type(b) == "table" and b.seeded then rec.bosses[k] = nil end end end
+		end
+	end
+	for npc, c in pairs(found.creature or {}) do if type(c) == "table" and c.seeded then found.creature[npc] = nil end end
+	for _, c in pairs(db.chars or {}) do
+		for id, r in pairs(type(c) == "table" and c.runs or {}) do if type(r) == "table" and r.seeded then c.runs[id] = nil end end
+	end
+end
 local R = ns.Readable
 
 ---------------------------------------------------------------------------

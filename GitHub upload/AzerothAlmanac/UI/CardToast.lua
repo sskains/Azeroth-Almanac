@@ -111,7 +111,9 @@ local function Anchor(f)
 	end
 	local bag = Bag()
 	if bag then
-		f:SetPoint("BOTTOMRIGHT", bag, "TOPRIGHT", 30, 14 + RAISE)
+		-- (Shannon, 2026-10-10: 100 further right than it was; kept on screen)
+		if f.SetClampedToScreen then f:SetClampedToScreen(true) end
+		f:SetPoint("BOTTOMRIGHT", bag, "TOPRIGHT", 130, 14 + RAISE)
 	else
 		f:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -20, 110 + RAISE)
 	end
