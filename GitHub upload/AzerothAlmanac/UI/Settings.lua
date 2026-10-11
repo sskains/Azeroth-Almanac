@@ -25,6 +25,8 @@ local PAD = 12
 
 local frame
 local pages, navRows = {}, {}
+-- (2026-10-11) every tick box by its label, for the welcome guide (UI\Welcome.lua): { get, set, tip, page }
+local CONTROLS = {}
 local refreshers = {}
 local function Refresh()
 	for _, fn in ipairs(refreshers) do pcall(fn) end
@@ -199,6 +201,7 @@ function Layout:Check(label, tip, get, set, indent)
 	hit:EnableMouse(true)
 	hit:SetScript("OnMouseUp", function() cb:Click() end)
 	tinsert(refreshers, function() cb:SetChecked(get() and true or false) end)
+	if type(label) == "string" and not CONTROLS[label] then CONTROLS[label] = { get = get, set = set, tip = tip, page = self.pageID } end
 	self.y = self.y + 28
 	return cb, fs
 end
@@ -437,6 +440,8 @@ local function BuildGeneral(P)
 			if ns.NodePins and ns.NodePins.ResetMiniButton then ns.NodePins:ResetMiniButton() ns.NodePins:Refresh() end
 		end },
 	})
+	-- (2026-10-11) the guide new characters see once
+	P:Buttons({ { L["Show the welcome guide"], 190, function() if ns.Welcome then ns.Welcome:Show(1) end end } })
 
 	P:Section(L["Almanac players"], L["Other players running Azeroth Almanac (your guild, group, online friends, and players you target or mouse over) are found with hidden addon messages, so features like Murloc Tac Toe know who can play. Nothing goes to a public channel."])
 	P:Check(L["Let other Almanac players see me"], L["Off: your Almanac never says hello or answers; it only notices others' hellos."],
@@ -455,7 +460,7 @@ local function BuildGeneral(P)
 	P:Text(L["Open or close the Almanac  •  Open Almanac settings  •  Characters (bags, bank, gear)  •  Gem Match\nTarget nearest selected quest mob  •  Clear markers on nearby quest mobs"])
 
 	P:Section(L["Slash commands"])
-	P:Text("|cffffd100/aa|r " .. L["the Almanac"] .. "      |cffffd100/aa settings|r " .. L["this window"] .. "      |cffffd100/aa stats|r " .. L["what's recorded"] .. "\n"
+	P:Text("|cffffd100/aa|r " .. L["the Almanac"] .. "      |cffffd100/aa settings|r " .. L["this window"] .. "      |cffffd100/aa stats|r " .. L["what's recorded"] .. "      |cffffd100/aa welcome|r " .. L["the welcome guide"] .. "\n"
 		.. "|cffffd100/aa scan|r " .. L["full auction house scan"] .. "      |cffffd100/aa inv|r " .. L["Characters: bags, bank, gear"] .. "      |cffffd100/aa games|r " .. L["Gem Match"] .. "      |cffffd100/aa mtt|r " .. L["Murloc Tac Toe"] .. "\n"
 		.. "|cffffd100/aa heal|r " .. L["Healer Assist (test, debug, on, off)"] .. "      |cffffd100/aa threat|r " .. L["threat preview"] .. "\n"
 		.. "|cffffd100/aa ranks|r " .. L["old spell ranks on your bars"] .. "      |cffffd100/aa node herb/ore/chest/other|r " .. L["classify the node you face"] .. "      |cffffd100/qt|r " .. L["quest tracker buttons"])
@@ -607,6 +612,13 @@ local function BuildTiers(P)
 				if r[8] then
 					local card = MiniCard(f, 38, r[1], r[8])
 					card:SetPoint("TOPLEFT", w - 66, y - 2)
+				elseif r[9] then
+					-- (2026-10-11) a tier that gives no card (Sighted: a card is earned by the kill)
+					local none = Font(f, "GameFontDisableSmall", 0.6, 0.6, 0.6)
+					none:SetPoint("TOPLEFT", w - 74, y - 18)
+					none:SetWidth(70)
+					none:SetJustifyH("CENTER")
+					none:SetText(r[9])
 				end
 				-- a faint rule between rows
 				if k < #rows then
@@ -622,12 +634,12 @@ local function BuildTiers(P)
 
 	-- 1. creatures
 	if B then
-		P:Section(L["Creatures"], L["Every creature you meet climbs these tiers as you kill it. Each tier reveals more of it on the Creatures page, and makes its Wild Gambit card stronger. Tiers are shared by all your characters."])
+		P:Section(L["Creatures"], L["Every creature you meet climbs these tiers as you kill it. Each tier reveals more of it on the Creatures page. Your first kill earns its Wild Gambit card, and every tier after that makes the card stronger. Tiers are shared by all your characters."])
 		local n, r = B.TIER_KILLS.normal, B.TIER_KILLS.rare
 		local needs = { { L["Seen once"] }, { 1 }, { n.studied, r.studied }, { n.mastered, r.mastered }, { n.revered, r.revered }, { n.exalted, r.exalted } }
 		local reveals = {
 			L["Name, level, type and rarity; where you met it."],
-			L["Health, armour, melee damage and the money it drops."],
+			L["Health, armour, melee damage and the money it drops. Earns its Wild Gambit card."],
 			L["Every ability it can use, including ones you've never seen."],
 			L["Immunities, resistances, the full loot table with drop chances, and skinning."],
 			L["A milestone: you know it by heart."],
@@ -642,7 +654,8 @@ local function BuildTiers(P)
 			if t == 2 then sub = L["Rares and bosses too"] end
 			local alert = alerts[t] and (Hex(Color(alerts[t] + 1)) .. ALERT[alerts[t]] .. "|r" .. (t == 4 and L[" · counts toward the Master Hunter milestones"] or "")) or nil
 			local bonus = WL and WL.BONUS[t] or (t - 1)
-			rows[t] = { t, B:TierIcon(t), B.TIERS[t], need, sub, reveals[t], alert, "+" .. bonus }
+			-- (Sighted gives no card: the first card is Fought, earned by the kill)
+			rows[t] = { t, B:TierIcon(t), B.TIERS[t], need, sub, reveals[t], alert, t > 1 and ("+" .. bonus) or nil, t == 1 and L["No card"] or nil }
 		end
 		Ladder({ L["Tier"], L["What it reveals"], L["Kills needed"], WL and L["Card"] or nil }, rows)
 	end
@@ -669,7 +682,7 @@ local function BuildTiers(P)
 
 	-- 3. Wild Gambit
 	if WL and B then
-		P:Section(L["Wild Gambit"], L["Every creature you've slain is a card (seeing one isn't enough: Fought is the first card). People you can't fight earn you their card by beating them at Wild Gambit: 1 win for Fought, then 3, 5, 10 and 20. Its spikes (its strength on the board) come from its level and its tier, so the more you hunt a creature, the stronger its card."])
+		P:Section(L["Wild Gambit"], L["Every creature you've slain is a card: seeing one isn't enough, the first kill earns it at Fought. People earn you their card when you beat them at Wild Gambit (see below). A card's spikes (its strength on the board) come from its level and its tier, so the more you hunt a creature, the stronger its card."])
 		P:Custom(196, function(f, w)
 			-- the formula: [level] + [tier] = [spikes]
 			local boxes = {
@@ -699,10 +712,11 @@ local function BuildTiers(P)
 			cap:SetPoint("TOPLEFT", 0, -78)
 			cap:SetText(L["The same level 30 creature at each tier:"])
 			local cw = 54
-			local gap = (w - 60 - 6 * cw) / 5 -- (room for the last name, centred under its card)
-			for t = 1, 6 do
+			local gap = (w - 60 - 5 * cw) / 4 -- (room for the last name, centred under its card)
+			-- (2026-10-11) from Fought: Sighted gives no card
+			for t = 2, 6 do
 				local card = MiniCard(f, cw, t, tostring(WL.Total(30, t)))
-				card:SetPoint("TOPLEFT", (t - 1) * (cw + gap), -96)
+				card:SetPoint("TOPLEFT", (t - 2) * (cw + gap), -96)
 				local c = Color(t)
 				local nm = Font(f, "GameFontHighlightSmall", c[1], c[2], c[3])
 				nm:SetPoint("TOP", card, "BOTTOM", 0, -2)
@@ -714,8 +728,26 @@ local function BuildTiers(P)
 		end)
 		local HA = WL.HERO_AT or { 10, 25, 50, 100 }
 		P:Text(L["|cffffd100Frames:|r a gold inner line from Hunted; comets run round the edge: one at Master Hunter, two at Epic, three at Legendary."])
-		P:Text(("|cffffd100%s|r %s"):format(L["Head starts:"], L["elites and rares are never below Hunted; rare elites and dungeon bosses never below Master Hunter; your companions start at Fought."]))
+		P:Text(("|cffffd100%s|r %s"):format(L["Head starts:"], L["elites and rares are never below Hunted; rare elites, bosses and faction leaders never below Master Hunter."]))
 		P:Text(("|cffffd100%s|r " .. L["starts at Fought and climbs with the creatures you've mastered: Hunted at %d, Master Hunter at %d, Epic at %d and Legendary at %d creatures at Master Hunter or above."]):format(L["Your hero card"], HA[1], HA[2], HA[3], HA[4]))
+		P:Text(("|cffffd100%s|r %s"):format(L["Your companion"], L["(a hunter's pet or a warlock's demon, added from its portrait's menu) has the same quality as your hero card, and rises with it."]))
+		P:Text(("|cffffd100%s|r %s"):format(L["Starter cards:"], L["a new character has a few meadow critters to play with; they leave your deck as real cards come in."]))
+		P:Text(("|cffffd100%s|r %s"):format(L["Not yet earned:"], L["a creature you've seen but not slain shows in an iron ring: slay it to earn its card. Each card earned or upgraded pops up as the card itself (Discovery alerts > Card toasts)."]))
+
+		-- (2026-10-11) people: a card for a win
+		P:Section(L["People and Wild Gambit"], L["People earn you their card when you beat them at Wild Gambit (right-click their portrait > Play Wild Gambit). Each person counts on their own; abandoned or called-off games don't count. They play harder as your card for them climbs."])
+		local WA = WL.WIN_AT or { 1, 3, 5, 10, 20 }
+		local prow = {}
+		for t = 2, 6 do
+			local wins = WA[t - 1]
+			prow[#prow + 1] = { t, B:TierIcon(t), B.TIERS[t], ns.N(wins, L["win"], L["wins"]), nil,
+				t == 2 and L["The card is earned."] or L["A stronger card, and a stronger opponent."], nil, "+" .. (WL.BONUS[t] or (t - 1)) }
+		end
+		Ladder({ L["Tier"], "", L["Wins needed"], L["Card"] }, prow)
+		P:Text(("|cffffd100%s|r %s"):format(L["Friendly people"], L["(your faction's guards, merchants, trainers, quest givers): wins only."]))
+		P:Text(("|cffffd100%s|r %s"):format(L["Neutral people"], L["(yellow names): a kill or a win, whichever comes first; the higher tier of the two counts."]))
+		P:Text(("|cffffd100%s|r %s"):format(L["Enemies"], L["(the other faction): the kill earns the card, as for creatures; after that, wins count too."]))
+		P:Text(("|cffffd100%s|r %s"):format(L["Head starts:"], L["guards and other elites start at Hunted, faction leaders at Master Hunter; their next step is the next number of wins in the table (a guard's first win gives Hunted, then Master Hunter at 5)."]))
 	end
 
 	-- 4. your progress (this account's own counts; no totals to reach)
@@ -815,7 +847,15 @@ local function BuildQuests(P)
 	P:Section(L["Tracker buttons"])
 	P:Check(L["Target buttons in the quest tracker"], L["A sword beside each kill or loot objective targets the nearest matching mob (also on a hotkey)."],
 		function() return db.enabled end, function(v) db.enabled = v R() end)
-	P:Check(L["Show how many are nearby"], L["Counts living mobs with a visible nameplate, so enemy nameplates need to be on (V key)."],
+	-- (2026-10-11, DESIGN 98) the navigation arrow: to your map pin, else the quest you've Focused
+	local nav = Opt().nav
+	local function RN() if ns.NavArrow then ns.NavArrow:Refresh() end end
+	P:Check(L["Navigation arrow"], L["A gold arrow at the top of the screen that leads you to your map pin, or, with no pin, to the quest you've Focused in the quest tracker (right-click a quest > Focus): its turn-in once it's complete, else the nearest place you've seen what it asks for. Shift-drag to move it."],
+		function() return nav.enabled ~= false end, function(v) nav.enabled = v RN() end)
+	P:Check(L["Remove the map pin when I arrive"], nil, function() return nav.clearPin ~= false end, function(v) nav.clearPin = v end, 1)
+	P:Check(L["Show the time to get there"], nil, function() return nav.eta ~= false end, function(v) nav.eta = v RN() end, 1)
+	P:Stepper(L["Arrow size %"], 60, 160, 10, function() return math.floor((nav.scale or 1) * 100 + 0.5) end, function(v) nav.scale = v / 100 RN() end, 1)
+	P:Check(L["Show how many are nearby"], L["Counts living mobs with a visible nameplate (on screen, up to 45 yards: WoW Forever's nameplate limit; a mob seen in the last minute stays counted when you turn away). While the buttons are on, the Almanac keeps enemy nameplates showing, in combat and out, and puts your own nameplate settings back when you turn them off."],
 		function() return db.showCounts end, function(v) db.showCounts = v R() end, 1)
 	P:Check(L["Quest mob's face in the sword badges"], L["The mob's portrait with a small sword in the corner."],
 		function() return db.mobFaces end, function(v) db.mobFaces = v R() end, 1)
@@ -962,7 +1002,7 @@ local function BuildAuction(P)
 	P:Check(L["Whole-stack price while holding Shift"], nil, function() return db.stackOnShift end, function(v) db.stackOnShift = v end, 1)
 
 	P:Section(L["Selling"])
-	P:Check(L["Alt+Right-click a bag item to sell it"], L["With the Auctions tab open: the whole stack goes into the sell slot, priced 1% under the lowest price from your last scan. Press Enter, or Alt+Right-click it again, to post it."],
+	P:Check(L["Alt+Right-click a bag item to sell it"], L["With the Auction House open (any tab: it switches to selling): the whole stack goes into the sell slot, priced at the lowest price listed (or from your last scan). Press Enter, or Alt+Right-click it again, to post it."],
 		function() return db.altPost ~= false end, function(v) db.altPost = v end)
 
 	P:Section(L["Scanning"], L["Open the auction house and press \"Full scan\" (or /aa scan). The game allows one full scan every 15 minutes."])
@@ -1413,6 +1453,8 @@ local function BuildGambit(P)
 		for i, t in ipairs(boards) do if t.key == (db.board or Q.WildGambit.DEFAULT_BOARD or "Glade") then return i end end
 		return 1
 	end, function(i) db.board = boards[i].key Q.WildGambit:ApplyBoard() end)
+	P:Check(L["Card voices"], L["A played card speaks: townsfolk, guards and enemies of the playable races say a greeting; other creatures give their battle cry. From the game's own sounds, 3 seconds at most."],
+		function() return db.voices ~= false end, function(v) db.voices = v end)
 	P:Check(L["Holiday boards"], L["During Hallow's End (18 October - 1 November) and the Feast of Winter Veil (16 December - 2 January) the board dresses for the season, whichever board you picked."],
 		function() return db.holidayBoards ~= false end, function(v) db.holidayBoards = v Q.WildGambit:ApplyBoard() end)
 	local docks = Q.WildGambit.DOCKS
@@ -1874,3 +1916,13 @@ function S:ResetPosition()
 end
 
 function S:IsShown() return frame and frame:IsShown() end
+
+-- (2026-10-11) a tick box's own get / set by its label, for the welcome guide: builds the settings
+-- pages (hidden) the first time, so the guide changes exactly what Settings changes
+function S:Control(label)
+	if not CONTROLS[label] then
+		if not frame then Build() end
+		for _, d in ipairs(PAGE_LIST) do if d.id and not pages[d.id] then pages[d.id] = BuildPage(d) pages[d.id]:Hide() end end
+	end
+	return CONTROLS[label]
+end

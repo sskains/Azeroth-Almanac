@@ -411,6 +411,8 @@ function TM:OnLogin()
 	events:SetScript("OnEvent", function(_, event)
 		if event == "PLAYER_REGEN_DISABLED" then StartTicker()
 		elseif event == "PLAYER_REGEN_ENABLED" then StopTicker()
+		elseif event == "PLAYER_TARGET_CHANGED" then
+			if ticker then Tick() end -- (2026-10-11) a new target in combat: the meter follows at once
 		elseif not ticker and db.enabled then
 			-- threat can start before your own combat does (a pet or the tank pulling)
 			if event == "UNIT_THREAT_LIST_UPDATE" then StartTicker() C_Timer.After(6, function()

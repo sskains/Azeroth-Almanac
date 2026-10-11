@@ -8,7 +8,7 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "0.69.0"
+ns.VERSION = "0.70.0"
 -- (0.69.0) the Almanac's own art: the logo (a closed crimson journal, its gold compass) and the journal
 -- badge (the open journal, a page burning with gold writing), for journal entries
 ns.ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_Almanac"
@@ -28,6 +28,7 @@ ns.defaults = {
 	bestiary = { tooltip = true },
 	peers = { share = true, tooltip = true, nudge = true, accepted = nil },
 	nodes = { map = true, minimap = true, herb = true, ore = true, chest = true, sighted = true, size = 14, mmSize = 7, mmButton = true },
+	nav = { enabled = true, clearPin = true, eta = true, scale = 1 },
 	townsfolk = { enabled = true, mapHidden = false, factionOnly = true, myClassOnly = true, continent = false, rims = false, size = 16, groups = {} },
 	journalMax = 5000,
 	debug = false,
@@ -434,6 +435,10 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.Store:PrintStats()
 	elseif cmd == "minimap" then
 		ns.MinimapButton:SetShown(not ns.db.settings.minimap.show)
+	elseif cmd == "navprobe" then
+		if ns.NavArrow and ns.NavArrow.Probe then ns.NavArrow:Probe(rest) end
+	elseif cmd == "welcome" then
+		if ns.Welcome then ns.Welcome:Show(1) end
 	elseif cmd == "where" then
 		-- (0.69.1) what the game says about where you are (dungeons it won't name)
 		if ns.Dungeons and ns.Dungeons.Report then ns.Dungeons:Report() end

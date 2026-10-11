@@ -450,7 +450,8 @@ function WG.AddWin(opp)
 		if A.CardToast then pcall(A.CardToast.Add, A.CardToast, opp.npc, before, after, w.name) end
 		local c = WL.COLORS[after] or { 1, 1, 1 }
 		local tierText = ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, WL.TIERS[after])
-		Tell((before < 2 and "you've earned %s's card: %s." or "%s's card is now %s."):format(w.name or "?", tierText))
+		-- (ns.Print: the file's Tell is declared further down, so it was nil here: 2026-10-11)
+		ns.Print("|cff9be36bWild Gambit:|r " .. (before < 2 and "you've earned %s's card: %s." or "%s's card is now %s."):format(w.name or "?", tierText))
 	end
 	return w.w
 end
@@ -3433,8 +3434,13 @@ local function Build()
 		-- looking for a match: the seconds tick on, on its tile
 		if WG.queue and self.lobby and self.lobby:IsVisible() then
 			local secs = math.floor(GetTime() - WG.queue.since)
-			self.lobby.tiles.match.name:SetText(("Looking...  %d:%02d\n|cff999999Your guild, group, Almanac players you've met%s.|r"):format(
+			local tile = self.lobby.tiles.match
+			if tile.secs ~= secs then tile.secs = secs -- (once a second, not every frame; 2026-10-11)
+			tile.name:SetText(("Looking...  %d:%02d\n|cff999999Your guild, group, Almanac players you've met%s.|r"):format(
 				math.floor(secs / 60), secs % 60, WG.queue.channel and " and the realm" or ""))
+			end
+		elseif self.lobby and self.lobby.tiles.match.secs then
+			self.lobby.tiles.match.secs = nil -- (the next search starts its clock afresh)
 		end
 		for _, c in ipairs(self.cards) do
 			if c.flashT then
@@ -3988,6 +3994,7 @@ function WG.RecordResult(forfeit)
 	local lost = (forfeit == "me") or (not forfeit and theirs > mine)
 	if won then p.w = p.w + 1 elseif lost then p.l = p.l + 1 else p.d = p.d + 1 end
 	g.result = { mine = mine, theirs = theirs, won = won, lost = lost, p = p, forfeit = forfeit }
+	WG.SaveClear() -- (2026-10-11) counted now: a /reload before the game's end screen mustn't count it again
 	-- (#54) a practice game won against a creature or NPC counts towards its card
 	if won and not g.pvp and not g.tutorial and g.opp and g.opp.npc then pcall(WG.AddWin, g.opp) end
 	return g.result
@@ -4061,6 +4068,9 @@ end
 local function FlyToBoard(f, cell, onLand)
 	local sx, sy = f.hx, f.hy
 	local bx, by = SlotCenter(cell)
+	-- (2026-10-11) a game resumed after /reload lands its moves at once, silently (in flight, they
+	-- landed after the replay was over and every sound and voice played together)
+	if game and game.replaying then PutOnBoard(f, cell) onLand() return end
 	if not (sx and sy and frame:GetWidth()) then PutOnBoard(f, cell) onLand() return end
 	if f.flipAt then f:FaceDown(false) end
 	f.inHand = false
@@ -4069,6 +4079,37 @@ local function FlyToBoard(f, cell, onLand)
 	game.flying = (game.flying or 0) + 1
 	tinsert(frame.anims, { f = f, kind = "fly", t = 0, sx = sx, sy = sy, s0 = f.baseScale,
 		tx = frame:GetWidth() / 2 - BW / 2 + bx, ty = BOARD_TOP + by, cell = cell, done = onLand })
+end
+
+-- (Shannon, 2026-10-11; DESIGN 96) a played card speaks: the creature's own greeting (spoken words,
+-- for the races' townsfolk, guards and enemies), else its battle cry, else its attack grunt; from
+-- Data\CreatureVoices.lua (the game's sound tables). Your hero card is silent. Cut off at 3 seconds;
+-- a new voice stops the last one. Settings > Wild Gambit > "Card voices".
+WG.VOICE_MAX = 3
+function WG.VoiceKit(card)
+	local V = A.DB and A.DB.voices
+	if not (V and card) or card.hero or card.class == "hero" then return nil end
+	local i = (card.display and V.DISPLAY[card.display]) or (card.npc and V.NPC[card.npc])
+	local set = i and V.SETS[i]
+	if not set then return nil end
+	if set[1] > 0 then return set[1], "words" end
+	if set[2] > 0 then return set[2], "cry" end
+	if set[3] > 0 then return set[3], "grunt" end
+end
+function WG.CardVoice(card, force)
+	if not force and not (db and db.sound and db.voices ~= false) then return end
+	if not force and game and game.replaying then return end
+	local kit, kind = WG.VoiceKit(card)
+	if not (kit and PlaySound) then return nil end
+	if WG.voiceHandle and StopSound then pcall(StopSound, WG.voiceHandle, 200) end
+	local ok, willPlay, handle = pcall(PlaySound, kit, "SFX")
+	if ok and willPlay and handle then
+		WG.voiceHandle = handle
+		C_Timer.After(WG.VOICE_MAX, function()
+			if WG.voiceHandle == handle then pcall(StopSound, handle, 300) WG.voiceHandle = nil end
+		end)
+	end
+	return kit, kind
 end
 
 local function Play1(side, h, cell)
@@ -4091,6 +4132,7 @@ local function Play1(side, h, cell)
 		entry.frame:FitModel()
 	end
 	Play(SND.place)
+	WG.CardVoice(card)
 	Flash(entry.frame, game.color[side])
 	if got[1] and got[1].trap then
 		-- walked into a Freezing Trap: frozen, and the trapper's now (unless an ankh saves it)
@@ -5967,6 +6009,7 @@ local function OnMessage(text, sender)
 				game.seq = seq
 				if kind == "M" then
 					local h, cell = tonumber(f[5]), tonumber(f[6])
+					if cell and cell ~= math.floor(cell) then cell = nil end -- (2026-10-11: whole cells only)
 					local sum = f[7] ~= "-" and f[7] or nil
 					if h and cell and game.hands.bot[h] and cell >= 1 and cell <= 9 and not game.board[cell] then
 						-- (#59 part 2) the boards must still agree once it's played
@@ -6034,6 +6077,10 @@ local function OnMessage(text, sender)
 		if frame:IsShown() and not (game and not game.over) then WG:ShowLobby() end
 	elseif kind == "S" then
 		net.oppBest, net.oppClass, net.oppNonce = tonumber(f[4]), f[5], tonumber(f[6])
+		-- (2026-10-11) numbers from the other side: finite, and the nonce a whole number in range
+		if net.oppBest and not (net.oppBest == net.oppBest and math.abs(net.oppBest) < 1e6) then net.oppBest = nil end
+		local n = net.oppNonce
+		if n and not (n == n and n >= 0 and n < 2147483647 and n == math.floor(n)) then net.oppNonce = nil end
 		net.oppRace, net.oppSex = f[7] ~= "-" and f[7] or nil, tonumber(f[8])
 		if frame.prep:IsVisible() then PaintPlayer(frame.players.bot, Short(sender), { player = sender, race = net.oppRace, sex = net.oppSex }) end
 		if not (net.oppBest and WL.ABILITIES[net.oppClass or ""] and net.oppNonce) then return end
@@ -6777,6 +6824,20 @@ function WG:Command(rest)
 	elseif low == "leave" then self:Leave()
 	elseif low == "tutorial" or low == "learn" or low == "howto" then self:Tutorial()
 	elseif low == "pet" then self:AddPet()
+	elseif low == "voice" or low:match("^voice ") then
+		-- /aa gambit voice [creature ID or name]: hear what its card says (your target with nothing given)
+		local what = strtrim(rest:sub(6))
+		local npc = tonumber(what)
+		if what == "" and UnitExists and UnitExists("target") then npc = A.NpcFromGuid and A.NpcFromGuid(A.Readable(UnitGUID("target"))) end
+		if not npc and what ~= "" then
+			for id, rec in pairs(A.Store:All("creature")) do
+				if type(rec) == "table" and rec.name and rec.name:lower() == what:lower() then npc = id break end
+			end
+		end
+		if not npc then Tell("/aa gambit voice <creature ID or name you've met>, or target a creature.") return end
+		local kit, kind = WG.CardVoice({ npc = npc }, true)
+		Tell(kit and ("creature %d: %s (sound kit %d)."):format(npc, ({ words = "its greeting", cry = "its battle cry", grunt = "its attack grunt" })[kind] or "?", kit)
+			or ("creature %d has no voice in the sound tables."):format(npc))
 	elseif low:match("^pet remove ") then self:RemovePet(strtrim(rest:sub(12)))
 	elseif low == "arttest" then
 		-- the painted board on its own in the middle of the screen, and what the game says about it

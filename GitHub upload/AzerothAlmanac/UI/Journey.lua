@@ -1221,7 +1221,7 @@ function W.JourneyPane(parent, opts)
 				p.px, p.py = px, py
 				p.segs = {}
 				p.pin, p.pinFrom, p.dot = nil, nil, nil
-				if who then p.r, p.g, p.b = GOLD[1], GOLD[2], GOLD[3] else p.r, p.g, p.b = ClassRGB(p.c) end
+				if f.drawWho then p.r, p.g, p.b = GOLD[1], GOLD[2], GOLD[3] else p.r, p.g, p.b = ClassRGB(p.c) end -- (one character: gold; was reading an unset global, 2026-10-11)
 				-- discoveries are the dots you can click; the recorder's points only carry the line
 				if p.e then
 					nd = nd + 1
@@ -1308,6 +1308,7 @@ function W.JourneyPane(parent, opts)
 		if not next(state.sel) then state.sel = { [DefaultWho()] = true } end
 		local picked, npicked = Picked()
 		local who = scope or (npicked == 1 and picked[1]) or nil
+		f.drawWho = who
 		f.who:SetShown(not scope)
 		f.who:SetText(WhoLabel())
 		f.range:SetText(RangeLabel())

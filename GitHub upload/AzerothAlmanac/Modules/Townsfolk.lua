@@ -143,6 +143,7 @@ end
 -- a map's corners in world coordinates, from the client: { inst, top, left, bottom, right } or false
 local rects = {}
 local function MapRect(uiMap)
+	if not uiMap then return false end -- (no map: in an instance or a loading screen; 2026-10-11)
 	if rects[uiMap] ~= nil then return rects[uiMap] end
 	rects[uiMap] = false
 	if not (uiMap and C_Map and C_Map.GetWorldPosFromMapPos and CreateVector2D) then return false end
@@ -713,7 +714,8 @@ ns:RegisterEvent("ADDON_LOADED", function(_, name)
 end)
 
 function TF:Refresh()
-	if self.provider then pcall(self.provider.RefreshAllData, self.provider) end
+	-- (2026-10-11) the map's pins only matter while the map is open (it refreshes them when it opens)
+	if self.provider and WorldMapFrame and WorldMapFrame:IsShown() then pcall(self.provider.RefreshAllData, self.provider) end
 	if self.button then self.button:UpdateLook() end
 	if popup and popup:IsShown() then popup:Hide() popup:Show() end
 end

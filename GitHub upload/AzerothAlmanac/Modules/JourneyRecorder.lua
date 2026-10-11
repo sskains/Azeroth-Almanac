@@ -53,7 +53,9 @@ local function Write(kind, force)
 	if not (w.map and w.x and w.y) then return end
 	local now = time()
 	local wx, wy = World()
-	if last and not force and not kind and last.m == w.map then
+	-- (2026-10-11) a ride or ghost run already under way (its mark same as the last point's) moves
+	-- like a walk: a point once you've gone far enough, not every 5 s standing at the spirit healer
+	if last and not force and (not kind or kind == last.k) and last.m == w.map then
 		local far
 		if wx and last.wx then far = ((wx - last.wx) ^ 2 + (wy - last.wy) ^ 2) >= MIN_YARDS * MIN_YARDS
 		else far = math.abs(w.x - last.x) + math.abs(w.y - last.y) >= MIN_PERCENT end
@@ -65,7 +67,7 @@ local function Write(kind, force)
 	local s = Store()
 	local entry = ("%d:%d:%.1f:%.1f%s;"):format(now - DayStart(now), w.map, w.x, w.y, kind and (":" .. kind) or "")
 	s[day] = (s[day] or "") .. entry
-	last = { m = w.map, x = w.x, y = w.y, wx = wx, wy = wy, t = now }
+	last = { m = w.map, x = w.x, y = w.y, wx = wx, wy = wy, t = now, k = kind }
 end
 
 function JR:Tick()

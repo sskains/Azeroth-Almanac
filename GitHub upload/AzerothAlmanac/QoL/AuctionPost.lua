@@ -1,7 +1,7 @@
 -- (#60, DESIGN 82) Bag to auction: Alt+Right-click an item in your bags while the Auction House is
--- open on its selling tab and it goes into the sell frame, the whole stack, priced 1% under the
--- lowest price known. Enter, or Alt+Right-click the same item again, posts it (a click or key press
--- is the hardware event posting needs).
+-- open (on any tab: it switches to selling) and it goes into the sell frame, the whole stack, priced
+-- at the lowest price known (WoW Forever has no need to undercut: Shannon, 2026-10-11). Enter, or
+-- Alt+Right-click the same item again, posts it (a click or key press is the hardware event posting needs).
 --   Not Shift-click (links, splitting), not Ctrl-click (dressing room), not plain right-click (the
 --   game's own: it puts the item in the sell frame unpriced). Elsewhere Alt+Right-click does nothing new.
 --   Settings > Auction House > "Alt+Right-click a bag item to sell it" (on by default).
@@ -10,30 +10,25 @@
 -- "Post Auctions" with Quantity, Unit Price and Create Auction) and the old Classic one (AuctionFrame,
 -- its Auctions tab), whichever the client has.
 --   Newer: the item goes in with AuctionHouseFrame:SetPostItem; the game then searches the current
---   listings and fills in the lowest live price, so the price is set 1% under that once it arrives
---   (live beats the last scan); with no live listing, 1% under the last scan (Auction Prices).
---   Old: ClickAuctionSellItemButton, prices 1% under the last scan.
+--   listings and fills in the lowest live price, so the price is matched (in whole silver) once it arrives
+--   (live beats the last scan); with no live listing, the last scan's (Auction Prices).
+--   Old: ClickAuctionSellItemButton, priced at the last scan's lowest.
 -- Three ways in, so it works whatever draws your bags: HandleModifiedItemClick (the game's bags call
 -- it on a modified click, with the item's location), the old bags' buttons (ContainerFrame<n>Item<m>),
 -- and any Alt+right mouse press over a bag slot (GLOBAL_MOUSE_DOWN). One click is acted on once.
 -- /aa ahpost says what it sees.
--- (Shannon, 2026-10-10) Never under yourself: posting a second stack (or a second copy) of something
--- you just listed found your own auction as the lowest and went 1% under it, stack after stack. The
--- lowest live price is now the lowest that isn't yours (the search results' containsOwnerItem);
--- when your own listing is the cheapest, the new one matches it. Prices you post this session are
--- remembered too, for a client whose results don't say whose they are.
+-- (Shannon, 2026-10-11) No undercutting: the price is the lowest listed (yours or anyone's), so a
+-- second stack matches the first.
 
 local _, A = ...
 local ns = A.QoL
 local AH = ns:NewModule("AuctionPost")
 
-local UNDERCUT = 0.99           -- 1% under the lowest price (at least 1 copper under)
 local pending                   -- { bag, slot, link, name, count, filled, set, at } the item waiting
 local keys                      -- the Enter listener while an item waits to be posted
 local hooked = {}
 local lastAt = { t = 0 }        -- (one click, several ways in: acted on once)
 local seen = { mouse = 0, modified = 0 }
-local posted = {}               -- itemID -> the unit price you last posted it at (this session)
 
 local function On() return not (ns.db and ns.db.auction and ns.db.auction.altPost == false) end
 local function Tell(msg) ns.Print("|cff9be36bAuction House:|r " .. msg) end
@@ -51,20 +46,22 @@ end
 local function Money(c)
 	return (GetCoinTextureString and GetCoinTextureString(c)) or (ns.Almanac.MoneyText and ns.Almanac.MoneyText(c)) or tostring(c)
 end
-local function Undercut(low)
-	if not low or low <= 0 then return nil end
-	local each = math.floor(low * UNDERCUT)
-	if each >= low then each = low - 1 end
-	return math.max(1, each)
+-- (Shannon, 2026-10-11: frequent "Internal auction error") The newer Auction House takes prices in
+-- whole silver only: its price box has no copper, and a unit price with copper in it is refused by
+-- the server with that error. Prices for it are rounded down to the silver, 1 silver at the least.
+local function Silver(c)
+	if not c then return nil end
+	return math.max(100, math.floor(c / 100) * 100)
 end
+AH.Silver = Silver
 
--- the last scan's lowest price for one of the item, undercut (and the price itself)
+-- the last scan's lowest price for one of the item
 function AH.UnitPrice(link)
 	local AP = ns.AuctionPrices
 	local entry = AP and link and AP:PriceFor(link)
 	local low = type(entry) == "table" and entry.p or tonumber(entry)
 	if not low or low <= 0 then return nil end
-	return Undercut(low), low
+	return low, low
 end
 
 ---------------------------------------------------------------------------
@@ -150,35 +147,27 @@ local function LiveLows(sf, id)
 end
 AH.LiveLows = LiveLows
 
--- the price: 1% under what the game found live (once its search is back), else under the last scan.
--- Run for the first few seconds after the item goes in (the game's search can land late and reset
--- its price); after that a price you type is left alone.
+-- the price: the lowest the game found live (once its search is back), else the last scan's, in
+-- whole silver. Run for the first few seconds after the item goes in (the game's search can land
+-- late and reset its price); after that a price you type is left alone.
 local function NewFill(final)
 	if not pending then return end
 	local sf = SellFrame()
 	if not sf then return end
 	local live = PriceOf(sf)
 	local each, low, from
-	local id = ItemIDOf(pending.link)
-	local others, own = LiveLows(sf, id)
 	if live and live > 0 and live ~= pending.set then
-		if own and (not others or own <= others) then
-			-- your own listing is the cheapest: match it, don't go under yourself
-			each, low, from = own, own, "your own listing at"
-		elseif others then
-			each, low, from = Undercut(others), others, "lowest listed now"
-		elseif posted[id] and live >= posted[id] then
-			each, low, from = posted[id], posted[id], "what you just listed it at"
-		else
-			each, low, from = Undercut(live), live, "lowest listed now"
-		end
+		local others, own = LiveLows(sf, ItemIDOf(pending.link))
+		low = math.min(others or math.huge, own or math.huge)
+		if low == math.huge then low = live end
+		each, from = Silver(low), (own and own == low) and "your own listing at" or "lowest listed now"
 	elseif not pending.set then
 		each, low = AH.UnitPrice(pending.link)
-		from = "last scan"
+		each, from = Silver(each), "last scan"
 	end
-	if each and each ~= live then
+	if each then
 		pending.set = each
-		SetPrice(sf, each)
+		if each ~= live then SetPrice(sf, each) end -- (the game's own price is often the lowest already)
 		SetQuantity(sf, pending.count)
 	end
 	if not pending.filled and (each or final) then
@@ -197,6 +186,23 @@ end
 local function NewPost()
 	local sf = SellFrame()
 	if not (pending and sf) then return false end
+	-- (one post per item: Enter, the click and the press can all ask; a second post of the same item
+	-- is refused by the server, also as an "Internal auction error")
+	if pending.posting and GetTime() - pending.posting < 3 then return true end
+	-- the item must still be where it was, as many as the quantity says
+	if ItemLink(pending.bag, pending.slot) ~= pending.link then
+		Tell("that item moved in your bags; Alt+Right-click it again.")
+		pending = nil
+		if keys then keys:Hide() end
+		return true
+	end
+	local have = ItemCount(pending.bag, pending.slot)
+	if have < (pending.count or 1) then pending.count = have SetQuantity(sf, have) end
+	-- a price typed or left with copper in it: down to the silver (the server refuses copper)
+	local price = PriceOf(sf)
+	if price and price > 0 and price % 100 ~= 0 then SetPrice(sf, Silver(price)) end
+	pending.posting = GetTime()
+	seen.lastPost = ("%s x%d at %s"):format(pending.link or "?", pending.count or 0, Money(PriceOf(sf) or 0))
 	local button = sf.PostButton
 	if button and button.IsEnabled and button:IsEnabled() then button:Click() return true end
 	if sf.PostItem then local ok = pcall(sf.PostItem, sf) return ok end
@@ -268,6 +274,25 @@ local function Selling()
 	if OldAuctionsTab() then return "old" end
 end
 
+-- (Shannon, 2026-10-11) the Auction House open on another tab (Buy, Auctions): switch it to selling
+-- first, so the item goes straight in without clicking the Sell tab
+local function AHOpen() return NewAH() or (AuctionFrame and AuctionFrame:IsShown() and true) or false end
+local function OpenSellTab()
+	if Selling() then return Selling() end
+	if NewAH() then
+		local f = AuctionHouseFrame
+		local tab = _G.AuctionHouseFrameSellTab or f.SellTab
+		if tab and tab.Click then pcall(tab.Click, tab) end
+		local M = AuctionHouseFrameDisplayMode
+		if not SellFrame() and M and f.SetDisplayMode then pcall(f.SetDisplayMode, f, M.ItemSell) end
+	elseif AuctionFrame and AuctionFrame:IsShown() then
+		local tab = _G.AuctionFrameTab3 -- (Browse, Bids, Auctions)
+		if tab and tab.Click then pcall(tab.Click, tab) end
+	end
+	return Selling()
+end
+AH.OpenSellTab = OpenSellTab
+
 local function Post()
 	local kind = Selling()
 	if kind == "new" then return NewPost() end
@@ -286,11 +311,10 @@ local function OnAltRightClick(bag, slot, before, via)
 	seen.click = ("bag %s slot %s"):format(tostring(bag), tostring(slot))
 	seen.via = via
 	if not On() then seen.why = "switched off in Settings" return end
-	local kind = Selling()
-	if not kind then
-		seen.why = NewAH() and "the Auction House is open, but not on its Sell tab" or "the Auction House's selling tab isn't open"
-		return
-	end
+	if not AHOpen() then seen.why = "the Auction House isn't open" return end
+	if not ItemLink(bag, slot) then seen.why = "no item in that bag slot" return end
+	local kind = OpenSellTab()
+	if not kind then seen.why = "the Auction House is open, but its selling tab couldn't be opened" return end
 	local key = bag * 100 + slot
 	local link = ItemLink(bag, slot)
 	if not link then seen.why = "no item in that bag slot" return end
@@ -390,9 +414,9 @@ local function OnMouseDown(button)
 	if button ~= "RightButton" or not IsAltKeyDown() then return end
 	local f = MouseFocus()
 	seen.focus = f and ((f.GetName and f:GetName()) or "a button with no name") or "nothing"
-	if not Selling() then
+	if not AHOpen() then
 		seen.click = "over " .. seen.focus
-		seen.why = NewAH() and "the Auction House is open, but not on its Sell tab" or "the Auction House's selling tab isn't open"
+		seen.why = "the Auction House isn't open"
 		return
 	end
 	local bag, slot = BagSlotOf(f)
@@ -453,12 +477,14 @@ function AH:Status()
 	ns.Print(("  Auction House: %s%s; selling: %s"):format(
 		f and (f:IsShown() and "open" or "closed") or (AuctionFrame and "the old one" or "|cffff6060not found|r"),
 		f and f:IsShown() and (" on " .. modeName) or "",
-		Selling() or "|cffffd100no (open the Sell tab)|r"))
+		Selling() or "|cffffd100no (an Alt+Right-click opens the Sell tab)|r"))
 	ns.Print(("  ways in: bag clicks seen %d, mouse presses seen %d, old bag buttons hooked %d"):format(seen.modified, seen.mouse, n))
 	ns.Print(("  last Alt+Right-click: %s%s%s"):format(seen.click or "none seen", seen.via and (" (by " .. seen.via .. ")") or "",
 		seen.focus and (", under the mouse: " .. seen.focus) or ""))
 	if pending then ns.Print(("  waiting to post: %s x%d at %s"):format(pending.link or "?", pending.count or 0, pending.set and Money(pending.set) or "no price")) end
 	if seen.why then ns.Print("  |cffffd100why nothing happened:|r " .. seen.why) end
+	if seen.lastPost then ns.Print("  last post: " .. seen.lastPost) end
+	if seen.lastError then ns.Print("  |cffff6060last refused:|r " .. seen.lastError) end
 end
 
 function AH:OnLogin()
@@ -472,7 +498,8 @@ function AH:OnLogin()
 	end
 	local f = CreateFrame("Frame")
 	for _, ev in ipairs({ "NEW_AUCTION_UPDATE", "AUCTION_HOUSE_CLOSED", "BAG_UPDATE", "GLOBAL_MOUSE_DOWN",
-		"COMMODITY_SEARCH_RESULTS_UPDATED", "ITEM_SEARCH_RESULTS_UPDATED", "AUCTION_HOUSE_AUCTION_CREATED", "AUCTION_HOUSE_POST_WARNING" }) do
+		"COMMODITY_SEARCH_RESULTS_UPDATED", "ITEM_SEARCH_RESULTS_UPDATED", "AUCTION_HOUSE_AUCTION_CREATED", "AUCTION_HOUSE_POST_WARNING",
+		"UI_ERROR_MESSAGE" }) do
 		pcall(f.RegisterEvent, f, ev)
 	end
 	f:SetScript("OnEvent", function(_, event, ...)
@@ -480,12 +507,10 @@ function AH:OnLogin()
 			Done()
 		elseif event == "AUCTION_HOUSE_AUCTION_CREATED" then
 			if pending and pending.kind == "new" then
-				local id = ItemIDOf(pending.link)
-				if id and pending.set then posted[id] = pending.set end
 				Done()
 			end
 		elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" or event == "ITEM_SEARCH_RESULTS_UPDATED" then
-			-- (the game's live price has arrived: ours goes under it, a moment after the game sets it)
+			-- (the game's live price has arrived: ours (in whole silver) goes in a moment after the game sets it)
 			if pending and pending.kind == "new" and GetTime() - (pending.at or 0) < 4 then C_Timer.After(0.1, function() NewFill(false) end) end
 		elseif event == "NEW_AUCTION_UPDATE" then
 			if pending and pending.kind == "old" then
@@ -495,6 +520,13 @@ function AH:OnLogin()
 		elseif event == "GLOBAL_MOUSE_DOWN" then
 			local ok, err = pcall(OnMouseDown, ...)
 			if not ok then seen.why = "error: " .. tostring(err) end
+		elseif event == "UI_ERROR_MESSAGE" then
+			-- the server refused a post: say what was being posted (for /aa ahpost), and let it try again
+			local _, msg = ...
+			if pending and pending.posting and msg and (msg == ERR_AUCTION_DATABASE_ERROR or tostring(msg):find("uction")) then
+				seen.lastError = ("%s, posting %s"):format(tostring(msg), seen.lastPost or "?")
+				pending.posting = nil
+			end
 		elseif event == "BAG_UPDATE" then
 			HookBags() -- (bags opened later, or a new bag)
 		end

@@ -70,7 +70,7 @@ p = player()
 p.lua("Click()")
 check(p.eval("SLOT and SLOT.name") == "Linen Cloth", "the item goes into the sell slot")
 check(p.eval("AuctionsStackSizeEntry.n") == 20 and p.eval("AuctionsNumStacksEntry.n") == 1, "the whole stack, one auction")
-check(p.eval("PRICE[BuyoutPrice]") == 99 and p.eval("PRICE[StartPrice]") == 94, "buyout 1% under the last scan's lowest (99c each), bid a little under")
+check(p.eval("PRICE[BuyoutPrice]") == 100 and p.eval("PRICE[StartPrice]") == 95, "buyout at the last scan's lowest (1s each, no undercut), bid a little under")
 check(p.eval("POSTS") == 0, "nothing posted yet")
 p.lua("Click()")
 check(p.eval("POSTS") == 1 and p.eval("QA.Pending()") is None, "Alt+Right-click again: posted")
@@ -78,7 +78,7 @@ check(p.eval("POSTS") == 1 and p.eval("QA.Pending()") is None, "Alt+Right-click 
 print("per stack prices")
 p = player()
 p.lua("AuctionFrameAuctions.priceType = 2 Click()")
-check(p.eval("PRICE[BuyoutPrice]") == 99 * 20, "with Per Stack chosen, the stack's price")
+check(p.eval("PRICE[BuyoutPrice]") == 100 * 20, "with Per Stack chosen, the stack's price")
 
 print("Enter posts")
 p = player()
@@ -90,8 +90,12 @@ check(p.eval("POSTS") == 1, "Enter posts it")
 
 print("when it does nothing")
 p = player()
-p.lua("AuctionFrameAuctions:Hide() Click()")
-check(p.eval("SLOT") is None, "Auctions tab not open: nothing new")
+p.lua("AuctionFrame:Hide() Click()")
+check(p.eval("SLOT") is None, "Auction House closed: nothing new")
+p = player()
+p.lua("AuctionFrameAuctions:Hide() AuctionFrameTab3 = { Click = function() AuctionFrameAuctions:Show() end } Click()")
+check(p.eval("SLOT and SLOT.name") == "Linen Cloth", "on the Browse tab: it switches to Auctions and the item goes in (Shannon, 2026-10-11)")
+p = player()
 p.lua("AuctionFrameAuctions:Show() ALT = false Click()")
 check(p.eval("SLOT") is None, "plain right-click: left to the game")
 p.lua("ALT = true A.db.qol.auction.altPost = false Click()")
@@ -103,7 +107,7 @@ check(p.eval("SLOT and SLOT.name") == "Linen Cloth" and p.eval("PRICE[BuyoutPric
 print("any bag (a bag addon's buttons)")
 p = player()
 p.lua("MousePress()")
-check(p.eval("SLOT and SLOT.name") == "Linen Cloth" and p.eval("PRICE[BuyoutPrice]") == 99, "Alt+Right-click on a bag addon's button: into the slot, priced")
+check(p.eval("SLOT and SLOT.name") == "Linen Cloth" and p.eval("PRICE[BuyoutPrice]") == 100, "Alt+Right-click on a bag addon's button: into the slot, priced")
 p.lua("RunTimers(1) MousePress()")
 check(p.eval("POSTS") == 1, "again: posted")
 p = player()
@@ -114,9 +118,9 @@ check(p.eval("POSTS") == 1, "the second Alt+Right-click posts")
 
 print("/aa ahpost")
 p = player()
-p.lua("AuctionFrameAuctions:Hide() MousePress() A.db.settings.debug = true SlashCmdList.AZEROTHALMANAC('ahpost')")
+p.lua("AuctionFrame:Hide() MousePress() A.db.settings.debug = true SlashCmdList.AZEROTHALMANAC('ahpost')")
 out = p.eval("table.concat(CHAT, ' / ')")
-check("selling tab isn't open" in out and "old bag buttons hooked" in out and "mouse presses seen 1" in out, "it says what it sees and why nothing happened")
+check("isn't open" in out and "old bag buttons hooked" in out and "mouse presses seen 1" in out, "it says what it sees and why nothing happened")
 
 print("WoW Forever's Auction House (AuctionHouseFrame, the Sell tab)")
 def newah():
@@ -138,9 +142,9 @@ AuctionHouseFrame.mode = 2
 AuctionHouseFrame.GetDisplayMode = function(self) return self.mode end
 AuctionHouseFrame.CommoditiesSellFrame = SELLF
 AuctionHouseFrame.ItemSellFrame = CreateFrame("Frame")
--- the game: the item goes in, then its search comes back with the lowest listed price (60c)
+-- the game: the item goes in, then its search comes back with the lowest listed price (60s)
 AuctionHouseFrame.SetPostItem = function(self, loc) SELLF.item = loc self.mode = 2 SELLF.PriceInput.amount = 0
-	C_Timer.After(0.5, function() SELLF.PriceInput.amount = 60 FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED") end) end
+	C_Timer.After(0.5, function() SELLF.PriceInput.amount = 6000 FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED") end) end
 GetMouseFoci = function() return { OTHER } end
 HANDLED = nil
 """)
@@ -148,7 +152,7 @@ HANDLED = nil
 p = newah()
 p.lua("MousePress() RunTimers(3)")
 check(p.eval("SELLF.item ~= nil") , "Alt+Right-click: the item goes into the sell frame")
-check(p.eval("SELLF.PriceInput.amount") == 59, "priced 1% under the lowest listed now (60c: 59c)")
+check(p.eval("SELLF.PriceInput.amount") == 6000, "priced at the lowest listed now (60s), no undercut")
 check(p.eval("SELLF.QuantityInput.n") == 20, "the whole stack")
 p.lua("RunTimers(1) FireEvent('GLOBAL_MOUSE_DOWN', 'RightButton') A.QoL.AuctionPost.OnModifiedClick('link', ItemLocation:CreateFromBagAndSlot(0, 1))")
 check(p.eval("NPOSTS") == 1, "Alt+Right-click again: posted by the click itself (the press waits for it)")
@@ -156,49 +160,69 @@ p.lua("RunTimers(1)")
 check(p.eval("NPOSTS") == 1, "...once")
 p = newah()
 p.lua("AuctionHouseFrame.SetPostItem = function(self, loc) SELLF.item = loc self.mode = 2 SELLF.PriceInput.amount = 0 end MousePress() RunTimers(3)")
-check(p.eval("SELLF.PriceInput.amount") == 99, "nothing listed: 1% under the last scan")
+check(p.eval("SELLF.PriceInput.amount") == 100, "nothing listed: the last scan's price (1s)")
 p.lua("KEY = nil for _, f in ipairs(FRAMES) do if f._scripts.OnKeyDown then KEY = f end end KEY:GetScript('OnKeyDown')(KEY, 'ENTER')")
 check(p.eval("NPOSTS") == 1, "Enter posts it")
 p = newah()
-p.lua("AuctionHouseFrame.mode = 1 MousePress() RunTimers(3)")
-check(p.eval("SELLF.item") is None, "on the Buy tab: nothing")
-p.lua("A.db.settings.debug = true SlashCmdList.AZEROTHALMANAC('ahpost')")
+p.lua("AuctionHouseFrame.mode = 1 AuctionHouseFrameSellTab = { Click = function() AuctionHouseFrame.mode = 3 end } MousePress() RunTimers(3)")
+check(p.eval("SELLF.item ~= nil") and p.eval("SELLF.PriceInput.amount") == 6000, "on the Buy tab: it switches to Sell, the item goes in, priced")
+p = newah()
+p.lua("AuctionHouseFrame.mode = 1 AuctionHouseFrame.SetDisplayMode = function(self, m) self.mode = m end MousePress() RunTimers(3)")
+check(p.eval("SELLF.item ~= nil"), "no Sell tab button found: the display mode is set instead")
+p = newah()
+p.lua("AuctionHouseFrame:Hide() MousePress() RunTimers(3) A.db.settings.debug = true SlashCmdList.AZEROTHALMANAC('ahpost')")
 out = p.eval("table.concat(CHAT, ' / ')")
-check("not on its Sell tab" in out, "/aa ahpost: says it's not on the Sell tab")
+check(p.eval("SELLF.item") is None and "isn't open" in out, "Auction House closed: nothing, and /aa ahpost says so")
 p = newah()
 p.lua("HandleModifiedItemClick = HandleModifiedItemClick") 
 p.lua("A.QoL.AuctionPost.OnModifiedClick('link', ItemLocation:CreateFromBagAndSlot(0, 1)) RunTimers(3)")
-check(p.eval("SELLF.PriceInput.amount") == 59, "from the bag's own Alt-click (HandleModifiedItemClick, with the item's place): priced")
+check(p.eval("SELLF.PriceInput.amount") == 6000, "from the bag's own Alt-click (HandleModifiedItemClick, with the item's place): priced")
 
 # (Shannon, 2026-10-10) a second stack never goes under your own first one
 p = newah()
 p.lua("""
-RESULTS = { { unitPrice = 60, containsOwnerItem = true }, { unitPrice = 70 } }
+RESULTS = { { unitPrice = 6000, containsOwnerItem = true }, { unitPrice = 7000 } }
 C_AuctionHouse = { GetNumCommoditySearchResults = function() return #RESULTS end,
 	GetCommoditySearchResultInfo = function(id, i) return RESULTS[i] end }
 MousePress() RunTimers(3)
 """)
-check(p.eval("SELLF.PriceInput.amount") == 60, "your own listing is the cheapest (60c, others 70c): matched, not undercut")
+check(p.eval("SELLF.PriceInput.amount") == 6000, "your own listing is the cheapest (60s, others 70s): matched, not undercut")
 p = newah()
 p.lua("""
-RESULTS = { { unitPrice = 60 }, { unitPrice = 65, containsOwnerItem = true } }
+RESULTS = { { unitPrice = 6000 }, { unitPrice = 6500, containsOwnerItem = true } }
 C_AuctionHouse = { GetNumCommoditySearchResults = function() return #RESULTS end,
 	GetCommoditySearchResultInfo = function(id, i) return RESULTS[i] end }
 MousePress() RunTimers(3)
 """)
-check(p.eval("SELLF.PriceInput.amount") == 59, "someone else is cheaper (60c): 1% under them (59c)")
+check(p.eval("SELLF.PriceInput.amount") == 6000, "someone else is cheaper (60s): matched (60s)")
 # a client whose results don't say whose they are: what you just posted counts as yours
 p = newah()
 p.lua("""
 C_AuctionHouse = nil
 MousePress() RunTimers(3)
 FireEvent("AUCTION_HOUSE_AUCTION_CREATED")
--- the second stack: the game's lowest live price is now your own 59c
+-- the second stack: the game's lowest live price is now your own 59s
 AuctionHouseFrame.SetPostItem = function(self, loc) SELLF.item = loc self.mode = 2 SELLF.PriceInput.amount = 0
-	C_Timer.After(0.5, function() SELLF.PriceInput.amount = 59 FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED") end) end
+	C_Timer.After(0.5, function() SELLF.PriceInput.amount = 5900 FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED") end) end
 RunTimers(2) MousePress() RunTimers(3)
 """)
-check(p.eval("SELLF.PriceInput.amount") == 59, "second stack after posting the first at 59c: stays 59c, not 58c")
+check(p.eval("SELLF.PriceInput.amount") == 5900, "second stack after posting the first at 59s: stays 59s")
+
+# (Shannon, 2026-10-11) "Internal auction error": copper in the price, or the same item posted twice
+p = newah()
+p.lua("""
+SELLF.PostButton.Click = function() NPOSTS = NPOSTS + 1 POSTED_AT = SELLF.PriceInput.amount end   -- (no created event yet)
+MousePress() RunTimers(3) SELLF.PriceInput.amount = 5950
+KEY = nil for _, f in ipairs(FRAMES) do if f._scripts.OnKeyDown then KEY = f end end KEY:GetScript('OnKeyDown')(KEY, 'ENTER')
+""")
+check(p.eval("POSTED_AT") == 5900, "a price with copper in it goes down to the silver before posting")
+p.lua("KEY:GetScript('OnKeyDown')(KEY, 'ENTER') RunTimers(1) A.QoL.AuctionPost.OnModifiedClick('link', ItemLocation:CreateFromBagAndSlot(0, 1))")
+check(p.eval("NPOSTS") == 1, "Enter twice and the click again: posted once")
+p.lua("ERR_AUCTION_DATABASE_ERROR = 'Internal auction error' FireEvent('UI_ERROR_MESSAGE', 1, 'Internal auction error') A.db.settings.debug = true CHAT = {} SlashCmdList.AZEROTHALMANAC('ahpost')")
+out = p.eval("table.concat(CHAT, ' / ')")
+check("last refused" in out and "Internal auction error" in out, "a refused post shows in /aa ahpost with what was posted")
+p.lua("KEY:GetScript('OnKeyDown')(KEY, 'ENTER')")
+check(p.eval("NPOSTS") == 2, "after a refusal, Enter can try again")
 
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")

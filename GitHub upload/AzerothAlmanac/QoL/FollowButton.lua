@@ -69,7 +69,7 @@ local function Eligible()
 end
 
 local function Refresh()
-	if not button then return end
+	if not button or not db.enabled then return end -- (off: hidden, nothing to check; 2026-10-11)
 	local ok = Followable()
 	local eligible = Eligible()
 	if button.ok ~= ok or button.eligible ~= eligible then
@@ -167,7 +167,7 @@ local function Build()
 	b.aura:Hide()
 	local t = 0
 	b:HookScript("OnUpdate", function(self, dt)
-		if not self.foot then return end
+		if not self.foot or not self.glow:IsShown() then return end -- (the pulse only while following)
 		t = t + dt
 		local w = self.iconSide or self:GetWidth()
 		local pulse = 0.5 + 0.5 * math.sin(t * 2.2)

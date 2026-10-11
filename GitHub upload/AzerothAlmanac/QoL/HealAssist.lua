@@ -115,6 +115,7 @@ local function HealthDead(bar, dead)
 end
 local DIM, OFF, ABSENT = 0.22, 0.55, 0.12 -- (not needed: faint, so a recommendation stands out)
 local DANGER_PCT = 0.3 -- under this the recommendation throbs red (the default; Settings: Danger level)
+local db -- (the saved settings, set at login; declared here so DangerPct reads it, not a global: 2026-10-11)
 local function DangerPct() return ((db and db.danger) or 30) / 100 end
 local HIGHLIGHT_ATLAS = "UI-HUD-ActionBar-IconFrame-Mouseover"
 local SOUND_ALERT = 8959
@@ -191,7 +192,6 @@ local ABOLISH = { Poison = "Abolish Poison", Disease = "Abolish Disease" }
 -- State
 ---------------------------------------------------------------------------
 
-local db
 local mine = {}          -- the catalog entries you know, with spell id / icon / cast time: { spell, id, icon, castTime, cost }
 local entries = {}       -- unit token -> { token, buttons = { [spell name] = button }, order = { names }, res = last result }
 local roster = {}        -- unit tokens in the group right now
@@ -1941,8 +1941,9 @@ local function ApplyVisuals(e, now)
 			end
 			b.tip = res.text[name]
 			local start, duration = Cooldown(name)
-			if duration > 0 and start > 0 then b.cooldown:SetCooldown(start, duration)
-			elseif b.hasCd then b.cooldown:SetCooldown(0, 0) end
+			if duration > 0 and start > 0 then
+				if b.cdStart ~= start or b.cdDur ~= duration then b.cdStart, b.cdDur = start, duration b.cooldown:SetCooldown(start, duration) end
+			elseif b.hasCd then b.cdStart, b.cdDur = nil, nil b.cooldown:SetCooldown(0, 0) end
 			b.hasCd = duration > 0 and start > 0
 			end
 		end
@@ -2164,7 +2165,7 @@ local function Tick()
 	if shownState ~= true then shownState = true needLayout = true end
 	-- (a raid: every other tick, so 40 members cost no more than a group of 20, 0.64.0)
 	HA.tickN = (HA.tickN or 0) + 1
-	if #roster > 10 and HA.tickN % 2 == 1 and not needLayout then return end
+	if #roster > 10 and HA.tickN % 2 == 1 and not (needLayout and not inCombat) then return end -- (a layout waits for combat's end)
 
 	if now - lastThreat >= 0.4 then ScanThreat(now) end
 	local hurt, hiddenAny = false, false
@@ -2277,6 +2278,9 @@ local function RefreshRoster()
 	for token, e in pairs(entries) do
 		if not set[token] then
 			e.res = nil
+			-- (2026-10-11) gone from the group: its aggro glow, badge and paw go too
+			e.threat, e.placed = nil, false
+			UpdateMarkers(e)
 			local edge = HA.edges and HA.edges[token]
 			if edge then edge.on = false edge:SetAlpha(0) end
 		end
@@ -2439,6 +2443,8 @@ function HA:OnLogin()
 					holder:Show()
 				end
 				needLayout = true
+				-- (2026-10-11) auras the game hid in combat: read them again now
+				for _, e in pairs(entries) do e.auraDirty = true end
 			end
 		end
 	end)

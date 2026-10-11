@@ -233,6 +233,8 @@ local function LayoutCollection()
 			(L["Bosses killed: %d of %d met"]):format(killed, #met)))
 		c.tip = { it.rec.name or "?", (L["Entered %s."]):format(ns.N(it.rec.n or 1, "time", "times")),
 			unmetN > 0 and (L["%s still to find."]):format(ns.N(unmetN, "boss", "bosses")) or L["Every boss here met."] }
+		local _, ev = W.DungeonArt(it.id, it.rec.name)
+		c.wg = ev and ev.event and ev.text and ev or nil
 		c:Show()
 		c.caption:Show()
 	end

@@ -252,8 +252,10 @@ function PP:OnLogin()
 		elseif event == "NAME_PLATE_UNIT_REMOVED" then
 			local plate = C_NamePlate.GetNamePlateForUnit(unit)
 			if plate then Undecorate(plate) end
-		else
-			C_Timer.After(0.2, function() PP:Refresh() end)
+		elseif not PP.refreshPending then
+			-- (2026-10-11) one refresh for a burst of roster events (a raid forming fires dozens)
+			PP.refreshPending = true
+			C_Timer.After(0.2, function() PP.refreshPending = nil PP:Refresh() end)
 		end
 	end)
 	PP:Refresh()

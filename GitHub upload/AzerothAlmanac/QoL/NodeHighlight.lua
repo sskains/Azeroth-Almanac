@@ -542,6 +542,8 @@ local function OnEvent(_, event, unit, ...)
 	if event == "PLAYER_SOFT_INTERACT_CHANGED" then
 		Update()
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
+		-- (2026-10-11) switched off, with no plate of ours left to give back: nothing to do
+		if not db.enabled and not next(renamedPlates) then return end
 		-- (0.67.4) checked now and again a frame later: on WoW Forever the event comes before the
 		-- plate's unit is filled in
 		if not (...) then
@@ -559,7 +561,11 @@ local function OnEvent(_, event, unit, ...)
 		end
 	elseif event == "NAME_PLATE_UNIT_REMOVED" then
 		local plate = C_NamePlate.GetNamePlateForUnit(unit)
-		if plate then RestorePlate(plate) end
+		if plate then
+			RestorePlate(plate)
+			-- (2026-10-11) the node's plate goes back to the pool: the sparkle mustn't ride on to a mob
+			if plate == shown.plate then HideSparkle() end
+		end
 	elseif event == "CVAR_UPDATE" then
 		OnCVarChanged(unit, select(1, ...))
 	elseif event == "PLAYER_REGEN_ENABLED" then

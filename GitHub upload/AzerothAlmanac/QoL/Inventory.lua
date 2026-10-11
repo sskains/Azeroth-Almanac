@@ -87,8 +87,9 @@ local function Me()
 	return me
 end
 
-local function Touch()
-	index = nil
+-- `same`: nothing that holds items changed (place, XP, talents, skills), so the item index is kept
+local function Touch(same)
+	if not same then index = nil end
 	if INV.OnChange then INV.OnChange() end
 end
 
@@ -126,7 +127,7 @@ function INV.ScanLocation()
 	end
 	c.hearth = GetBindLocation and GetBindLocation() or c.hearth
 	c.locTime = time()
-	Touch()
+	Touch(true) -- (no items changed: the item index stands)
 end
 
 -- XP, rested XP and whether you're in a rest area (inn or city), saved with the time so the
@@ -142,7 +143,7 @@ function INV.ScanXP()
 	c.resting = IsResting() and true or false
 	c.restTime = time()
 	c.maxLevel = GetMaxPlayerLevel and GetMaxPlayerLevel() or nil
-	Touch()
+	Touch(true) -- (no items changed: the item index stands)
 end
 
 local REST_PER_8H = 0.05       -- of a level's XP, in an inn or city
@@ -308,7 +309,7 @@ local function ScanTalents()
 			if points[1] + points[2] + points[3] > 0 then
 				local c = Me()
 				c.talents, c.talentNames = points, names
-				Touch()
+				Touch(true) -- (no items changed: the item index stands)
 				return
 			end
 		end
@@ -331,7 +332,7 @@ local function ScanTalents()
 	if #points == 0 then return end
 	local c = Me()
 	c.talents, c.talentNames = points, names
-	Touch()
+	Touch(true) -- (no items changed: the item index stands)
 end
 INV.ScanTalents = ScanTalents
 
@@ -418,7 +419,7 @@ local function ScanProfessions()
 	end
 	c.professions = INV.UniqueProfessions(list)
 	c.professionsTime = time()
-	Touch()
+	Touch(true) -- (no items changed: the item index stands)
 end
 
 -- Mail you send to your own characters shows up in their mailbox before they log in.

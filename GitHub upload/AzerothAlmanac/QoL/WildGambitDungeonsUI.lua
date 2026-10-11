@@ -38,7 +38,8 @@ local function H() D = D or WG.D return D end
 
 local tweens = {}
 local driver = CreateFrame("Frame")
-driver:SetScript("OnUpdate", function(_, elapsed)
+driver:SetScript("OnUpdate", function(self, elapsed)
+	if #tweens == 0 then self:Hide() return end -- (2026-10-11: asleep until the next tween)
 	for i = #tweens, 1, -1 do
 		local t = tweens[i]
 		t.age = t.age + elapsed
@@ -54,6 +55,7 @@ driver:SetScript("OnUpdate", function(_, elapsed)
 end)
 local function Tween(delay, dur, fn, done)
 	tweens[#tweens + 1] = { age = -(delay or 0) * SLOW, dur = math.max(0.01, dur * SLOW), fn = fn, done = done }
+	driver:Show()
 end
 local function After(delay, fn) Tween(delay, 0.01, function() end, fn) end
 

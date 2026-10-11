@@ -98,15 +98,16 @@ local function SellJunk()
 	end
 
 	-- Otherwise one by one, a moment apart, stopping if the merchant window closes.
-	local i = 0
+	-- (2026-10-11) the report counts only what was sold: closing the window stops it part way
+	local i, soldItems, soldTotal = 0, 0, 0
 	local function Next()
 		i = i + 1
 		local e = list[i]
 		if not e or not (MerchantFrame and MerchantFrame:IsShown()) then
-			if i > 1 then Report(("Sold %d junk %s for %s."):format(items, items == 1 and "item" or "items", Money(total))) end
+			if soldItems > 0 then Report(("Sold %d junk %s for %s."):format(soldItems, soldItems == 1 and "item" or "items", Money(soldTotal))) end
 			return
 		end
-		pcall(Container.UseContainerItem, e[1], e[2])
+		if pcall(Container.UseContainerItem, e[1], e[2]) then soldItems, soldTotal = soldItems + e[3], soldTotal + e[4] end
 		C_Timer.After(SELL_STEP, Next)
 	end
 	Next()

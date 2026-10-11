@@ -63,7 +63,8 @@ end
 
 function Store:Load()
 	local db = AzerothAlmanacDB
-	if type(db) ~= "table" or not db.version then db = Fresh() end
+	-- (ns.freshInstall: the welcome guide turns the optional helpers off on a brand-new install)
+	if type(db) ~= "table" or not db.version then db = Fresh() ns.freshInstall = true end
 	for v = (db.version or 1) + 1, VERSION do
 		if MIGRATIONS[v] then
 			local ok, err = pcall(MIGRATIONS[v], db)

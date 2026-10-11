@@ -656,7 +656,8 @@ local function Tidy()
 end
 ns:RegisterEvent("PLAYER_ENTERING_WORLD", function()
 	C_Timer.After(5, function()
-		pcall(Tidy)
+		-- (2026-10-11) once a session: loots, picks and sightings put each node right as they happen
+		if not G.tidied then G.tidied = true pcall(Tidy) end
 		-- build the object contents index now, not in the middle of the first sighting
 		if ns.ItemDB and ns.ItemDB.ObjectLoot then pcall(ns.ItemDB.ObjectLoot, ns.ItemDB, 0) end
 	end)

@@ -80,11 +80,15 @@ function W.CurrentDungeon()
 end
 
 -- is this dungeon (ID, name) the one you're in?
+local nameKeys = {} -- (2026-10-11) name -> its key, worked out once (every card asks every frame)
 function W.IsCurrentDungeon(id, name)
 	local cid, key = W.CurrentDungeon()
 	if id and cid and id == cid then return true end
 	local D = ns.Dungeons
-	return key ~= nil and D and D.NameKey and D.NameKey(name) == key or false
+	if key == nil or not (D and D.NameKey and name) then return false end
+	local k = nameKeys[name]
+	if k == nil then k = D.NameKey(name) or false nameKeys[name] = k end
+	return k == key
 end
 
 function W.PortalSwirl(parent, layer, sublevel)
@@ -312,8 +316,9 @@ function W.DungeonCard(parent, width)
 			tc.spill:SetAlpha(a * 0.3)
 		end
 		-- the portal: open while hovered, always (brighter) on the dungeon you're in
-		local here = self.id and W.PortalOn() and W.IsCurrentDungeon(self.id, self.dname)
-		self.portal:SetWanted(not W.PortalOn() and 0 or here and 1.25 or self.hover and 1 or 0)
+		local portalOn = W.PortalOn()
+		local here = self.id and portalOn and W.IsCurrentDungeon(self.id, self.dname)
+		self.portal:SetWanted(not portalOn and 0 or here and 1.25 or self.hover and 1 or 0)
 		self.portal:Step(elapsed)
 		-- the hover grow, eased
 		if self.scaleNow ~= self.scaleWant then
@@ -334,6 +339,16 @@ function W.DungeonCard(parent, width)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			for i, line in ipairs(self.tip) do
 				if i == 1 then GameTooltip:AddLine(line, 1, 0.82, 0.25) else GameTooltip:AddLine(line, 0.9, 0.9, 0.9, true) end
+			end
+			-- (Shannon, 2026-10-11) the dungeon's Wild Gambit event: what it does when it's drawn
+			local e = self.wg
+			if e then
+				GameTooltip:AddLine(" ")
+				GameTooltip:AddLine("|TInterface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit:16|t " .. (L["Wild Gambit: %s"]):format(e.event), 1, 0.82, 0.25)
+				GameTooltip:AddLine(e.text, 0.9, 0.9, 0.9, true)
+				local when = e.kind == "lasting" and L["Lasts for the rest of the match."] or e.kind == "next" and L["Touches the next card or turn."] or L["Happens at once."]
+				GameTooltip:AddLine(when, 0.6, 0.6, 0.6, true)
+				GameTooltip:AddLine(L["Drawn by chance during a match (at most once), for a dungeon one of the players has entered."], 0.6, 0.6, 0.6, true)
 			end
 			GameTooltip:AddLine(L["Click to open."], 0.6, 0.8, 1)
 			GameTooltip:Show()

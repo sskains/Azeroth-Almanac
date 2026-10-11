@@ -343,6 +343,7 @@ local function EnemyName(unit)
 	end)
 	return ok and name or nil
 end
+QT.EnemyName = EnemyName
 
 -- Someone else's mob: tapped by a player outside your group, or already hurt and fighting a
 -- player (or their pet) who isn't you or in your group. Those aren't worth running to.
@@ -486,21 +487,56 @@ end
 -- with the closest one kept: name -> { unit, closeness }. Friendly ones are for turn-ins.
 local nearestPlate = {}
 
+-- (Shannon, 2026-10-11) on WoW Forever a mob only has a nameplate while it's on camera, so one
+-- beside or behind you dropped out of the count. Each counted mob is remembered by its GUID with
+-- where you stood (QT.seen); one that's gone off camera still counts for QT.SEEN_FOR seconds while
+-- you stay within QT.SEEN_NEAR yards of where you last saw it. A dead one, or one someone else takes,
+-- is forgotten.
+QT.seen = {}
+QT.SEEN_FOR = 60
+QT.SEEN_NEAR = 60
+local function Here()
+	local w = A.Where and A.Where()
+	local N = A.NavArrow
+	if not (w and w.map and w.x and N and N.World) then return nil end
+	local inst, n, we = N.World(w.map, w.x, w.y)
+	return inst and { inst, n, we } or nil
+end
+local function GuidOf(unit)
+	local ok, g = pcall(UnitGUID, unit)
+	return ok and Readable(g) or nil
+end
+
+local PLATE_UNITS = {}
+for i = 1, 40 do PLATE_UNITS[i] = "nameplate" .. i end
+
 local function CountNearby()
 	wipe(counts)
 	wipe(nearestPlate)
 	wipe(takenPlates)
+	local visible, now, here = {}, GetTime(), nil
 	for i = 1, 40 do
-		local unit = "nameplate" .. i
+		local unit = PLATE_UNITS[i]
+		if UnitExists(unit) then -- (2026-10-11: empty slots cost nothing; most of the 40 are)
 		local name = EnemyName(unit)
+		local guid = GuidOf(unit)
+		if guid then visible[guid] = true end
+		if not name and guid then QT.seen[guid] = nil end -- (dead, or not an enemy)
 		if name then
 			RememberUnit(unit)
 			if Taken(unit) then
 				-- visible, but not a target: not counted, targeted or marked
 				takenPlates[name] = (takenPlates[name] or 0) + 1
+				if guid then QT.seen[guid] = nil end
 				name = nil
 			else
 				counts[name] = (counts[name] or 0) + 1
+				if guid then
+					if here == nil then here = Here() or false end
+					local e = QT.seen[guid]
+					if e then e.name, e.t, e.at = name, now, here or nil
+					else QT.seen[guid] = { name = name, t = now, at = here or nil } end
+				end
 			end
 		else
 			local ok, friendly = pcall(function()
@@ -514,8 +550,26 @@ local function CountNearby()
 			local best = nearestPlate[name]
 			if not best or close < best[2] then nearestPlate[name] = { unit, close } end
 		end
+		end
+	end
+	-- the ones off camera now, seen a moment ago near here
+	for guid, e in pairs(QT.seen) do
+		if not visible[guid] then
+			local keep = now - e.t <= QT.SEEN_FOR
+			if keep and e.at then
+				here = here == nil and (Here() or false) or here
+				if here and here[1] == e.at[1] then
+					local dn, dw = here[2] - e.at[2], here[3] - e.at[3]
+					keep = dn * dn + dw * dw <= QT.SEEN_NEAR * QT.SEEN_NEAR
+				end
+			end
+			if keep then counts[e.name] = (counts[e.name] or 0) + 1 else QT.seen[guid] = nil end
+		end
 	end
 end
+
+-- how many of a mob are counted near you now (the badge's number)
+function QT:Nearby(name) return counts[name] or 0 end
 
 -- The nameplate of the closest match among names, or nil. (Declared near the top for MacroFor.)
 function NearestPlate(names)
@@ -665,9 +719,8 @@ local function ApplySelection()
 	end
 end
 
-local function UpdateCounts()
-	if not db.enabled then return end -- (off: no nameplate scan at all, 0.62.0)
-	CountNearby()
+-- the buttons' numbers from the last count
+local function PaintCounts()
 	for _, b in ipairs(buttons) do
 		if b.key then
 			local n = CountFor(b.targets)
@@ -680,6 +733,22 @@ local function UpdateCounts()
 			end
 		end
 	end
+end
+
+local function UpdateCounts()
+	if not db.enabled then return end -- (off: no nameplate scan at all, 0.62.0)
+	CountNearby()
+	PaintCounts()
+end
+
+-- one count per frame (and one per half second) however many nameplate events come together:
+-- a pack coming into view fires one event per mob
+QT.pending = {}
+function QT.Recount(delay)
+	delay = delay or 0
+	if QT.pending[delay] then return end
+	QT.pending[delay] = true
+	C_Timer.After(delay, function() QT.pending[delay] = nil UpdateCounts() end)
 end
 
 ---------------------------------------------------------------------------
@@ -863,7 +932,8 @@ local function Layout()
 	if InCombatLockdown() then return end
 
 	CollectObjectives()
-	CountNearby()
+	-- (2026-10-11) one count per layout (it counted twice, and with the buttons off it still scanned)
+	if db.enabled then CountNearby() end
 	BuildMarkLines()
 	UpdateClearButton()
 	local lines, root = {}, nil
@@ -902,12 +972,57 @@ local function Layout()
 	end
 
 	ApplySelection()
-	UpdateCounts()
+	if db.enabled then PaintCounts() end
 end
 
 ---------------------------------------------------------------------------
 -- Module API (used by Settings)
 ---------------------------------------------------------------------------
+
+-- (Shannon, 2026-10-11) the targeting, the nearby count and the markers all see quest mobs through
+-- their nameplates, so while the buttons are on the game's nameplate settings are set for it, out of
+-- combat (they can't change in combat), and each is put back as it was when the buttons are turned off:
+--   nameplateMaxDistance 45    the reach (Classic's default 20; WoW Forever's real limit is 45 yards:
+--                              Shannon measured it, 2026-10-11; a higher value is stored but not used)
+--   nameplateShowEnemies 1     enemy nameplates on (the V key)
+--   nameplateShowAll 1         ...out of combat too: without it the game only gives a mob a nameplate
+--                              once you're fighting it or have it targeted, so mobs in range weren't
+--                              counted or marked until the sword was clicked (Shannon's report)
+-- No setting of our own. db.savedCVars = the player's values, db.appliedCVars = what the client kept
+-- (it may cap a value); turning off restores a value only if it's still what we left.
+QT.RANGE = 45
+QT.CVARS = { { "nameplateMaxDistance", QT.RANGE }, { "nameplateShowEnemies", 1 }, { "nameplateShowAll", 1 } }
+function QT:ApplyRange()
+	if not (db and GetCVar and SetCVar) then return end
+	if InCombatLockdown() then self.rangePending = true return end
+	self.rangePending = nil
+	-- (the first build kept the range alone in savedPlateDist / appliedPlateDist)
+	if db.savedPlateDist ~= nil then
+		db.savedCVars = db.savedCVars or {}
+		db.appliedCVars = db.appliedCVars or {}
+		db.savedCVars.nameplateMaxDistance = db.savedCVars.nameplateMaxDistance or db.savedPlateDist
+		db.appliedCVars.nameplateMaxDistance = db.appliedCVars.nameplateMaxDistance or db.appliedPlateDist
+		db.savedPlateDist, db.appliedPlateDist = nil, nil
+	end
+	for _, cv in ipairs(QT.CVARS) do
+		local name, want = cv[1], cv[2]
+		local cur = tonumber(GetCVar(name))
+		if cur then
+			if db.enabled then
+				db.savedCVars = db.savedCVars or {}
+				db.appliedCVars = db.appliedCVars or {}
+				if cur < want and cur ~= db.appliedCVars[name] then
+					if db.savedCVars[name] == nil then db.savedCVars[name] = cur end
+					pcall(SetCVar, name, want)
+					db.appliedCVars[name] = tonumber(GetCVar(name))
+				end
+			elseif db.savedCVars and db.savedCVars[name] ~= nil then
+				if cur == db.appliedCVars[name] then pcall(SetCVar, name, db.savedCVars[name]) end
+				db.savedCVars[name], db.appliedCVars[name] = nil, nil
+			end
+		end
+	end
+end
 
 function QT:OnInitialize(saved)
 	db = saved.questTargeter
@@ -923,6 +1038,7 @@ function QT:OnLogin()
 	events:SetScript("OnEvent", function(_, event, ...)
 		if event == "PLAYER_REGEN_ENABLED" then
 			Layout()
+			if QT.rangePending then QT:ApplyRange() end
 			if pendingSelection then ApplySelection() end
 		elseif event == "PLAYER_TARGET_CHANGED" then
 			RememberUnit("target")
@@ -930,9 +1046,17 @@ function QT:OnLogin()
 			RememberUnit("mouseover")
 		elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
 			LearnFromLoot()
+		elseif event == "NAME_PLATE_UNIT_REMOVED" then
+			local unit = ...
+			if unit and Readable(UnitIsDead(unit)) == true then
+				local g = GuidOf(unit)
+				if g then QT.seen[g] = nil end
+			end
+			QT.Recount(0)
 		elseif event == "NAME_PLATE_UNIT_ADDED" then
 			-- (0.67.4) a frame later: on WoW Forever the event comes before the plate's unit is filled in
-			C_Timer.After(0, UpdateCounts)
+			QT.Recount(0)
+			QT.Recount(0.5)
 		elseif event == "QUEST_TURNED_IN" then
 			-- Remember who took the quest back, for quests the database doesn't know.
 			local questID = ...
@@ -956,9 +1080,13 @@ function QT:OnLogin()
 	end
 
 	Layout()
+	QT:ApplyRange()
 	-- The tracker reflows on its own schedule, so re-check a few times a second.
 	C_Timer.NewTicker(0.25, function()
 		Layout()
+		-- (out of combat Layout counts every time, so a mob first seen in the distance, whose plate
+		-- WoW Forever fills in a moment late, is picked up within a quarter second; in combat Layout
+		-- waits, so the count runs here; 2026-10-11)
 		if InCombatLockdown() then UpdateCounts() end
 	end)
 end
@@ -966,6 +1094,7 @@ end
 -- Out of combat this applies right away; in combat the next Layout after combat picks it up.
 function QT:Refresh()
 	Layout()
+	QT:ApplyRange()
 end
 
 function QT:LearnedCount()
@@ -1007,7 +1136,27 @@ SlashCmdList.AZALMQT = function(msg)
 		if InCombatLockdown() then return ns.Print("Can't turn the buttons on or off during combat.") end
 		db.enabled = not db.enabled
 		Layout()
+		QT:ApplyRange()
 		ns.Print(db.enabled and "Quest tracker buttons on." or "Quest tracker buttons off.")
+	elseif cmd == "why" then
+		-- (2026-10-11) what the count sees on every nameplate right now, for a mob that isn't counted
+		local n = 0
+		for i = 1, 40 do
+			local unit = "nameplate" .. i
+			if UnitExists(unit) then
+				n = n + 1
+				local raw = UnitName(unit)
+				local okG, guid = pcall(UnitGUID, unit)
+				local function S(v) if v == nil then return "nil" end if A.IsSecret and A.IsSecret(v) then return "secret" end return tostring(v) end
+				ns.Print(("%s: name %s, guid %s, attackable %s, dead %s, combat %s, taken %s -> counted as %s"):format(unit,
+					S(raw), S(okG and guid or nil), S(UnitCanAttack("player", unit)), S(UnitIsDead(unit)), S(UnitAffectingCombat(unit)),
+					tostring(QT.Taken(unit)), tostring(EnemyName(unit) or "-")))
+			end
+		end
+		ns.Print(("%d nameplates. Objectives this counts for:"):format(n))
+		for _, b in ipairs(buttons) do
+			if b.key and b.targets then ns.Print("  " .. b.key .. ": " .. table.concat(b.targets, ", ")) end
+		end
 	elseif cmd == "link" then
 		local item, mob = rest:match("^(.-)%s*=%s*(.+)$")
 		if not item or item == "" then return ns.Print("Usage: /qt link Spider Ichor = Forest Lurker") end
