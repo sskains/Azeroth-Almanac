@@ -321,7 +321,10 @@ local CONT_COLOR = {
 	["Eastern Kingdoms"] = { 0.95, 0.62, 0.2 },
 	["Kalimdor"] = { 0.3, 0.75, 0.7 },
 	["Battlegrounds"] = { 0.85, 0.28, 0.25 },
+	["Elsewhere"] = { 0.45, 0.7, 0.95 },
 }
+-- (what a group is called on its card, when that is not its key: the key stays what the game and the saved folds use)
+local CONT_DISPLAY = { ["Elsewhere"] = "Uncharted Lands" }
 local CONT_DEFAULT = { 0.85, 0.7, 0.3 }
 local function ContColor(name) return CONT_COLOR[name] or CONT_DEFAULT end
 local ZONE_ART = {
@@ -345,6 +348,7 @@ local ZONE_ART = {
 	["Dustwallow Marsh"] = "Zone_DustwallowMarsh",
 	["Eastern Kingdoms"] = "Zone_EasternKingdoms",
 	["Eastern Plaguelands"] = "Zone_EasternPlaguelands",
+	["Elsewhere"] = "Zone_Elsewhere",
 	["Elwynn Forest"] = "Zone_ElwynnForest",
 	["Felwood"] = "Zone_Felwood",
 	["Feralas"] = "Zone_Feralas",
@@ -602,7 +606,7 @@ local function FillContinentBanner(row, r)
 	local name = r.text
 	local c = ContColor(name)
 	FillBanner(row, {
-		name = name, art = ZoneArt(name), icon = W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }), tint = c, big = true,
+		name = CONT_DISPLAY[name] or name, art = ZoneArt(name), icon = W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }), tint = c, big = true,
 		count = "|cffcccccc" .. (name == L["Battlegrounds"] and ns.N(r.count, "battleground", "battlegrounds") or ns.N(r.count, "zone", "zones")) .. (r.explored and r.explored > 0 and ("  \194\183  " .. (L["%d explored"]):format(r.explored)) or "") .. "|r",
 		pill = {
 			sign = collapsed[r.key] and "+" or "-",
