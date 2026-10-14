@@ -18,8 +18,8 @@
   python art_convert.py round <in.png> <out.tga> [size]   round medallion on a flat dark background:
                                                          outside the ring made transparent, squared (default 256)
   python art_convert.py roundicon <out folder>            (0.69.2) the slightly rounded icon's mask (64 px) and ring (128 px): Icon_Mask.tga, Icon_Ring.tga
-  python art_convert.py banner <in.jpg> <out.tga> [W H] [edge=0.05]   (0.69.2) a wide zone picture, no keying: near-black painted borders trimmed, cropped to
-                                                         the W:H shape, resized, opaque (default 512 x 128)
+  python art_convert.py banner <in.jpg> <out.tga> [W H] [edge=0.04] [paint=1.0] [despeckle]   (0.69.2) a wide zone picture, no keying: near-black painted borders trimmed, cropped to
+                                                         the W:H shape, a Gemini glitch in the top smoothed away, optionally made less cartoony (paint=), resized, opaque (default 512 x 128)
   python art_convert.py cobweb <FX_Cobweb.tga>                  (2026-10-10) three corner cobwebs on one sheet, for the cards
   python art_convert.py ruin <Frame_Dungeon.tga> <out.tga> [nowebs]      (0.69.1) a see-through overlay for the dungeon arch: cracks,
                                                          dirt and soot on the stone, moss, cobwebs in the doorway (scipy)
@@ -573,9 +573,54 @@ def roundicon(folder):
     write_tga(rgba(rounded(128, 0, 4)), folder + "\\Icon_Ring.tga")
     print("roundicon: Icon_Mask.tga 64 x 64, Icon_Ring.tga 128 x 128 in " + folder)
 
-def banner(src, dst, w=512, h=128, edge=0.0):
-    """A wide zone picture (Gemini, about 4:1): a painted near-black border along its edges trimmed off (up to a tenth
-    of each side), cropped to the w:h shape about its centre, resized, written opaque."""
+def painterly(im, strength=1.0):
+    """Less cartoon, more painted (for the zone banners): the thin dark outlines lifted, saturation eased, a touch of
+    soft focus, a gentle contrast curve, and fine canvas grain. strength 0 = untouched, 1 = the default look, 2 = strong."""
+    from PIL import ImageFilter, ImageEnhance
+    k = max(0.0, min(float(strength), 2.0))
+    if k == 0:
+        return im
+    rgb = im.convert("RGB")
+    a = np.array(rgb).astype(float)
+    # 1. thin dark outlines: what a closing (max then min filter) adds to a dark thin line, in luminance
+    lum = rgb.convert("L")
+    closed = lum.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))
+    line = np.clip(np.array(closed).astype(float) - np.array(lum).astype(float), 0, 255)
+    line = np.array(Image.fromarray(np.clip(line * 3, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8))).astype(float) / 255
+    base = np.array(rgb.filter(ImageFilter.GaussianBlur(2.2))).astype(float)   # the colour round the line
+    w = (line * min(0.85 * k, 1.0))[..., None]
+    a = a * (1 - w) + np.maximum(base, a) * w
+    img = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+    # 2. soft focus, less saturation, a gentle S curve
+    img = Image.blend(img, img.filter(ImageFilter.GaussianBlur(1.6)), min(0.3 * k, 0.6))
+    img = ImageEnhance.Color(img).enhance(1 - 0.16 * k)
+    arr = np.array(img).astype(float) / 255
+    arr = arr + 0.12 * (arr - 0.5) * (1 - np.abs(arr - 0.5) * 2)
+    # 3. fine canvas grain
+    arr = arr + np.random.default_rng(7).normal(0, 3.0 * k / 255, arr.shape[:2])[..., None]
+    return Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8))
+
+def despeckle_top(im):
+    """Gemini sometimes leaves a scatter of small off-colour squares in the top of a picture (seen in a continent's sky). A
+    median filter over the top 12%, fading out by 12%, removes them. Used with the `despeckle` flag on the pictures that
+    need it (it can't be told reliably from fine painted detail, so it is not automatic)."""
+    from PIL import ImageFilter
+    rgb = im.convert("RGB")
+    H = rgb.height
+    rows = max(24, int(H * 0.12))
+    a = np.array(rgb).astype(float)
+    m = np.array(rgb.filter(ImageFilter.MedianFilter(11))).astype(float)
+    wgt = np.clip(1 - (np.arange(H) - rows * 0.5) / (rows * 0.5), 0, 1)[:, None, None]
+    return Image.fromarray(np.clip(a * (1 - wgt) + m * wgt, 0, 255).astype(np.uint8))
+
+def banner(src, dst, w=512, h=128, edge=0.0, paint=0.0, despeckle=False):
+    """A wide zone picture (Gemini, about 4:1), always through the same steps so the whole set matches:
+    1. a painted near-black border along its edges trimmed off (up to a tenth of each side);
+    2. edge: that share of the width off each side and of the height off top and bottom (a dark vignette painted in);
+    3. cropped to the w:h shape about its centre;
+    4. despeckle: small off-colour squares in the top (a Gemini glitch) smoothed away;
+    5. paint: the painterly filter (strength; 0 = off, 1 = default);
+    6. resized, written opaque."""
     im = Image.open(src).convert("RGB")
     lum = np.array(im).astype(float).mean(axis=2)
     H, W = lum.shape
@@ -591,9 +636,9 @@ def banner(src, dst, w=512, h=128, edge=0.0):
         t = b = max(t, b)   # (the same frame all round: the side where the picture fades dark has no clear jump)
     l, r = trim(cols, W // 10), trim(cols[::-1], W // 10)
     im = im.crop((l, t, W - r, H - b))
-    if edge:   # (a share of the width off every side, as much off the top and bottom: the darkest part of a vignette)
-        e = int(round(im.width * edge))
-        im = im.crop((e, e, im.width - e, im.height - e))
+    if edge:
+        ex, ey = int(round(im.width * edge)), int(round(im.height * edge))
+        im = im.crop((ex, ey, im.width - ex, im.height - ey))
     cw, ch = im.size
     aspect = w / h
     if cw / ch > aspect:
@@ -604,8 +649,13 @@ def banner(src, dst, w=512, h=128, edge=0.0):
         nh = int(round(cw / aspect))
         y0 = (ch - nh) // 2
         im = im.crop((0, y0, cw, y0 + nh))
+    fixed = bool(despeckle)
+    if fixed:
+        im = despeckle_top(im)
+    if paint:
+        im = painterly(im, paint)
     write_tga(im.resize((w, h), Image.LANCZOS).convert("RGBA"), dst)
-    print("banner: trimmed %d/%d/%d/%d (top/bottom/left/right) -> %d x %d" % (t, b, l, r, w, h))
+    print("banner: trimmed %d/%d/%d/%d%s%s -> %d x %d" % (t, b, l, r, ", top despeckled" if fixed else "", (", paint=%g" % paint) if paint else "", w, h))
 
 if __name__ == "__main__":
     if sys.argv[1] == "frame":
@@ -627,9 +677,10 @@ if __name__ == "__main__":
     elif sys.argv[1] == "roundicon":
         roundicon(sys.argv[2])
     elif sys.argv[1] == "banner":
-        nums = [v for v in sys.argv[4:] if not v.startswith("edge=")]
+        nums = [v for v in sys.argv[4:] if not v.startswith(("edge=", "paint=", "despeckle"))]
         eg = [v[5:] for v in sys.argv[4:] if v.startswith("edge=")]
-        banner(sys.argv[2], sys.argv[3], *(int(v) for v in nums[:2]), edge=float(eg[0]) if eg else 0.0)
+        pt = [v[6:] for v in sys.argv[4:] if v.startswith("paint=")]
+        banner(sys.argv[2], sys.argv[3], *(int(v) for v in nums[:2]), edge=float(eg[0]) if eg else 0.0, paint=float(pt[0]) if pt else 0.0, despeckle="despeckle" in sys.argv[4:])
     elif sys.argv[1] == "ruin":
         ruin(sys.argv[2], sys.argv[3], webs="nowebs" not in sys.argv[4:])
     elif sys.argv[1] == "cobweb":

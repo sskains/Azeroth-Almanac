@@ -320,31 +320,88 @@ local CONT_H = 86   -- a continent card
 local CONT_COLOR = {
 	["Eastern Kingdoms"] = { 0.95, 0.62, 0.2 },
 	["Kalimdor"] = { 0.3, 0.75, 0.7 },
+	["Battlegrounds"] = { 0.85, 0.28, 0.25 },
 }
 local CONT_DEFAULT = { 0.85, 0.7, 0.3 }
 local function ContColor(name) return CONT_COLOR[name] or CONT_DEFAULT end
 local ZONE_ART = {
+	["Alterac Mountains"] = "Zone_AlteracMountains",
+	["Alterac Valley"] = "Zone_AlteracValley",
+	["Arathi Basin"] = "Zone_ArathiBasin",
+	["Arathi Highlands"] = "Zone_ArathiHighlands",
 	["Ashenvale"] = "Zone_Ashenvale",
 	["Azshara"] = "Zone_Azshara",
+	["Badlands"] = "Zone_Badlands",
+	["Blasted Lands"] = "Zone_BlastedLands",
 	["Burning Steppes"] = "Zone_BurningSteppes",
 	["Darkshore"] = "Zone_Darkshore",
+	["Darkspear Islands"] = "Zone_DarkspearIslands",
+	["Darnassus"] = "Zone_Darnassus",
+	["Deadwind Pass"] = "Zone_DeadwindPass",
+	["Desolace"] = "Zone_Desolace",
 	["Dun Morogh"] = "Zone_DunMorogh",
+	["Durotar"] = "Zone_Durotar",
 	["Duskwood"] = "Zone_Duskwood",
+	["Dustwallow Marsh"] = "Zone_DustwallowMarsh",
 	["Eastern Kingdoms"] = "Zone_EasternKingdoms",
+	["Eastern Plaguelands"] = "Zone_EasternPlaguelands",
 	["Elwynn Forest"] = "Zone_ElwynnForest",
 	["Felwood"] = "Zone_Felwood",
+	["Feralas"] = "Zone_Feralas",
+	["Hillsbrad Foothills"] = "Zone_HillsbradFoothills",
 	["Ironforge"] = "Zone_Ironforge",
 	["Kalimdor"] = "Zone_Kalimdor",
+	["Loch Modan"] = "Zone_LochModan",
 	["Moonglade"] = "Zone_Moonglade",
+	["Mount Hyjal"] = "Zone_MountHyjal",
+	["Mulgore"] = "Zone_Mulgore",
 	["Orgrimmar"] = "Zone_Orgrimmar",
+	["Redridge Mountains"] = "Zone_RedridgeMountains",
+	["Riverglades"] = "Zone_Riverglades",
 	["Searing Gorge"] = "Zone_SearingGorge",
+	["Shen'dralas"] = "Zone_Shendralas",
+	["Silithus"] = "Zone_Silithus",
+	["Silverpine Forest"] = "Zone_SilverpineForest",
 	["Stormwind City"] = "Zone_StormwindCity",
 	["Stranglethorn Vale"] = "Zone_StranglethornVale",
+	["Swamp of Sorrows"] = "Zone_SwampofSorrows",
+	["Tanaris"] = "Zone_Tanaris",
 	["Teldrassil"] = "Zone_Teldrassil",
 	["The Barrens"] = "Zone_TheBarrens",
+	["The Hinterlands"] = "Zone_TheHinterlands",
+	["Thousand Needles"] = "Zone_ThousandNeedles",
 	["Thunder Bluff"] = "Zone_ThunderBluff",
+	["Tirisfal Glades"] = "Zone_TirisfalGlades",
+	["Un'Goro Crater"] = "Zone_UnGoroCrater",
+	["Undercity"] = "Zone_Undercity",
+	["Warsong Gulch"] = "Zone_WarsongGulch",
+	["Western Plaguelands"] = "Zone_WesternPlaguelands",
 	["Westfall"] = "Zone_Westfall",
+	["Wetlands"] = "Zone_Wetlands",
+	["Winterspring"] = "Zone_Winterspring",
+	["Zephras Isle"] = "Zone_ZephrasIsle",
 }
+-- (looked up without capitals, spaces or punctuation: "Un'Goro Crater" / "Un'goro crater" / "Ungoro Crater" are one)
+local function NormName(n) return ((n or ""):lower():gsub("[^%a]", "")) end
+local ART_BY_NAME = {}
+for name, file in pairs(ZONE_ART) do ART_BY_NAME[NormName(name)] = file end
+local function ZoneArt(name)
+	local k = NormName(name)
+	return ART_BY_NAME[k] or (k:find("darkspear", 1, true) and ART_BY_NAME.darkspearislands) or nil
+end
+
+-- (0.70.1) battlegrounds: their own group, "Battlegrounds", under the continents; each card says what kind it is, with
+-- a small blue and red flag in front (Alliance against Horde). Sizes only where Blizzard has given them.
+local BATTLEGROUNDS = {
+	warsonggulch = L["Capture the flag"],
+	arathibasin = L["Five bases"],
+	alteracvalley = L["Siege"],
+	darkspearislands = L["15 v 15, footholds and a central flag"],
+}
+local function BattlegroundType(name)
+	local k = NormName(name)
+	return BATTLEGROUNDS[k] or (k:find("darkspear", 1, true) and BATTLEGROUNDS.darkspearislands) or nil
+end
 local ZONE_MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 
 local function ZoneBanner(row)
@@ -398,6 +455,21 @@ local function ZoneBanner(row)
 	b.name:SetShadowOffset(1, -1)
 	b.count = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	b.count:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", 1, -3)
+	-- a battleground's two flags (Alliance blue, Horde red) in front of its line
+	b.flags = {}
+	for i, c in ipairs({ { 0.25, 0.45, 0.95 }, { 0.88, 0.2, 0.15 } }) do
+		local t = b:CreateTexture(nil, "OVERLAY")
+		t:SetSize(8, 10)
+		t:SetColorTexture(c[1], c[2], c[3], 1)
+		t:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", 1 + (i - 1) * 11, -4)
+		t:Hide()
+		local pole = b:CreateTexture(nil, "OVERLAY")
+		pole:SetSize(1, 14)
+		pole:SetColorTexture(0.85, 0.7, 0.35, 1)
+		pole:SetPoint("TOPRIGHT", t, "TOPLEFT", 0, 2)
+		pole:Hide()
+		b.flags[#b.flags + 1] = { flag = t, pole = pole }
+	end
 	b.count:SetShadowOffset(1, -1)
 	-- the fold sign in front of the name: a small gold-edged box with + (folded) or - (open); > on the dungeons card
 	local pill = CreateFrame("Button", nil, b)
@@ -484,6 +556,13 @@ local function FillBanner(row, o)
 	if o.icon then b.icon:SetTexture(o.icon) end
 	b.name:SetText(o.name)
 	b.count:SetText(o.count or "")
+	-- (a battleground: its flags, and the line moved clear of them)
+	b.count:ClearAllPoints()
+	b.count:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", o.flags and 25 or 1, -3)
+	for _, f in ipairs(b.flags) do
+		f.flag:SetShown(o.flags and true or false)
+		f.pole:SetShown(o.flags and true or false)
+	end
 	if o.pill then
 		b.pill.sign:SetText("|cffffd100" .. o.pill.sign .. "|r")
 		b.pill.tip = o.pill.label
@@ -523,8 +602,8 @@ local function FillContinentBanner(row, r)
 	local name = r.text
 	local c = ContColor(name)
 	FillBanner(row, {
-		name = name, art = ZONE_ART[name], icon = W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }), tint = c, big = true,
-		count = "|cffcccccc" .. ns.N(r.count, "zone", "zones") .. (r.explored and r.explored > 0 and ("  \194\183  " .. (L["%d explored"]):format(r.explored)) or "") .. "|r",
+		name = name, art = ZoneArt(name), icon = W.FindIcon({ "INV_Misc_Map02", "INV_Misc_Map_01" }), tint = c, big = true,
+		count = "|cffcccccc" .. (name == L["Battlegrounds"] and ns.N(r.count, "battleground", "battlegrounds") or ns.N(r.count, "zone", "zones")) .. (r.explored and r.explored > 0 and ("  \194\183  " .. (L["%d explored"]):format(r.explored)) or "") .. "|r",
 		pill = {
 			sign = collapsed[r.key] and "+" or "-",
 			label = collapsed[r.key] and L["Show zones"] or L["Hide zones"],
@@ -542,8 +621,10 @@ local function FillZoneBanner(row, z, folded, cont)
 	local total, done = ns.Places:Exploration(name)
 	local n = #z.subs
 	FillBanner(row, {
-	name = name, art = ZONE_ART[name], icon = W.KindIcon("zone"), left = 14, top = 4, tint = ContColor(cont),
-		count = total and ((done >= total and "|cff40ff40" or "|cffcccccc") .. (L["%d / %d explored"]):format(done, total) .. "|r")
+	name = name, art = ZoneArt(name), icon = W.KindIcon("zone"), left = 14, top = 4, tint = ContColor(cont),
+		flags = BattlegroundType(name) and true or nil,
+		count = BattlegroundType(name) and ("|cffffd100" .. L["Battleground"] .. "|r |cffcccccc\194\183 " .. BattlegroundType(name) .. "|r")
+			or total and ((done >= total and "|cff40ff40" or "|cffcccccc") .. (L["%d / %d explored"]):format(done, total) .. "|r")
 			or ("|cffcccccc" .. ns.N(n, "place", "places") .. "|r"),
 		pill = n > 0 and {
 			sign = folded and "+" or "-",
@@ -581,32 +662,39 @@ local function Collect()
 			if not collapsed.new then for _, r in ipairs(new) do rows[#rows + 1] = r end end
 		end
 	end
-	-- continents, each with its zones, each with its places (the tree is sorted by continent)
-	local lastCont, contRow
+	-- continents, each with its zones, each with its places (the tree is sorted by continent); the battlegrounds
+	-- are a group of their own at the end, whatever continent the game files their maps under
+	local groups, order = {}, {}
 	for _, z in ipairs(tree) do
-	if not known[z.id] then known[z.id] = true collapsed[z.id] = true end
-	zones = zones + 1
+		if not known[z.id] then known[z.id] = true collapsed[z.id] = true end
+		zones = zones + 1
 		places = places + #z.subs
 		local subs = {}
 		for _, s in ipairs(z.subs) do
 			if Matches(s.rec) and not (ns.New and ns.New:IsNew("places", s.rec)) then subs[#subs + 1] = s end
 		end
 		if Matches(z.rec) or #subs > 0 then
-			local cont = z.rec.continent or L["Elsewhere"]
-			if cont ~= lastCont then
-				lastCont = cont
-				contRow = { kind = "continent", header = false, text = cont, key = "c:" .. cont, count = 0, explored = 0 }
-				rows[#rows + 1] = contRow
-			end
+			local cont = BattlegroundType(z.rec.name) and L["Battlegrounds"] or z.rec.continent or L["Elsewhere"]
+			if not groups[cont] then groups[cont] = {} order[#order + 1] = cont end
+			local g = groups[cont]
+			g[#g + 1] = { z = z, subs = subs }
+		end
+	end
+	for i, c in ipairs(order) do -- (battlegrounds last)
+		if c == L["Battlegrounds"] and i < #order then table.remove(order, i) order[#order + 1] = c break end
+	end
+	for _, cont in ipairs(order) do
+		local contRow = { kind = "continent", header = false, text = cont, key = "c:" .. cont, count = 0, explored = 0 }
+		rows[#rows + 1] = contRow
+		for _, e in ipairs(groups[cont]) do
+			local z = e.z
 			contRow.count = contRow.count + 1
-			do
-				local tot, dn = ns.Places:Exploration(z.rec.name)
-				if tot and dn and dn >= tot then contRow.explored = contRow.explored + 1 end
-			end
+			local tot, dn = ns.Places:Exploration(z.rec.name)
+			if tot and dn and dn >= tot then contRow.explored = contRow.explored + 1 end
 			if not collapsed[contRow.key] then
 				rows[#rows + 1] = { kind = "zone", z = z, id = z.id, cont = cont } -- (id: so Back finds this row again)
 				if not collapsed[z.id] or filter ~= "" then
-					for _, s in ipairs(subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id, cont = cont } end
+					for _, s in ipairs(e.subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id, cont = cont } end
 				end
 			end
 		end
