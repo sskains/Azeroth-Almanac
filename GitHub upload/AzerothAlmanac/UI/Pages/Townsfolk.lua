@@ -11,8 +11,10 @@ local L = ns.L
 local W = ns.Widgets
 
 local page = { key = "townsfolk", title = L["People"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_People", order = 8 }
-local list, detail, countText, kindButton, portrait, nameText, titleText, placeText, mapButton, pinButton
-local filter, kindFilter = "", nil
+local list, detail, countText, portrait, nameText, titleText, placeText, mapButton, pinButton
+local filter, groupFilter = "", nil -- groupFilter: a Townsfolk group's key, "nodes" (flight paths), or nil (everyone)
+local view, crumb = "cards", nil -- "cards" | "list"; crumb: the open card's name
+local cardBar, backBtn, crumbText, cardsBtn, listBtn
 local shown -- { npc = id } or { node = name }
 local collapsed = {}
 
@@ -20,16 +22,6 @@ local NOTE = "|cffbfbfbf"
 local FLIGHT_ICON = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" }
 local QUEST_ICON = { "INV_Misc_Note_01", "INV_Letter_15" }
 local SIDE = { A = L["Alliance"], H = L["Horde"], AH = L["Alliance and Horde"] }
-
--- the kinds the filter offers: the Townsfolk groups' families, quest givers and flight paths
-local KINDS = {
-	{ key = nil, label = L["Everyone"] },
-	{ key = "trainer", label = L["Trainers"] },
-	{ key = "service", label = L["Services"] },
-	{ key = "vendor", label = L["Vendors"] },
-	{ key = "quest", label = L["Quest givers"] },
-	{ key = "flight", label = L["Flight paths"] },
-}
 
 local function GoTo(key, method, ...)
 	local args = { ... }
@@ -439,7 +431,7 @@ end
 ---------------------------------------------------------------------------
 
 local function Matches(p)
-	if kindFilter and kindFilter ~= p.group.family then return false end
+	if groupFilter and groupFilter ~= "nodes" and p.group.key ~= groupFilter then return false end
 	if filter == "" then return true end
 	for _, v in ipairs({ p.name, p.title, p.zone, p.sub, p.group.label }) do
 		if v and v:lower():find(filter, 1, true) then return true end
@@ -464,7 +456,9 @@ local function Collect()
 	local order = {}
 	for i, g in ipairs(ns.Townsfolk and ns.Townsfolk.groups or {}) do if g.key then order[g.key] = i end end
 	order.quest = 1000
-	if kindFilter ~= "flight" then
+	-- (a card's list is flat: no heading, nothing folded)
+	local flat = groupFilter ~= nil
+	if groupFilter ~= "nodes" then
 		for _, p in pairs(People()) do
 			total = total + 1
 			if Matches(p) and ns.New and ns.New:IsNew("townsfolk", PersonRec(p)) then
@@ -483,14 +477,14 @@ local function Collect()
 	for _, g in ipairs(groups) do
 		local people = byGroup[g.key]
 		table.sort(people, function(a, b) return (a.name or "") < (b.name or "") end)
-		rows[#rows + 1] = { header = g.label, key = g.key, count = #people }
+		if not flat then rows[#rows + 1] = { header = g.label, key = g.key, count = #people } end
 		for _, p in ipairs(people) do
 			n = n + 1
-			if not collapsed[g.key] then rows[#rows + 1] = { npc = p.npc, p = p } end
+			if flat or not collapsed[g.key] then rows[#rows + 1] = { npc = p.npc, p = p } end
 		end
 	end
 	-- flight paths, by zone
-	if kindFilter == nil or kindFilter == "flight" then
+	if groupFilter == nil or groupFilter == "nodes" then
 		local nodes = {}
 		for name, rec in pairs(ns.Store:Shown("flight")) do
 			total = total + 1
@@ -505,10 +499,10 @@ local function Collect()
 		end
 		if #nodes > 0 then
 			table.sort(nodes, function(a, b) return a.node < b.node end)
-			rows[#rows + 1] = { header = L["Flight paths"], key = "flight", count = #nodes }
+			if not flat then rows[#rows + 1] = { header = L["Flight paths"], key = "nodes", count = #nodes } end
 			for _, e in ipairs(nodes) do
 				n = n + 1
-				if not collapsed.flight then rows[#rows + 1] = e end
+				if flat or not collapsed.nodes then rows[#rows + 1] = e end
 			end
 		end
 	end
@@ -524,34 +518,165 @@ local function Collect()
 	return rows, n, total
 end
 
-local function KindLabel()
-	for _, k in ipairs(KINDS) do if k.key == kindFilter then return k.label end end
-	return L["Everyone"]
+---------------------------------------------------------------------------
+-- (0.70.1) Cards: a small card for each kind of person you have met (Warrior trainers, Innkeepers,
+-- Flight masters ...), in sections like the Creatures page's; a card opens the list on those people
+---------------------------------------------------------------------------
+
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+local PAIR_H, BANNER_H = 60, 58
+local CREST_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true, ROGUE = true,
+	SHAMAN = true, WARLOCK = true, WARRIOR = true }
+-- groups with a painted icon (the rest wear the game's own icons; docs/ART_ASSETS.md lists what is still missing)
+local PAINTED = { fishing = "Icon_Fishing", trainer_other = "Icon_Training", vendor_general = "Icon_Merchant" }
+
+local function NewText(n) return (n and n > 0) and ("  |cff1eff00+" .. n .. "|r") or "" end
+
+local function ArtPath(kind)
+	local a = W.KindArt(kind)
+	if type(a) == "table" then a = a.fallback end
+	return a
 end
 
-local function KindMenu(anchor)
-	local items = { { title = true, text = L["Show"] } }
-	for _, k in ipairs(KINDS) do
-		items[#items + 1] = { text = k.label, selected = k.key == kindFilter, run = function()
-			kindFilter = k.key
-			kindButton:SetText(KindLabel())
-			page:Refresh()
-		end }
+-- a group's card icon, and how much of its edge to cut (a class crest cuts its own painted rim)
+local function GroupIcon(g)
+	if g.class and CREST_CLASSES[g.class] then return MEDIA .. "Crest_" .. g.class, 0.13 end
+	if PAINTED[g.key] then return MEDIA .. PAINTED[g.key], 0 end
+	if g.key == "flight" then return ArtPath("flight"), 0 end -- (the flight masters: the painted gryphon or wind rider by your faction)
+	return W.FindIcon({ g.icon or "INV_Misc_Book_09" }), 0.08
+end
+
+local function ClassColor(class)
+	local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+	if not c then return "|cffffffff" end
+	return ("|cff%02x%02x%02x"):format(c.r * 255 + 0.5, c.g * 255 + 0.5, c.b * 255 + 0.5)
+end
+
+-- open the list on one card's people
+local function OpenCard(label, key)
+	groupFilter, view, crumb = key, "list", label
+	page:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
+local function BackToCards()
+	groupFilter, view, crumb = nil, "cards", nil
+	page:Refresh()
+	if list and list.ScrollTop then list:ScrollTop() end
+end
+
+-- the cards, as list rows. Card rows have no `header` field: the list puts a spacer before every row that has one
+local function CardRows()
+	local rows = {}
+	local TF = ns.Townsfolk
+	local count, news, total, newAll = {}, {}, 0, 0
+	for _, p in pairs(People()) do
+		total = total + 1
+		local key = p.group.key
+		count[key] = (count[key] or 0) + 1
+		if ns.New and ns.New:IsNew("townsfolk", PersonRec(p)) then news[key] = (news[key] or 0) + 1 newAll = newAll + 1 end
 	end
-	W.Menu(anchor, items)
+	local nodes, nodesNew = 0, 0
+	for _, rec in pairs(ns.Store:Shown("flight")) do
+		nodes = nodes + 1
+		if ns.New and ns.New:IsNew("townsfolk", rec) then nodesNew = nodesNew + 1 newAll = newAll + 1 end
+	end
+	if total + nodes == 0 then return rows, 0 end
+	rows[#rows + 1] = { card = "all", count = total + nodes, new = newAll }
+
+	-- the sections, as the Townsfolk groups are headed; only the kinds you've met
+	local sections, byText, cur = {}, {}, nil
+	local function Section(text)
+		if not byText[text] then byText[text] = { text = text, cards = {} } sections[#sections + 1] = byText[text] end
+		return byText[text]
+	end
+	local function GroupCard(g)
+		local icon, crop = GroupIcon(g)
+		return { icon = icon, crop = crop, plain = g.label, count = tostring(count[g.key]) .. NewText(news[g.key]),
+			name = g.class and (ClassColor(g.class) .. g.label .. "|r") or g.label, tip = g.label,
+			action = function() OpenCard(g.label, g.key) end }
+	end
+	for _, g in ipairs(TF and TF.groups or {}) do
+		if g.heading then cur = Section(g.heading)
+		elseif cur and (count[g.key] or 0) > 0 then cur.cards[#cur.cards + 1] = GroupCard(g) end
+	end
+	if nodes > 0 then
+		local sec = Section(L["Services"])
+		sec.cards[#sec.cards + 1] = { icon = ArtPath("flight"), crop = 0, plain = L["Flight paths"], name = L["Flight paths"],
+			count = tostring(nodes) .. NewText(nodesNew), tip = L["Flight paths"], action = function() OpenCard(L["Flight paths"], "nodes") end }
+	end
+	if (count.quest or 0) > 0 then
+		local sec = Section(L["Other"])
+		sec.cards[#sec.cards + 1] = { icon = ArtPath("quest"), crop = 0, plain = L["Quest givers"], name = L["Quest givers"],
+			count = tostring(count.quest) .. NewText(news.quest), tip = L["Quest givers"], action = function() OpenCard(L["Quest givers"], "quest") end }
+	end
+	for _, sec in ipairs(sections) do
+		if #sec.cards > 0 then
+			local key = "s:" .. sec.text
+			rows[#rows + 1] = { card = "section", header = sec.text, key = key }
+			if not collapsed[key] then
+				for i = 1, #sec.cards, 2 do rows[#rows + 1] = { card = "pair", a = sec.cards[i], b = sec.cards[i + 1] } end
+			end
+		end
+	end
+	return rows, total + nodes
+end
+
+-- a card row in the list
+local function FillCardRow(row, r)
+	row.icon:SetTexture(nil)
+	row.text:SetText("")
+	row.right:SetText("")
+	if ns.New then ns.New:MarkRow(row, false) end
+	for _, c in ipairs(row.halves or {}) do c:Hide() end
+	if row.banner then row.banner:Hide() end
+	if r.card == "section" then
+		row:SetHeader(true, collapsed[r.key])
+		row.text:SetText(r.header)
+		return
+	end
+	if r.card == "pair" then
+		local w = row:GetWidth()
+		if not w or w < 50 then w = 300 end -- (before the first layout)
+		for i, o in ipairs({ r.a, r.b }) do
+			local c = W.PairCard(row, i)
+			c:ClearAllPoints()
+			c:SetPoint("TOPLEFT", row, "TOPLEFT", 4 + (i - 1) * (w / 2), -3)
+			c:SetSize(w / 2 - 6, PAIR_H - 6)
+			if o then W.FillPairCard(c, o, PAIR_H) else c:Hide() end
+		end
+		return
+	end
+	if r.card == "all" and W.FillZoneBanner then
+		W.FillZoneBanner(row, { name = L["Show all"], icon = MEDIA .. "Tab_People",
+			count = "|cffcccccc" .. ns.N(r.count, "person", "people") .. "|r" .. NewText(r.new) })
+		if row.banner then row.banner.name:SetTextColor(GameFontNormalLarge:GetTextColor()) end
+	end
+end
+
+local function CardHeight(r)
+	if r.card == "pair" then return PAIR_H end
+	if r.card == "all" then return BANNER_H end
+end
+
+-- the bar over the list: the back arrow and crumb in a card's list; Cards / List on the right
+local function PaintBar()
+	if not cardBar then return end
+	local inCard = view == "list" and crumb ~= nil
+	backBtn:SetShown(inCard)
+	crumbText:SetText(inCard and ("|cffffd100" .. L["People"] .. "|r  |cff999999\226\128\186|r  " .. crumb) or "")
+	cardsBtn:SetActive(view == "cards")
+	listBtn:SetActive(view ~= "cards")
 end
 
 function page:Build(parent, header)
-	local search = W.Search(header, 180, function(text)
-		filter = text
+	view, groupFilter, crumb = "cards", nil, nil -- (each session starts on the cards, as the Creatures page does)
+	local search = W.Search(header, 220, function(text)
+		filter = text or ""
+		if filter ~= "" and view == "cards" then view, groupFilter, crumb = "list", nil, nil end
 		page:Refresh()
 	end)
 	search:SetPoint("LEFT", header, "LEFT", 16, -2)
-	kindButton = W.Dropdown(header, KindLabel(), 130, function(self) KindMenu(self) end)
-	kindButton:SetPoint("LEFT", search, "RIGHT", 12, 0)
-	local hint = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	hint:SetPoint("LEFT", kindButton, "RIGHT", 10, 0)
-	hint:SetText(L["a name, title or place"])
 	countText = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	countText:SetPoint("RIGHT", header, "RIGHT", -12, -2)
 
@@ -559,13 +684,48 @@ function page:Build(parent, header)
 	left:SetPoint("TOPLEFT", 0, 0)
 	left:SetPoint("BOTTOMLEFT", 0, 0)
 	left:SetWidth(320)
+	-- the bar over the list: back arrow and crumb, Cards / List
+	cardBar = CreateFrame("Frame", nil, left)
+	cardBar:SetPoint("TOPLEFT", 4, -4)
+	cardBar:SetPoint("TOPRIGHT", -4, -4)
+	cardBar:SetHeight(26)
+	backBtn = CreateFrame("Button", nil, cardBar)
+	backBtn:SetSize(24, 24)
+	backBtn:SetPoint("LEFT", 2, 0)
+	backBtn.tex = backBtn:CreateTexture(nil, "ARTWORK")
+	backBtn.tex:SetAllPoints()
+	backBtn.tex:SetTexture(MEDIA .. "Back_Arrow")
+	backBtn:SetHighlightTexture(MEDIA .. "Back_Arrow", "ADD")
+	backBtn:SetScript("OnClick", function()
+		if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+		BackToCards()
+	end)
+	backBtn:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT") GameTooltip:AddLine(L["Back to the cards"], 1, 0.82, 0) GameTooltip:Show() end)
+	backBtn:SetScript("OnLeave", GameTooltip_Hide)
+	crumbText = cardBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	crumbText:SetPoint("LEFT", backBtn, "RIGHT", 4, 0)
+	crumbText:SetJustifyH("LEFT")
+	listBtn = W.ViewButton(cardBar, "View_List", L["List"], function() view, crumb, groupFilter = "list", L["Everyone"], nil page:Refresh() end)
+	listBtn:SetPoint("RIGHT", -2, 0)
+	cardsBtn = W.ViewButton(cardBar, "View_Cards", L["Cards"], function() filter = "" BackToCards() end)
+	cardsBtn:SetPoint("RIGHT", listBtn, "LEFT", -4, 0)
+	crumbText:SetPoint("RIGHT", cardsBtn, "LEFT", -6, 0)
+	crumbText:SetWordWrap(false)
 	list = W.List(left, {
-		collapse = { state = collapsed, key = function(r) return r.header and r.key end, refresh = function() page:Refresh() end },
+		collapse = { state = collapsed, key = function(r) return (r.header and r.key) or nil end, refresh = function() page:Refresh() end },
 		rowHeight = 24,
+		heightOf = CardHeight,
+		-- the section you're scrolling through stays pinned at the top
+		sticky = function(r)
+			if r.card == "section" then return { r.header, 1, 0.82, 0.3, collapsed[r.key] } end
+		end,
 		style = "log",   -- the Map & Quest Log look, as on Quests
 		round = true,
 		emptyText = L["No one yet. Trainers, innkeepers, bankers, flight masters, vendors and quest givers are recorded as you meet them."],
 		update = function(row, r)
+			if r.card then FillCardRow(row, r) return end
+			for _, c in ipairs(row.halves or {}) do c:Hide() end
+			if row.banner then row.banner:Hide() end
 			row.icon:ClearAllPoints()
 			row:SetHeader(r.header ~= nil, r.header and collapsed[r.key])
 			if ns.New then ns.New:MarkRow(row, r.isNew, "townsfolk", r.newKey) end
@@ -600,7 +760,18 @@ function page:Build(parent, header)
 		restore = function(r)
 			if r.npc then Show({ npc = r.npc }) elseif r.node then Show({ node = r.node }) end
 		end,
-		onClick = function(r)
+		onClick = function(r, row, mouse)
+			-- the cards: a section folds; a card opens its list (the cards handle their own clicks)
+			if r.card then
+				if mouse and mouse ~= "LeftButton" then return end
+				if r.card == "section" then
+					collapsed[r.key] = (not collapsed[r.key]) or nil
+					page:Refresh()
+				elseif r.card == "all" then
+					OpenCard(L["Everyone"], nil)
+				end
+				return
+			end
 			if r.header then
 				collapsed[r.key] = not collapsed[r.key]
 				page:Refresh()
@@ -613,7 +784,8 @@ function page:Build(parent, header)
 			end
 		end,
 	})
-	list:SetAllPoints(left)
+	list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -32)
+	list:SetPoint("BOTTOMRIGHT", left, "BOTTOMRIGHT", 0, 0)
 
 	detail = W.Detail(parent, 64)
 	detail:SetTheme({ "Tailoring", "Cooking" })
@@ -686,6 +858,15 @@ end
 
 function page:Refresh()
 	if not list then return end
+	PaintBar()
+	if view == "cards" and filter == "" then
+		local rows, total = CardRows()
+		list:SetData(rows)
+		list:Select(nil)
+		countText:SetText(ns.N(total, "person", "people"))
+		if shown then Show(shown) end
+		return
+	end
 	local rows, n, total = Collect()
 	local keep
 	for _, r in ipairs(rows) do
@@ -697,24 +878,19 @@ function page:Refresh()
 	if shown then Show(shown) end
 end
 
+-- (opened from another page) the person's own card list, so their row is there to see
 function page:ShowPerson(npc)
 	ns.UI:Open("townsfolk")
 	shown = { npc = npc }
-	if kindFilter and Person(npc) and Person(npc).group.family ~= kindFilter then
-		kindFilter = nil
-		kindButton:SetText(KindLabel())
-	end
+	local p = Person(npc)
+	view, groupFilter, crumb = "list", p and p.group.key or nil, p and p.group.label or nil
 	self:Refresh()
 end
 
 function page:ShowNode(name)
 	ns.UI:Open("townsfolk")
 	shown = { node = name }
-	if kindFilter and kindFilter ~= "flight" then
-		kindFilter = nil
-		kindButton:SetText(KindLabel())
-	end
-	collapsed.flight = nil
+	view, groupFilter, crumb = "list", "nodes", L["Flight paths"]
 	self:Refresh()
 end
 
