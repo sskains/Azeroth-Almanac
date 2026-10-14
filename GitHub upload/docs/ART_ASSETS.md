@@ -154,3 +154,45 @@ Same family and rules as the Gathering cards above (the shared paragraph first, 
 - [?] Recipe_Tailoring (soft blue and cream; delivered 2026-10-10, docs/art_source/Recipe_Tailoring.png 1024 x 254 -> Media 512 x 128, on the card): a tailor's loft; in the right half, bolts of linen, wool and silk in rich colours, a spinning wheel, a half-sewn embroidered robe on a mannequin, scissors, spools of thread; the left fades into dusky drapery.
 - [?] Recipe_Cooking (warm amber; delivered 2026-10-10, docs/art_source/Recipe_Cooking.png 1024 x 254 -> Media 512 x 128, on the card): a tavern kitchen; in the right half, a cast-iron pot over a crackling hearth, a roast on a spit, fresh bread, sausages, spices and a wooden spoon on a chopping board, steam rising; the left fades into smoky dark beams.
 - [?] Recipe_FirstAid (clean white and red; delivered 2026-10-10, docs/art_source/Recipe_FirstAid.png 1024 x 254 -> Media 512 x 128, on the card): a field medic's table in a canvas tent; in the right half, rolled linen and wool bandages, a small kit of salves and vials, a leather satchel stitched with a simple white leaf emblem, a lantern's warm glow; the left fades into dark canvas.
+
+## People cards: painted icons (0.70.1, 2026-10-14)
+
+The People tab's small cards each wear an icon that fades into the name (the Journal's and Creatures' look). Done: the nine class crests
+(`Crest_<CLASS>`), Fishing (`Icon_Fishing`), Other trainers (`Icon_Training`), General goods (`Icon_Merchant`), Flight masters and
+Flight paths (`Icon_Flight_Gryphon` / `Icon_Flight_WindRider`, by faction), Quest givers (`Tab_Quests`), Show all (`Tab_People`).
+The rest wear the game's own spell and item icons until a painting arrives. Each is a **square painted scene, 256 x 256** (like
+`Icon_Merchant`: one clear subject in a lit scene, dark edges, no text), on flat magenta; convert with `art_convert.py cut ... 256 256 fill`;
+save as `Media/Icon_People_<key>.tga` and add the key to `PAINTED` in `UI/Pages/Townsfolk.lua`.
+
+| Key | Card | Subject |
+|---|---|---|
+| alchemy | Alchemy | bubbling flasks, an alembic and herbs on a workbench |
+| blacksmithing | Blacksmithing | an anvil, a hammer and a glowing forged blade |
+| enchanting | Enchanting | a floating glowing rune over a wand and shimmering dusts |
+| engineering | Engineering | brass gears, goggles and a small gnomish gadget |
+| herbalism | Herbalism | a basket of herbs and flowers with a sickle |
+| leatherworking | Leatherworking | stitched leather, an awl and a skinning knife |
+| mining | Mining | a pickaxe, chunks of ore and a lantern in a mine |
+| skinning | Skinning | a skinning knife and a pelt stretched on a rack |
+| tailoring | Tailoring | a needle, bolts of cloth and spools of thread |
+| cooking | Cooking | an iron pot over a fire, a ladle and ingredients |
+| firstaid | First Aid | rolled linen bandages and a vial of salve on a wooden box |
+| weapon | Weapon masters | a rack of swords, axes and maces |
+| riding | Riding trainers | a saddle, reins and a mount in a stable yard |
+| portal | Portal trainers | a swirling arcane portal arch in a mage tower |
+| pet | Pet trainers | a young wolf, a hawk on a gauntlet and treats |
+| inn | Innkeepers | a warm-lit tavern door, a mug, a key and a bed |
+| bank | Bankers | an open vault door with gold bars and a strongbox |
+| auction | Auctioneers | a gavel, a pile of coins and a ledger |
+| stable | Stable masters | a stall with a saddled mount and hay |
+| guild | Guild masters | a guild tabard on a banner stand, a charter and a quill |
+| battle | Battlemasters | crossed blue and red banners with a war horn |
+| spirit | Spirit healers | a pale winged spirit over a graveyard in soft light |
+| repair | Repair | a mending hammer, a whetstone and a dented shield |
+| vendor_food | Food & drink | bread, cheese, apples and a flagon on a table |
+| vendor_reagents | Reagents | pouches of powders, vials of glowing dust and feathers |
+| vendor_trade | Trade supplies | a crate of ingots, cloth and leather |
+| vendor_ammo | Ammunition | a quiver of arrows and a pouch of shot |
+| vendor_poisons | Poisons | green vials, a skull-marked bottle and a dagger |
+| vendor_other | Other vendors | a market stall with assorted wares |
+| mailbox | Mailboxes | a post box with letters |
