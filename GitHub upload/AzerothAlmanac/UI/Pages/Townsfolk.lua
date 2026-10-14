@@ -713,14 +713,13 @@ function page:Build(parent, header)
 	crumbText:SetWordWrap(false)
 	list = W.List(left, {
 		collapse = { state = collapsed, key = function(r) return (r.header and r.key) or nil end, refresh = function() page:Refresh() end },
-		rowHeight = 24,
+		rowHeight = 26,
 		heightOf = CardHeight,
 		-- the section you're scrolling through stays pinned at the top
 		sticky = function(r)
 			if r.card == "section" then return { r.header, 1, 0.82, 0.3, collapsed[r.key] } end
 		end,
-		style = "log",   -- the Map & Quest Log look, as on Quests
-		round = true,
+		round = true, -- (the plain list style, as the Creatures and Items pages: small grey capitals for the headings)
 		emptyText = L["No one yet. Trainers, innkeepers, bankers, flight masters, vendors and quest givers are recorded as you meet them."],
 		update = function(row, r)
 			if r.card then FillCardRow(row, r) return end

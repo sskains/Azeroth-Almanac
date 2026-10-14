@@ -61,10 +61,12 @@ CREST = CARDS["Warrior"] and tostring(CARDS["Warrior"].icon):find("Crest_WARRIOR
 -- every card row draws through the page's own update (the shared pair cards and the banner)
 FILLED, DRAW_ERR = 0, nil
 for _, r in ipairs(Rows()) do
-	local row = Mock("Row") row.icon = Mock("I") row.text = Mock("T") row.right = Mock("R") row.SetHeader = function() end
-	local ok, err = pcall(PEOPLE_OPTS.update, row, r)
-	if not ok then DRAW_ERR = tostring(err) end
-	for _, c in ipairs(row.halves or {}) do if c:IsShown() then FILLED = FILLED + 1 end end
+	if not r.spacer then -- (the list draws its own spacer rows; they never reach the page)
+		local row = Mock("Row") row.icon = Mock("I") row.text = Mock("T") row.right = Mock("R") row.SetHeader = function() end
+		local ok, err = pcall(PEOPLE_OPTS.update, row, r)
+		if not ok then DRAW_ERR = tostring(err) end
+		for _, c in ipairs(row.halves or {}) do if c:IsShown() then FILLED = FILLED + 1 end end
+	end
 end
 CARDS["Warrior"].action()
 local rows = Rows()
