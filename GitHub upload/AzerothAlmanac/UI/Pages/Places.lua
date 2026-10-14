@@ -366,6 +366,7 @@ local ZONE_ART = {
 	["Shen'dralas"] = "Zone_Shendralas",
 	["Silithus"] = "Zone_Silithus",
 	["Silverpine Forest"] = "Zone_SilverpineForest",
+	["Stonetalon Mountains"] = "Zone_StonetalonMountains",
 	["Stormwind City"] = "Zone_StormwindCity",
 	["Stranglethorn Vale"] = "Zone_StranglethornVale",
 	["Swamp of Sorrows"] = "Zone_SwampofSorrows",
