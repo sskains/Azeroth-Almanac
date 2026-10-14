@@ -11,7 +11,7 @@ local W = ns.Widgets
 local page = { key = "quests", title = L["Quests"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Tab_Quests", order = 5 }
 local list, detail, countText, filterButton
 local filter, statusFilter = "", "a" -- (opens on the quests in your log)
-local actions -- the in-the-log buttons over the page: Show in quest log, Share
+local actions -- the in-the-log buttons over the page: Show in quest log, Share, Abandon
 local shown
 local collapsed = {}
 
@@ -487,6 +487,92 @@ local function Share(qid)
 	pcall(QuestLogPushQuest)
 end
 
+-- (2026-10-13, Shannon) the quest tracker: is it on it; put it on or take it off. Returns the new
+-- state, or nil with why it couldn't (the tracker is full).
+local function Fn(t, k) local f = t and t[k] return type(f) == "function" and f or nil end
+local function Tracked(qid)
+	if Fn(C_QuestLog, "GetQuestWatchType") then
+		local ok, t = pcall(C_QuestLog.GetQuestWatchType, qid)
+		if ok then return t ~= nil end
+	end
+	local i = LogIndex(qid)
+	if i and Fn(_G, "IsQuestWatched") then
+		local ok, v = pcall(IsQuestWatched, i)
+		if ok then return v and true or false end
+	end
+	return false
+end
+local function MaxTracked()
+	local c = Constants and Constants.QuestWatchConsts and Constants.QuestWatchConsts.MAX_QUEST_WATCHES
+	if type(c) == "number" then return c end
+	return type(MAX_WATCHABLE_QUESTS) == "number" and MAX_WATCHABLE_QUESTS or nil
+end
+local function TrackedCount()
+	if Fn(C_QuestLog, "GetNumQuestWatches") then
+		local ok, n = pcall(C_QuestLog.GetNumQuestWatches)
+		if ok and type(n) == "number" then return n end
+	end
+	if Fn(_G, "GetNumQuestWatches") then
+		local ok, n = pcall(GetNumQuestWatches)
+		if ok and type(n) == "number" then return n end
+	end
+	return 0
+end
+local function SetTracked(qid, on)
+	local i = LogIndex(qid)
+	if not i then return nil end
+	if on then
+		local max = MaxTracked()
+		if max and TrackedCount() >= max then return nil, (L["The quest tracker is full (%d quests)."]):format(max) end
+		if Fn(C_QuestLog, "AddQuestWatch") then pcall(C_QuestLog.AddQuestWatch, qid)
+		elseif Fn(_G, "AddQuestWatch") then pcall(AddQuestWatch, i) end
+	else
+		if Fn(C_QuestLog, "RemoveQuestWatch") then pcall(C_QuestLog.RemoveQuestWatch, qid)
+		elseif Fn(_G, "RemoveQuestWatch") then pcall(RemoveQuestWatch, i) end
+	end
+	-- (the game's tracker and log redraw themselves on the event; the old ones need a nudge)
+	if QuestWatch_Update then pcall(QuestWatch_Update) end
+	if QuestLog_Update then pcall(QuestLog_Update) end
+	return Tracked(qid)
+end
+local function ToggleTracked(qid)
+	local now, why = SetTracked(qid, not Tracked(qid))
+	if why then ns.Print(why) end
+	return now
+end
+ns.QuestTracking = { Tracked = Tracked, Set = SetTracked, Toggle = ToggleTracked } -- (for the tests)
+
+-- (2026-10-13, Shannon) abandon it: the game's own "Abandon quest?" confirmation does the rest
+local function Abandon(qid)
+	local i = LogIndex(qid)
+	if not i then return end
+	Select(qid, i)
+	if Fn(_G, "SelectQuestLogEntry") then pcall(SelectQuestLogEntry, i) end -- (the old log's selection, which SetAbandonQuest reads)
+	local name
+	if Fn(C_QuestLog, "SetAbandonQuest") then
+		pcall(C_QuestLog.SetAbandonQuest)
+		local ok, t = pcall(C_QuestLog.GetTitleForQuestID or function() end, qid)
+		name = ok and t or nil
+	elseif Fn(_G, "SetAbandonQuest") then
+		pcall(SetAbandonQuest)
+	end
+	if not name and Fn(_G, "GetAbandonQuestName") then
+		local ok, t = pcall(GetAbandonQuestName)
+		name = ok and t or nil
+	end
+	local rec = ns.Store:Get("quest", qid)
+	name = name or (rec and rec.name) or ""
+	local okI, items = pcall(GetAbandonQuestItems or function() end)
+	if not okI then items = nil end
+	if StaticPopup_Show then
+		if items and items ~= "" and StaticPopupDialogs and StaticPopupDialogs.ABANDON_QUEST_WITH_ITEMS then
+			StaticPopup_Show("ABANDON_QUEST_WITH_ITEMS", name, items)
+		else
+			StaticPopup_Show("ABANDON_QUEST", name)
+		end
+	end
+end
+
 local function PaintActions(qid)
 	if not actions then return end
 	local inLog = LogIndex(qid) ~= nil
@@ -496,6 +582,7 @@ local function PaintActions(qid)
 	local grouped = (IsInGroup and IsInGroup()) or (GetNumGroupMembers and GetNumGroupMembers() > 0)
 	local can = grouped and Pushable(qid)
 	actions.share:SetEnabled(can and true or false)
+	if actions.abandon then actions.abandon:SetEnabled(true) end
 	actions.share.why = not grouped and L["Join a group to share it."] or (not can and L["This quest can't be shared."]) or nil
 end
 
@@ -657,6 +744,24 @@ local function QuestRow(parent, height)
 	row.text:SetWordWrap(false)
 	row.right = top:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	row.right:SetJustifyH("RIGHT")
+	-- (2026-10-13, Shannon) a tick box to put a quest in your log on the tracker or take it off
+	-- (shift-click on the row does the same)
+	row.track = CreateFrame("CheckButton", nil, top, "UICheckButtonTemplate")
+	row.track:SetSize(20, 20)
+	row.track:SetPoint("RIGHT", -6, 0)
+	row.track:SetScript("OnClick", function(self)
+		if not self.qid then return end
+		local now = ToggleTracked(self.qid)
+		self:SetChecked(now and true or false)
+	end)
+	row.track:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(self:GetChecked() and L["On the quest tracker"] or L["Not on the quest tracker"], 1, 0.82, 0)
+		GameTooltip:AddLine(L["Click (or shift-click the quest) to put it on the tracker or take it off."], 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	row.track:SetScript("OnLeave", GameTooltip_Hide)
+	row.track:Hide()
 	-- (0.69.1) a heading under the mouse glows, its words white, its - / + gold (shared with every list)
 	function row:restoreState() self.state:SetVertexColor(1, 1, 1) end
 	W.HeaderHover(row, top, row.bar)
@@ -687,7 +792,7 @@ local function QuestRow(parent, height)
 		self.state:SetShown(on)
 		self.hover:SetShown(not on)
 		self.poi:SetShown(not on)
-		if on then self.icon:Hide() self.dots:Hide() end
+		if on then self.icon:Hide() self.dots:Hide() self.track:Hide() end
 		self.text:ClearAllPoints()
 		self.right:ClearAllPoints()
 		if on then
@@ -706,7 +811,8 @@ local function QuestRow(parent, height)
 		else
 			self.text:SetFontObject(GameFontNormal)
 			self.text:SetPoint("LEFT", self.poi, "RIGHT", 5, 0)
-			self.right:SetPoint("RIGHT", -10, 0)
+			if self.track:IsShown() then self.right:SetPoint("RIGHT", self.track, "LEFT", -2, 0)
+			else self.right:SetPoint("RIGHT", -10, 0) end
 		end
 		self.text:SetPoint("RIGHT", self.right, "LEFT", -6, 0)
 	end
@@ -714,7 +820,7 @@ local function QuestRow(parent, height)
 		self.spacer = on
 		self.text:SetShown(not on)
 		self.right:SetShown(not on)
-		if on then self:SetHeader(false) self.poi:Hide() self.icon:Hide() self.dots:Hide() self.hover:Hide() self.glow:Hide() end
+		if on then self:SetHeader(false) self.poi:Hide() self.icon:Hide() self.dots:Hide() self.hover:Hide() self.glow:Hide() self.track:Hide() end
 		self:EnableMouse(not on)
 	end
 	row:SetHeader(false)
@@ -760,6 +866,11 @@ function page:Build(parent, header)
 		build = QuestRow,
 		emptyText = L["No quests yet. Every quest you're offered is recorded here, and the quests your characters have already done."],
 		update = function(row, r)
+			-- (the tick box for quests in your log: set before the layout so the name makes room)
+			local inLog = r.qid and not r.header and LogIndex(r.qid) ~= nil
+			row.track.qid = inLog and r.qid or nil
+			row.track:SetShown(inLog and true or false)
+			if inLog then row.track:SetChecked(Tracked(r.qid)) end
 			row:SetHeader(r.header ~= nil, r.header and collapsed[r.newHeader and "new" or r.header])
 			if ns.New then ns.New:MarkRow(row, r.isNew, "quests", r.newKey) end
 			if r.header then
@@ -782,6 +893,12 @@ function page:Build(parent, header)
 				collapsed[k] = not collapsed[k]
 				page:Refresh()
 			elseif r.qid then
+				-- (2026-10-13, Shannon) shift-click: on the tracker or off, like the tick box
+				if IsShiftKeyDown and IsShiftKeyDown() and LogIndex(r.qid) then
+					ToggleTracked(r.qid)
+					list:Refresh()
+					return
+				end
 				if ns.New and ns.New:Clicked("quests", r) then list:Refresh() end
 				Show(r.qid)
 			end
@@ -795,7 +912,7 @@ function page:Build(parent, header)
 	-- for a quest in your log: the yellow ! opens it in the game's quest log; Share offers it to
 	-- your group (top right of the parchment)
 	actions = CreateFrame("Frame", nil, detail)
-	actions:SetSize(120, 30)
+	actions:SetSize(210, 30)
 	actions:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -10, -8)
 	actions:SetFrameLevel(detail:GetFrameLevel() + 40)
 	local open = CreateFrame("Button", nil, actions)
@@ -821,6 +938,16 @@ function page:Build(parent, header)
 		GameTooltip:Show()
 	end)
 	actions.share:HookScript("OnLeave", GameTooltip_Hide)
+	-- (2026-10-13, Shannon) Abandon: the game's own confirmation asks first
+	actions.abandon = W.Button(actions, L["Abandon"], 82, function() Abandon(actions.qid) end)
+	actions.abandon:SetPoint("RIGHT", actions.share, "LEFT", -6, 0)
+	actions.abandon:HookScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		GameTooltip:AddLine(L["Abandon this quest"], 1, 0.82, 0)
+		GameTooltip:AddLine(L["Takes it out of your quest log (the game asks you to confirm)."], 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	actions.abandon:HookScript("OnLeave", GameTooltip_Hide)
 	-- (the button lights up when you join or leave a group, and as quests come and go)
 	actions:RegisterEvent("GROUP_ROSTER_UPDATE")
 	actions:RegisterEvent("QUEST_LOG_UPDATE")
@@ -868,5 +995,27 @@ ns:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
 end)
 
 ns:On("RESET", function() shown = nil if list then list:Select(nil) Show(nil) end end)
+
+-- (2026-10-13, Shannon) a quest taken, progressed, completed, turned in or abandoned, or put on or
+-- off the tracker: the list redraws (once per burst, a moment later so the Almanac's own quest
+-- records have caught up), only while the page is showing
+do
+	local pending = false
+	local function Soon()
+		if pending then return end
+		pending = true
+		C_Timer.After(0.15, function()
+			pending = false
+			if list and ns.UI:IsShown() and ns.UI:Current() == "quests" then page:Refresh() end
+		end)
+	end
+	for _, ev in ipairs({ "QUEST_LOG_UPDATE", "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED", "QUEST_WATCH_UPDATE",
+		"QUEST_WATCH_LIST_CHANGED", "UNIT_QUEST_LOG_CHANGED" }) do
+		pcall(ns.RegisterEvent, ns, ev, Soon)
+	end
+	page.RefreshSoon = Soon
+	-- (and as soon as the Almanac's own quest records change: an abandon or hand-in marked at once)
+	ns:On("CHANGED", function(kind) if kind == "quest" then Soon() end end)
+end
 
 ns.UI:RegisterPage(page)

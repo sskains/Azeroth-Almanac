@@ -272,6 +272,30 @@ end
 -- The mob names a button for this objective should target. For items that's the
 -- sources you've learned or linked, plus the database's sources in your current
 -- zone, with any that are nearby right now moved to the front.
+-- the creature a quest item's name belongs to ("Nak's Skull" -> "Nak"), or nil: a possessive at the
+-- start, a name of at least 3 letters, not a trade or rank word ("Mage's Staff" names no creature)
+local NOT_OWNERS = { Mage = true, Warrior = true, Priest = true, Rogue = true, Hunter = true, Druid = true, Paladin = true,
+	Shaman = true, Warlock = true, Thief = true, Traveler = true, Hunters = true, Explorer = true, Miner = true, Merchant = true,
+	Soldier = true, Sailor = true, Captain = true, Adventurer = true, Apprentice = true, Journeyman = true, Expert = true, Artisan = true }
+-- ("Heart of Isha Awak" -> "Isha Awak": after " of ", every word capitalised, not an element or a place word)
+local NOT_OF = { Water = true, Fire = true, Earth = true, Air = true, Light = true, Shadow = true, Frost = true, Nature = true,
+	Arcane = true, Life = true, Death = true, Stone = true, Iron = true, Gold = true, Silver = true, Copper = true, Mithril = true,
+	Thorium = true, Power = true, Wisdom = true, Strength = true, Agility = true, Stamina = true, Intellect = true, Spirit = true }
+function QT.OwnerOf(item)
+	if type(item) ~= "string" then return nil end
+	local owner = item:match("^(.-)'s ")
+	if owner then
+		if #owner < 3 or NOT_OWNERS[owner] or owner:find("%d") then return nil end
+		return owner
+	end
+	owner = item:match("^[%a%-]+ of (.+)$")
+	if not owner or #owner < 3 or owner:find("%d") or NOT_OF[owner] then return nil end
+	for word in owner:gmatch("[^%s]+") do
+		if not word:match("^%u") then return nil end -- ("Heart of the Wild": no)
+	end
+	return owner
+end
+
 local function TargetsFor(name)
 	local obj = objectives[name]
 	if not obj then return end
@@ -291,6 +315,12 @@ local function TargetsFor(name)
 	local zone = GetRealZoneText()
 	for _, entry in ipairs(ns.Drops and ns.Drops[name] or {}) do
 		if DropsInZone(entry, zone) then add(entry[1]) end
+	end
+	-- (Shannon, 2026-10-12) nothing known drops it yet, but the item names its owner: "Nak's Skull"
+	-- comes from Nak (a named mob not met yet: the database only knows met creatures by name)
+	if #list == 0 then
+		local owner = QT.OwnerOf(name)
+		if owner then add(owner) end
 	end
 	if #list == 0 then return end
 

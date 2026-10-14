@@ -29,6 +29,14 @@ local TORCH = { { 0.094, 0.504 }, { 0.906, 0.504 } }
 local SND = { appear = 1487165, fire = 1267926, frost = 1454156, swap = 1713567, banish = 1487165,
 	ankh = 568667, stone = 568770, dome = 1267362, plunder = 567428, boom = 1267926 }
 
+-- Restless Thanes (DESIGN 103): the dwarven ghost by a striking card, and the mist over the board while
+-- the haunting lasts (Shannon's art, 2026-10-11: glow on black, drawn added; both pictures 1024 x 559,
+-- kept at that shape on screen)
+local GHOST_ART, MIST_ART = "FX_ThaneGhost", "FX_HauntMist"
+local ART_ASPECT = 1024 / 559
+local HAUNT = { 1, 1, 1 } -- (the art is already the spirits' pale blue-green)
+SND.haunt, SND.counter = 1487165, 568667 -- (stand-ins: Banish's shadow, Reincarnation's spirit)
+
 local D -- WG.D (the window's helpers), set at the first use
 local function H() D = D or WG.D return D end
 
@@ -638,6 +646,17 @@ local function Run(side, key)
 			end
 		end
 		T = 1.0
+	elseif key == "thanes" then
+		-- the spirits rise: a ghost over the board, then a pale mist that stays while they're restless
+		local ghost = Pic(GHOST_ART, mx, my, d.BW * 0.8, d.BW * 0.8 / ART_ASPECT, true)
+		ghost:SetVertexColor(HAUNT[1], HAUNT[2], HAUNT[3])
+		Pulse(ghost, 0.05, 0.3, 0.5, 0.6, 0.9, 0.25)
+		local mist = Pic(MIST_ART, mx, my, d.BW * 1.2, d.BW * 1.2 / ART_ASPECT * 1.6, true) -- (a little taller than its shape: the board is near square)
+		mist:SetVertexColor(HAUNT[1], HAUNT[2], HAUNT[3])
+		Tween(0.2, 0.6, function(p) mist:SetAlpha(0.35 * p) end)
+		dun.mist = mist
+		d.Play(SND.haunt)
+		T = 1.2
 	elseif key == "wc" then
 		for _, side2 in ipairs({ "me", "bot" }) do
 			local e = g.hands[side2][out.sleep[side2]]
@@ -700,7 +719,7 @@ local function Fire(side, key)
 	g.eventBusy = true
 	g.flying = (g.flying or 0) + 1
 	g.selected, g.targeting, g.pocket = nil, nil, nil
-	local lasting = def.kind == "lasting"
+	local lasting = def.kind == "lasting" or def.corner -- (a `corner` card waits at the corner while it lasts)
 	After(REVEAL_AT, function()
 		if d.Game() ~= g or g.over then return end
 		Reveal(side, def, lasting)
@@ -775,6 +794,11 @@ function WG:DungeonEnd()
 		local c = frame.dcard
 		Tween(0.6, 0.6, function(p) c:SetAlpha(1 - p) end, function() c:Hide() c:SetAlpha(1) end)
 	end
+	if g and g.dun and g.dun.mist then
+		local mist = g.dun.mist
+		g.dun.mist = nil
+		Tween(0.3, 0.6, function(p) mist:SetAlpha(0.35 * (1 - p)) end, function() Free(mist) end)
+	end
 	if g and g.dun and g.dun.dome then
 		local dome = g.dun.dome
 		g.dun.dome = nil
@@ -792,12 +816,46 @@ function WG:DungeonAfterPlay(side, spell)
 		for _, e in ipairs(g.hands[side]) do if e.sleep then e.sleep = nil SetSleep(e.frame, false) end end
 	end
 	local dun = g.dun
+	-- (DESIGN 103) the haunting is over once both players have played their two cards: the mist and
+	-- the card at the corner go
+	if dun.mist and not (g.board.rules and g.board.rules.haunt) then
+		local mist = dun.mist
+		dun.mist = nil
+		Tween(0.4, 0.8, function(p) mist:SetAlpha(0.35 * (1 - p)) end, function() Free(mist) end)
+		local frame = d.Frame()
+		local c = frame and frame.dcard
+		if c and c.mini and c.def and c.def.corner then
+			Tween(0.4, 0.6, function(p) c:SetAlpha(1 - p) end, function() c:Hide() c:SetAlpha(1) end)
+		end
+		d.Note("The Thanes rest again.")
+	end
 	if dun.fired or g.over or WL.Full(g.board) then return end
 	local key = WD.Roll(dun.owned[side], g.board, Hands(g), Info(g), dun.rng)
 	if not key then return end
 	dun.fired = { side = side, key = key }
 	if WG.SaveClear then WG.SaveClear() end -- (#50: a fired event can't be replayed after a /reload)
 	Fire(side, key)
+end
+
+-- (DESIGN 103) Restless Thanes' counter-capture: a dwarven ghost rises beside the enemy card that
+-- strikes back, facing the card it takes, and wails
+function WG:DungeonCounter(cap, delay)
+	local d = H()
+	local g = d.Game()
+	if not (g and cap and cap.from and cap.cell) then return end
+	local fx, fy = Cell(cap.from)
+	local tx, ty = Cell(cap.cell)
+	if not (fx and tx) then return end
+	local size = d.CW * 1.6 -- (its width; the bust's wisps spread wide)
+	-- beside the striking card, on the far side from its target, a little up
+	local x = fx + (fx - tx) * 0.35
+	local y = fy + (fy - ty) * 0.35 - d.CH * 0.15
+	local ghost = Pic(GHOST_ART, x, y, size, size / ART_ASPECT, true)
+	ghost:SetVertexColor(HAUNT[1], HAUNT[2], HAUNT[3])
+	if tx < fx then ghost:SetTexCoord(1, 0, 0, 1) end -- (the art faces right: mirrored to face left)
+	Pulse(ghost, delay or 0, 0.15, 0.45, 0.4, 0.95, 0.15)
+	Tween(delay or 0, 1.0, function(p) ghost:SetPoint("CENTER", d.Frame().board, "TOPLEFT", x, -(y - 12 * p)) end)
+	After(delay or 0, function() d.Play(SND.counter) end)
 end
 
 -- Gnomeregan's Backfire: the card blows up on its square; its player gets a new card and goes again

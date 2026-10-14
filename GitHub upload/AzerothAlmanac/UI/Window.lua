@@ -188,7 +188,9 @@ local function Build()
 	local templated
 	frame, templated = W.Try("Frame", "AzerothAlmanacFrame", UIParent, "PortraitFrameTemplate")
 	frame:SetSize(WIDTH, HEIGHT)
-	frame:SetFrameStrata("HIGH")
+	-- (Shannon, 2026-10-11) the game's own windows' layer (bags, character, spellbook, quest log),
+	-- so a click brings whichever window you pick to the front; on "HIGH" this one always covered them
+	frame:SetFrameStrata("MEDIUM")
 	frame:SetToplevel(true)
 	frame:HookScript("OnShow", frame.Raise) -- (a window opened comes in front: the games share this layer)
 	frame:SetClampedToScreen(true)

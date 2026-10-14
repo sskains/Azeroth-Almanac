@@ -346,7 +346,7 @@ function W.DungeonCard(parent, width)
 				GameTooltip:AddLine(" ")
 				GameTooltip:AddLine("|TInterface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit:16|t " .. (L["Wild Gambit: %s"]):format(e.event), 1, 0.82, 0.25)
 				GameTooltip:AddLine(e.text, 0.9, 0.9, 0.9, true)
-				local when = e.kind == "lasting" and L["Lasts for the rest of the match."] or e.kind == "next" and L["Touches the next card or turn."] or L["Happens at once."]
+				local when = e.turns and (L["Lasts for each player's next %d cards."]):format(e.turns) or e.kind == "lasting" and L["Lasts for the rest of the match."] or e.kind == "next" and L["Touches the next card or turn."] or L["Happens at once."]
 				GameTooltip:AddLine(when, 0.6, 0.6, 0.6, true)
 				GameTooltip:AddLine(L["Drawn by chance during a match (at most once), for a dungeon one of the players has entered."], 0.6, 0.6, 0.6, true)
 			end

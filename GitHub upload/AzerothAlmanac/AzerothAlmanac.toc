@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Azeroth Almanac
 ## Notes: An adventurer's journal for WoW Forever: everything you discover, across all your characters. /aa
-## Author: skain
+## Author: Olaris
 ## Version: 0.70.0
 ## SavedVariables: AzerothAlmanacDB
 ## IconTexture: Interface\AddOns\AzerothAlmanac\Media\Logo_Almanac
@@ -20,6 +20,7 @@ Modules\Items.lua
 Modules\Merchants.lua
 Modules\Trainers.lua
 Data\Items.lua
+Data\QuestMobs.lua
 Modules\ItemDB.lua
 Data\StatWeights.lua
 Modules\Upgrades.lua

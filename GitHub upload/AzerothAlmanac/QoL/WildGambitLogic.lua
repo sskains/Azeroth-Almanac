@@ -488,11 +488,42 @@ local function CaptureFrom(board, cell, owner, opts, captured)
 	return captured
 end
 
+-- (Shannon, 2026-10-11; DESIGN 103) Restless Thanes: the card just placed at `cell` is taken back by
+-- the touching enemy card with the higher side (the biggest margin; never on a tie, never onward).
+-- Its own captures stand. Not a shielded card; an ankh brings it back. Stone cards strike too.
+local function Counter(board, cell, owner)
+	local slot = board[cell]
+	if not (slot and slot.owner == owner and slot.card) or WL.Safe(board, cell) then return nil end
+	local best, bestMargin
+	for _, nb in ipairs(WL.Neighbours(cell)) do
+		local other = board[nb[1]]
+		if other and other.owner and other.owner ~= owner and not other.frozen and other.card then
+			local margin = other.card.s[nb[3]] - slot.card.s[nb[2]]
+			if margin > 0 and (not bestMargin or margin > bestMargin) then best, bestMargin = nb, margin end
+		end
+	end
+	if not best then return nil end
+	local by = board[best[1]].owner
+	local hit = { cell = cell, side = best[3], margin = bestMargin, from = best[1], counter = true, by = by }
+	if board.ankh and board.ankh == owner then
+		board.ankh = nil
+		hit.saved = true
+		return hit
+	end
+	board.lastTaken = board.lastTaken or {}
+	board.lastTaken[owner] = cell
+	slot.owner = by
+	return hit
+end
+WL.Counter = Counter
+
 -- plays `card` for `owner` on `cell`: returns the captured cells ({ cell, side, margin, from }).
+-- Restless Thanes' counter-capture comes last, marked `counter` (its `from` is the enemy card).
 -- A Freezing Trap on the square takes the card for the trap's owner instead ({ cell, trap = owner }).
 function WL.Place(board, cell, card, owner, opts)
 	-- (0.67.0) dungeon events' lasting rules: Thorns (ties win), Rend... chain captures, Rallying Cry
 	local rules = board.rules
+	local haunted
 	if rules then
 		if rules.ties or rules.chain then
 			local o = {}
@@ -500,6 +531,12 @@ function WL.Place(board, cell, card, owner, opts)
 			o.ties = o.ties or rules.ties
 			o.chain = o.chain or rules.chain
 			opts = o
+		end
+		-- Restless Thanes: this card is one of its player's haunted ones (counted here, a trap included)
+		if rules.haunt and (rules.haunt[owner] or 0) > 0 then
+			haunted = true
+			rules.haunt[owner] = rules.haunt[owner] - 1
+			if (rules.haunt.me or 0) <= 0 and (rules.haunt.bot or 0) <= 0 then rules.haunt = nil end
 		end
 		if rules.rally and rules.rally[owner] then
 			rules.rally[owner] = nil
@@ -526,7 +563,12 @@ function WL.Place(board, cell, card, owner, opts)
 	end
 	if traps then traps[cell] = nil end
 	board[cell] = { card = card, owner = owner }
-	return CaptureFrom(board, cell, owner, opts, {})
+	local got = CaptureFrom(board, cell, owner, opts, {})
+	if haunted then
+		local hit = Counter(board, cell, owner)
+		if hit then got[#got + 1] = hit end
+	end
+	return got
 end
 
 function WL.Count(board, owner)
@@ -606,7 +648,11 @@ function WL.BotMove(board, hand, me, theirHand, rng, slip, pool)
 				if b.traps then for k, v in pairs(b.traps) do if v ~= me then b.traps[k] = nil end end end
 				local got = WL.Place(b, cell, card, me)
 				local taken = 0
-				for _, g in ipairs(got) do if not g.saved and not g.trap then taken = taken + 1 end end
+				for _, g in ipairs(got) do
+					if g.counter then
+						if not g.saved then taken = taken - 2 end -- (Restless Thanes: the card goes to them)
+					elseif not g.saved and not g.trap then taken = taken + 1 end
+				end
 				local score = taken * 10
 				for _, nb in ipairs(WL.Neighbours(cell)) do
 					if not b[nb[1]] then

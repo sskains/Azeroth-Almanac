@@ -26,7 +26,7 @@ F = WG.D and WG.D.Frame and WG.D.Frame() or AzerothAlmanacWildGambit
 p.lua("if not F then for _, f in ipairs(FRAMES) do if f.mini then F = f end end end")
 check(p.eval("F ~= nil and F.mini ~= nil"), "the window and its minimize button")
 check((p.eval("F.mini._level") or 0) >= 5 + 50, "the minimize button is above the stone frame (level %s, the border at window + 50)" % p.eval("F.mini._level"))
-check(p.eval("F:GetFrameStrata()") == "HIGH", "the window is on the Almanac's layer (HIGH)")
+check(p.eval("F:GetFrameStrata()") == "MEDIUM", "the window is on the game windows' layer (MEDIUM), so bags and the character window can come in front")
 
 print("after combat")
 p.lua("""

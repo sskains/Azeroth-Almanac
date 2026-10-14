@@ -28,6 +28,10 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 -- the painted board: its picture is shown FRAME_SIZE square, and the gems' grid starts INSET_X / INSET_Y
 -- in from its top left (measured from the art: the sockets' pitch is 94.4 px of 1024, so 50 px here)
 local FRAME_SIZE = 542
+-- (Shannon, 2026-10-13) the game's icon: the gem side of the side panel's pouch (Media\Icon_GemMatch,
+-- cropped from GemMatch_Pouch), in the corner emblem, the title bar and the flight prompt
+local GEM_ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_GemMatch"
+ns.GEM_MATCH_ICON = GEM_ICON
 local RIBBON_V = 0.5547 -- (the ribbon fills this much of its square-ish canvas, from the top: SetTexCoord)
 local PANEL_W = 330 -- the carved side panel (its frame takes 58 px each side, so the field inside is PANEL_W - 124 with a little air)
 local INSET_X, INSET_Y = 73.5, 68.5
@@ -932,7 +936,9 @@ local function Build()
 	frame:SetPoint("CENTER")
 	-- the Almanac's layer (HIGH): opened over the Almanac it comes in front; whichever was clicked
 	-- last is in front (Shannon, 2026-10-10; it was MEDIUM, behind the Almanac)
-	frame:SetFrameStrata("HIGH")
+	-- (Shannon, 2026-10-11) the game's own windows' layer (bags, character, spellbook, quest log),
+	-- so a click brings whichever window you pick to the front; on "HIGH" this one always covered them
+	frame:SetFrameStrata("MEDIUM")
 	frame:SetToplevel(true)
 	frame:HookScript("OnShow", frame.Raise)
 	frame:SetClampedToScreen(true)
@@ -959,7 +965,7 @@ local function Build()
 	local icon = frame:CreateTexture(nil, "ARTWORK")
 	icon:SetSize(28, 28)
 	icon:SetPoint("TOPLEFT", 14, -8)
-	icon:SetTexture(GetIcon(7910) or "Interface\\Icons\\INV_Misc_Gem_01")
+	icon:SetTexture(GEM_ICON)
 	local title = frame:CreateFontString(nil, "OVERLAY")
 	title:SetFont(TITLE_FONT, 22, "")
 	title:SetTextColor(unpack(GOLD))
@@ -1293,10 +1299,10 @@ local function Build()
 	help:SetJustifyH("LEFT")
 	help:SetText("Click two gems next to each other, or drag one. Match 4 for a power gem, 5 for an Arcane Crystal.")
 
-	ns.NativeWindow(frame, { title = "Gem Match", icon = GetIcon(7910) or "Interface\\Icons\\INV_Misc_Gem_01",
+	ns.NativeWindow(frame, { title = "Gem Match", icon = GEM_ICON,
 		hide = { titleBg, icon, title }, close = close, byline = sub })
 	-- the corner icon bigger, in the gold elite frame, as in Wild Gambit
-	ns.GoldEmblem(frame, GetIcon(7910) or "Interface\\Icons\\INV_Misc_Gem_01")
+	ns.GoldEmblem(frame, GEM_ICON)
 	-- the byline ("Azeroth Almanac") in the bottom-left corner, as in Wild Gambit and Murloc Tac Toe
 	-- (Shannon, 2026-10-10; it used to sit under the title, to the right of the big icon)
 	sub:ClearAllPoints()

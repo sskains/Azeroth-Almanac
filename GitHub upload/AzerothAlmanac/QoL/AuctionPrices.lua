@@ -297,6 +297,19 @@ local function AddLines(tooltip, link, data)
 				tooltip:AddDoubleLine(("Auction %d-day avg"):format(days) .. suffix, Money(avg * count), 1, 0.82, 0, 1, 1, 1)
 			end
 		end
+		-- (2026-10-13, Shannon) how many of it sell a day, estimated from scan to scan (AuctionVolume)
+		local id = tonumber(tostring(link):match("item:(%d+)"))
+		if id and ns.AuctionVolume and ns.AuctionVolume.DailyVolume then
+			local perDay, info = ns.AuctionVolume:DailyVolume(id)
+			local text
+			if perDay then
+				text = perDay < 1 and "under 1" or ("~" .. math.floor(perDay + 0.5))
+				text = text .. (" |cff999999(%dh watched)|r"):format(math.floor((info and info.hours or 0) + 0.5))
+			else
+				text = "|cff999999needs a few more scans|r"
+			end
+			tooltip:AddDoubleLine("Sells a day", text, 1, 0.82, 0, 1, 1, 1)
+		end
 		added = true
 	end
 	return added

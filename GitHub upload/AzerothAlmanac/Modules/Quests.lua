@@ -384,6 +384,46 @@ ns:RegisterEvent("QUEST_ACCEPTED", function(_, a, b)
 	Q:Soon()
 end)
 
+-- (2026-10-13, Shannon: abandoning from the Almanac took a while to show) a quest leaving the log
+-- waited ~6 s to be called abandoned (in case it was a hand-in whose "completed" flag lags). Now the
+-- game says which it was: abandoning (the game's own AbandonQuest, from any quest log or the
+-- Almanac) marks it at once, and QUEST_TURNED_IN marks a hand-in done at once.
+local abandonID -- the quest the "Abandon quest?" confirmation is about
+local function SelectedQuest()
+	local id = Call(C_QuestLog and C_QuestLog.GetAbandonQuest)
+	if type(id) == "number" and id > 0 then return id end
+	id = Call(C_QuestLog and C_QuestLog.GetSelectedQuest)
+	if type(id) == "number" and id > 0 then return id end
+	local i = Call(GetQuestLogSelection)
+	if type(i) == "number" and i > 0 and GetQuestLogTitle then
+		local ok, _, _, _, _, _, _, _, qid = pcall(GetQuestLogTitle, i)
+		if ok and type(qid) == "number" and qid > 0 then return qid end
+	end
+end
+function Q:Abandoned(qid)
+	qid = qid or abandonID or SelectedQuest()
+	abandonID = nil
+	if not (ns.db and type(qid) == "number") then return end
+	local cur = Status(qid)
+	if cur and cur.s == "d" then return end
+	SetStatus(qid, "x", true)
+	missing[qid] = nil
+	ns:Fire("CHANGED", "quest", qid)
+end
+if hooksecurefunc then
+	if SetAbandonQuest then hooksecurefunc("SetAbandonQuest", function() abandonID = SelectedQuest() end) end
+	if C_QuestLog and C_QuestLog.SetAbandonQuest then hooksecurefunc(C_QuestLog, "SetAbandonQuest", function() abandonID = SelectedQuest() end) end
+	if AbandonQuest then hooksecurefunc("AbandonQuest", function() Q:Abandoned() end) end
+	if C_QuestLog and C_QuestLog.AbandonQuest then hooksecurefunc(C_QuestLog, "AbandonQuest", function() Q:Abandoned() end) end
+end
+ns:RegisterEvent("QUEST_TURNED_IN", function(_, qid)
+	qid = R(qid)
+	if not (ns.db and type(qid) == "number") then return end
+	SetStatus(qid, "d")
+	missing[qid] = nil
+	ns:Fire("CHANGED", "quest", qid)
+end)
+
 ---------------------------------------------------------------------------
 -- Quests each character finished before the Almanac was installed
 ---------------------------------------------------------------------------

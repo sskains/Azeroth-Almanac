@@ -41,6 +41,38 @@ local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 local GHOST = { 0.6, 0.85, 1 }
 local MAX_POINTS = 800       -- the newest points in the frame (the oldest are left off)
 local GOLD = { 1, 0.82, 0.3 }
+-- (2026-10-13, Shannon; DESIGN 109) a smoother, more whimsical time lapse: the head glides along the
+-- line as it grows, idle time is squeezed, effects ease, zones crossfade; gryphon flights in an arc,
+-- footstep puffs, a bounce on arrival, day and night on the map, "zzz" over long rests, a sparkly end
+local IDLE_FULL = 15         -- a pause up to this long (seconds) plays at full length
+local IDLE_RATE = 0.04       -- beyond it, idle time plays at 4% ...
+local IDLE_MAX = 120         -- ... and counts as this much at most (a log-out: a short "zzz")
+local WALK_MAX = 30          -- the head walks a stretch in at most this long, at the end of the gap
+local FLY_MAX = 90           -- (a flight is flown the whole way, but counts at most this long on the play clock)
+local SLEEP_AFTER = 600      -- a rest this long (or a log-out) shows "zzz" over the head
+local function Ease(k) return 1 - (1 - k) ^ 3 end        -- quick, then settling
+local function Smooth(k) if k <= 0 then return 0 elseif k >= 1 then return 1 end return k * k * (3 - 2 * k) end
+J.Ease, J.Smooth = Ease, Smooth
+-- how long the move into p from q takes (the rest of the gap was spent standing)
+local function IsFlight(q, p) return p.k == "f" and q.k == "F" end
+local function MoveTime(q, p)
+	return math.min(math.max(0, p.t - q.t), IsFlight(q, p) and 1800 or WALK_MAX)
+end
+local function IdleWeight(idle)
+	if idle <= IDLE_FULL then return idle end
+	return IDLE_FULL + math.min(IDLE_MAX - IDLE_FULL, (idle - IDLE_FULL) * IDLE_RATE)
+end
+J.MoveTime, J.IdleWeight = MoveTime, IdleWeight
+-- the map's light at an hour of the day (0..24): night 0..1 and the warm of dawn and dusk 0..1
+function J.Light(hour)
+	local night
+	if hour < 4 or hour >= 21 then night = 1
+	elseif hour < 6.5 then night = 1 - Smooth((hour - 4) / 2.5)
+	elseif hour < 18 then night = 0
+	else night = Smooth((hour - 18) / 3) end
+	local warm = math.max(math.exp(-((hour - 6.5) / 1.2) ^ 2), math.exp(-((hour - 19) / 1.2) ^ 2))
+	return night, warm
+end
 
 -- a point's time on the 12-hour clock: "Oct 10 9:05 PM" (Shannon, 2026-10-10)
 function J.Stamp(t)
@@ -324,7 +356,6 @@ local function TierOf(e)
 	return 1
 end
 J.TierOf = TierOf
-local TIER_RGB = { { 1, 1, 1 }, { 0.12, 1, 0 }, { 0, 0.44, 0.87 }, { 0.64, 0.21, 0.93 }, { 1, 0.5, 0 } }
 
 local function Saved()
 	local s = ns.db and ns.db.settings and ns.db.settings.window
@@ -372,12 +403,40 @@ function W.JourneyPane(parent, opts)
 	local overlay = CreateFrame("Frame", nil, map)
 	overlay:SetAllPoints(map)
 	overlay:SetFrameLevel(map:GetFrameLevel() + 20)
+	-- (2026-10-13) the map just left, fading out under the new one (a crossfade, not a blink)
+	local ghost
+	local function Ghost()
+		if not ghost then
+			ghost = W.ZoneMap(stage)
+			ghost:SetFrameLevel(math.max(0, map:GetFrameLevel() - 1))
+			ghost:Hide()
+		end
+		return ghost
+	end
+	-- (2026-10-13) day and night: the map dims to blue at night and warms at dawn and dusk, by the
+	-- time beside the head (only while playing or scrubbing)
+	local tint = CreateFrame("Frame", nil, map)
+	tint:SetAllPoints(map)
+	tint:SetFrameLevel(map:GetFrameLevel() + 12)
+	tint.night = tint:CreateTexture(nil, "ARTWORK")
+	tint.night:SetAllPoints()
+	tint.night:SetColorTexture(0.06, 0.1, 0.32, 1)
+	tint.night:SetAlpha(0)
+	tint.warm = tint:CreateTexture(nil, "ARTWORK", nil, 1)
+	tint.warm:SetAllPoints()
+	tint.warm:SetColorTexture(1, 0.55, 0.25, 1)
+	tint.warm:SetBlendMode("ADD")
+	tint.warm:SetAlpha(0)
+	tint.n, tint.w = 0, 0
+	f.tint = tint
+	f.GetGhost = function() return ghost end -- (for the tests)
 	local empty = f:CreateFontString(nil, "OVERLAY", "GameFontDisable")
 	empty:SetPoint("CENTER", stage, "CENTER")
 	empty:SetWidth(360)
 
 	local lines, dots, pts, pins, beads = {}, {}, {}, {}, {}
 	local heads = {}
+	f.heads = heads -- (for the tests)
 	local nl, nb = 0, 0
 	local ring = overlay:CreateTexture(nil, "OVERLAY", nil, 7)
 	ring:SetTexture(CIRCLE)
@@ -443,6 +502,21 @@ function W.JourneyPane(parent, opts)
 		h.label = h:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		h.label:SetPoint("LEFT", h, "RIGHT", 4, 0)
 		h.label:SetShadowOffset(1, -1)
+		-- (2026-10-13) the gryphon carried under the face on a flight, and "zzz" over a long rest
+		h.mount = h:CreateTexture(nil, "BORDER")
+		h.mount:SetPoint("CENTER")
+		W.SetTex(h.mount, W.KindArt("flight"))
+		h.mount:Hide()
+		h.zz = {}
+		for i = 1, 3 do
+			local z = h:CreateFontString(nil, "OVERLAY")
+			z:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+			z:SetTextColor(0.85, 0.92, 1)
+			z:SetText("z")
+			z:Hide()
+			h.zz[i] = z
+		end
+		h.hist = {}
 		h.trail = {}
 		for i = 1, 6 do
 			local t = overlay:CreateTexture(nil, "OVERLAY", nil, 3)
@@ -476,19 +550,25 @@ function W.JourneyPane(parent, opts)
 				ClassIcon(h.face, c and c.classFile)
 			end
 		end
+		-- (2026-10-13, Shannon) the trail glows brightest right behind the head, then dims away as
+		-- before (the last ones about where they were); the colour lifted a little toward white
 		for i, t in ipairs(h.trail) do
-			local s = size * (0.55 - i * 0.06)
+			local s = size * (0.86 - i * 0.09)
 			t:SetSize(s, s)
-			t:SetVertexColor(r, g, b, 0.55 - i * 0.08)
+			local lift = 0.35 * 0.6 ^ (i - 1)
+			t:SetVertexColor(r + (1 - r) * lift, g + (1 - g) * lift, b + (1 - b) * lift, 0.07 + 0.9 * 0.6 ^ (i - 1))
 		end
 	end
 
-	local function HideHeads()
-		for _, h in pairs(heads) do
-			h:Hide()
-			for _, t in ipairs(h.trail) do t:Hide() end
-		end
+	local function HideHead(h)
+		h:Hide()
+		for _, t in ipairs(h.trail) do t:Hide() end
+		for _, z in ipairs(h.zz) do z:Hide() end
+		h.mount:Hide()
+		wipe(h.hist)
+		h.lx, h.ly, h.bounceAt, h.walk = nil, nil, nil, 0
 	end
+	local function HideHeads() for _, h in pairs(heads) do HideHead(h) end end
 
 	local function HideAll()
 		for _, t in ipairs(pins) do t:Hide() end
@@ -523,7 +603,8 @@ function W.JourneyPane(parent, opts)
 		t:SetAlpha(spec.a or 1)
 		t:Show()
 		fxLive[#fxLive + 1] = { t = t, t0 = GetTime() + (spec.delay or 0), dur = spec.dur or 0.8, s0 = spec.s0 or 0.4, s1 = spec.s1 or 1.6,
-			a = spec.a or 1, rise = spec.rise or 0, base = base, tall = spec.tall or 1, px = px * w, py = -py * h, delay = spec.delay }
+			a = spec.a or 1, rise = spec.rise or 0, base = base, tall = spec.tall or 1, px = px * w, py = -py * h, delay = spec.delay,
+			dx = spec.dx or 0, dy = spec.dy or 0, fall = spec.fall or 0 }
 		if spec.delay then t:SetAlpha(0) end
 	end
 	local function StepFx()
@@ -536,20 +617,26 @@ function W.JourneyPane(parent, opts)
 				fxPool[#fxPool + 1] = e.t
 				table.remove(fxLive, i)
 			elseif k >= 0 then
-				local sc = e.s0 + (e.s1 - e.s0) * k
+				-- (2026-10-13) eased: bursts out quickly and settles; a soft fade in, a gentle fade out
+				local ek = Ease(k)
+				local sc = e.s0 + (e.s1 - e.s0) * ek
 				e.t:SetSize(e.base * sc, e.base * sc * e.tall)
-				e.t:SetAlpha(e.a * (1 - k))
-				if e.rise ~= 0 then
+				local a = (k < 0.08) and (k / 0.08) or (1 - Smooth((k - 0.3) / 0.7))
+				e.t:SetAlpha(e.a * a)
+				if e.rise ~= 0 or e.dx ~= 0 or e.dy ~= 0 then
 					e.t:ClearAllPoints()
-					e.t:SetPoint("CENTER", overlay, "TOPLEFT", e.px, e.py + e.rise * k)
+					e.t:SetPoint("CENTER", overlay, "TOPLEFT", e.px + e.dx * ek, e.py + (e.rise + e.dy) * ek - e.fall * k * k)
 				end
 			end
 		end
 		-- the map's shake (a death)
 		if f.shakeUntil then
 			if now < f.shakeUntil then
+				-- (2026-10-13) a shudder that dies away, not a random jitter
+				local t = now - (f.shakeUntil - 0.45)
+				local amp = 4 * math.exp(-t * 7)
 				map:ClearAllPoints()
-				map:SetPoint("TOPLEFT", stage, "TOPLEFT", f.mapX + math.random(-3, 3), f.mapY + math.random(-2, 2))
+				map:SetPoint("TOPLEFT", stage, "TOPLEFT", f.mapX + amp * math.sin(t * 46), f.mapY + amp * 0.5 * math.cos(t * 38))
 			else
 				f.shakeUntil = nil
 				map:ClearAllPoints()
@@ -560,7 +647,7 @@ function W.JourneyPane(parent, opts)
 		if f.banner and f.bannerAt then
 			local k = (now - f.bannerAt) / 2.4
 			if k >= 1 then f.banner:Hide() f.bannerAt = nil
-			else f.banner:SetAlpha(k < 0.2 and k / 0.2 or (k > 0.7 and (1 - k) / 0.3) or 1) end
+			else f.banner:SetAlpha(k < 0.2 and Smooth(k / 0.2) or (k > 0.7 and Smooth((1 - k) / 0.3)) or 1) end
 		end
 	end
 	local function ClearFx()
@@ -568,6 +655,7 @@ function W.JourneyPane(parent, opts)
 		wipe(fxLive)
 		if f.banner then f.banner:Hide() f.bannerAt = nil end
 		if f.shakeUntil then f.shakeUntil = nil map:ClearAllPoints() map:SetPoint("TOPLEFT", stage, "TOPLEFT", f.mapX, f.mapY) end
+		if ghost then ghost:Hide() end
 	end
 	f.banner = f:CreateFontString(nil, "OVERLAY")
 	f.banner:SetFont("Fonts\\MORPHEUS.TTF", full and 30 or 18, "OUTLINE")
@@ -613,7 +701,7 @@ function W.JourneyPane(parent, opts)
 			Snd("portal", 3)
 		elseif k == "d" then
 			Fx(x, y, { tex = RING, r = 1, g = 0.15, b = 0.1, dur = 0.8, s0 = 0.4, s1 = 2.6 })
-			if not light then f.shakeUntil = GetTime() + 0.35 end
+			if not light then f.shakeUntil = GetTime() + 0.45 end
 			Snd("death", 3)
 		elseif k == "g" and not (q and q.k == "g") then
 			Fx(x, y, { r = GHOST[1], g = GHOST[2], b = GHOST[3], dur = 1, s1 = 1.8, rise = 12 })
@@ -628,57 +716,162 @@ function W.JourneyPane(parent, opts)
 			Fx(x, y, { r = 0.7, g = 0.4, b = 1, dur = 0.8, s1 = 2.2, delay = 0.1 })
 			Snd("arcane", 3)
 		end
-		-- a discovery passed: by its toast tier
-		if p.e then
-			local tier = TierOf(p.e)
-			local c = TIER_RGB[tier]
-			if tier == 1 then
-				if not light then Fx(x, y, { tex = RING, r = c[1], g = c[2], b = c[3], dur = 0.5, s0 = 0.3, s1 = 1, a = 0.7 }) end
-			else
-				if not light or tier >= 3 then Fx(x, y, { tex = RING, r = c[1], g = c[2], b = c[3], dur = 0.7, s0 = 0.4, s1 = 1.6 + tier * 0.3 }) end
-				if tier >= 2 and not light then
-					local icon = W.KindArt(p.e.k)
-					if type(icon) == "string" then Fx(x, y, { tex = icon, add = false, dur = 1.1, s0 = 0.8, s1 = 1, rise = 20 }) end
+		-- (2026-10-13) arriving by gryphon, hearth, portal, a jump or back to life: the head bounces
+		if k == "f" or k == "h" or k == "i" or (k ~= "g" and q and q.k == "g") or (p.pinFrom and not k) then
+			local hd = heads[p.c]
+			if hd then hd.bounceAt = GetTime() end
+		end
+		-- (2026-10-13, Shannon: "skip past the tier discoveries") passing a discovery fires nothing:
+		-- no tier rings, blooms, icons or chimes; a new zone still shows its name
+		if p.e and p.e.k == "zone" then Banner(p.e.s) end
+	end
+
+	-- how much of the line shows: everything up to this time. While playing or scrubbing, each
+	-- character's head glides from their latest point towards the next, the line growing behind it.
+	local first, last = 0, 0
+	local allPts = {} -- (every point in the frame, on whatever map; `pts`: those on the map shown)
+	local Build -- (forward: the map's drawing, below)
+
+	-- (2026-10-13) the play clock: idle time squeezed, so the time lapse spends its length on travel.
+	-- Knots of (real time, play weight); frac 0..1 of the play length -> a real time.
+	local warpT, warpW = {}, {}
+	local function BuildWarp(all)
+		wipe(warpT) wipe(warpW)
+		if #all == 0 then return end
+		local w = 0
+		warpT[1], warpW[1] = all[1].t, 0
+		for i = 2, #all do
+			local q, p = all[i - 1], all[i]
+			local dt = p.t - q.t
+			if dt > 0 then
+				local move = (q.c == p.c) and MoveTime(q, p) or math.min(dt, WALK_MAX)
+				local idle = dt - move
+				if idle > 0 then
+					w = w + IdleWeight(idle)
+					warpT[#warpT + 1], warpW[#warpW + 1] = q.t + idle, w
 				end
-				if tier >= 4 then Fx(x, y, { r = c[1], g = c[2], b = c[3], dur = 1.2, s0 = 1, s1 = 4, a = 0.6 }) end
-				if tier >= 5 then Fx(x, y, { r = 1, g = 0.85, b = 0.4, dur = 1.6, s0 = 0.6, s1 = 1, tall = 5, rise = 30 }) end
-				if p.e.k == "zone" then Banner(p.e.s) Snd("zone", 3)
-				else Snd("tier" .. tier, tier) end
+				w = w + ((q.c == p.c and IsFlight(q, p)) and math.min(move, FLY_MAX) or move)
+				warpT[#warpT + 1], warpW[#warpW + 1] = p.t, w
+			end
+		end
+	end
+	local function TimeAt(frac)
+		local n = #warpT
+		local total = warpW[n] or 0
+		if n < 2 or total <= 0 then return first + (last - first) * frac end
+		if frac <= 0 then return warpT[1] end
+		if frac >= 1 then return warpT[n] end
+		local target = frac * total
+		local lo, hi = 1, n
+		while hi - lo > 1 do
+			local mid = math.floor((lo + hi) / 2)
+			if warpW[mid] <= target then lo = mid else hi = mid end
+		end
+		local w0, w1 = warpW[lo], warpW[hi]
+		if w1 <= w0 then return warpT[hi] end
+		return warpT[lo] + (warpT[hi] - warpT[lo]) * (target - w0) / (w1 - w0)
+	end
+	f.TimeAt = TimeAt
+
+	-- a point on the stretch into n, k of the way along (pixels on the overlay; flights bow upward)
+	local function PathAt(n, k)
+		local x, y = n.ax + n.adx * k, n.ay + n.ady * k
+		if n.bow then
+			local b = math.sin(math.pi * k) * n.bow
+			x, y = x + n.nx * b, y + n.ny * b
+		end
+		return x, y
+	end
+	-- how far along the stretch from p into n the head is at upTo (0: still at p)
+	local function GlideK(p, n, upTo)
+		local move = MoveTime(p, n)
+		if move <= 0 then return 0 end
+		local k = (upTo - (n.t - move)) / move
+		if k <= 0 then return 0 elseif k >= 1 then return 1 end
+		return k
+	end
+
+	-- a point reached or not: its dot, its line (whole) and its pins
+	local function On(p, on, active)
+		if p.dot then p.dot:SetShown(on) end
+		for _, o in ipairs(p.segs) do
+			if o.cut then o.cut = nil o:SetEndPoint("TOPLEFT", overlay, o.x2, o.y2) end
+			o:SetShown(on)
+		end
+		-- (the swirls of unexplained jumps only while playing or scrubbing: at rest they're clutter)
+		if p.pin then p.pin:SetShown(on and (active or not p.pin.isJump)) end
+		if p.pinFrom then p.pinFrom:SetShown(on and (active or not p.pinFrom.isJump)) end
+	end
+	-- the stretch into n drawn part way, to k
+	local function Partial(n, k)
+		for _, o in ipairs(n.segs) do
+			if o.frac then o:SetShown(o.frac <= k)
+			else
+				o:SetShown(k > 0)
+				local x, y = PathAt(n, k)
+				o:SetEndPoint("TOPLEFT", overlay, x, y)
+				o.cut = true
 			end
 		end
 	end
 
-	-- how much of the line shows: everything up to this time. While playing or scrubbing, each
-	-- character's head sits on their latest point, with a short trail behind it.
-	local first, last = 0, 0
-	local allPts = {} -- (every point in the frame, on whatever map; `pts`: those on the map shown)
-	local Build -- (forward: the map's drawing, below)
+	local cursor, lastBy, partial = 0, {}, {}
+	local Heads -- (below)
 	local function Reveal(upTo)
-		local w, h = map:GetWidth(), map:GetHeight()
-		local lastBy, prevBy = {}, {}
 		local firing = state.playing and not state.scrubbing
-		local active = state.playing or state.scrubbing
-		for _, p in ipairs(pts) do
-			local on = p.t <= upTo
-			if on and not p.fired then
-				p.fired = true
-				if firing then Fire(p, lastBy[p.c]) end
-			end
-			if p.dot then p.dot:SetShown(on) end
-			for _, o in ipairs(p.segs) do o:SetShown(on) end
-			-- (the swirls of unexplained jumps only while playing or scrubbing: at rest they're clutter)
-			if p.pin then p.pin:SetShown(on and (active or not p.pin.isJump)) end
-			if p.pinFrom then p.pinFrom:SetShown(on and (active or not p.pinFrom.isJump)) end
-			if on then
-				prevBy[p.c] = prevBy[p.c] or {}
-				local trail = prevBy[p.c]
-				table.insert(trail, 1, p)
-				if #trail > 7 then trail[8] = nil end
+		local active = (state.playing or state.scrubbing) and true or false
+		if f.revealAt and upTo >= f.revealAt and f.revealActive == active then
+			-- (2026-10-13) forward: only the points newly reached, not every point every frame
+			for i = cursor + 1, #pts do
+				local p = pts[i]
+				if p.t > upTo then break end
+				cursor = i
+				On(p, true, active)
+				if not p.fired then
+					p.fired = true
+					if firing then Fire(p, lastBy[p.c]) end
+				end
 				lastBy[p.c] = p
 			end
+		else
+			wipe(lastBy)
+			cursor = 0
+			for i, p in ipairs(pts) do
+				local on = p.t <= upTo
+				if on then
+					cursor = i
+					if not p.fired then
+						p.fired = true
+						if firing then Fire(p, lastBy[p.c]) end
+					end
+					lastBy[p.c] = p
+				end
+				On(p, on, active)
+			end
+			for c in pairs(partial) do partial[c] = nil end
 		end
-		HideHeads()
+		f.revealAt, f.revealActive = upTo, active
+		f.tintAt = active and upTo or nil
+		Heads(upTo, active)
+	end
+	f.ResetReveal = function() f.revealAt = nil wipe(lastBy) wipe(partial) cursor = 0 end
+
+	local ROCK = { b = true, z = true }
+	function Heads(upTo, active)
+		local w, h = map:GetWidth(), map:GetHeight()
+		local now = GetTime()
+		local fx = FxOn()
+		local light = FxLight()
 		local size = full and math.max(26, unitW / 30) or math.max(18, unitW / 26)
+		-- the stretches drawn part way last frame that aren't any more: whole, or not at all
+		for c, n in pairs(partial) do
+			local p = lastBy[c]
+			if not active or not p or p.nextSame ~= n or n.t <= upTo then
+				On(n, n.t <= upTo, active)
+				partial[c] = nil
+			end
+		end
+		for key, hd in pairs(heads) do if not lastBy[key] and hd:IsShown() then HideHead(hd) end end
 		if not active then
 			-- at rest: a small head on each character's last spot, nothing else
 			for key, p in pairs(lastBy) do
@@ -688,36 +881,135 @@ function W.JourneyPane(parent, opts)
 				hd:SetPoint("CENTER", overlay, "TOPLEFT", p.px * w, -p.py * h)
 				hd:SetAlpha(1)
 				hd.face:SetDesaturated(false)
+				if hd.face.SetRotation then hd.face:SetRotation(0) hd.ring:SetRotation(0) end
 				hd.glow:SetAlpha(0.5)
 				hd.label:SetText("")
+				hd.labelKey = nil
+				hd.mount:Hide()
+				for _, t in ipairs(hd.trail) do t:Hide() end
+				for _, z in ipairs(hd.zz) do z:Hide() end
+				wipe(hd.hist)
+				hd.lx, hd.ly = nil, nil
 				hd:Show()
 			end
 			return
 		end
 		for key, p in pairs(lastBy) do
 			local hd = Head(key)
-			PaintHead(hd, key, p.r, p.g, p.b, size)
-			hd:ClearAllPoints()
-			hd:SetPoint("CENTER", overlay, "TOPLEFT", p.px * w, -p.py * h)
-			hd:SetAlpha(p.k == "g" and 0.55 or 1)
-			hd.face:SetDesaturated(p.k == "d" or p.k == "g")
-			if p.k == "b" or p.k == "z" then
-				-- (on a boat: a gentle bob; a zeppelin sways)
-				local bob = math.sin(GetTime() * (p.k == "b" and 5 or 2.5)) * (p.k == "b" and 2 or 3)
-				hd:ClearAllPoints()
-				hd:SetPoint("CENTER", overlay, "TOPLEFT", p.px * w + (p.k == "z" and bob or 0), -p.py * h + (p.k == "b" and bob or 0))
-			elseif p.k == "F" then
-				hd:SetSize(size * 1.25, size * 1.25) -- (taking off: lifted)
+			-- where the head is: on its point, or gliding along the stretch to the next one
+			local n = p.nextSame
+			local k = (n and n.style and n.t > upTo) and GlideK(p, n, upTo) or 0
+			local x, y
+			if k > 0 then
+				x, y = PathAt(n, k)
+				Partial(n, k)
+				partial[key] = n
+			else
+				x, y = p.px * w, -p.py * h
 			end
-			hd.label:SetText(J.Stamp(p.t) .. "  ·  " .. ZoneName(p.m))
+			local moving = k > 0 and k < 1
+			local style = moving and n.style or nil
+			local flying = style == "dotted"
+			local ride = style == "dashed" and (n.k == "z" or p.k == "z") and "z" or (style == "dashed" and "b") or (not moving and ROCK[p.k or ""] and p.k)
+			local ghostly = p.k == "g" or (moving and n.k == "g")
+			local sz = size * ((flying or (not moving and p.k == "F")) and 1.15 or 1)
+			PaintHead(hd, key, p.r, p.g, p.b, sz)
+			hd:SetAlpha(ghostly and 0.55 or 1)
+			hd.face:SetDesaturated(p.k == "d" or ghostly)
+			-- bob and rock on a boat, sway under a zeppelin, flap on a gryphon
+			local ox, oy, rot = 0, 0, 0
+			if ride == "b" then oy = math.sin(now * 5) * 2 rot = math.sin(now * 2.6) * 0.14
+			elseif ride == "z" then ox = math.sin(now * 2.5) * 3 rot = math.sin(now * 1.6) * 0.06
+			elseif flying then oy = math.sin(now * 9) * sz * 0.06 end
+			if hd.face.SetRotation then hd.face:SetRotation(rot) hd.ring:SetRotation(rot) end
+			hd.mount:SetShown(flying)
+			if flying then
+				hd.mount:SetSize(sz * 1.35, sz * 1.35)
+				hd.mount:ClearAllPoints()
+				hd.mount:SetPoint("CENTER", hd, "CENTER", 0, -sz * 0.32)
+			end
+			-- squash and stretch on arriving
+			if hd.bounceAt then
+				local t = now - hd.bounceAt
+				if t >= 0.7 then hd.bounceAt = nil
+				elseif t >= 0 then
+					local b = 0.24 * math.exp(-t * 5) * math.cos(t * 17)
+					hd.face:SetSize(sz * 0.78 * (1 + b), sz * 0.78 * (1 - b))
+					hd.ring:SetSize(sz * 0.78 / 0.766 * (1 + b), sz * 0.78 / 0.766 * (1 - b))
+					oy = oy + math.max(0, -b) * sz * 0.5
+				end
+			end
+			hd:ClearAllPoints()
+			hd:SetPoint("CENTER", overlay, "TOPLEFT", x + ox, y + oy)
+			-- the time and zone beside it (set when they change, not every frame)
+			local minute = math.floor(upTo / 60)
+			local lk = minute * 100000 + (p.m or 0)
+			if hd.labelKey ~= lk then
+				hd.labelKey = lk
+				hd.label:SetText(J.Stamp(upTo) .. "  ·  " .. ZoneName(p.m))
+			end
 			hd:Show()
-			local trail = prevBy[key]
-			for i = 1, 6 do
-				local q, t = trail[i + 1], hd.trail[i]
-				if q then
+			-- the comet tail: where the head has just been, shrinking into it when it stops
+			local hist = hd.hist
+			if hd.lx and ((x - hd.lx) ^ 2 + (y - hd.ly) ^ 2) > (sz * 4) ^ 2 then wipe(hist) end -- (a jump: no tail across it)
+			local moved = hd.lx and math.sqrt((x - hd.lx) ^ 2 + (y - hd.ly) ^ 2) or 0
+			-- (2026-10-13, Shannon: the glow went in the Wetlands) a slow walk across a big zone moves the
+			-- head only a little each frame: the tail now shrinks only once the head has really stopped
+			-- (it used to lose a glow every 0.1 s whenever a step was short, so a slow walk had none)
+			local top = hist[1]
+			if moved > 0.001 then hd.stillSince = nil elseif not hd.stillSince then hd.stillSince = now end
+			if not top or ((x - top[1]) ^ 2 + (y - top[2]) ^ 2) >= (sz * 0.22) ^ 2 then
+				table.insert(hist, 1, { x, y })
+				if #hist > 7 then hist[8] = nil end
+				hd.histAt = now
+			elseif hd.stillSince and now - hd.stillSince > 0.25 and now - (hd.histAt or 0) > 0.08 and #hist > 0 then
+				hist[#hist] = nil
+				hd.histAt = now
+			end
+			for i, t in ipairs(hd.trail) do
+				local pt = hist[i + 1]
+				if pt then
 					t:ClearAllPoints()
-					t:SetPoint("CENTER", overlay, "TOPLEFT", q.px * w, -q.py * h)
+					t:SetPoint("CENTER", overlay, "TOPLEFT", pt[1], pt[2])
 					t:Show()
+				else
+					t:Hide()
+				end
+			end
+			-- footstep puffs (dust; pale wisps for a ghost, bubbles behind a boat, glints in the air)
+			if fx and moving and moved > 0 and moved < sz * 4 then
+				hd.walk = (hd.walk or 0) + moved
+				local step = sz * (flying and 1.4 or 0.9) * (light and 2 or 1)
+				if hd.walk >= step then
+					hd.walk = 0
+					hd.foot = -(hd.foot or 1)
+					local len = math.max(1, math.sqrt(n.adx ^ 2 + n.ady ^ 2))
+					local side = hd.foot * sz * 0.14
+					local fxp, fyp = x - n.ady / len * side, y + n.adx / len * side
+					local spec
+					if ghostly then spec = { r = GHOST[1], g = GHOST[2], b = GHOST[3], size = sz * 0.35, dur = 0.9, s0 = 0.6, s1 = 1.4, a = 0.5, rise = 6 }
+					elseif flying then spec = { r = 1, g = 0.85, b = 0.45, size = sz * 0.3, dur = 0.8, s0 = 1, s1 = 0.3, a = 0.7, fall = 6 }
+					elseif ride == "b" then spec = { tex = MEDIA .. "FX_Bubbles", size = sz * 0.45, dur = 1, s0 = 0.5, s1 = 1.2, a = 0.6, rise = 4 }
+					elseif ride == "z" then spec = { r = 1, g = 1, b = 1, size = sz * 0.4, dur = 1.1, s0 = 0.5, s1 = 1.4, a = 0.3 }
+					else spec = { tex = MEDIA .. "FX_Dust", add = false, size = sz * 0.32, dur = 0.9, s0 = 0.5, s1 = 1.1, a = 0.55 } end
+					Fx(fxp / w, -fyp / h, spec)
+				end
+			end
+			hd.lx, hd.ly = x, y
+			-- "zzz" over a long rest (or a log-out) once the head has stood a while
+			local nA = p.nextAll
+			local asleep = fx and not moving and nA ~= nil and (nA.t - p.t) >= SLEEP_AFTER and (upTo - p.t) >= 20
+			for i, z in ipairs(hd.zz) do
+				if asleep then
+					local ph = (now * 0.55 + i / 3) % 1
+					z:SetFont("Fonts\\FRIZQT__.TTF", math.max(9, sz * 0.4), "OUTLINE")
+					z:ClearAllPoints()
+					z:SetPoint("BOTTOMLEFT", hd, "TOPRIGHT", -sz * 0.25 + ph * sz * 0.5 + math.sin(ph * 6) * 2, -sz * 0.35 + ph * sz * 0.9)
+					z:SetScale(0.7 + ph * 0.6)
+					z:SetAlpha(math.sin(math.pi * ph) * 0.95)
+					z:Show()
+				else
+					z:Hide()
 				end
 			end
 		end
@@ -747,14 +1039,28 @@ function W.JourneyPane(parent, opts)
 			if p.e then finds = finds + 1 end
 			lastBy[p.c] = p
 		end
+		local light = FxLight()
+		local size = full and math.max(26, unitW / 30) or math.max(18, unitW / 26)
 		for _, p in pairs(lastBy) do
 			for i = 0, 2 do Fx(p.px, p.py, { tex = RING, r = 1, g = 0.82, b = 0.3, dur = 0.9, s0 = 0.4, s1 = 2.2, delay = i * 0.3 }) end
+			-- (2026-10-13) and a burst of gold sparkles that drift out and settle
+			local n = light and 8 or 18
+			for i = 1, n do
+				local a = (i / n) * 2 * math.pi + math.random() * 0.4
+				local d = size * (1.2 + math.random() * 1.8)
+				local warm = math.random()
+				Fx(p.px, p.py, { size = size * (0.22 + math.random() * 0.2), r = 1, g = 0.75 + warm * 0.2, b = 0.25 + warm * 0.4,
+					dur = 1.1 + math.random() * 0.6, s0 = 1, s1 = 0.35, dx = math.cos(a) * d, dy = math.sin(a) * d + size * 0.4,
+					fall = size * 0.8, delay = 0.15 + math.random() * 0.4 })
+			end
+			if not light then Fx(p.px, p.py, { r = 1, g = 0.85, b = 0.4, dur = 1.4, s0 = 0.8, s1 = 5, a = 0.45 }) end
 		end
 		local nz = 0
 		for _ in pairs(zones) do nz = nz + 1 end
 		if full and f.summary then
 			f.summary:SetText(ns.N(nz, "zone", "zones") .. "  ·  " .. ns.N(flights, "flight", "flights") .. "  ·  " .. ns.N(deaths, "death", "deaths") .. "  ·  " .. ns.N(finds, "discovery", "discoveries"))
 			f.summary:Show()
+			f.summaryAt = GetTime() -- (it pops in, below)
 		end
 		if full then J.Sound("finish", 3, 1) end
 	end
@@ -768,8 +1074,15 @@ function W.JourneyPane(parent, opts)
 		if toCont then
 			m = Continent(allPts[#allPts].m)
 		else
-			for i = #allPts, 1, -1 do if allPts[i].t <= upTo then m = allPts[i].m break end end
-			m = m or allPts[1].m
+			local cur
+			for i = #allPts, 1, -1 do if allPts[i].t <= upTo then cur = allPts[i] break end end
+			m = cur and cur.m or allPts[1].m
+			-- (2026-10-13) a flight into another zone: the continent while in the air, so the gryphon
+			-- can be seen crossing; the landing zone takes over when it lands
+			local n = cur and cur.nextAll
+			if cur and cur.k == "F" and n and n.k == "f" and n.m ~= cur.m and upTo >= n.t - MoveTime(cur, n) then
+				m = Continent(cur.m)
+			end
 		end
 		if not m or m == f.shownMap then return end
 		-- (Everyone mode: two characters in different zones would flip the map back and forth)
@@ -777,7 +1090,19 @@ function W.JourneyPane(parent, opts)
 		f.switchedAt = GetTime()
 		-- (what's already behind the heads counts as passed: no burst of old effects on the new map)
 		for _, p in ipairs(allPts) do if p.t <= upTo then p.fired = true end end
+		-- (2026-10-13) the map being left stays underneath and fades out as the new one fades in
+		local old, oldW, oldA = f.shownMap, map:GetWidth(), map:GetAlpha()
 		if not Build(m, allPts) then return end
+		if old and FxOn() then
+			local g = Ghost()
+			if g:Draw(old, oldW) > 0 then
+				g:ClearAllPoints()
+				g:SetPoint("TOPLEFT", stage, "TOPLEFT", f.ghostX or 0, f.ghostY or 0)
+				g:SetAlpha(oldA or 1)
+				g:Show()
+			end
+		end
+		f.fadeTime = toCont and 0.8 or 0.6
 		map:SetAlpha(0)
 		f.fadeAt = GetTime()
 		if not toCont then Banner(ZoneName(m)) end
@@ -787,7 +1112,36 @@ function W.JourneyPane(parent, opts)
 		StepFx()
 		if f.fadeAt then
 			local k = (GetTime() - f.fadeAt) / (f.fadeTime or 0.35)
-			if k >= 1 then map:SetAlpha(1) f.fadeAt = nil else map:SetAlpha(k) end
+			if k >= 1 then
+				map:SetAlpha(1) f.fadeAt = nil
+				if ghost then ghost:Hide() end
+			else
+				map:SetAlpha(Smooth(k))
+				if ghost and ghost:IsShown() then ghost:SetAlpha(1 - Smooth(k)) end
+			end
+		end
+		-- (2026-10-13) day and night, eased towards the hour beside the head (none at rest)
+		do
+			local nTo, wTo = 0, 0
+			if f.tintAt and FxOn() then
+				local minute = math.floor(f.tintAt / 60)
+				if minute ~= tint.minute then
+					tint.minute = minute
+					local d = date("*t", f.tintAt)
+					tint.nTo, tint.wTo = J.Light((d.hour or 12) + (d.min or 0) / 60)
+				end
+				nTo, wTo = tint.nTo or 0, tint.wTo or 0
+			end
+			local e = math.min(1, elapsed * 2.5)
+			tint.n = tint.n + (nTo - tint.n) * e
+			tint.w = tint.w + (wTo - tint.w) * e
+			tint.night:SetAlpha(tint.n * 0.38)
+			tint.warm:SetAlpha(tint.w * 0.16)
+		end
+		if f.summaryAt and f.summary then
+			local k = (GetTime() - f.summaryAt) / 0.5
+			if k >= 1 then f.summary:SetScale(1) f.summary:SetAlpha(1) f.summaryAt = nil
+			else f.summary:SetScale(1 + 0.35 * (1 - Ease(k))) f.summary:SetAlpha(Smooth(k * 1.5)) end
 		end
 		-- (2026-10-10) Play glows while there's a journey you haven't played since opening; the speed
 		-- shows big for a moment when it's changed
@@ -803,9 +1157,9 @@ function W.JourneyPane(parent, opts)
 		if not state.playing then return end
 		state.clock = state.clock + elapsed * state.speed
 		local frac = math.min(1, state.clock / PlayTime())
-		local pulse = 0.7 + 0.3 * math.sin(GetTime() * 9)
+		local pulse = 0.72 + 0.2 * math.sin(GetTime() * 2.4) -- (2026-10-13: breathing, not flickering)
 		for _, hd in pairs(heads) do hd.glow:SetAlpha(pulse) end
-		local upTo = first + (last - first) * frac
+		local upTo = TimeAt(frac)
 		Follow(upTo)
 		Reveal(upTo)
 		SetSlider(frac)
@@ -823,7 +1177,7 @@ function W.JourneyPane(parent, opts)
 
 	-- a fresh run of the time lapse from `frac` (0..1): points before it count as already passed
 	local function Begin(frac)
-		local at = first + (last - first) * frac
+		local at = TimeAt(frac)
 		for _, p in ipairs(pts) do p.fired = p.t < at end
 		if f.summary then f.summary:Hide() end
 		if full then J.Sound("play", 2, 1) end
@@ -862,7 +1216,7 @@ function W.JourneyPane(parent, opts)
 		if state.playing then
 			state.playing = false
 			local at = math.min(1, state.clock / PlayTime())
-			Reveal(first + (last - first) * at)
+			Reveal(TimeAt(at))
 			J.KeepPlace(state.range, at)
 		else
 			-- (from where the slider stands, unless it's at the end)
@@ -995,8 +1349,8 @@ function W.JourneyPane(parent, opts)
 			state.scrubbing = true
 			state.clock = frac * PlayTime()
 			f.fadeTime = 0.35
-			Follow(first + (last - first) * frac, frac >= 0.999)
-			Reveal(first + (last - first) * frac)
+			Follow(TimeAt(frac), frac >= 0.999)
+			Reveal(TimeAt(frac))
 			if math.abs((self.ticked or 0) - v) > 60 then
 				self.ticked = v
 				J.PlayNamed("scrub")
@@ -1088,19 +1442,23 @@ function W.JourneyPane(parent, opts)
 	end
 
 	-- (#49) one stretch of line between two points: solid, dashed (boats, zeppelins) or dotted (flights)
+	-- (2026-10-13) the stretch is kept on p (start, direction, a flight's bow) so the head can glide along
+	-- it and it can be drawn part way: each dash and bead knows how far along it sits (o.frac)
 	local function Segment(p, q, style, w, h, thick, r, g, b, a)
 		local x1, y1, x2, y2 = q.px * w, -q.py * h, p.px * w, -p.py * h
+		local dx, dy = x2 - x1, y2 - y1
+		local len = math.sqrt(dx * dx + dy * dy)
+		p.style, p.ax, p.ay, p.adx, p.ady, p.bow = style, x1, y1, dx, dy, nil
 		if style == "solid" then
 			local l = Line()
 			l:SetThickness(thick)
 			l:SetColorTexture(r, g, b, a)
 			l:SetStartPoint("TOPLEFT", overlay, x1, y1)
 			l:SetEndPoint("TOPLEFT", overlay, x2, y2)
+			l.x2, l.y2, l.frac, l.cut = x2, y2, nil, nil
 			p.segs[#p.segs + 1] = l
 			return
 		end
-		local dx, dy = x2 - x1, y2 - y1
-		local len = math.sqrt(dx * dx + dy * dy)
 		if len < 1 then return end
 		if style == "dashed" then
 			local dash, gap = math.max(5, unitW / 90), math.max(4, unitW / 130)
@@ -1112,18 +1470,27 @@ function W.JourneyPane(parent, opts)
 				l:SetColorTexture(r, g, b, a)
 				l:SetStartPoint("TOPLEFT", overlay, x1 + dx * d / len, y1 + dy * d / len)
 				l:SetEndPoint("TOPLEFT", overlay, x1 + dx * e / len, y1 + dy * e / len)
+				l.frac, l.cut = d / len, nil
 				p.segs[#p.segs + 1] = l
 				d = e + gap
 			end
-		else -- dotted
+		else -- dotted: a flight, bowed upward into a gentle arc
+			local nx, ny = -dy / len, dx / len
+			if ny < 0 then nx, ny = -nx, -ny end
+			p.bow, p.nx, p.ny = math.min(len * 0.18, unitW / 12), nx, ny
 			local step = math.max(6, unitW / 70)
 			local size = math.max(3, thick * 1.6)
-			for d = 0, len, step do
+			local arc = len * (1 + 0.6 * (p.bow / len) ^ 2) -- (the arc's length, near enough)
+			local count = math.max(1, math.floor(arc / step))
+			for i = 0, count do
+				local k = i / count
 				local t = Bead()
 				t:SetSize(size, size)
 				t:SetVertexColor(r, g, b, a)
 				t:ClearAllPoints()
-				t:SetPoint("CENTER", overlay, "TOPLEFT", x1 + dx * d / len, y1 + dy * d / len)
+				local bw = math.sin(math.pi * k) * p.bow
+				t:SetPoint("CENTER", overlay, "TOPLEFT", x1 + dx * k + nx * bw, y1 + dy * k + ny * bw)
+				t.frac = k
 				p.segs[#p.segs + 1] = t
 			end
 		end
@@ -1133,6 +1500,8 @@ function W.JourneyPane(parent, opts)
 	-- each with its dot, pins and the line from the one before it. Used for the whole frame at rest,
 	-- for each zone in turn while the time lapse plays, and for the continent when it ends.
 	function Build(shown, all)
+		f.ghostX, f.ghostY = f.mapX, f.mapY -- (where the map being left sat, for the crossfade)
+		if f.ResetReveal then f.ResetReveal() end
 		HideAll()
 		wipe(pts)
 		nl, nb = 0, 0
@@ -1221,6 +1590,7 @@ function W.JourneyPane(parent, opts)
 				p.px, p.py = px, py
 				p.segs = {}
 				p.pin, p.pinFrom, p.dot = nil, nil, nil
+				p.style, p.bow, p.nextSame = nil, nil, nil
 				if f.drawWho then p.r, p.g, p.b = GOLD[1], GOLD[2], GOLD[3] else p.r, p.g, p.b = ClassRGB(p.c) end -- (one character: gold; was reading an unset global, 2026-10-11)
 				-- discoveries are the dots you can click; the recorder's points only carry the line
 				if p.e then
@@ -1236,6 +1606,7 @@ function W.JourneyPane(parent, opts)
 					if state.focus and p.e == state.focus then focusDot = d end
 				end
 				local q = prevBy[p.c]
+				if q then q.nextSame = p end
 				local ride = p.k == "b" or p.k == "z" or (q and (q.k == "b" or q.k == "z"))
 				-- how you got here: a hearth, a dungeon door, the graveyard after a death (a flight's
 				-- landing gets its dotted line below)
@@ -1344,8 +1715,34 @@ function W.JourneyPane(parent, opts)
 		for _, r in ipairs(J.RANGES) do if r.key == state.range then rangeLabel = r.label end end
 		local whoText = who and ns.CharName(who) or WhoLabel()
 		f.whoText, f.rangeLabel = whoText, rangeLabel
+		-- (2026-10-13) the recorder wrote a point at each zone crossed while on a flight: those are
+		-- dropped, so the take-off and the landing pair up (the dotted arc, the gryphon)
+		do
+			local kept, flying = {}, {}
+			for _, p in ipairs(all) do
+				local c = p.c or 0
+				local fl = flying[c]
+				if p.k == "F" then flying[c] = p.t kept[#kept + 1] = p
+				elseif fl and not p.k and p.t - fl < 1800 and not p.e then -- (skip it)
+				else
+					if p.k then flying[c] = nil end
+					kept[#kept + 1] = p
+				end
+			end
+			all = kept
+		end
 		allPts = all
 		first, last = (all[1] and all[1].t) or 0, (all[#all] and all[#all].t) or 0
+		BuildWarp(all)
+		do -- (each point's next one for the same character, on any map: how long they rested)
+			local prev = {}
+			for _, p in ipairs(all) do
+				p.nextAll = nil
+				local q = prev[p.c or 0]
+				if q then q.nextAll = p end
+				prev[p.c or 0] = p
+			end
+		end
 		if not shown then
 			map:Hide()
 			empty:SetText(L["No journey here yet: each discovery you make marks where you were, and the line joins them."])
@@ -1380,7 +1777,7 @@ function W.JourneyPane(parent, opts)
 			PaintPlay()
 			-- (2026-10-10) where you left off (paused or scrubbed, this time frame), else the whole journey
 			local at = (not state.focus) and #all > 1 and J.KeptPlace(state.range) or 1
-			local upTo = first + (last - first) * at
+			local upTo = TimeAt(at)
 			state.clock = at * PlayTime()
 			SetSlider(at)
 			for _, p in ipairs(all) do p.fired = p.t <= upTo end

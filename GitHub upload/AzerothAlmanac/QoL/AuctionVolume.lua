@@ -7,6 +7,10 @@
 -- and scaled to a day, over the last 7 days.
 -- Shared with guildmates running Azeroth Almanac: sales (fingerprinted, so a sale seen twice counts
 -- once), the watched time, and the lowest prices, which also update your auction prices.
+-- (2026-10-13, Shannon: "include how many units of the item sell a day" on the Auction tooltip) every
+-- other item is estimated the same way, more compactly: each listing kept as "units:hash:time left",
+-- one watched time for the whole house (a full scan sees every item), and sold units per day
+-- (r.allSnap, r.allWatch, r.allSold; not shared). AV:DailyVolume answers for any item.
 
 local _, A = ...
 local ns = A.QoL
@@ -85,6 +89,22 @@ end
 
 local function Prune(r)
 	local oldest = Day(Now()) - KEEP_DAYS
+	-- (2026-10-13) every other item: the watched time and the sold units of the last KEEP_DAYS days
+	local cutoff = Now() - KEEP_DAYS * 86400
+	if r.allWatch then
+		local kept = {}
+		for _, w in ipairs(r.allWatch) do if w[2] > cutoff then kept[#kept + 1] = w end end
+		r.allWatch = kept
+	end
+	for id, days in pairs(r.allSold or {}) do
+		for day in pairs(days) do
+			if day < oldest then days[day] = nil end
+		end
+		if not next(days) then r.allSold[id] = nil end
+	end
+	for id, l in pairs(r.listed) do
+		if l[4] and l[4] < cutoff then r.listed[id] = nil end
+	end
 	for id, days in pairs(r.sales) do
 		for day in pairs(days) do
 			if day < oldest then days[day] = nil end
@@ -94,8 +114,20 @@ local function Prune(r)
 end
 
 -- Estimated sales per day, and details: { hours, days, listed = { n, auctions, sellers, t } }.
+-- (2026-10-13) every other item: one watched time for the whole house, units sold per day
+local function AllVolume(r, id)
+	local watched = 0
+	for _, w in ipairs(r.allWatch or {}) do watched = watched + (w[2] - w[1]) end
+	local info = { hours = watched / 3600, listed = r.listed[id] }
+	if watched < MIN_WATCHED then return nil, info end
+	local units = 0
+	for _, u in pairs((r.allSold or {})[id] or {}) do units = units + u end
+	return units / watched * 86400, info
+end
+
 function AV:DailyVolume(id)
 	local r = Realm()
+	if not Tracked()[id] then return AllVolume(r, id) end
 	local cover = r.cover[id]
 	local watched, first = 0, nil
 	for _, w in ipairs(cover or {}) do
@@ -124,12 +156,18 @@ end
 ---------------------------------------------------------------------------
 
 function AV:OnScanStart()
-	current = { items = {}, lows = {} }
+	current = { items = {}, lows = {}, all = {} }
 	for id in pairs(Tracked()) do current.items[id] = {} end
 end
 
 function AV:OnListing(itemID, count, buyout, owner, timeLeft)
 	if not current then return end
+	-- (2026-10-13) every item, compactly: "units:hash:time left"
+	if itemID and current.all then
+		local all = current.all[itemID]
+		if not all then all = {} current.all[itemID] = all end
+		all[#all + 1] = ("%d:%s:%d"):format(count, Hash(("%.0f:%s"):format(buyout, owner or "?")), timeLeft or 4)
+	end
 	local list = current.items[itemID]
 	if not list then return end
 	-- %.0f, not %d: this client's string.format only takes %d up to 2^31, and joke listings go far higher.
@@ -194,6 +232,42 @@ function AV:OnScanDone()
 		r.listed[id] = { units, #list, nSellers, now }
 	end
 	r.snap = { t = now, items = current.items }
+	-- (2026-10-13) every other item: a listing gone though it couldn't have expired counts as sold
+	local prevAll = r.allSnap
+	local gapAll = prevAll and (now - prevAll.t)
+	if prevAll and gapAll >= MIN_GAP and gapAll <= MAX_GAP then
+		r.allWatch = r.allWatch or {}
+		r.allWatch[#r.allWatch + 1] = { prevAll.t, now }
+		r.allSold = r.allSold or {}
+		local day = Day(now)
+		for id, oldList in pairs(prevAll.items or {}) do
+			if not Tracked()[id] then
+				local remaining = {}
+				for _, entry in ipairs(current.all[id] or {}) do
+					local base = entry:match("^(.*):%d+$")
+					remaining[base] = (remaining[base] or 0) + 1
+				end
+				for _, entry in ipairs(oldList) do
+					local base, tl = entry:match("^(.*):(%d+)$")
+					if (remaining[base] or 0) > 0 then
+						remaining[base] = remaining[base] - 1
+					elseif (MIN_REMAINING[tonumber(tl)] or 0) > gapAll then
+						local sold = r.allSold[id] or {}
+						sold[day] = (sold[day] or 0) + (tonumber(base:match("^(%d+)")) or 1)
+						r.allSold[id] = sold
+					end
+				end
+			end
+		end
+	end
+	for id, list in pairs(current.all) do
+		if not Tracked()[id] then
+			local units = 0
+			for _, entry in ipairs(list) do units = units + (tonumber(entry:match("^(%d+)")) or 0) end
+			r.listed[id] = { units, #list, 0, now }
+		end
+	end
+	r.allSnap = { t = now, items = current.all }
 	Prune(r)
 	if db.share and IsInGuild and IsInGuild() then Share(prev and prev.t, now, watchedIDs, found, current.lows) end
 	current = nil
@@ -279,13 +353,8 @@ local function AddTooltipLines(tooltip)
 	link = ns.Readable(link)
 	local id = link and tonumber(link:match("item:(%d+)"))
 	if not id or not Tracked()[id] then return end
-	local perDay, info = AV:DailyVolume(id)
-	if perDay then
-		tooltip:AddDoubleLine("Sells about", ("%s a day |cff999999(%.1fh watched)|r"):format(
-			perDay < 1 and "<1" or ("~" .. math.floor(perDay + 0.5)), info.hours), 1, 0.82, 0, 1, 1, 1)
-	else
-		tooltip:AddDoubleLine("Sells about", "|cff999999not enough scans yet|r", 1, 0.82, 0, 1, 1, 1)
-	end
+	-- (2026-10-13) how many sell a day is on the Auction lines now (AuctionPrices), for every item
+	local _, info = AV:DailyVolume(id)
 	local listed = info.listed
 	if listed then
 		local sellers = listed[3] > 0 and (", %d sellers"):format(listed[3]) or ""

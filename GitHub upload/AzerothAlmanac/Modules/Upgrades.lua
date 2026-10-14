@@ -215,6 +215,35 @@ local function CanWear(c, classID, subID, isMe, id)
 	return from ~= nil and (c.level or 1) >= from
 end
 
+-- (Shannon, 2026-10-13: cloth was shown as an upgrade for a hunter) the armor type a class should
+-- wear: its heaviest at its level, or the one below it once it has just stepped up (hunters and
+-- shamans leather from 40, warriors and paladins mail from 40, while the mail / plate comes in);
+-- never a lighter type than the piece worn there now. Body slots only (a cloak is "cloth" too).
+local BODY = { INVTYPE_HEAD = true, INVTYPE_SHOULDER = true, INVTYPE_CHEST = true, INVTYPE_ROBE = true, INVTYPE_WAIST = true,
+	INVTYPE_LEGS = true, INVTYPE_FEET = true, INVTYPE_WRIST = true, INVTYPE_HAND = true }
+function U.BestArmor(class, level)
+	local t = ns.ClassGear.armor[class or ""]
+	if not t then return nil end
+	local best, from = nil, 1
+	for sub = 1, 4 do
+		if t[sub] and (level or 1) >= t[sub] then best, from = sub, t[sub] end
+	end
+	return best, from
+end
+local function RightArmor(c, equipLoc, classID, subID, wornLink)
+	if classID ~= 4 or not BODY[equipLoc or ""] or not subID or subID < 1 or subID > 4 then return true end
+	local best, from = U.BestArmor(c.class, c.level)
+	if not best then return true end
+	local lowest = (from > 1) and best - 1 or best
+	if subID < lowest then return false end
+	if wornLink then
+		local _, _, wClass, wSub = Instant(wornLink)
+		if wClass == 4 and wSub and wSub >= 1 and wSub <= 4 and subID < wSub then return false end
+	end
+	return true
+end
+U.RightArmor = RightArmor
+
 ---------------------------------------------------------------------------
 -- What it would replace
 ---------------------------------------------------------------------------
@@ -307,6 +336,10 @@ local function Better(c, item, isMe)
 	local id, equipLoc, classID, subID = Instant(item)
 	if not id or not SLOTS[equipLoc or ""] then return nil end
 	if not CanWear(c, classID, subID, isMe, id) then return nil end
+	do
+		local slots = SLOTS[equipLoc]
+		if not RightArmor(c, equipLoc, classID, subID, slots and WornLink(c, slots[1])) then return nil end
+	end
 	local tree, specName = U.Tree(c)
 	if not tree then return nil end
 	local full = Full(item)

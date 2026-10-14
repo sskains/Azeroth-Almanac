@@ -83,13 +83,23 @@ WD.LIST = {
 		text = "A board card and a hand card of each player's are sacrificed and replaced." },
 	{ key = "naxx", dungeon = "Naxxramas", ids = { 533 }, art = EJ .. "Naxxramas", event = "Frost Breath", kind = "lasting", raid = true,
 		text = "An empty square freezes over: out of play for the rest of the match." },
-	{ key = "thanes", dungeon = "Hall of Thanes", ids = {}, art = MEDIA .. "Scene_Dungeon_HallOfThanes", event = "Anvil Oath", kind = "instant", forever = true,
-		text = "Every card's weakest side gets +2." },
+	-- (Shannon, 2026-10-11; DESIGN 103) Restless Thanes: for each player's next two cards, a card placed
+	-- beside a stronger enemy side is captured by it (the rule: WL.Place, board.rules.haunt). Its card
+	-- waits at the board's corner while the haunting lasts (`corner`).
+	{ key = "thanes", dungeon = "Hall of Thanes", ids = {}, art = MEDIA .. "Scene_Dungeon_HallOfThanes", event = "Restless Thanes", kind = "next", corner = true, turns = 2, forever = true,
+		text = "Restless spirits guard the board: for each player's next two cards, a card placed beside a stronger enemy side is captured by it." },
 	{ key = "lordaeron", dungeon = "Ruins of Lordaeron", ids = { 2999 }, art = MEDIA .. "Scene_Dungeon_RuinsOfLordaeron", event = "Betrayal", kind = "instant", forever = true,
 		text = "Every card on the board changes sides." },
 }
 WD.BY_KEY = {}
 for i, d in ipairs(WD.LIST) do d.n = i WD.BY_KEY[d.key] = d end
+-- events written and kept, but not in play (Shannon decides when they come back): not rolled, not
+-- listed; their rules stay in E below so the code isn't lost
+WD.UNUSED = {
+	-- (Hall of Thanes' first event, replaced by Restless Thanes on 2026-10-11)
+	anvil = { key = "anvil", dungeon = "Hall of Thanes", event = "Anvil Oath", kind = "instant", text = "Every card's weakest side gets +2." },
+}
+WD.HAUNT_TURNS = WD.BY_KEY.thanes.turns -- Restless Thanes: how many cards each player plays under it
 -- (the Spire is one instance: Lower and Upper share its ID, so entering it gives both)
 WD.ICE = { name = "Ice", s = { 0, 0, 0, 0 }, total = 0, ice = true }
 
@@ -542,7 +552,17 @@ E.naxx = {
 	end,
 }
 
+-- Restless Thanes: the haunting (the counter-capture itself is WL.Place's, while board.rules.haunt holds)
 E.thanes = {
+	Can = function(b) return #Empty(b) >= 2 and not (b.rules and b.rules.haunt) end,
+	Do = function(b, _, _, _, out)
+		Rules(b).haunt = { me = WD.HAUNT_TURNS, bot = WD.HAUNT_TURNS }
+		out.rule = "haunt"
+	end,
+}
+
+-- (unused, WD.UNUSED.anvil) Anvil Oath: every card's weakest side gets +2
+E.anvil = {
 	Can = function(b) return #Cards(b) > 0 end,
 	Do = function(b, _, _, _, out)
 		for _, i in ipairs(Cards(b)) do

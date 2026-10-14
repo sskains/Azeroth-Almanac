@@ -2357,7 +2357,9 @@ local function Build()
 	frame:SetPoint("CENTER")
 	-- (Shannon, 2026-10-10) the Almanac's own layer, and in front when it opens: opened over the
 	-- Almanac it used to load behind it
-	frame:SetFrameStrata("HIGH")
+	-- (Shannon, 2026-10-11) the game's own windows' layer (bags, character, spellbook, quest log),
+	-- so a click brings whichever window you pick to the front; on "HIGH" this one always covered them
+	frame:SetFrameStrata("MEDIUM")
 	frame:SetToplevel(true)
 	frame:HookScript("OnShow", frame.Raise)
 	frame:SetClampedToScreen(true)
@@ -3040,6 +3042,19 @@ local function Build()
 		end
 		if self.hover or dealing then self.text:SetTextColor(1, 0.95, 0.7) else self.text:SetTextColor(1, 0.82, 0.4) end
 	end)
+	-- (Shannon, 2026-10-13) the wooden plank under the goblin is a button too: it hangs below and
+	-- past the ring, outside the ring's click area, so it gets its own catcher that does what the
+	-- ring does (click deals, hover lights both, the press shrinks the goblin)
+	local plank = CreateFrame("Button", nil, shuffle)
+	plank:SetSize(128, 30)
+	plank:SetPoint("TOP", shuffle, "BOTTOM", 0, 10)
+	plank:SetFrameLevel(shuffle:GetFrameLevel() + 1)
+	plank:SetScript("OnClick", function() shuffle:GetScript("OnClick")(shuffle) end)
+	plank:SetScript("OnMouseDown", function() shuffle.down = true end)
+	plank:SetScript("OnMouseUp", function() shuffle.down = false end)
+	plank:SetScript("OnEnter", function() shuffle:GetScript("OnEnter")(shuffle) end)
+	plank:SetScript("OnLeave", function() shuffle:GetScript("OnLeave")(shuffle) end)
+	shuffle.plank = plank
 	frame.shuffleButton = shuffle
 	-- Back (to choosing an opponent) and Begin / Ready
 	-- Back is a red arrow in a gold ring in the board's top left corner (the game's back arrow where
@@ -4157,7 +4172,20 @@ local function Play1(side, h, cell)
 	for k, cap in ipairs(got) do
 		local from = game.frames[cap.from] or entry.frame
 		local delay = 0.18 + (k - 1) * 0.46
-		if cap.saved then
+		if cap.counter then
+			-- (2026-10-11, DESIGN 103) Restless Thanes: a dwarven ghost rises by the enemy card, which
+			-- strikes back and takes the card just played (an ankh brings it back)
+			local who = cap.by or (side == "me" and "bot" or "me")
+			delay = delay + 0.15
+			if WG.DungeonCounter then pcall(WG.DungeonCounter, WG, cap, delay) end
+			Bump(from, game.frames[cap.cell] or entry.frame, cap.side, game.color[who], who == "bot", delay + 0.25, not cap.saved and cap.margin >= 3)
+			if cap.saved then
+				Reborn(cap.cell, delay + 0.8)
+				Note("The Thanes strike back, but Reincarnation brings the card back!")
+			else
+				Note("Restless Thanes: the spirits take the card back!")
+			end
+		elseif cap.saved then
 			Bump(from, game.frames[cap.cell], cap.side, game.color[side], side == "bot", delay, false)
 			Reborn(cap.cell, delay + 0.55)
 			Note((game.board[cap.cell].owner == "me" and "Your" or (game.botName .. "'s")) .. " Reincarnation brings the card back!")

@@ -919,7 +919,7 @@ end
 local function MakeButton(e, m)
 	local size = db.iconSize
 	local b = CreateFrame("Button", nil, Holder(), "SecureActionButtonTemplate")
-	b:SetFrameStrata("HIGH")
+	b:SetFrameStrata("LOW") -- (its real layer is set where it's placed: Layer in Strip)
 	b:SetSize(size, size)
 	-- Newer clients only act on the press or the release, depending on the "cast on key down"
 	-- option, so the button listens to both and the game's own click handler picks the right one.
@@ -1168,9 +1168,21 @@ local function BadgeTip(self)
 	GameTooltip:Show()
 end
 
+-- (Shannon, 2026-10-11) the icons and markers sit on the layer of what they're beside (the unit
+-- frame, or the panel), a little above it: on "HIGH" they showed over the Auction House, bags and
+-- every other window
+local function Layer(f, anchor, above)
+	local okS, strata = pcall(anchor.GetFrameStrata, anchor)
+	local okL, level = pcall(anchor.GetFrameLevel, anchor)
+	strata = okS and type(strata) == "string" and strata or "LOW"
+	if strata == "BACKGROUND" then strata = "LOW" end
+	if f:GetFrameStrata() ~= strata then f:SetFrameStrata(strata) end
+	f:SetFrameLevel(math.min(9000, (okL and type(level) == "number" and level or 1) + (above or 10)))
+end
+
 local function MakeMarkers(e)
 	local glow = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-	glow:SetFrameStrata("HIGH")
+	glow:SetFrameStrata("LOW") -- (Layer in PlaceMarkers)
 	glow:EnableMouse(false)
 	glow:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 })
 	-- on the game's portrait frames: their own red status glow, which follows the frame's shape
@@ -1187,7 +1199,7 @@ local function MakeMarkers(e)
 	e.glow = glow
 
 	local badge = CreateFrame("Frame", nil, UIParent)
-	badge:SetFrameStrata("HIGH")
+	badge:SetFrameStrata("LOW")
 	badge:SetSize(32, 14)
 	badge:EnableMouse(true)
 	badge.back = badge:CreateTexture(nil, "BACKGROUND")
@@ -1210,7 +1222,7 @@ local function MakeMarkers(e)
 	-- pets carry a small green paw print, so they're never mistaken for people
 	if e.pet then
 		local paw = CreateFrame("Frame", nil, UIParent)
-		paw:SetFrameStrata("HIGH")
+		paw:SetFrameStrata("LOW")
 		paw:SetSize(14, 14)
 		paw:EnableMouse(false)
 		paw.tex = paw:CreateTexture(nil, "OVERLAY")
@@ -1254,9 +1266,12 @@ local function PlaceMarkers(e, kind, target, y, rowH)
 	if not e.glow then MakeMarkers(e) end
 	e.placed = true
 	local glow, badge = e.glow, e.badge
+	Layer(glow, target, 12)
+	Layer(badge, target, 14)
+	if e.paw then Layer(e.paw, target, 14) end
 	glow:ClearAllPoints()
 	badge:ClearAllPoints()
-	glow.art = nil
+	glow.art, glow.none = nil, nil
 	glow.tex:Hide()
 	glow:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 })
 	if kind == "frame" then
@@ -1271,6 +1286,11 @@ local function PlaceMarkers(e, kind, target, y, rowH)
 		else
 			glow:SetPoint("TOPLEFT", target, "TOPLEFT", -2, 2)
 			glow:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 2, -2)
+			-- (2026-10-13, Shannon picked option 1: the red box round the pet frame) a portrait frame
+			-- without status-glow art (the pet frame) is a box bigger than its picture, so it gets no
+			-- rectangle, only the skull badge; plain rectangular frames (raid-style) keep the outline
+			local name = target and target.GetName and target:GetName() or ""
+			if not name:find("Compact", 1, true) then glow.none = true end
 		end
 		local first = e.buttons[e.order[1]]
 		if first then badge:SetPoint("RIGHT", first, "LEFT", -2, 0) else badge:SetPoint("TOPRIGHT", target, "BOTTOMLEFT", 0, 0) end
@@ -1308,7 +1328,7 @@ local function UpdateMarkers(e)
 		return
 	end
 	local c = AGGRO_COLORS[math.min(3, math.max(1, t.level))]
-	if db.aggroGlow then
+	if db.aggroGlow and not e.glow.none then
 		if e.glowLevel ~= t.level or e.glowArt ~= e.glow.art then
 			e.glowLevel, e.glowArt = t.level, e.glow.art
 			if e.glow.art then e.glow.tex:SetVertexColor(c[1], c[2], c[3], 1) else e.glow:SetBackdropBorderColor(c[1], c[2], c[3], 1) end
@@ -1324,7 +1344,8 @@ local function UpdateMarkers(e)
 		e.glow.pulse:Stop()
 		e.glow:Hide()
 	end
-	if db.aggroBadge then
+	-- (no glow on this frame: the badge stands in for it)
+	if db.aggroBadge or (db.aggroGlow and e.glow.none) then
 		e.badge.skull:SetVertexColor(c[1], c[2], c[3])
 		e.badge.count:SetText(t.count)
 		e.badge.count:SetTextColor(c[1], c[2], c[3])
@@ -1333,6 +1354,7 @@ local function UpdateMarkers(e)
 		e.badge:Hide()
 	end
 end
+HA.PlaceMarkers, HA.UpdateMarkers = PlaceMarkers, UpdateMarkers -- (for the tests)
 
 local function BuildPanel()
 	if panel then return end
@@ -1401,6 +1423,7 @@ local function Strip(e, anchorFrame, side, x, y)
 		local px, py = x + extra + col * (size + GAP), y - line * (size + GAP)
 		b:SetSize(size, size)
 		b:ClearAllPoints()
+		Layer(b, anchorFrame, 10)
 		if side == "right" then
 			b:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", px, py)
 		elseif side == "below" then

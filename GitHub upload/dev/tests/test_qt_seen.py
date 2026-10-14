@@ -43,6 +43,21 @@ p.lua('PLATES.nameplate3 = { guid = "Creature-0-1-1-1-2969-C", name = nil } Fire
 check(p.eval('QT:Nearby("Wiry Swoop")') == 1, "a nameplate filled in late is counted without targeting it")
 p.lua('local ok, e = pcall(SlashCmdList.AZALMQT, "why") WHY = ok or tostring(e)')
 check(p.eval("WHY") is True, "/qt why runs (%s)" % p.eval("WHY"))
+# (2026-10-12) an item no known creature drops yet: its name names the owner
+check(p.eval('QT.OwnerOf("Nak\'s Skull")') == "Nak", "Nak's Skull -> Nak")
+check(p.eval('QT.OwnerOf("Kurzen\'s Head")') == "Kurzen", "Kurzen's Head -> Kurzen")
+check(p.eval('QT.OwnerOf("Mage\'s Robe")') is None and p.eval('QT.OwnerOf("Linen Cloth")') is None and p.eval('QT.OwnerOf("Ox\'s Hide")') is None,
+      "no owner for a class word, a plain item, or a too-short name")
+check(p.eval('QT.OwnerOf("Heart of Isha Awak")') == "Isha Awak" and p.eval('QT.OwnerOf("Scroll of Myzrael")') == "Myzrael",
+      "Heart of Isha Awak -> Isha Awak, Scroll of Myzrael -> Myzrael")
+check(p.eval('QT.OwnerOf("Heart of the Wild")') is None and p.eval('QT.OwnerOf("Essence of Water")') is None,
+      "no owner for 'of the ...' or an element")
+# (DESIGN 105) a quest item whose droppers you haven't met: named from Data\QuestMobs.lua
+p.lua("""C_QuestLog.GetNumQuestLogEntries = function() return 0 end A.db.found.item = A.db.found.item or {} A.db.found.item[5842] = { name = "Unrefined Ore Sample" }
+DROPS = A.QoL.DropsFor("Unrefined Ore Sample")""")
+names = p.eval("DROPS and table.concat((function() local t = {} for i, e in ipairs(DROPS) do t[i] = e[1] end return t end)(), ',')")
+check(names and "Gravelsnout Surveyor" in names and "Gravelsnout Digger" in names, "unmet droppers are named for targeting (%s)" % names)
+check(p.eval("A.Store:Get('creature', 4116) == nil"), "...without the creature appearing in the Almanac (still not met)")
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

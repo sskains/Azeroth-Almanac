@@ -1231,7 +1231,9 @@ local function Build()
 	frame:SetBackdropBorderColor(0.4, 0.32, 0.16, 1)
 	frame:SetPoint("CENTER")
 	-- the Almanac's layer (HIGH), in front when opened (Shannon, 2026-10-10)
-	frame:SetFrameStrata("HIGH")
+	-- (Shannon, 2026-10-11) the game's own windows' layer (bags, character, spellbook, quest log),
+	-- so a click brings whichever window you pick to the front; on "HIGH" this one always covered them
+	frame:SetFrameStrata("MEDIUM")
 	frame:SetToplevel(true)
 	frame:HookScript("OnShow", frame.Raise)
 	frame:SetClampedToScreen(true)

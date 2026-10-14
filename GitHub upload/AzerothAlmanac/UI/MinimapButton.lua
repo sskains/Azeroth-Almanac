@@ -103,7 +103,7 @@ local function MenuItems()
 		{ section = true, text = L["Mini Games"] },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit", text = L["Wild Gambit"], run = function() ns.QoL.WildGambit:Toggle() end },
 		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Icon", text = L["Murloc Tac Toe"], run = function() ns.QoL.MurlocTacToe:Toggle() end },
-		{ icon = "INV_Misc_Gem_Ruby_02", text = L["Gem Match"], run = function() ns.QoL.GemMatch:Toggle() end },
+		{ icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_GemMatch", text = L["Gem Match"], run = function() ns.QoL.GemMatch:Toggle() end },
 		{ divider = true, text = "" },
 		{ icon = "INV_Misc_Gear_01", text = L["Settings"], run = function() ns.Settings:Open() end },
 		{ icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up", text = L["Hide this button"], run = function()

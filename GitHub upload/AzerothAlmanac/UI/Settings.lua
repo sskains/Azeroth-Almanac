@@ -1132,10 +1132,14 @@ local function BuildWings(P)
 	local function Set(key) return function(v) db[key] = v end end
 	P:Section(L["Wings & Whispers"], (L["Meet the creature carrying you on every flight: its name, personality and a fun fact the first time, then how many times you've flown together. %d creatures."]):format(WW:CrewCount()))
 	P:Check(L["Introduce my flying creature"], nil, function() return db.enabled end, Set("enabled"))
-	P:Check(L["Talking portrait panel"], L["The creature's 3D portrait in a story-style panel; its words type out as it talks. Drag to move, right-click to close. Off: chat lines instead."],
+	P:Check(L["Talking portrait panel"], L["The creature's 3D portrait in a gold ring, its words typing out on a plate beside it. Click to see the words at once; drag to move; the x closes it. Off: chat lines instead."],
 		function() return db.panel end, Set("panel"), 1)
 	P:Check(L["Panel on repeat rides too"], nil, function() return db.panelRepeats end, Set("panelRepeats"), 2)
 	P:Check(L["Creature sound"], nil, function() return db.sound end, Set("sound"), 2)
+	P:Check(L["Soft chirps as the words type out"], nil, function() return db.typeSound ~= false end, Set("typeSound"), 3)
+	P:Stepper(L["Panel size (%)"], 70, 130, 10, function() return db.panelScale or 100 end, function(v) db.panelScale = v WW:ApplyLook() end, 2)
+	P:Stepper(L["Panel opacity (%)"], 40, 100, 10, function() return db.panelAlpha or 100 end, function(v) db.panelAlpha = v end, 2,
+		L["How solid the text box is (the portrait ring always stays solid)."])
 	P:Check(L["Spicy humour"], L["Off: family friendly. Every cheeky line has a clean version."], function() return db.spicy end, Set("spicy"), 1)
 	P:Check(L["A quip when I land"], nil, function() return db.landing end, Set("landing"), 1)
 	P:Check(L["The name in the middle of the screen"], nil, function() return db.center end, Set("center"), 1)
@@ -1522,7 +1526,7 @@ local PAGE_LIST = {
 	{ id = "healer", label = L["Healer Assist"], icon = "Spell_Holy_FlashHeal", build = BuildHealer, aliases = { "heal", "healassist" },
 		desc = L["Clickable heal, cure and resurrect icons on each group member; the best choice flashes yellow."] },
 	{ cat = L["Fun"] },
-	{ id = "games", label = L["Gem Match"], icon = "INV_Misc_Gem_Ruby_02", build = BuildGames, aliases = { "gems", "game" },
+	{ id = "games", label = L["Gem Match"], icon = "Interface\\AddOns\\AzerothAlmanac\\Media\\Icon_GemMatch", build = BuildGames, aliases = { "gems", "game" },
 		desc = L["A match-three game with Classic gems, for flights and queues."] },
 	{ id = "gambit", label = L["Wild Gambit"], icon = "INV_10_Inscription_DarkmoonCards_Wild_Earth", build = BuildGambit, aliases = { "wild", "cards" },
 		desc = L["The creature card game: your Almanac's creatures as cards."] },
@@ -1845,7 +1849,9 @@ local function Build()
 	local templated
 	frame, templated = W.Try("Frame", "AzerothAlmanacSettingsFrame", UIParent, "PortraitFrameTemplate")
 	frame:SetSize(WIN_W, WIN_H)
-	frame:SetFrameStrata("HIGH")
+	-- (Shannon, 2026-10-11) the game's own windows' layer (bags, character, spellbook, quest log),
+	-- so a click brings whichever window you pick to the front; on "HIGH" this one always covered them
+	frame:SetFrameStrata("MEDIUM")
 	frame:SetToplevel(true)
 	frame:SetClampedToScreen(true)
 	frame:SetMovable(true)

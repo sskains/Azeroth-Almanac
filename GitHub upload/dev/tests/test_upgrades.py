@@ -150,6 +150,30 @@ check(p.eval("R(15) and R(15).me") is None, "a robe for rogues only (\"Classes: 
 check(p.eval("R(16) and R(16).me ~= nil"), "a robe for mages and priests: green for a mage")
 check(p.eval("U.ClassLimit(15).ROGUE") and not p.eval("U.ClassLimit(14)"), "the limit is read from the tooltip; other items have none")
 
+# the armor type a class should wear (Shannon: cloth shown as an upgrade for a hunter)
+p.lua("""
+ITEMS[30] = { "Agile Cloth Gloves", 4, 1, "INVTYPE_HAND", 1, 2, { ITEM_MOD_AGILITY_SHORT = 12 } }
+ITEMS[31] = { "Plain Leather Gloves", 4, 2, "INVTYPE_HAND", 1, 2, { ITEM_MOD_AGILITY_SHORT = 2, RESISTANCE0_NAME = 30 } }
+ITEMS[32] = { "Agile Leather Gloves", 4, 2, "INVTYPE_HAND", 1, 2, { ITEM_MOD_AGILITY_SHORT = 12, RESISTANCE0_NAME = 40 } }
+ITEMS[33] = { "Plain Mail Gloves", 4, 3, "INVTYPE_HAND", 1, 2, { ITEM_MOD_AGILITY_SHORT = 2, RESISTANCE0_NAME = 90 } }
+ITEMS[34] = { "Agile Cloak", 4, 1, "INVTYPE_CLOAK", 1, 2, { ITEM_MOD_AGILITY_SHORT = 12 } }
+A.QoL.db.inventory.chars["Hal-Testrealm"] = { name = "Hal", realm = "Testrealm", faction = "Alliance", class = "HUNTER", level = 30,
+	talents = { 0, 0, 0 }, gear = { [10] = 31 } }
+HAL = A.QoL.db.inventory.chars["Hal-Testrealm"]
+function H(item) U:Forget() return (U.Better(HAL, item, false)) end
+""")
+check(p.eval("H(30)") is None, "a hunter in leather gloves: better-stat cloth gloves aren't an upgrade")
+check(p.eval("H(32) ~= nil"), "...better leather gloves are")
+check(p.eval("H(34) ~= nil"), "...a cloak (\"cloth\") still is: armor type is body slots only")
+p.lua("HAL.gear[10] = nil")
+check(p.eval("H(30)") is None, "...nor cloth for an empty hands slot")
+p.lua("HAL.level = 45 HAL.gear[10] = 31")
+check(p.eval("H(32) ~= nil"), "a level 45 hunter still in leather: a better leather piece still shows")
+p.lua("HAL.gear[10] = 33")
+check(p.eval("H(32)") is None, "...but not over the mail he's in")
+check(p.eval("(U.BestArmor('WARRIOR', 39))") == 3 and p.eval("(U.BestArmor('WARRIOR', 40))") == 4 and p.eval("(U.BestArmor('DRUID', 60))") == 2,
+      "heaviest armor: warrior mail to 39, plate from 40; druid leather")
+
 p.lua("A.db.settings.upgrades.on = false")
 check(p.eval("R(2)") is None and p.eval("U:RowMark(2)") is None, "switched off in Settings: no arrows")
 print()

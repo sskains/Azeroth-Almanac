@@ -94,12 +94,18 @@ end
 -- a map change (a zone line, a dungeon, a hearth) gets a point at once
 function JR:MapChanged()
 	if not On() then return end
+	-- (2026-10-13) not while on a flight: the zones flown over aren't walked (they split the
+	-- take-off from the landing, so the Journey didn't see the flight)
+	if UnitOnTaxi and UnitOnTaxi("player") then return end
 	local ok, inside = pcall(IsInInstance)
 	inside = ok and ns.Readable(inside) or false
 	local was = self.inside
 	self.inside = inside and true or false
 	if was ~= nil and was ~= self.inside then nextKind = "i" end
-	C_Timer.After(1, function() pcall(Write, nil, true) end)
+	C_Timer.After(1, function()
+		if UnitOnTaxi and UnitOnTaxi("player") then return end
+		pcall(Write, nil, true)
+	end)
 end
 
 -- the points from a time on, for one character (nil: every character), oldest first

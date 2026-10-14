@@ -69,7 +69,7 @@ ns.defaults = {
 		inviteOnlyKnown = false, acceptFriends = true, acceptGuild = true,
 	},
 	wings = {
-		enabled = true, panel = true, panelRepeats = true, sound = true, spicy = true, landing = true,
+		enabled = true, panel = true, panelRepeats = true, sound = true, typeSound = true, spicy = true, landing = true, panelScale = 100, panelAlpha = 100,
 		center = false, party = false, gemPrompt = true, rides = {}, totals = {},
 	},
 	partyPlates = {
@@ -264,13 +264,19 @@ function ns.DropsFor(name)
 	local id = ItemIDByName(name)
 	local src = id and A.ItemDB and A.ItemDB:Get(id)
 	if not src then return nil end
-	local list = {}
+	local list, unmet = {}, 0
+	local named = A.DB and A.DB.questMob or {}
 	for _, d in ipairs(src.drops or {}) do
 		local rec = A.Store:Get("creature", d.id)
 		if rec and rec.name then
 			local entry = { rec.name }
 			for _, z in ipairs(ZoneNames(rec)) do entry[#entry + 1] = z end
 			list[#list + 1] = entry
+		elseif named[d.id] and unmet < 6 then
+			-- (2026-10-12, DESIGN 105) not met yet: its name from Data\QuestMobs.lua, for targeting only
+			-- (no zones known, so it's targeted anywhere; the likeliest six droppers at most)
+			unmet = unmet + 1
+			list[#list + 1] = { named[d.id] }
 		end
 	end
 	return #list > 0 and list or nil
