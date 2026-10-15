@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased
 
+- [ ] Recipes, one card per profession (`/reload`): there is no "Blacksmith" or "Miner" card; those recipes are under "Blacksmithing" and "Mining" with their pictures and the counts added together; a profession trainer's recipes (their title may name the worker) land with the same profession's; your skill bar and the profession's page still match.
 - [ ] **Quests page, in your quest log:** the tick box on each quest matches the game's tracker; ticking adds it to the objective tracker, unticking removes it; shift-click on a quest row does the same (and doesn't open it); at the tracker's limit a chat line says it's full. Select a quest: Abandon beside Share brings up the game's "Abandon quest?" (with items if it gave you any); accepting removes it and the list drops it within a moment. Accept a quest, finish an objective, turn one in: the list updates without reopening the page. Quests not in your log show no tick box.
 
 - [ ] **Healer Assist aggro on the pet:** with a pet tanking (or taking hits), no red rectangle round the pet frame; a skull badge with the count shows beside its icons instead; the player and party portraits still get their red glow; raid-style party frames still get the outline.
