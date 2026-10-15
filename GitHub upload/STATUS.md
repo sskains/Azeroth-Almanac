@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.70.0** · 2026-10-11 · WoW Forever beta (interface 16001)
+**Version 0.70.0** · 2026-10-11 (unreleased work on `main` since, through 2026-10-15: see CHANGELOG.md Unreleased) · WoW Forever beta (interface 16001)
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 
@@ -38,6 +38,7 @@ Not released yet: nobody outside the two of us has the addon, so changes need no
 | 31–45 | 0.69.0: Journal rearranged (cards, Journey pane, entry list), "New" marks, Recipes and People, gathering skill and lockpicking, dungeon word art, card rework and portal swirl, painted toast and journal icons, First to find crests, heading hover | 🧪 | 0.69.0 |
 | 30 | Journey recorder (where each character walks, flights, boats, hearths, deaths) | 🧪 | 0.69.0 |
 | 95–101 | 0.70.0: welcome guide for new characters (helpers start off on new installs), Progression page brought up to date, Wild Gambit card voices and dungeon card tooltips, Quest Targeter at WoW Forever's 45-yard nameplate range with memory of mobs off camera and `/qt why`, the navigation arrow (pin, Focused quest, the game's own quest markers), bag to auction (whole silver, no undercut, any tab), bug hunt (13 fixes, lighter hot paths, smoke test) | 🧪 | 0.70.0 |
+| 102–125 | Unreleased (2026-10-13 → 15): Quests page (abandon, tracker tick boxes, shift-click link to chat, live refresh, quest chain tree, quest givers' faces), Journey smoothing and whimsy, Wings & Whispers panel (ring, Fun Fact card, feathers, progress line), auction sells-a-day, Healer Assist (pet frame badge, no box for an absent pet), Beast Lore on creature cards, own skill on gathering tooltips, druid mana bar in bear/cat form, NPC titles under friendly nameplates, People page Wild Gambit card / preview, Banish up to 10 spikes (WG protocol 13); Asia: People cards, Places zone banners (58 paintings), recipe profession names | 🧪 | unreleased |
 | WG | Wild Gambit card game: practice (Easy/Normal/Hard), player matches, class spells, hidden card, guided tutorial, holiday boards, header nameplates | 🧪 | → 0.49.0 |
 
 ## Not started
@@ -60,6 +61,7 @@ Not released yet: nobody outside the two of us has the addon, so changes need no
 
 ## Needs checking in game first
 
+- **Everything under Unreleased in `docs/TEST_CHECKLIST.md`** (2026-10-13 → 15), first of all the druid mana bar in forms (no "blocked" messages when changing form in combat).
 - **Art and layout:**
   - Item cards on dark slots: the loot-window card may look squashed at slot height.
   - Coin atlases: fixed at 14 px.
