@@ -101,6 +101,17 @@ check(p.eval("Find(function(r) return r.id == 3275 end) ~= nil") and p.eval("Fin
 T = "A.Trainers"
 check(p.eval(T + '.CleanProfession("Junior Skinning Trainer")') == "Skinning", "\"Junior Skinning Trainer\" is Skinning")
 check(p.eval(T + '.CleanProfession("Expert Cooking")') == "Cooking" and p.eval(T + '.CleanProfession("")') is None, "rank words come off; a blank name is no name")
+# (2026-10-14) a trainer's title names the worker: "Blacksmith" and "Miner" are Blacksmithing and Mining
+check(p.eval(T + '.CleanProfession("Blacksmith Trainer")') == "Blacksmithing" and p.eval(T + '.CleanProfession("Junior Miner Trainer")') == "Mining",
+      "\"Blacksmith Trainer\" is Blacksmithing and \"Junior Miner Trainer\" is Mining")
+check(p.eval(T + '.CleanProfession("Herbalist")') == "Herbalism" and p.eval(T + '.CleanProfession("Blacksmithing")') == "Blacksmithing",
+      "a worker's name becomes its profession; a profession's own name stays")
+p.lua("""
+WORKERS = { found = { spell = { [1] = { name = "Smelt", group = "skill:Miner" } }, trainer = { [2] = { group = "skill:Blacksmith" } } }, chars = {} }
+A.Trainers:OnInitialize(WORKERS)
+""")
+check(p.eval("WORKERS.found.spell[1].group") == "skill:Mining" and p.eval("WORKERS.found.trainer[2].group") == "skill:Blacksmithing",
+      "records saved as \"skill:Miner\" and \"skill:Blacksmith\" are put right on load")
 p.lua("""
 FIX = { found = { spell = {
 	[1] = { name = "Skinning", group = "skill:Junior Skinning" },

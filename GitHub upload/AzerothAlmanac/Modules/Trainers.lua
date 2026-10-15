@@ -120,12 +120,18 @@ end
 ---------------------------------------------------------------------------
 
 local RANK_WORDS = { "Grand Master ", "Master ", "Artisan ", "Expert ", "Journeyman ", "Apprentice ", "Junior " }
+-- (2026-10-14, Asia's screenshot: "Blacksmith" and "Miner" cards beside "Blacksmithing" and "Mining") a trainer's title
+-- names the worker ("<Blacksmith Trainer>"), a recipe's window the profession: one name each, the profession's
+local WORKER = { Blacksmith = "Blacksmithing", Miner = "Mining", Skinner = "Skinning", Herbalist = "Herbalism",
+	Enchanter = "Enchanting", Engineer = "Engineering", Leatherworker = "Leatherworking", Tailor = "Tailoring",
+	Alchemist = "Alchemy", Cook = "Cooking", Fisherman = "Fishing", Jewelcrafter = "Jewelcrafting" }
 function T.CleanProfession(name)
 	if type(name) ~= "string" then return nil end
 	name = name:gsub("%s*[Tt]rainer$", ""):gsub("^%s+", ""):gsub("%s+$", "")
 	for _, w in ipairs(RANK_WORDS) do
 		if name:sub(1, #w) == w then name = name:sub(#w + 1) break end
 	end
+	name = WORKER[name] or name
 	return name ~= "" and name or nil
 end
 
