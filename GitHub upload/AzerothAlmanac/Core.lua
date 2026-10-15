@@ -425,6 +425,12 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		ns.QoL.SpellRanker:Check()
 	elseif cmd == "rankignore" then
 		ns.QoL.SpellRanker:Ignore(rest)
+	elseif cmd == "lore" or cmd == "beastlore" then
+		-- (2026-10-14) what the last Beast Lore read off the tooltip
+		ns.Bestiary:LoreReport()
+	elseif cmd == "manacheck" then
+		-- (2026-10-15) a probe for the druid mana bar in forms
+		ns.QoL.UnitFrames:ManaCheck()
 	elseif cmd == "threat" then
 		ns.QoL.ThreatMonitor:Preview()
 	elseif cmd == "wings" then
@@ -502,6 +508,7 @@ function ns.Help()
 	ns.Print("/aa node herb|ore|chest|other|reset - " .. L["classify the node you're facing"])
 	ns.Print("/qt - " .. L["quest tracker target buttons (/qt help)"])
 	ns.Print("/aa stats - " .. L["what has been recorded, and how big the saved data is"])
+	ns.Print("/aa lore - " .. L["what your last Beast Lore read about a beast"])
 	ns.Print("/aa talents - " .. L["Talent Planner (the Planner tab on your Talents window)"])
 	ns.Print("/aa minimap - " .. L["show or hide the minimap button"])
 	ns.Print("/aa nodes [button] - " .. L["show or hide gathering nodes on the minimap (button: put the minimap button back)"])

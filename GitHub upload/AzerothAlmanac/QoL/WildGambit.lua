@@ -426,6 +426,20 @@ function WG.WinCard(npc, w)
 	return card
 end
 
+-- (2026-10-15, Shannon) a person's card before it's earned: the first card a win would give (for the
+-- People page, shown faded with "not earned yet"). info: what the People page knows (name, level,
+-- type, display); a game already played against them fills the rest.
+function WG.PreviewCard(npc, info)
+	info = info or {}
+	local w = WG.Wins(npc)
+	local i = { npc = npc, name = (w and w.name) or info.name or "?", level = tonumber(w and w.level) or tonumber(info.level) or 1,
+		class = (w and w.class) or "normal", type = (w and w.type) or info.type or "Humanoid", display = (w and w.display) or info.display,
+		zoneN = 0, zoneE = 0, spotE = 0, spotS = 0 }
+	local card = WL.Card(i, 2)
+	card.preview = true
+	return card
+end
+
 -- a game won against a creature or NPC: its count, and a line (later its card toast) when that
 -- earns or raises its card
 function WG.AddWin(opp)
@@ -5284,7 +5298,7 @@ end
 -- checked against the rules (and the creature's real level); a wrong one ends the game.
 ---------------------------------------------------------------------------
 
-local PREFIX, PROTO = "AzAlmWG", "12" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends; 12: Pick Pocket trades hand cards)
+local PREFIX, PROTO = "AzAlmWG", "13" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends; 12: Pick Pocket trades hand cards; 13: Banish only up to 10 spikes)
 local POPUP = "AZEROTHALMANAC_WG_CHALLENGE"
 
 -- (#59, DESIGN 81) Playing across versions. Each copy plays a range of protocols; two players use
@@ -5294,16 +5308,18 @@ local POPUP = "AZEROTHALMANAC_WG_CHALLENGE"
 -- only reaches back as far as the old behaviour is still in this code and tested; anything older is
 -- refused, both sides are told who needs to update, and the older side is offered the update quest.
 -- Release rule: PROTO goes up only when the messages change (a line in CHANGELOG.md says so).
-WG.PROTO_MIN, WG.PROTO_MAX = tonumber(PROTO), tonumber(PROTO)
+WG.PROTO_MIN, WG.PROTO_MAX = 12, tonumber(PROTO) -- (12: a copy from before the Banish cap still plays, with the old Banish)
 A.GAME_PROTOCOLS = A.GAME_PROTOCOLS or {}
 A.GAME_PROTOCOLS.wg = { WG.PROTO_MIN, WG.PROTO_MAX }
 -- the protocol each feature first came in (a match on an older protocol plays without it)
-WG.FEATURE_PROTO = { pickpocket = 12 }
+WG.FEATURE_PROTO = { pickpocket = 12, banishCap = 13 }
 function WG:Feature(name)
 	local need = self.FEATURE_PROTO[name]
 	local p = (self.net and self.net.proto) or self.PROTO_MAX
 	return not need or p >= need
 end
+-- (a protocol 12 match: Banish takes any enemy card, as the other copy's rules say)
+WL.OldBanish = function() return not WG:Feature("banishCap") end
 function WG.Accepts(p)
 	p = tonumber(p)
 	return p ~= nil and p >= WG.PROTO_MIN and p <= WG.PROTO_MAX

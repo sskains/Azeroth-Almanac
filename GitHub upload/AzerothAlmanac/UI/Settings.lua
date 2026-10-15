@@ -1296,6 +1296,7 @@ local function BuildUnitFrames(P)
 	P:Check(L["Names in class colour"], nil, function() return db.classColor end, Set("classColor"))
 	P:Check(L["XP needed to level on the experience bar"], nil, function() return db.xpNeeded end, Set("xpNeeded"))
 	P:Check(L["Always show it on the bar"], nil, function() return db.xpAlways end, Set("xpAlways"), 1)
+	P:Check(L["Druid: mana under the rage or energy bar in bear and cat form"], nil, function() return db.druidMana end, Set("druidMana"))
 
 	local pp = Q.db.partyPlates
 	local PP = Q.PartyPlates
@@ -1317,6 +1318,8 @@ local function BuildUnitFrames(P)
 	P:Check(L["Beacon over their heads"], nil, function() return pp.beacon end, SetPP("beacon"), 1)
 	P:Stepper(L["Name size %"], 100, 150, 5, function() return pp.nameScale or 100 end, function(v) pp.nameScale = v PP:Refresh() end, 1)
 	P:Check(L["Raid members too"], nil, function() return pp.raid end, SetPP("raid"), 1)
+	P:Section(L["NPC nameplates"], L["Out in the world (the game locks friendly nameplates in dungeons and raids)."])
+	P:Check(L["NPC titles under friendly nameplates, like <Cooking Supplier>"], nil, function() return pp.npcTitles end, function(v) pp.npcTitles = v PP:RefreshTitles() end)
 end
 
 local function BuildFollow(P)

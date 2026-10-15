@@ -95,6 +95,11 @@ local function Meet(who, qid, role, where)
 	if rec then
 		rec[role] = rec[role] or {}
 		rec[role][qid] = true
+		-- (2026-10-15) their face for the quest page, read from them while you're talking
+		if kind == "npc" and not rec.display and ns.Bestiary and ns.Bestiary.FaceFromUnit then
+			local unit = R(UnitExists("questnpc")) and "questnpc" or "npc"
+			pcall(ns.Bestiary.FaceFromUnit, ns.Bestiary, unit, who.id, "npc")
+		end
 	end
 end
 

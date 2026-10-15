@@ -1225,6 +1225,7 @@ end
 --   { "title", "Thistlefur Shaman" }, { "banner", "General" }, { "stat", "Level", "23-24" },
 --   { "bar", "Studied", 7, 10, "7 / 10 kills" }, { "skillbar", nil, 7, 10, "7 / 10" } (the blue skills bar), { "body", text }, { "small", text }, { "gap", 8 },
 --   { "slots", { { item = 2592, note = "3 / 4 (75%)" }, { spell = 11986, note = "seen" }, { icon = 132000, name = "...", note = "..." } } },
+--     (a slot's face = function(texture) return painted end draws a portrait over its icon)
 -- }, emptyText)
 ---------------------------------------------------------------------------
 
@@ -2201,6 +2202,11 @@ local function FillSlot(f, e)
 		f.icon:SetTexture(icon or W.FindIcon({ "INV_Misc_QuestionMark" }))
 		local c = e.crop or 0 -- (a share cut from each edge: a crest's own painted rim, under the ring)
 		f.icon:SetTexCoord(c, 1 - c, c, 1 - c)
+	end
+	-- (2026-10-15) e.face(texture): paints a portrait (an NPC's face) over the icon when it can (true)
+	if e.face then
+		local ok, painted = pcall(e.face, f.icon)
+		if ok and painted then f.icon:SetTexCoord(0, 1, 0, 1) end
 	end
 	local boxed = f.look == "box"
 	local q = e.item and select(4, pcall((C_Item and C_Item.GetItemInfo) or GetItemInfo, e.item))

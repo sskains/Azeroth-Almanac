@@ -1135,7 +1135,9 @@ local function SortedList()
 	for _, token in ipairs(roster) do
 		local e = entries[token]
 		-- a pet that isn't out doesn't get a row, nor does anyone with no icons (a hunter's group members)
-		if e and not (e.pet and e.res and e.res.absent) and #e.order > 0 then list[#list + 1] = e end
+		-- (2026-10-14, Shannon: a hunter or warlock with no pet out got the Healer Assist box just to
+		-- offer Call Pet) your own pet not being out no longer brings up a row or the box either
+		if e and not (e.pet and e.res and (e.res.absent or e.res.noPet)) and #e.order > 0 then list[#list + 1] = e end
 	end
 	table.sort(list, function(a, b)
 		local sa, sb = a.res and a.res.score or 0, b.res and b.res.score or 0
@@ -2219,7 +2221,9 @@ local function Tick()
 			local keys = {}
 			for _, token in ipairs(roster) do
 				local f = FrameFor(token)
-				keys[#keys + 1] = token .. "=" .. (f and (f:GetName() or tostring(f)) or "?")
+				local e = entries[token]
+				local away = e and e.res and e.res.noPet and "-" or ""   -- (a pet coming or going re-lays it out)
+				keys[#keys + 1] = token .. away .. "=" .. (f and (f:GetName() or tostring(f)) or "?")
 			end
 			-- units with a frame are keyed by it; the rest fall into the panel
 			if table.concat(keys, ",") ~= HA.frameKey then

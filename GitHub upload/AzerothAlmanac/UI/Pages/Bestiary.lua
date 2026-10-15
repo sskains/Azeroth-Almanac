@@ -158,6 +158,22 @@ local function Describe(npc, rec)
 	if #who > 0 then b[#b + 1] = { "stat", L["Also met by"], table.concat(who, ", ") } end
 	b[#b + 1] = { "stat", L["Last seen"], ns.AgoText(rec.l) }
 
+	-- (2026-10-14, Shannon) what a hunter's Beast Lore said about it, line by line as the game put it
+	local lore = rec.lore
+	if lore and lore.lines and #lore.lines > 0 then
+		b[#b + 1] = { "banner", L["Beast Lore"] }
+		for _, l in ipairs(lore.lines) do
+			local left, right = l[1], l[2]
+			if not right then
+				local k, v = left:match("^([^:]+):%s*(.+)$")
+				if k and #k <= 30 then left, right = k, v end
+			end
+			if right then b[#b + 1] = { "stat", left, right }
+			else b[#b + 1] = { "small", left } end
+		end
+		b[#b + 1] = { "small", NOTE .. (L["From %s's Beast Lore, %s."]):format(ns.CharName(lore.by), ns.DateText(lore.t)) .. "|r" }
+	end
+
 	-- Health
 	b[#b + 1] = { "banner", L["Health"] }
 	local hp, samples = B:Health(rec)

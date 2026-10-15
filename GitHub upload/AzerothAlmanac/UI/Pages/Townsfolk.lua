@@ -223,6 +223,69 @@ local function TrainingSlots(npc, t)
 	return slots
 end
 
+-- (2026-10-15, Shannon) their Wild Gambit card where the logo was: the card you've won, or the one a
+-- win would give, faded, with "Not earned yet" beside it
+local cardBox
+local function CardBox()
+	if cardBox ~= nil then return cardBox or nil end
+	cardBox = false
+	local WG = ns.QoL and ns.QoL.WildGambit
+	if not (WG and WG.Showcase) then return nil end
+	local ok, card = pcall(WG.Showcase, WG, UIParent)
+	if not (ok and card) then return nil end
+	local f = CreateFrame("Frame", nil, UIParent)
+	f:SetSize(1, 176)
+	card:SetParent(f)
+	card:SetScale(0.94)
+	card:ClearAllPoints()
+	card:SetPoint("CENTER", f, "LEFT", 86, 0)
+	f.card = card
+	-- (Shannon: the Wild Gambit logo above "Not earned yet")
+	-- (the art is squeezed into a 512 x 256 file: drawn at its own 3.54 : 1, as Wild Gambit does; and a
+	-- button that opens Wild Gambit, Shannon 2026-10-15)
+	local LOGO_W = 124 -- (190, then 35% smaller: Shannon)
+	f.logo = CreateFrame("Button", nil, f)
+	f.logo:SetSize(LOGO_W, LOGO_W / 3.54)
+	f.logo:SetPoint("TOPLEFT", f, "TOPLEFT", 182, -24)
+	f.logo.art = f.logo:CreateTexture(nil, "ARTWORK")
+	f.logo.art:SetAllPoints()
+	f.logo.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit")
+	f.logo.glow = f.logo:CreateTexture(nil, "HIGHLIGHT")
+	f.logo.glow:SetAllPoints()
+	f.logo.glow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit")
+	f.logo.glow:SetBlendMode("ADD")
+	f.logo.glow:SetAlpha(0.35)
+	f.logo:SetScript("OnClick", function()
+		local WGm = ns.QoL and ns.QoL.WildGambit
+		if WGm and WGm.Open then WGm:Open() end
+	end)
+	f.logo:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(L["Wild Gambit"], 1, 0.82, 0)
+		GameTooltip:AddLine(L["Click to open Wild Gambit."], 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	f.logo:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	f.title:SetPoint("TOPLEFT", f.logo, "BOTTOMLEFT", 6, -10)
+	f.title:SetJustifyH("LEFT")
+	f.note = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	f.note:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -8)
+	f.note:SetJustifyH("LEFT")
+	f.note:SetSpacing(2)
+	function f:Fill(width, shown, earned, title, note)
+		self:SetWidth(width)
+		self.note:SetWidth(math.max(120, width - 196))
+		self.title:SetText(title)
+		self.note:SetText(note)
+		pcall(self.card.ShowCard, self.card, shown)
+		self.card:SetAlpha(earned and 1 or 0.55)
+		return 176
+	end
+	cardBox = f
+	return f
+end
+
 local function DescribePerson(p)
 	local b = {}
 	local m = p.recs.merchant
@@ -238,10 +301,20 @@ local function DescribePerson(p)
 		local card = WG:CardFor(p.npc)
 		local tier = card and card.tier or 1
 		local nextAt = WL.WinsFor(tier)
-		b[#b + 1] = { "logo", "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit", 128, 64 }
 		local c = WL.COLORS[tier] or { 1, 1, 1 }
 		local tierText = card and ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, WL.TIERS[tier]) or (NOTE .. L["Not yet earned"] .. "|r")
-		b[#b + 1] = { "stat", L["Their card"], tierText }
+		local tf = p.recs.townsfolk or {}
+		local shownCard = card or (WG.PreviewCard and WG.PreviewCard(p.npc, { name = p.name, level = tf.lvl, display = p.display or tf.display }))
+		local box = shownCard and CardBox()
+		if box then
+			local title = card and ((L["Their card: %s"]):format(tierText)) or ("|cffbfbfbf" .. L["Not earned yet"] .. "|r")
+			local note = card and (L["Yours: won %s against them."]):format(ns.N(wins, "game", "games"))
+				or (NOTE .. L["The card a first win gives you. Beat them at Wild Gambit to make it yours."] .. "|r")
+			b[#b + 1] = { "frame", box, function(width) return box:Fill(width, shownCard, card ~= nil, title, note) end }
+		else
+			b[#b + 1] = { "logo", "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_WildGambit", 128, 64 }
+			b[#b + 1] = { "stat", L["Their card"], tierText }
+		end
 		if nextAt then
 			b[#b + 1] = { "skillbar", nil, wins, nextAt, (L["%d / %d"]):format(wins, nextAt) .. "  ·  "
 				.. (L["%s to %s"]):format(ns.N(nextAt - wins, "win", "wins"), WL.TIERS[math.max(2, tier + 1)]) }

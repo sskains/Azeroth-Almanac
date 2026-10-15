@@ -14,7 +14,8 @@
 --   db = { [spellID] = n },                                                  debuffs on you
 --   hp = { [level or 0] = { samples... } }, heal = { n, hi },                 health and heals
 --   corpses = n, loot = { [itemID] = corpses }, money = { n, total },
---   gathered = n, gather = { [itemID] = n } }
+--   gathered = n, gather = { [itemID] = n },
+--   lore = { t, by, lines = { { left, right } } } }                        a hunter's Beast Lore, as the tooltip said it
 
 local _, ns = ...
 local L = ns.L
@@ -871,6 +872,127 @@ ns:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spellID)
 	end
 	if name and GATHER[name] then lastGather = GetTime() end
 end)
+---------------------------------------------------------------------------
+-- Beast Lore (2026-10-14, Shannon): a hunter's Beast Lore adds the beast's details to its tooltip
+-- for 30 seconds. Its lines are read off the target's tooltip (the lines that weren't there just
+-- before the cast) and kept on the creature: rec.lore = { t, by, lines = { { left, right } } }.
+---------------------------------------------------------------------------
+B.BEAST_LORE = 1462
+local loreBefore = nil      -- { guid = , npc = , seen = { [text] = true } } from just before the cast
+B.lastLore = nil            -- what the last read found (for /aa lore)
+
+local function IsBeastLore(spellID)
+	spellID = R(spellID)
+	if spellID == B.BEAST_LORE then return true end
+	if type(spellID) ~= "number" then return false end
+	local function NameOf(id)
+		if C_Spell and C_Spell.GetSpellInfo then
+			local ok, info = pcall(C_Spell.GetSpellInfo, id)
+			return ok and type(info) == "table" and R(info.name) or nil
+		elseif GetSpellInfo then
+			return (GetSpellInfo(id))
+		end
+	end
+	local want = NameOf(B.BEAST_LORE)
+	return type(want) == "string" and NameOf(spellID) == want
+end
+
+-- the target's tooltip as { { left, right } }, from the tooltip data (or a hidden tooltip)
+local scanTip
+function B.UnitTooltipLines(unit)
+	local out = {}
+	local function Add(l, r)
+		l, r = R(l), R(r)
+		if type(l) ~= "string" then l = nil end
+		if type(r) ~= "string" or r == "" then r = nil end
+		if l and l ~= "" then out[#out + 1] = { l, r } end
+	end
+	if C_TooltipInfo and type(C_TooltipInfo.GetUnit) == "function" then
+		local ok, data = pcall(C_TooltipInfo.GetUnit, unit)
+		if ok and type(data) == "table" and type(data.lines) == "table" then
+			for _, line in ipairs(data.lines) do Add(line.leftText, line.rightText) end
+			return out
+		end
+	end
+	if not scanTip then
+		scanTip = CreateFrame("GameTooltip", "AzerothAlmanacScanTip", UIParent, "GameTooltipTemplate")
+	end
+	scanTip:SetOwner(UIParent, "ANCHOR_NONE")
+	scanTip:ClearLines()
+	pcall(scanTip.SetUnit, scanTip, unit)
+	local n = type(scanTip.NumLines) == "function" and scanTip:NumLines() or 0
+	for i = 1, (type(n) == "number" and n or 0) do
+		local lf, rf = _G["AzerothAlmanacScanTipTextLeft" .. i], _G["AzerothAlmanacScanTipTextRight" .. i]
+		local rt = rf and rf:IsShown() and rf:GetText() or nil
+		Add(lf and lf:GetText(), rt)
+	end
+	scanTip:Hide()
+	return out
+end
+
+local function LineKey(l) return l[1] .. "\t" .. (l[2] or "") end
+
+-- the lines that belong to Beast Lore: the new ones since before the cast; without a "before", the
+-- ones after the name and level that aren't the usual tooltip lines
+local function LoreLines(all, before)
+	local found = {}
+	local level = (TOOLTIP_UNIT_LEVEL and TOOLTIP_UNIT_LEVEL:match("^(%S+)")) or "Level"
+	for i, l in ipairs(all) do
+		local new
+		if before then new = not before[LineKey(l)]
+		else
+			new = i > 1 and not l[1]:find("^" .. level) and not l[1]:find("^%s*%-") and l[1] ~= (UNIT_SKINNABLE_LEATHER or "Skinnable")
+				and l[1] ~= (PVP or "PvP") and l[1] ~= (CORPSE or "Corpse")
+		end
+		if new then found[#found + 1] = l end
+	end
+	return found
+end
+
+function B:ReadLore(unit, before)
+	unit = unit or "target"
+	local npc, guid = IsCreatureUnit(unit)
+	if not npc then return nil end
+	local seen = before and before.guid == guid and before.seen or nil
+	local lines = LoreLines(B.UnitTooltipLines(unit), seen)
+	B.lastLore = { npc = npc, name = R(UnitName(unit)), lines = lines, diffed = seen ~= nil }
+	if #lines == 0 then return nil end
+	B:Seen(unit)
+	local rec = ns.Store:Get("creature", npc)
+	if not rec then return nil end
+	rec.lore = { t = time(), by = ns.CharKey(), lines = lines }
+	ns:Fire("CHANGED", "creature", npc)
+	return rec.lore
+end
+
+function B:LoreReport()
+	local l = B.lastLore
+	if not l then ns.Print(L["Beast Lore: nothing read yet. Cast Beast Lore on a beast, then try again."]) return end
+	ns.Print((L["Beast Lore on %s (#%d): %d lines%s."]):format(l.name or "?", l.npc or 0, #l.lines, l.diffed and "" or L[" (no before-cast tooltip to compare)"]))
+	for _, x in ipairs(l.lines) do ns.Print("   " .. x[1] .. (x[2] and ("  |  " .. x[2]) or "")) end
+end
+
+ns:RegisterEvent("UNIT_SPELLCAST_SENT", function(_, unit, _, _, spellID)
+	if unit ~= "player" or not ns.db or not IsBeastLore(spellID) then return end
+	local npc, guid = IsCreatureUnit("target")
+	if not npc then loreBefore = nil return end
+	local seen = {}
+	for _, l in ipairs(B.UnitTooltipLines("target")) do seen[LineKey(l)] = true end
+	loreBefore = { guid = guid, npc = npc, seen = seen }
+end)
+ns:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spellID)
+	if unit ~= "player" or not ns.db or not IsBeastLore(spellID) then return end
+	local before = loreBefore
+	loreBefore = nil
+	-- (the debuff, and with it the tooltip lines, can land a moment after the cast)
+	local tries = 0
+	local function Try()
+		tries = tries + 1
+		if B:ReadLore("target", before) == nil and tries < 4 then C_Timer.After(0.5, Try) end
+	end
+	C_Timer.After(0.2, Try)
+end)
+
 ns:RegisterEvent("LOOT_READY", function()
 	if not ns.db then return end
 	ns.doing = "reading loot"

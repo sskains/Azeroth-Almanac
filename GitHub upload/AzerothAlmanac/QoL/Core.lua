@@ -74,13 +74,13 @@ ns.defaults = {
 	},
 	partyPlates = {
 		enabled = true, colorMode = "class", color = { 0.3, 0.85, 1 }, healthBar = true, emblem = true,
-		roles = true, beacon = false, nameScale = 100, raid = true,
+		roles = true, beacon = false, nameScale = 100, raid = true, npcTitles = true,
 	},
 	threat = {
 		enabled = true, solo = true, meter = true, rows = 6, locked = false, warn = true, warnAt = 70,
 		aggroAt = 100, sound = true, flash = true, plates = true, tankMode = "auto", panelAlpha = 0.8,
 	},
-	unitFrames = { classBadge = true, classColor = true, xpNeeded = true, xpAlways = true },
+	unitFrames = { classBadge = true, classColor = true, xpNeeded = true, xpAlways = true, druidMana = true },
 	spellRanker = { autoCheck = true, checkOnOpen = true, autoReplace = true, ignore = {} },
 	talentPlanner = {
 		enabled = true,         -- the Planner tab on the Talents window

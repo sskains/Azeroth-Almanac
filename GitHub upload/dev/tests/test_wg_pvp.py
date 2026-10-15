@@ -32,8 +32,9 @@ def protocols(lo, hi):
     # a copy that plays Wild Gambit protocols lo..hi (writes hi)
     def patch(name, src):
         if name == "QoL/WildGambit.lua":
-            src = src.replace('local PREFIX, PROTO = "AzAlmWG", "12"', 'local PREFIX, PROTO = "AzAlmWG", "%d"' % hi)
-            src = src.replace("WG.PROTO_MIN, WG.PROTO_MAX = tonumber(PROTO), tonumber(PROTO)", "WG.PROTO_MIN, WG.PROTO_MAX = %d, %d" % (lo, hi))
+            import re
+            src = re.sub(r'local PREFIX, PROTO = "AzAlmWG", "\d+"', 'local PREFIX, PROTO = "AzAlmWG", "%d"' % hi, src)
+            src = re.sub(r"WG\.PROTO_MIN, WG\.PROTO_MAX = [^\n]*", "WG.PROTO_MIN, WG.PROTO_MAX = %d, %d" % (lo, hi), src)
         return src
     return patch
 
@@ -138,7 +139,7 @@ for i, ca in enumerate(CLASSES):
     check(same and over and sums and alarms == 0 and len(spells) >= 1,
           "%s against %s: %d spells cast, boards agree, match ends, no false alarms" % (ca, cb, len(spells)))
 print("5. protocol ranges")
-a, b = pair(patch_a=protocols(12, 13))
+a, b = pair(patch_a=protocols(12, 13), patch_b=protocols(12, 12))
 log = []
 ok_a, ok_b = start(a, b, log)
 check(any(t.startswith("13|C|") for n, t in log if n == "Alice"), "a 12-13 copy challenges at 13")
@@ -156,6 +157,20 @@ chat_b = " ".join(b.eval("table.concat(CHAT, ' ')").split())
 check("They need to update" in chat_a, "a newer copy is told the other player needs to update")
 check("Update your Almanac" in chat_b, "the older copy is told to update")
 check(a.eval("A.WildGambit.net") is None and a.eval("Game()") is None, "no game starts, nothing left waiting")
+
+print("6. Banish up to 10 spikes (2026-10-15), the old rule with a protocol 12 copy")
+a, b = pair(cls_a="WARLOCK", patch_b=protocols(12, 12))
+for who in (a, b):
+    pass
+L = "A.QoL.WildLogic"
+check(a.eval("%s.ABILITIES.WARLOCK.max == 10 and %s.ABILITIES.WARLOCK.target == 'small'" % (L, L)), "Banish: enemy cards of 10 spikes or fewer")
+big = "{ [5] = { owner = 'them', card = { s = { 4, 3, 3, 3 } } } }"
+small = "{ [5] = { owner = 'them', card = { s = { 3, 3, 2, 2 } } } }"
+check(a.eval("%s.CanTarget(%s, %s.ABILITIES.WARLOCK, 5, 'me')" % (L, small, L)) is True, "a 10-spike card can be banished")
+check(a.eval("%s.CanTarget(%s, %s.ABILITIES.WARLOCK, 5, 'me')" % (L, big, L)) is False, "a 13-spike card can't")
+a.lua("A.WildGambit.net = { proto = 12 }")
+check(a.eval("%s.CanTarget(%s, %s.ABILITIES.WARLOCK, 5, 'me')" % (L, big, L)) is True, "in a match on protocol 12 (an older copy): any enemy card, as its rules say")
+a.lua("A.WildGambit.net = nil")
 
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")

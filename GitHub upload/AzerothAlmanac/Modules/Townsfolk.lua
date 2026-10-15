@@ -221,6 +221,9 @@ function TF:Meet(unit, talked)
 	local name = R(UnitName(unit))
 	local rec, isNew = ns.Store:Discover("townsfolk", npc, { name = name, title = TitleOf(unit) }, nil, where, true)
 	if not rec then return end
+	-- (2026-10-15) their level, for the Wild Gambit card the People page shows before it's earned
+	local lvl = R(UnitLevel(unit))
+	if type(lvl) == "number" and lvl > 0 then rec.lvl = lvl end
 	rec.z = rec.z or {}
 	if where.map then rec.z[where.map] = true end
 	local inst, wx, wy = PlayerWorld()

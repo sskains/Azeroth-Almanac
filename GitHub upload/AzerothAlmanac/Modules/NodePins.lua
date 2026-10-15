@@ -108,8 +108,10 @@ local function Tooltip(owner, p)
 	local k = G and G.KIND[rec.kind or "chest"]
 	if k then GameTooltip:AddLine(k.label, 0.8, 0.8, 0.8) end
 	-- (0.69.0, #36 / #37) the skill it needs, coloured for you
-	local need = ns.Gathering and ns.Gathering.NeedText and ns.Gathering:NeedText(rec)
-	if need then GameTooltip:AddLine(need) end
+	local need, skill, lo, rogue = nil, nil, nil, nil
+	if ns.Gathering and ns.Gathering.NeedText then need, skill, lo, rogue = ns.Gathering:NeedText(rec) end
+	-- (2026-10-15, Shannon) and your own skill beside it
+	if need then GameTooltip:AddLine(need .. (G.YouText and G:YouText(skill, lo, rogue) or "")) end
 	if (rec.gathered or 0) > 0 then GameTooltip:AddLine((L["Gathered %s"]):format(ns.Times(rec.gathered)), 0.6, 0.9, 0.6) end
 	if (rec.sighted or 0) > 0 then GameTooltip:AddLine((L["Sighted %s"]):format(ns.Times(rec.sighted)), 0.7, 0.7, 0.7) end
 	GameTooltip:AddLine(p.sighted and L["Sighted here."] or L["Gathered here."], 0.55, 0.55, 0.55)

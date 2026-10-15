@@ -693,8 +693,10 @@ end
 -- square), "none" (no target), "hands" (Pick Pocket, 0.69.1: a card in your hand, then one in
 -- theirs with at most `up` spikes more; never a hidden card or the spell card)
 WL.ABILITIES = {
-	WARLOCK = { key = "banish", short = "Remove any enemy card. Its owner draws a new one.", kind = "remove", name = "Banish", icon = "Spell_Shadow_Cripple", target = "theirs",
-		sound = 1487165, sound2 = 567950, text = "Banish any enemy card from the board. Its owner is dealt a new card." },
+	-- (2026-10-15, Shannon: "make the limit up to a 10 spike card"; was any enemy card. A match with
+	-- an older copy, protocol 12, keeps the old rule: WL.OldBanish)
+	WARLOCK = { key = "banish", short = "Remove an enemy card of 10 spikes or fewer. Its owner draws a new one.", kind = "remove", name = "Banish", icon = "Spell_Shadow_Cripple", target = "small", max = 10,
+		sound = 1487165, sound2 = 567950, text = "Banish an enemy card with 10 spikes or fewer from the board. Its owner is dealt a new card." },
 	MAGE = { key = "polymorph", short = "An enemy card of 10 spikes or fewer becomes a sheep and leaves. Its owner draws a new one.", kind = "remove", name = "Polymorph", icon = "Spell_Nature_Polymorph", target = "small", max = 10,
 		sound = 569526, text = "An enemy card with 10 spikes or fewer turns into a sheep and wanders off. Its owner is dealt a new card." },
 	WARRIOR = { key = "execute", short = "Remove an enemy card next to a stronger card of yours. Its owner draws a new one.", kind = "remove", name = "Execute", icon = "INV_Sword_48", target = "execute",
@@ -763,6 +765,7 @@ function WL.CanTarget(board, ability, cell, me, stage)
 	end
 	if not Open(board, cell, me) then return false end
 	if t == "theirs" then return true end
+	if t == "small" and ability.key == "banish" and WL.OldBanish and WL.OldBanish() then return true end
 	if t == "small" then return Sum(slot.card) <= (ability.max or 8) end
 	if t == "execute" then return Executioner(board, cell, me) ~= nil end
 	return false

@@ -222,6 +222,88 @@ function PP:Refresh()
 		local unit = plate.namePlateUnitToken or (plate.GetUnit and plate:GetUnit()) or (plate.UnitFrame and plate.UnitFrame.unit)
 		if unit then pcall(Decorate, unit) end
 	end
+	PP:RefreshTitles()
+end
+
+---------------------------------------------------------------------------
+-- NPC titles under friendly nameplates (2026-10-15, Shannon): a small white "<Cooking Supplier>"
+-- under the plate. The title is the second line of the NPC's tooltip (read once per kind of NPC).
+-- Only adds a font string of our own on the plate; nothing of the game's plate is changed.
+---------------------------------------------------------------------------
+
+local titled = {}      -- plate -> our holder frame
+PP.titled = titled
+local titleOf = {}     -- npc ID -> title, or false (has none)
+
+local function NpcTitle(unit)
+	local npc = A.NpcFromGuid and A.NpcFromGuid(Readable(UnitGUID(unit)))
+	if npc and titleOf[npc] ~= nil then return titleOf[npc] or nil end
+	local title
+	local rec = npc and A.Store and A.Store:Get("townsfolk", npc)
+	if rec and type(rec.title) == "string" and rec.title ~= "" then title = rec.title end
+	if not title and C_TooltipInfo and type(C_TooltipInfo.GetUnit) == "function" then
+		local ok, data = pcall(C_TooltipInfo.GetUnit, unit)
+		local line = ok and type(data) == "table" and type(data.lines) == "table" and data.lines[2]
+		local text = line and Readable(line.leftText)
+		if type(text) == "string" and text ~= "" then
+			local level = (TOOLTIP_UNIT_LEVEL and TOOLTIP_UNIT_LEVEL:match("^(%S+)")) or "Level"
+			-- (not the level line, PvP, a quest objective or a faction / zone line read as a title)
+			if not text:find("^" .. level) and text ~= (PVP or "PvP") and not text:find("^%s*%-") then title = text end
+		end
+	end
+	if npc then titleOf[npc] = title or false end
+	return title
+end
+PP.NpcTitle = NpcTitle
+
+local function Untitle(plate)
+	local h = titled[plate]
+	if h then h:Hide() end
+end
+
+local function Title(unit)
+	local plate = C_NamePlate.GetNamePlateForUnit(unit)
+	if not plate then return end -- (locked: friendly plates in dungeons and raids)
+	Untitle(plate)
+	if not (db and db.npcTitles) then return end
+	if Readable(UnitIsPlayer(unit)) ~= false then return end
+	if Readable(UnitPlayerControlled(unit)) == true then return end -- (pets, totems: "Bob's Pet" isn't a title)
+	-- friendly: green and yellow (vendors, trainers, guards, neutral goblins), not ones you can attack
+	local reaction = Readable(UnitReaction(unit, "player"))
+	if type(reaction) ~= "number" or reaction < 4 then return end
+	if Readable(UnitCanAttack("player", unit)) == true then return end
+	local title = NpcTitle(unit)
+	if not title then return end
+	local h = titled[plate]
+	if not h then
+		h = CreateFrame("Frame", nil, plate)
+		h:SetSize(1, 1)
+		h:EnableMouse(false)
+		h.text = h:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		h.text:SetTextColor(1, 1, 1)
+		h.text:SetShadowOffset(1, -1)
+		h.text:SetPoint("TOP", h, "TOP", 0, 0)
+		titled[plate] = h
+	end
+	local frame = plate.UnitFrame
+	local function Region(r) return type(r) == "table" and type(r.IsShown) == "function" and r or nil end
+	local bar = frame and (Region(frame.HealthBarsContainer) or Region(frame.healthBar))
+	local anchor = (bar and Readable(bar:IsShown()) ~= false and bar) or (frame and Region(frame.name)) or plate
+	h:ClearAllPoints()
+	h:SetPoint("TOP", anchor, "BOTTOM", 0, -2)
+	h:SetFrameLevel(plate:GetFrameLevel() + 5)
+	h.text:SetText("<" .. title .. ">")
+	h:Show()
+end
+PP.Title = Title
+
+function PP:RefreshTitles()
+	if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
+	for plate in pairs(titled) do Untitle(plate) end
+	for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+		local unit = plate.namePlateUnitToken or (plate.GetUnit and plate:GetUnit()) or (plate.UnitFrame and plate.UnitFrame.unit)
+		if unit then pcall(Title, unit) end
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -248,10 +330,10 @@ function PP:OnLogin()
 	events:SetScript("OnEvent", function(_, event, unit)
 		if event == "NAME_PLATE_UNIT_ADDED" then
 			-- a moment later, after the game has set the plate up
-			C_Timer.After(0, function() pcall(Decorate, unit) end)
+			C_Timer.After(0, function() pcall(Decorate, unit) pcall(Title, unit) end)
 		elseif event == "NAME_PLATE_UNIT_REMOVED" then
 			local plate = C_NamePlate.GetNamePlateForUnit(unit)
-			if plate then Undecorate(plate) end
+			if plate then Undecorate(plate) Untitle(plate) end
 		elseif not PP.refreshPending then
 			-- (2026-10-11) one refresh for a burst of roster events (a raid forming fires dozens)
 			PP.refreshPending = true

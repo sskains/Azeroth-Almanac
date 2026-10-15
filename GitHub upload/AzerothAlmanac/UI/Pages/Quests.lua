@@ -14,6 +14,7 @@ local filter, statusFilter = "", "a" -- (opens on the quests in your log)
 local actions -- the in-the-log buttons over the page: Show in quest log, Share, Abandon
 local shown
 local collapsed = {}
+local QuestLink -- (below: a quest's chat link)
 
 local ICON = {
 	d = "Interface\\RaidFrame\\ReadyCheck-Ready",
@@ -49,9 +50,33 @@ local function Place(p)
 end
 
 -- a slot for an NPC, object or item that gives or takes a quest; click for a waypoint
+-- (2026-10-15, Shannon) an NPC's own face on their slot: from the People or Creatures record, asked
+-- for in the background when it isn't known yet (the page redraws when it comes)
+local faceWanted = {}
+local function NpcFace(id)
+	return function(texture)
+		local B = ns.Bestiary
+		if not (B and B.SetFace) then return false end
+		-- (Shannon: "Images still not quite loading": quest givers are kept as "npc" records, which this
+		-- didn't look at; and the face is now caught while you talk to them, Modules/Quests.lua Meet)
+		faceWanted[id] = true
+		local first, firstKind
+		for _, kind in ipairs({ "npc", "townsfolk", "merchant", "creature" }) do
+			local rec = ns.Store:Get(kind, id)
+			if rec then
+				if rec.display then return B:SetFace(texture, id, rec, kind) end
+				first, firstKind = first or rec, firstKind or kind
+			end
+		end
+		if first then return B:SetFace(texture, id, first, firstKind) end -- (not known yet: asked for)
+		return false
+	end
+end
+
 local function WhoSlot(who, pos, note)
 	local icon = who.kind == "object" and OBJECT_ICON or who.kind == "item" and ITEM_ICON or NPC_ICON
 	local e = { name = who.name or "?", icon = W.FindIcon(icon), note = (note and (note .. "  ") or "") .. (Place(pos) or "") }
+	if who.kind ~= "object" and who.kind ~= "item" and type(who.id) == "number" then e.face = NpcFace(who.id) end
 	if pos and pos.map and pos.x then
 		e.tip = L["Click to set a waypoint here."]
 		e.onClick = function() W.Waypoint(pos.map, pos.x, pos.y, who.name) end
@@ -239,6 +264,243 @@ local function QuestMap(qid, rec, db)
 	return map, pins
 end
 
+---------------------------------------------------------------------------
+-- The quest chain (2026-10-15, Shannon): every quest linked before and after this one (the hidden
+-- quest database's links and the ones the Almanac saw), for your race and class, as a tree. A plain
+-- run of quests stays flat; where a quest leads to several, those are indented under it and fold.
+-- Quests not found yet are named by the game when it can (Shannon: named, not hidden).
+---------------------------------------------------------------------------
+
+local MAX_CHAIN = 40
+local chainFolded = {}   -- quest ID -> true: its branches folded away
+local namesWaiting = false
+
+local function QuestName(id)
+	local q = ns.Store:Get("quest", id)
+	if q and q.name then return q.name end
+	local C = C_QuestLog
+	for _, fn in ipairs({ C and C.GetTitleForQuestID, C and C.GetQuestInfo }) do
+		if type(fn) == "function" then
+			local ok, n = pcall(fn, id)
+			n = ok and ns.Readable(n) or nil
+			if type(n) == "string" and n ~= "" then return n end
+		end
+	end
+	if C and type(C.RequestLoadQuestByID) == "function" then pcall(C.RequestLoadQuestByID, id) namesWaiting = true end
+	return nil
+end
+
+local function Mine(id)
+	if ns.Store:Get("quest", id) then return true end
+	return ns.QuestDB:Get(id) ~= nil and ns.QuestDB:ForMe(id)
+end
+
+local function Links(id)
+	local nxt, prv = {}, {}
+	local db = ns.QuestDB:Get(id)
+	for _, n in ipairs(db and db.after or {}) do nxt[n] = true end
+	local rec = ns.Store:Get("quest", id)
+	for n in pairs(rec and rec.nx or {}) do nxt[n] = true end
+	for _, p in ipairs(ns.QuestDB:Before(id)) do prv[p] = true end
+	if rec and rec.prev then prv[rec.prev] = true end
+	return nxt, prv
+end
+
+local function LevelOf(id) return Q():Level(id, ns.Store:Get("quest", id)) or 0 end
+local function ByLevel(a, b)
+	local la, lb = LevelOf(a), LevelOf(b)
+	if la ~= lb then return la < lb end
+	return a < b
+end
+
+-- { rows = { { id, depth, kids, folded } }, step, total, branches } or nil when it stands alone
+function page.Chain(qid)
+	-- the quests linked to it, either way, as far as they go (for you)
+	local inChain, queue, kids, parents = { [qid] = true }, { qid }, {}, {}
+	local n, i = 1, 1
+	while i <= #queue do
+		local id = queue[i]
+		i = i + 1
+		local nxt, prv = Links(id)
+		for other in pairs(nxt) do
+			if Mine(other) then
+				kids[id] = kids[id] or {}
+				kids[id][other] = true
+				parents[other] = parents[other] or {}
+				parents[other][id] = true
+				if not inChain[other] and n < MAX_CHAIN then inChain[other] = true n = n + 1 queue[#queue + 1] = other end
+			end
+		end
+		for other in pairs(prv) do
+			if Mine(other) then
+				kids[other] = kids[other] or {}
+				kids[other][id] = true
+				parents[id] = parents[id] or {}
+				parents[id][other] = true
+				if not inChain[other] and n < MAX_CHAIN then inChain[other] = true n = n + 1 queue[#queue + 1] = other end
+			end
+		end
+	end
+	if n < 2 then return nil end
+	local function KidList(id)
+		local l = {}
+		for k in pairs(kids[id] or {}) do if inChain[k] then l[#l + 1] = k end end
+		table.sort(l, ByLevel)
+		return l
+	end
+	local roots = {}
+	for id in pairs(inChain) do
+		local hasParent = false
+		for p in pairs(parents[id] or {}) do if inChain[p] then hasParent = true end end
+		if not hasParent then roots[#roots + 1] = id end
+	end
+	table.sort(roots, ByLevel)
+	if #roots == 0 then roots = { qid } end -- (a loop in the links: start from this one)
+
+	local rows, seen, branches = {}, {}, false
+	local step, pathLen = nil, {}
+	local function Walk(id, depth, len, hidden)
+		if seen[id] then return end
+		seen[id] = true
+		local list = KidList(id)
+		if #list > 1 then branches = true end
+		pathLen[id] = len
+		if id == qid then step = len end
+		local folded = chainFolded[id] and #list > 1
+		if not hidden then rows[#rows + 1] = { id = id, depth = depth, kids = #list, folded = folded } end
+		local childDepth = #list > 1 and depth + 1 or depth
+		for _, k in ipairs(list) do Walk(k, childDepth, len + 1, hidden or folded) end
+	end
+	for _, r in ipairs(roots) do Walk(r, 0, 1, false) end
+	-- how far it goes: the longest run of quests through this one
+	local function Longest(id, guard)
+		guard = guard or {}
+		if guard[id] then return 0 end
+		guard[id] = true
+		local best = 0
+		for _, k in ipairs(KidList(id)) do best = math.max(best, Longest(k, guard)) end
+		guard[id] = nil
+		return 1 + best
+	end
+	step = step or 1
+	return { rows = rows, step = step, total = step + Longest(qid) - 1, branches = branches, current = qid }
+end
+
+local chainBox
+local function ChainBox()
+	if chainBox then return chainBox end
+	local f = CreateFrame("Frame", nil, detail)
+	f:SetSize(1, 1)
+	f.rows = {}
+	local ROW_H = 20
+	local function Row(k)
+		local r = f.rows[k]
+		if r then return r end
+		r = CreateFrame("Button", nil, f)
+		r:SetHeight(ROW_H)
+		r.hl = r:CreateTexture(nil, "HIGHLIGHT")
+		r.hl:SetAllPoints()
+		r.hl:SetColorTexture(1, 0.82, 0.3, 0.08)
+		r.mark = r:CreateTexture(nil, "BACKGROUND")
+		r.mark:SetAllPoints()
+		r.mark:SetColorTexture(1, 0.82, 0.3, 0.12)
+		r.line = r:CreateTexture(nil, "BORDER") -- (the tree's guide line for an indented branch)
+		r.line:SetColorTexture(0.55, 0.45, 0.25, 0.6)
+		r.line:SetWidth(1)
+		r.fold = CreateFrame("Button", nil, r)
+		r.fold:SetSize(14, 14)
+		r.fold.tex = r.fold:CreateTexture(nil, "ARTWORK")
+		r.fold.tex:SetAllPoints()
+		r.icon = r:CreateTexture(nil, "ARTWORK")
+		r.icon:SetSize(16, 16)
+		r.name = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		r.name:SetJustifyH("LEFT")
+		r.name:SetWordWrap(false)
+		r.lvl = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		r.lvl:SetPoint("RIGHT", r, "RIGHT", -6, 0)
+		r.name:SetPoint("RIGHT", r.lvl, "LEFT", -8, 0)
+		r:SetScript("OnEnter", function(self)
+			local id = self.id
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:AddLine(QuestName(id) or (L["quest %d"]):format(id), 1, 1, 1)
+			local lv = LevelOf(id)
+			if lv > 0 then GameTooltip:AddLine((L["Level %d"]):format(lv), 0.8, 0.8, 0.8) end
+			local any = false
+			for _, st in ipairs(Q():Statuses(id)) do
+				GameTooltip:AddDoubleLine(ns.CharName(st.key, true), StatusText(st.st), 1, 0.82, 0, 1, 1, 1)
+				any = true
+			end
+			if not ns.Store:Get("quest", id) then GameTooltip:AddLine(L["Not found yet."], 0.6, 0.6, 0.6)
+			elseif id ~= shown then GameTooltip:AddLine(L["Click to open this quest."], 0.55, 0.55, 0.55) end
+			if not any and ns.Store:Get("quest", id) then GameTooltip:AddLine(L["None of your characters has it yet."], 0.6, 0.6, 0.6) end
+			GameTooltip:Show()
+		end)
+		r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		r:SetScript("OnClick", function(self)
+			if self.id ~= shown and ns.Store:Get("quest", self.id) then page:ShowQuest(self.id) end
+		end)
+		r.fold:SetScript("OnClick", function(self)
+			local id = self:GetParent().id
+			chainFolded[id] = not chainFolded[id] or nil
+			if shown then page:ShowQuest(shown) end
+		end)
+		f.rows[k] = r
+		return r
+	end
+	function f:Fill(chain, width)
+		self:SetWidth(width)
+		local INDENT = 16
+		for k, e in ipairs(chain.rows) do
+			local r = Row(k)
+			r.id = e.id
+			r:ClearAllPoints()
+			r:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -(k - 1) * ROW_H)
+			r:SetPoint("RIGHT", self, "RIGHT", 0, 0)
+			local x = 4 + e.depth * INDENT
+			r.line:ClearAllPoints()
+			if e.depth > 0 then
+				r.line:SetPoint("TOP", r, "TOPLEFT", x - INDENT / 2, 0)
+				r.line:SetPoint("BOTTOM", r, "BOTTOMLEFT", x - INDENT / 2, 0)
+				r.line:Show()
+			else
+				r.line:Hide()
+			end
+			r.fold:ClearAllPoints()
+			r.fold:SetPoint("LEFT", r, "LEFT", x, 0)
+			if e.kids > 1 then
+				r.fold.tex:SetTexture(e.folded and "Interface\\Buttons\\UI-PlusButton-Up" or "Interface\\Buttons\\UI-MinusButton-Up")
+				r.fold:Show()
+			else
+				r.fold:Hide()
+			end
+			r.icon:ClearAllPoints()
+			r.icon:SetPoint("LEFT", r, "LEFT", x + 16, 0)
+			local st = Q():MyStatus(e.id)
+			local found = ns.Store:Get("quest", e.id) ~= nil
+			r.icon:SetTexture((st and ICON[st]) or QUEST_ICON)
+			if r.icon.SetDesaturated then r.icon:SetDesaturated(not found) end
+			r.icon:SetAlpha(found and 1 or 0.5)
+			r.name:ClearAllPoints()
+			r.name:SetPoint("LEFT", r.icon, "RIGHT", 6, 0)
+			r.name:SetPoint("RIGHT", r.lvl, "LEFT", -8, 0)
+			local name = QuestName(e.id) or (L["quest %d"]):format(e.id)
+			local current = e.id == chain.current
+			local color = current and "|cffffd100" or (found and "|cffffffff" or "|cff9d9d9d")
+			r.name:SetText(color .. name .. "|r" .. (found and "" or ("  |cff7f7f7f" .. L["(not found yet)"] .. "|r")))
+			local lv = LevelOf(e.id)
+			r.lvl:SetText(lv > 0 and (L["Level %d"]):format(lv) or "")
+			r.mark:SetShown(current)
+			r:Show()
+		end
+		for k = #chain.rows + 1, #self.rows do self.rows[k]:Hide() end
+		local h = #chain.rows * ROW_H
+		self:SetHeight(h)
+		return h
+	end
+	chainBox = f
+	return f
+end
+
 local function Describe(qid, rec)
 	local b = {}
 	local db = ns.QuestDB:Get(qid)
@@ -309,7 +571,7 @@ local function Describe(qid, rec)
 				local name, met = Q():NameOf(e.id, e.object)
 				if name then
 					local pos = met and met.map and { map = met.map, x = met.x, y = met.y, zone = met.zone, sub = met.sub } or nil
-					people[#people + 1] = WhoSlot({ name = name, kind = e.object and "object" or "npc" }, pos, L["Takes it in"])
+					people[#people + 1] = WhoSlot({ id = e.id, name = name, kind = e.object and "object" or "npc" }, pos, L["Takes it in"])
 					break
 				end
 			end
@@ -347,59 +609,16 @@ local function Describe(qid, rec)
 		end
 	end
 
-	-- the story around it: quests before and after that you've found
-	local before, after, seen = {}, {}, {}
-	if rec.prev and ns.Store:Get("quest", rec.prev) then seen[rec.prev] = true before[#before + 1] = QuestSlot(rec.prev) end
-	for _, id in ipairs(ns.QuestDB:Before(qid)) do
-		if not seen[id] and ns.Store:Get("quest", id) then seen[id] = true before[#before + 1] = QuestSlot(id) end
-	end
-	local doneByAnyone = false
-	for _, s in ipairs(Q():Statuses(qid)) do if s.st.s == "d" then doneByAnyone = true end end
-	for id in pairs(rec.nx or {}) do
-		if not seen[id] and ns.Store:Get("quest", id) then seen[id] = true after[#after + 1] = QuestSlot(id) end
-	end
-	local hidden, hints = 0, {}
-	for _, id in ipairs(db and db.after or {}) do
-		if not seen[id] then
-			if ns.Store:Get("quest", id) then
-				seen[id] = true
-				after[#after + 1] = QuestSlot(id)
-			elseif doneByAnyone and ns.QuestDB:ForMe(id) then
-				-- a completed quest reveals that more follows, and who has it if you've met them
-				hidden = hidden + 1
-				local next = ns.QuestDB:Get(id)
-				for _, s in ipairs(next and next.starters or {}) do
-					local name = Q():NameOf(s.id, s.object)
-					if name then hints[name] = true end
-				end
-			end
-		end
-	end
-	if #before > 0 or #after > 0 or hidden > 0 then
-		b[#b + 1] = { "banner", L["The Story"] }
-		if #before > 0 then
-			b[#b + 1] = { "body", L["Follows:"] }
-			b[#b + 1] = { "slots", before }
-		end
-		if #after > 0 then
-			b[#b + 1] = { "body", L["Leads to:"] }
-			b[#b + 1] = { "slots", after }
-		end
-		if hidden > 0 then
-			local names = {}
-			for name in pairs(hints) do names[#names + 1] = name end
-			table.sort(names)
-			local text = (L["More follows: %s you haven't found yet."]):format(ns.N(hidden, "quest", "quests"))
-			if #names > 0 then text = text .. " " .. (L["%s may have more for you."]):format(table.concat(names, ", ")) end
-			b[#b + 1] = { "body", text }
-		end
-	end
-
-	-- your characters
-	local statuses = Q():Statuses(qid)
-	if #statuses > 0 then
-		b[#b + 1] = { "banner", L["Your Characters"] }
-		for _, s in ipairs(statuses) do b[#b + 1] = { "stat", ns.CharName(s.key, true), StatusText(s.st) } end
+	-- (2026-10-15, Shannon) the quest chain as a tree, in place of The Story and Your Characters:
+	-- every quest before and after it, where this one sits, and each one's status
+	local chain = page.Chain(qid)
+	if chain then
+		b[#b + 1] = { "banner", L["Quest Chain"] }
+		local where = (L["Step %d of %d"]):format(chain.step, chain.total)
+		if chain.branches then where = where .. "  ·  " .. L["it branches"] end
+		b[#b + 1] = { "small", where }
+		local box = ChainBox()
+		b[#b + 1] = { "frame", box, function(width) return box:Fill(chain, width) end }
 	end
 	b[#b + 1] = { "gap", 6 }
 	b[#b + 1] = { "small", (L["First found by %s on %s."]):format(ns.CharName(rec.b, true), ns.DateText(rec.f)) }
@@ -541,6 +760,30 @@ local function ToggleTracked(qid)
 	return now
 end
 ns.QuestTracking = { Tracked = Tracked, Set = SetTracked, Toggle = ToggleTracked } -- (for the tests)
+
+-- (2026-10-14, Shannon) a quest's chat link: the game's own for a quest in your log, else built the
+-- way the game builds them ("|Hquest:id:level|h[Name]|h"), which every client shows as a quest link
+QuestLink = function(qid, rec)
+	if not qid then return nil end
+	local i = LogIndex(qid)
+	if i and Fn(_G, "GetQuestLink") then
+		local ok, link = pcall(GetQuestLink, i)
+		if ok and type(link) == "string" and link:find("|Hquest:", 1, true) then return link end
+		ok, link = pcall(GetQuestLink, qid)
+		if ok and type(link) == "string" and link:find("|Hquest:", 1, true) then return link end
+	end
+	if Fn(C_QuestLog, "GetQuestLink") then
+		local ok, link = pcall(C_QuestLog.GetQuestLink, qid)
+		if ok and type(link) == "string" and link:find("|Hquest:", 1, true) then return link end
+	end
+	rec = rec or ns.Store:Get("quest", qid)
+	local name = rec and rec.name
+	if not name then return nil end
+	local lvl = tonumber(rec.lvl or rec.level) or -1
+	return ("|cffffff00|Hquest:%d:%d|h[%s]|h|r"):format(qid, lvl, name)
+end
+
+ns.QuestTracking.Link = function(qid, rec) return QuestLink(qid, rec) end -- (for the tests)
 
 -- (2026-10-13, Shannon) abandon it: the game's own "Abandon quest?" confirmation does the rest
 local function Abandon(qid)
@@ -893,11 +1136,16 @@ function page:Build(parent, header)
 				collapsed[k] = not collapsed[k]
 				page:Refresh()
 			elseif r.qid then
-				-- (2026-10-13, Shannon) shift-click: on the tracker or off, like the tick box
-				if IsShiftKeyDown and IsShiftKeyDown() and LogIndex(r.qid) then
-					ToggleTracked(r.qid)
-					list:Refresh()
-					return
+				-- (2026-10-14, Shannon) shift-click with the chat box open: the quest's link into chat;
+				-- (2026-10-13) otherwise, for a quest in your log: on the tracker or off, like the tick box
+				if IsShiftKeyDown and IsShiftKeyDown() then
+					local link = QuestLink(r.qid, r.rec)
+					if link and ChatEdit_InsertLink and ChatEdit_InsertLink(link) then return end
+					if LogIndex(r.qid) then
+						ToggleTracked(r.qid)
+						list:Refresh()
+						return
+					end
 				end
 				if ns.New and ns.New:Clicked("quests", r) then list:Refresh() end
 				Show(r.qid)
@@ -1015,7 +1263,13 @@ do
 	end
 	page.RefreshSoon = Soon
 	-- (and as soon as the Almanac's own quest records change: an abandon or hand-in marked at once)
-	ns:On("CHANGED", function(kind) if kind == "quest" then Soon() end end)
+	ns:On("CHANGED", function(kind, id)
+		if kind == "quest" then Soon()
+		-- (a giver's face just learned, 2026-10-15)
+		elseif (kind == "npc" or kind == "townsfolk" or kind == "merchant" or kind == "creature") and id and faceWanted[id] then Soon() end
+	end)
+	-- (a chain quest's name the game has just loaded)
+	pcall(ns.RegisterEvent, ns, "QUEST_DATA_LOAD_RESULT", function() if namesWaiting then namesWaiting = false Soon() end end)
 end
 
 ns.UI:RegisterPage(page)

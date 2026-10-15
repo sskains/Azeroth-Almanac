@@ -451,14 +451,36 @@ function G:NeedText(rec, plain)
 	return self:NeedColor(lo, rank) .. text .. "|r", skill, lo, rogue
 end
 
--- the game's tooltip on a node: "Requires Herbalism (125)" and the like corrects the database
+-- (2026-10-15, Shannon) your own skill after a node's need: "  (you: 87)", coloured as the game
+-- colours gathering (red too low ... grey no more skill-ups). key: another character's (a lock seen
+-- through the account's rogue). nil for a lock you haven't the skill for (only rogues pick locks).
+function G:YouText(skill, level, key, showNeed)
+	local rank
+	if not key or key == ns.CharKey() then
+		rank = self:SkillRank(self.NEED_SKILL[skill])
+		if rank == nil then rank = self:CharSkill(skill) end
+	else
+		rank = self:CharSkill(skill, key)
+	end
+	-- (showNeed: the game's line said just "Herbalism", so the level it needs goes in too)
+	local need = (showNeed and level) and ((L["needs %d"]):format(level) .. ", ") or ""
+	if rank == nil then
+		if skill == 1 then return nil end
+		return "  |cffd9d9d9(" .. need .. L["you: not learned"] .. ")|r"
+	end
+	local who = (key and key ~= ns.CharKey()) and (ns.CharName(key) .. ": ") or L["you: "]
+	return "  " .. self:NeedColor(level or 0, rank) .. "(" .. need .. who .. rank .. ")|r"
+end
+
+-- the game's tooltip on a node: "Requires Herbalism (125)" and the like corrects the database, and
+-- gets your own skill added after it
+local YOU_MARK = "|cff" -- (our addition starts with a colour code; the game's line doesn't)
 local function ReadTooltip(tip)
 	if not (ns.db and tip and tip.NumLines) or (tip.GetUnit and tip:GetUnit()) or (tip.GetItem and tip:GetItem()) then return end
 	local first = _G[tip:GetName() .. "TextLeft1"]
 	local name = first and R(first:GetText())
 	if type(name) ~= "string" then return end
 	local rec = ns.Store:Get("node", name)
-	if not rec then return end
 	for i = 2, math.min(tip:NumLines(), 6) do
 		local line = _G[tip:GetName() .. "TextLeft" .. i]
 		local text = line and R(line:GetText())
@@ -466,10 +488,26 @@ local function ReadTooltip(tip)
 			for skill, sname in pairs(G.NEED_SKILL) do
 				if text:find(sname, 1, true) then
 					local level = tonumber(text:match("%((%d+)%)") or text:match(sname .. "%s+(%d+)"))
-					if level then
-						if not (rec.need and rec.need[1] == skill and rec.need[2] == level) then
+					-- (Shannon's Silverleaf screenshot: when you can gather it the game says just
+					-- "Herbalism", no level; the level then comes from the database)
+					local fromDB = false
+					if not level and text:match("^%s*" .. sname .. "%s*$") then
+						local nskill, lo = G:Needs(rec or { name = name })
+						if nskill == skill then level, fromDB = lo, true end
+						if not level then level, fromDB = false, true end
+					end
+					if level ~= nil then
+						if rec and level and not fromDB and not (rec.need and rec.need[1] == skill and rec.need[2] == level) then
 							rec.need = { skill, level }
 							ns:Fire("CHANGED", "node", name)
+						end
+						if not text:find(YOU_MARK, 1, true) then
+							local you = G:YouText(skill, level or nil, nil, fromDB)
+							if you then
+								line:SetText(text .. you)
+								G.youLine, G.youText = line, text .. you
+								tip:Show() -- (re-sizes it to the longer line)
+							end
 						end
 						return
 					end
@@ -478,8 +516,34 @@ local function ReadTooltip(tip)
 		end
 	end
 end
+G.ReadTooltip = ReadTooltip
+-- (2026-10-15, Shannon: "shows for a second, then switches back") the game rewrites a world object's
+-- tooltip while you hover it, without showing it again, so the line is watched: whenever it no longer
+-- holds our text, it's read again (a cheap look at one line; the full read only after a rewrite)
+local function Watch(self)
+	if G.youLine then
+		local now = G.youLine:GetText()
+		if now == G.youText then return end
+		G.youLine, G.youText = nil, nil
+	end
+	if self.GetUnit and self:GetUnit() then return end
+	pcall(ReadTooltip, self)
+end
+G.WatchTooltip = Watch
 if GameTooltip and GameTooltip.HookScript then
-	GameTooltip:HookScript("OnShow", function(self) pcall(ReadTooltip, self) end)
+	GameTooltip:HookScript("OnShow", function(self) G.youLine, G.youText = nil, nil pcall(ReadTooltip, self) end)
+	GameTooltip:HookScript("OnHide", function() G.youLine, G.youText = nil, nil end)
+	local wait = 0
+	GameTooltip:HookScript("OnUpdate", function(self, elapsed)
+		-- (every frame while our line stands is one GetText; otherwise at most 20 reads a second)
+		if G.youLine and G.youLine:GetText() == G.youText then return end
+		wait = wait - (elapsed or 0)
+		if wait > 0 then return end
+		wait = 0.05
+		-- (only the world's tooltips, which the game anchors to the screen: not buttons, bags, spells)
+		if self.GetOwner and self:GetOwner() ~= UIParent then return end
+		Watch(self)
+	end)
 end
 
 ---------------------------------------------------------------------------

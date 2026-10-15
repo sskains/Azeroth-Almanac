@@ -41,6 +41,16 @@ check(p.eval("WATCHED[3] == nil") and "full" in (p.eval("PRINTED") or ""), "a fu
 p.lua("T.Toggle(101)")
 check(p.eval("WATCHED[1] == nil"), "...and takes one off")
 
+print("quest links in chat (2026-10-14)")
+p.lua("""
+GetQuestLink = function(i) if i == 2 then return "|cffffff00|Hquest:202:23|h[Cycle of Rebirth]|h|r" end end
+L1 = T.Link(202)
+GetQuestLink = nil
+L2 = T.Link(999, { name = "Gaea Seeds", lvl = 22 })
+""")
+check(p.eval("L1") == "|cffffff00|Hquest:202:23|h[Cycle of Rebirth]|h|r", "a quest in your log: the game's own link")
+check(p.eval("L2") == "|cffffff00|Hquest:999:22|h[Gaea Seeds]|h|r", "any other quest: a link built the game's way (%s)" % p.eval("L2"))
+
 print("the page")
 p.lua("""
 A.UI:Toggle() RunTimers(1) A.UI:Open("quests") RunTimers(1)
