@@ -106,6 +106,11 @@ check(p.eval(T + '.CleanProfession("Blacksmith Trainer")') == "Blacksmithing" an
       "\"Blacksmith Trainer\" is Blacksmithing and \"Junior Miner Trainer\" is Mining")
 check(p.eval(T + '.CleanProfession("Herbalist")') == "Herbalism" and p.eval(T + '.CleanProfession("Blacksmithing")') == "Blacksmithing",
       "a worker's name becomes its profession; a profession's own name stays")
+check(p.eval(T + '.CleanProfession("Gnomish Engineer")') == "Engineering" and p.eval(T + '.CleanProfession("Master Dragonscale Leatherworker")') == "Leatherworking"
+      and p.eval(T + '.CleanProfession("Armorsmith Trainer")') == "Blacksmithing" and p.eval(T + '.CleanProfession("Journeyman Tailor")') == "Tailoring",
+      "specialisation titles (Gnomish Engineer, Dragonscale Leatherworker, Armorsmith) are their profession too")
+check(p.eval(T + '.CleanProfession("First Aid")') == "First Aid" and p.eval(T + '.CleanProfession("Cooking")') == "Cooking" and p.eval(T + '.CleanProfession("Lockpicking")') == "Lockpicking",
+      "names that aren't a worker's title are left alone")
 p.lua("""
 WORKERS = { found = { spell = { [1] = { name = "Smelt", group = "skill:Miner" } }, trainer = { [2] = { group = "skill:Blacksmith" } } }, chars = {} }
 A.Trainers:OnInitialize(WORKERS)

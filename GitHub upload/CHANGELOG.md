@@ -6,7 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
-- **Recipes: one card per profession** (Asia's screenshot): a trainer whose title names the worker ("<Blacksmith Trainer>", "<Miner Trainer>") made a "Blacksmith" and a "Miner" card beside "Blacksmithing" and "Mining", and those two had no picture. The worker's name now becomes its profession's (Blacksmith, Miner, Skinner, Herbalist, Enchanter, Engineer, Leatherworker, Tailor, Alchemist, Cook, Fisherman, Jewelcrafter), including in records you saved earlier, so each profession is one card with its picture.
+- **Recipes: one card per profession** (Asia's screenshot): a trainer whose title names the worker ("<Blacksmith Trainer>", "<Miner Trainer>") made a "Blacksmith" and a "Miner" card beside "Blacksmithing" and "Mining", and those two had no picture. The worker's name now becomes its profession's (Blacksmith, Miner, Skinner, Herbalist, Enchanter, Engineer, Leatherworker, Tailor, Alchemist, Cook, Fisherman, Jewelcrafter; and the specialist titles such as Gnomish Engineer, Dragonscale Leatherworker and Armorsmith), by the last word of the title, including in records anyone saved earlier (they are put right the first time the Almanac loads), so each profession is one card with its picture.
 
 - **Quests: abandons and hand-ins show at once** (Shannon: the list was slow after abandoning). A quest leaving the log used to wait about 6 seconds before being called abandoned (in case it was a hand-in the game hadn't flagged yet), and the list only noticed on the next quest-log update. Now abandoning (from the Almanac or the game's quest log) and handing in are marked the moment they happen, and the Quests page redraws as soon as a quest's record changes.
 
