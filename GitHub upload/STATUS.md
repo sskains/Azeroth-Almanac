@@ -1,6 +1,8 @@
 # Project status
 
-**Version 0.70.0** · 2026-10-11 (unreleased work on `main` since, through 2026-10-15: see CHANGELOG.md Unreleased) · WoW Forever beta (interface 16001)
+**Version 1.0.0** · 2026-10-16 · WoW Forever beta (interface 16001)
+
+First public release, built for CurseForge (`Releases.0.0\AzerothAlmanac-1.0.0.zip`). Everything in CHANGELOG.md's 1.0.0 section still needs its in-game pass: see `docs/TEST_CHECKLIST.md`.
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 

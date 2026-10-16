@@ -4,7 +4,31 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
-## Unreleased
+## 1.0.0 (2026-10-16)
+
+First public release, for CurseForge.
+
+- **Wild Gambit: your collection** (Shannon). The deck painted on the table's corner is now a button: it breathes a gold outline to say so, and clicking it opens **Your deck** — every card you hold as the real cards, five to a row, with search, sort (power, name, level, tier), a tier filter and "starred only". Click a card to star it; the five you star are always offered on the pick table and are dealt to you more often. The outline is the painted card's own silhouette (`Media\Deck_Glow.tga`, built by `tools/build_deck_glow.py` from the felt itself) rather than a second card laid over it, which never landed on the painting exactly and read as a ghost card beside the deck. While the collection is up, the players' header, the table and the deck's outline are put away rather than covered: they sit at or above the panel's own frame level, so covering them left a second Back arrow, nameplates and a stray glow showing through. New file `QoL/WildGambitDeck.lua` (`WildGambit.lua` is at Lua's 200-local limit).
+
+- **Wild Gambit: stars with no card behind them are dropped** (Shannon). A star could outlive the creature record it was put on, and it still took one of the five slots, so starring a real card was refused as "full" while dead stars sat there. Opening the collection now unstars any favourite you no longer hold a card for and says which, by name. Favourites are also matched by number as well as outright, so an id held as `"12345"` on one page and `12345` on another no longer silently loses the star.
+
+- **Wild Gambit: a wisp in the empty seat** (Shannon). Before an opponent is chosen, the other seat showed the game's question mark icon, a 64-pixel square with its own border that the round opening cut to pieces. It now has a wisp (creature 3681, display 10045) turning slowly on the dark portrait plate the Whispers portraits use. If no model loads, the seat falls back to the deck's card back rather than the question mark; the question mark stays only where it is honest, on a creature whose face the Almanac hasn't learnt yet.
+
+- **Wild Gambit: the result banners light up properly** (Shannon). Victory, Defeat and Draw are **replaced textures** (`Media/Result_Victory.tga`, `Result_Defeat.tga`, `Result_Draw.tga`): the burst is no longer painted into them, so the light is now its own additive layer (`Media/Result_Glow.tga`) that fades into the background instead of stopping at the art's edge. Announced here per CONTRIBUTING rule 4: if you had changes to those three files, they are overwritten by this.
+
+- **Wild Gambit and Murloc Tac Toe: holiday dress follows the server** (Shannon, from Asia's board showing pumpkins in advance). `ns.HolidayNow()` now asks the game's own calendar for the holiday running today and matches it by name, falling back to the old dates (Hallow's End 18 Oct - 1 Nov, Winter Veil 16 Dec - 2 Jan) when the client can't answer. Answers are cached for a minute. `/aa mtt season` still forces the seasonal champions and board on all year for trying them out, and now says that it dresses the board too.
+
+- **Share how far you are through your level** (Shannon). "Ask how far to their next level" on another Almanac player's right-click menu, above Play Wild Gambit, with the XP icon. They are asked, and can allow it once or always; the answer prints in chat as the exact amount and percentage. New `UI/UnitMenu.lua` holds the shared menu block so each game adds itself in a fixed order (XP 40, Murloc Tac Toe 45, Wild Gambit 50), and Murloc Tac Toe now carries its own icon there.
+
+- **The "new" counts on the tabs are legible** (Shannon). The number sits on a small painted red ribbon (`Media/Badge_Ribbon.tga`) instead of floating over the tab art.
+
+- **Places: zones no longer offer an expander that opens onto nothing** (Shannon). A zone counted its sub-places for the card count but the fold arrow used a different number, so zones with nothing to show still offered one.
+
+- **Smaller Back arrows** (Shannon). The table's and the collection's red arrows go from 44 to 36. The table's hover handler was also still carrying sizes from when the arrow was 60: it grew to 62 on hover and shrank to **56** on leave, so after the first mouseover it sat larger than its own size for the rest of the session.
+
+- **Release tidying** for the first public build: the art-scan commands and `Modules/ArtScan.lua` are out of the addon, the temporary `/aadeck` measuring command and its debug box are gone, and `tools/build_release.ps1` stages a clean copy and refuses to build on a byte order mark in the TOC, a TOC file that doesn't exist, an unlisted Lua file or a development file. The CurseForge listing (description, the scrubbed Murloc Tac Toe screenshot and the game icons) is in `CurseForge/`.
+
+- **New art carried over from the live folder:** `Media/Board_DarkPortal.tga` and `Media/WW_Wing.tga`.
 
 - **Recipes: one card per profession** (Asia's screenshot): a trainer whose title names the worker ("<Blacksmith Trainer>", "<Miner Trainer>") made a "Blacksmith" and a "Miner" card beside "Blacksmithing" and "Mining", and those two had no picture. The worker's name now becomes its profession's (Blacksmith, Miner, Skinner, Herbalist, Enchanter, Engineer, Leatherworker, Tailor, Alchemist, Cook, Fisherman, Jewelcrafter; and the specialist titles such as Gnomish Engineer, Dragonscale Leatherworker and Armorsmith), by the last word of the title, including in records anyone saved earlier (they are put right the first time the Almanac loads), so each profession is one card with its picture.
 

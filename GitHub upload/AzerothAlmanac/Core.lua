@@ -8,7 +8,7 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "0.70.0"
+ns.VERSION = "1.0.0"
 -- (0.69.0) the Almanac's own art: the logo (a closed crimson journal, its gold compass) and the journal
 -- badge (the open journal, a page burning with gold writing), for journal entries
 ns.ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_Almanac"
@@ -26,7 +26,14 @@ ns.defaults = {
 	window = { scale = 1, tab = "journal", scroll = 100, smooth = true },
 	toasts = { enabled = true, sound = true, minTier = 1, soundTier = 2, cards = true, zone = true, subzone = true, instance = true, level = true, creature = true, tier = true, merchant = true, item = true, quest = true, trainer = true, flight = true, node = true, fishing = true, milestone = true },
 	bestiary = { tooltip = true },
-	peers = { share = true, tooltip = true, nudge = true, accepted = nil },
+	-- xpShare: who gets your level and progress without being asked about it. "off", "party"
+	-- (party and raid only), "known" (also guild and friends), "all" (anyone - still prompts).
+	-- xpExact sends the exact experience remaining and an exact percent. On by default: an answer
+	-- only ever goes to someone who asked for it and was allowed, so there is no stream of samples
+	-- to round away. Off rounds the percent and drops the amount. xpAlways holds the players you
+	-- ticked "Always" for, by peer key.
+	peers = { share = true, tooltip = true, nudge = true, accepted = nil,
+		xpAsk = true, xpShare = "known", xpExact = true, xpAlways = {} },
 	nodes = { map = true, minimap = true, herb = true, ore = true, chest = true, sighted = true, size = 14, mmSize = 7, mmButton = true },
 	nav = { enabled = true, clearPin = true, eta = true, scale = 1 },
 	townsfolk = { enabled = true, mapHidden = false, factionOnly = true, myClassOnly = true, continent = false, rims = false, size = 16, groups = {} },
@@ -360,7 +367,7 @@ StaticPopupDialogs.AZEROTHALMANAC_RESET = {
 	timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
 }
 
-local DEV_COMMANDS = { art = true, toast = true, atlascheck = true, ejscan = true, wgdungeon = true, whatis = true, cards = true, cardtoast = true, ringzoom = true }
+local DEV_COMMANDS = { toast = true, wgdungeon = true, cardtoast = true, ringzoom = true }
 
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
@@ -463,24 +470,17 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 	elseif cmd == "debug" then
 		ns.db.settings.debug = not ns.db.settings.debug
 		ns.Print("debug " .. (ns.db.settings.debug and "on" or "off"))
-	elseif cmd == "art" then
-		ns.ArtScan:Scan()
+	-- (0.70.0) The art commands (art, atlascheck, ejscan, whatis, cards) and Modules\ArtScan.lua
+	-- went with the first public build: they catalogued the game's art while the Almanac was being
+	-- written, and nothing a player does reaches them.
 	elseif cmd == "toast" then
 		if ns.Toast then ns.Toast:Test() end
 	elseif cmd == "ringzoom" then
 		if ns.Widgets and ns.Widgets.SetRingZoom then ns.Widgets.SetRingZoom(rest) end
 	elseif cmd == "cardtoast" then
 		if ns.CardToast then ns.CardToast:Test(rest) end
-	elseif cmd == "atlascheck" then
-		ns.ArtScan:AtlasCheck()
 	elseif cmd == "wgdungeon" then
 		if ns.WildGambit and ns.WildGambit.DebugDungeon then ns.WildGambit:DebugDungeon(rest) end
-	elseif cmd == "ejscan" then
-		ns.ArtScan:EJScan()
-	elseif cmd == "whatis" then
-		ns.ArtScan:WhatIs(rest)
-	elseif cmd == "cards" then
-		ns.ArtScan:Cards()
 	elseif cmd == "reset" then
 		StaticPopup_Show("AZEROTHALMANAC_RESET")
 	else

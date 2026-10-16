@@ -450,6 +450,35 @@ local function BuildGeneral(P)
 		function() return Opt().peers.tooltip end, function(v) Opt().peers.tooltip = v end)
 	P:Check(L["Tell me when a newer version is out"], L["A quest from the Almanac itself when someone's copy is newer than yours. /aa version quest shows it."],
 		function() return Opt().peers.nudge end, function(v) Opt().peers.nudge = v end)
+
+	-- (0.70.0) sharing how far you are through your level
+	P:Check(L["Let me ask others how far they are"], L["Adds \"Ask how far to their next level\" to an Almanac player's right-click menu. They are asked, and answer only if they want to."],
+		function() return Opt().peers.xpAsk end, function(v) Opt().peers.xpAsk = v end)
+	local xpWho = {
+		{ key = "off",   name = L["no one"] },
+		{ key = "ask",   name = L["ask me every time"] },
+		{ key = "party", name = L["my party"] },
+		{ key = "known", name = L["party, guild and friends"] },
+		{ key = "all",   name = L["anyone who asks"] },
+	}
+	local function XPIndex()
+		for i, o in ipairs(xpWho) do if o.key == Opt().peers.xpShare then return i end end
+		return 4
+	end
+	P:Picker(L["Share my progress with"], xpWho, XPIndex, function(i) Opt().peers.xpShare = xpWho[i].key end, nil, nil,
+		L["Who is answered without the Almanac asking you first. Anyone else raises a prompt, and saying no looks exactly like being away from the keyboard, so turning someone down costs nothing. \"No one\" never even prompts. Nothing is ever broadcast."])
+	P:Check(L["Share my exact experience, not just a percent"], L["On: the exact percent and the experience remaining. Nothing is sent unless someone asks and you allow it, so the numbers only ever reach a player who asked. Off: a rounded percent and no amount."],
+		function() return Opt().peers.xpExact end, function(v) Opt().peers.xpExact = v end)
+	P:Text(function()
+		local n = 0
+		for _ in pairs(Opt().peers.xpAlways or {}) do n = n + 1 end
+		if n == 0 then return L["No one is on your always-share list."] end
+		return (L["%s on your always-share list."]):format(ns.N(n, "player", "players"))
+	end)
+	P:Buttons({ { L["Clear always-share list"], 200, function()
+		Opt().peers.xpAlways = {}
+		ns.Print(L["Cleared your always-share list."])
+	end } })
 	P:Text(function() return (L["%s known."]):format(ns.N(ns.Peers and ns.Peers:Count() or 0, "other Almanac player", "other Almanac players")) end)
 
 	P:Section(L["Key bindings"], L["Set these in Options > Keybindings, under Azeroth Almanac (in the AddOns section)."])

@@ -282,6 +282,12 @@ function WG:SetHint(text)
 	fs:SetFont("Fonts\\MORPHEUS.TTF", heading and 24 or 15, "")
 	fs:SetText(text)
 	frame.hintOrn:Layout(heading)
+	-- ...and again next frame. The ornament sets its rules from fs:GetStringWidth(), which still
+	-- reports the previous line the instant the text is replaced, so a longer heading ("Shuffling
+	-- the deck...") got the rules of a shorter one and they ran through the lettering.
+	C_Timer.After(0, function()
+		if frame and frame.hintOrn and fs:GetText() == text then frame.hintOrn:Layout(heading) end
+	end)
 end
 
 local function CardOf(npc, rec, earned)
@@ -318,23 +324,55 @@ function WG:Favorites()
 	db.favorites = db.favorites or {}
 	return db.favorites
 end
+-- Compared by number as well as outright, so a creature starred from one page is still starred on
+-- another if one of them holds its id as a string: the ids travel through saved variables and
+-- through addon messages, and a "12345" that never matches 12345 silently loses the star.
+-- (a field, not a local: this chunk is at Lua's limit of 200 locals)
+function WG.SameNpc(a, b)
+	if a == b then return true end
+	local x, y = tonumber(a), tonumber(b)
+	return x ~= nil and x == y
+end
 function WG:IsFavorite(npc)
-	for _, n in ipairs(self:Favorites()) do if n == npc then return true end end
+	if npc == nil then return false end
+	for _, n in ipairs(self:Favorites()) do if WG.SameNpc(n, npc) then return true end end
 	return false
 end
 -- star or unstar a creature; with five already starred, `replace` names the one to give up
 -- (without it nothing changes and the answer is "full")
 function WG:SetFavorite(npc, on, replace)
 	local favs = self:Favorites()
-	for i = #favs, 1, -1 do if favs[i] == npc then table.remove(favs, i) end end
+	for i = #favs, 1, -1 do if WG.SameNpc(favs[i], npc) then table.remove(favs, i) end end
 	if on then
-		if replace then for i = #favs, 1, -1 do if favs[i] == replace then table.remove(favs, i) end end end
+		if replace then for i = #favs, 1, -1 do if WG.SameNpc(favs[i], replace) then table.remove(favs, i) end end end
 		if #favs >= self.FAV_MAX then return "full" end
 		favs[#favs + 1] = npc
 	end
 	-- the pick table shows them straight away (not mid-game)
 	if frame and frame.prep and frame.prep:IsVisible() then self:ShowPick() end -- (only when the table is open)
 	return on and "added" or "removed"
+end
+
+-- A star on a creature you no longer hold a card for can never be offered or drawn, and it still
+-- takes one of the five slots - so starring a real card is refused as "full" while three dead stars
+-- sit there. It happens: a star outlives the record it was put on (an older build let you star
+-- before the card was earned; a reset clears the discoveries but not the stars). Dropped when the
+-- deck screen opens, and the names are said out loud rather than quietly thrown away.
+function WG:PruneFavorites()
+	local favs = self:Favorites()
+	local gone = {}
+	for i = #favs, 1, -1 do
+		local npc = favs[i]
+		if not self:CardFor(npc) then
+			local rec = A.Store and A.Store:Get("creature", npc)
+			local name = type(rec) == "table" and rec.name
+				or (A.DB and A.DB.questMob and A.DB.questMob[npc])
+				or ("#" .. tostring(npc))
+			table.insert(gone, 1, name)
+			table.remove(favs, i)
+		end
+	end
+	return gone
 end
 
 -- (#54) the card you hold for a creature or NPC, or nil when it isn't earned yet
@@ -860,39 +898,48 @@ local function PlayAllowed(unit)
 		and (R(UnitIsPlayer(unit)) == true or NpcOfGuid(UnitGUID(unit)) ~= nil)
 end
 
+-- (0.70.0) The colour of the light behind each banner. The banner art carries no light of its own
+-- (tools/build_result_banners.py keys the painted art; tools/build_result_glow.py draws the glow),
+-- so this is what makes a win feel gold and a loss feel red.
+-- (a WG field, not a local: this file is at Lua's 200-locals limit for a chunk)
+WG.RESULT_ART = {
+	Victory = { glow = { 1.00, 0.86, 0.45 } },
+	Draw    = { glow = { 0.72, 0.80, 0.92 } },
+	Defeat  = { glow = { 1.00, 0.42, 0.30 } },
+}
+
+function WG.SetResultArt(kind)
+	local over = frame and frame.over
+	if not over then return end
+	local look = WG.RESULT_ART[kind] or WG.RESULT_ART.Draw
+	over.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Result_" .. kind)
+	if over.glow then
+		over.glow:SetVertexColor(look.glow[1], look.glow[2], look.glow[3])
+		if over.glowPulse and over.glowPulse.Play then pcall(over.glowPulse.Play, over.glowPulse) end
+	end
+end
+
 -- (2026-10-10, Shannon) the Wild Gambit logo in front of its right-click menu entries
 -- (a WG field, not a local: this file is near Lua's 200-locals limit)
 WG.MENU_ICON = "|TInterface\\AddOns\\AzerothAlmanac\\Media\\Icon_WildGambit:16:16:0:0|t "
 
+-- (0.70.0) through ns.UnitMenu now, so the Almanac's entries share one divider and a settled order
+-- (this one sits below "Ask how far to their next level"). The menu tags and the older dropdown
+-- fallback live there; this only says when the entry belongs and what it does.
 local function HookPlayMenu()
 	local label = WG.MENU_ICON .. "|cff9be36bPlay Wild Gambit|r"
-	if Menu and Menu.ModifyMenu then
-		for _, tag in ipairs({ "MENU_UNIT_TARGET", "MENU_UNIT_FOCUS", "MENU_UNIT_PLAYER", "MENU_UNIT_ENEMY_PLAYER",
-			"MENU_UNIT_PARTY", "MENU_UNIT_RAID_PLAYER", "MENU_UNIT_BOSS", "MENU_UNIT_FRIEND" }) do
-			pcall(Menu.ModifyMenu, tag, function(owner, root, context)
-				local unit = (context and context.unit) or (owner and owner.unit)
-				if unit and PlayAllowed(unit) then
-					root:CreateDivider()
-					root:CreateButton(label, function() WG:PlayAgainst(unit) end)
-				elseif context and context.name and not unit and tag == "MENU_UNIT_FRIEND" then
-					local name = context.name .. ((context.server and context.server ~= "") and ("-" .. context.server) or "")
-					root:CreateDivider()
-					root:CreateButton(label, function() WG:Challenge(name) end)
-				end
-			end)
+	if not (A.UnitMenu and A.UnitMenu.Register) then return end
+	A.UnitMenu:Register(50, function(ctx)
+		if ctx.unit and PlayAllowed(ctx.unit) then
+			local unit = ctx.unit
+			return { text = label, func = function() WG:PlayAgainst(unit) end }
 		end
-	elseif UnitPopup_ShowMenu and hooksecurefunc then
-		local whiches = { TARGET = true, FOCUS = true, PLAYER = true, ENEMY_PLAYER = true, PARTY = true, RAID_PLAYER = true, BOSS = true }
-		hooksecurefunc("UnitPopup_ShowMenu", function(dropdown, which, unit)
-			unit = unit or (dropdown and dropdown.unit)
-			if not whiches[which] or (UIDROPDOWNMENU_MENU_LEVEL or 1) ~= 1 or not PlayAllowed(unit) then return end
-			local info = UIDropDownMenu_CreateInfo()
-			info.text = label
-			info.notCheckable = true
-			info.func = function() WG:PlayAgainst(unit) end
-			UIDropDownMenu_AddButton(info)
-		end)
-	end
+		-- a friends-list entry has a name but no unit
+		if ctx.name and not ctx.unit and ctx.tag == "MENU_UNIT_FRIEND" then
+			local name = ctx.name
+			return { text = label, func = function() WG:Challenge(name) end }
+		end
+	end)
 end
 WG.HookPlayMenu = HookPlayMenu
 
@@ -2416,6 +2463,7 @@ local function Build()
 	-- "vs" between the two players
 	-- (the vs and the players a quarter larger, on their own layer over the tables and the board)
 	local vsHolder = CreateFrame("Frame", nil, frame)
+	frame.vsHolder = vsHolder   -- (the deck screen hides the players' header while it is up)
 	vsHolder:SetAllPoints(frame)
 	vsHolder:SetScale(HEAD_SCALE)
 	vsHolder:SetFrameLevel(frame:GetFrameLevel() + 140)
@@ -3074,24 +3122,24 @@ local function Build()
 	-- Back is a red arrow in a gold ring in the board's top left corner (the game's back arrow where
 	-- the client has it, else the spellbook's page arrow, either one made red)
 	local back = CreateFrame("Button", nil, prep)
-	back:SetSize(60, 60)
+	back:SetSize(36, 36)   -- (0.70.0: smaller - at 60 it loomed over the board's corner, at 44 it still did)
 	back:SetPoint("CENTER", prep, "TOPLEFT", 50, 26) -- (0.69.1: up off the board's edge, in the clear)
 	back:SetFrameLevel(prep:GetFrameLevel() + 50)
 	-- (just the painted arrow, no ring or socket)
 	back.arrow = back:CreateTexture(nil, "ARTWORK")
-	back.arrow:SetSize(56, 56)
+	back.arrow:SetSize(34, 34)
 	back.arrow:SetPoint("CENTER", 0, 0)
 	back.arrow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Back_Arrow") -- (custom art: a painted red arrow)
 	back.glow = back:CreateTexture(nil, "BACKGROUND", nil, -1)
 	back.glow:SetTexture(GLOW_TEX)
 	back.glow:SetBlendMode("ADD")
 	back.glow:SetVertexColor(1, 0.4, 0.25)
-	back.glow:SetSize(100, 100)
+	back.glow:SetSize(60, 60)   -- (in step with the smaller arrow)
 	back.glow:SetPoint("CENTER")
 	back.glow:SetAlpha(0)
 	back:SetScript("OnClick", function() WG:Back() end)
 	back:SetScript("OnEnter", function(self)
-		self.arrow:SetSize(62, 62)
+		self.arrow:SetSize(40, 40)
 		self.glow:SetAlpha(0.6)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:AddLine("Back", 1, 0.82, 0)
@@ -3099,7 +3147,7 @@ local function Build()
 		GameTooltip:Show()
 	end)
 	back:SetScript("OnLeave", function(self)
-		self.arrow:SetSize(56, 56)
+		self.arrow:SetSize(34, 34)   -- (back to its own size: this used to put it back at 56)
 		self.glow:SetAlpha(0)
 		GameTooltip_Hide()
 	end)
@@ -3257,7 +3305,10 @@ local function Build()
 	tc.name:Hide()
 	local box = CreateFrame("EditBox", nil, tc, "InputBoxTemplate")
 	box:SetSize(TW - 50, 22)
-	box:SetPoint("TOP", tc.portrait, "BOTTOM", 4, -8)
+	-- (0.70.0) the box and the two buttons evenly spaced: the portrait's foot sits at 128 and the
+	-- Challenge button's base at 238 - 14, which leaves 96 for three 22 high rows, so 10 between
+	-- each. They were 8, 6 and 16, which bunched the box and My target and left Challenge adrift.
+	box:SetPoint("TOP", tc.portrait, "BOTTOM", 4, -10)
 	box:SetAutoFocus(false)
 	box:SetScript("OnEnterPressed", function(self) self:ClearFocus() if self:GetText() ~= "" then WG:Challenge(self:GetText()) end end)
 	box:SetScript("OnEscapePressed", box.ClearFocus)
@@ -3267,7 +3318,7 @@ local function Build()
 	box:SetScript("OnTextChanged", function(self) hint:SetShown(self:GetText() == "") WG.PaintCompat() end)
 	tc.box = box
 	local target = WoodButton(A.Widgets.Button(tc, "My target", 110, function() WG:Challenge("target") end))
-	target:SetPoint("TOP", box, "BOTTOM", -4, -6)
+	target:SetPoint("TOP", box, "BOTTOM", -4, -10)
 	-- (#59) can we play them? green: same version; yellow: plays, some features off; red: one of you
 	-- needs to update (the name typed, else your target; nothing when their Almanac hasn't said)
 	tc.compat = tc:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -3338,6 +3389,28 @@ local function Build()
 	over.art = over:CreateTexture(nil, "ARTWORK")
 	over.art:SetSize(440, 214)
 	over.art:SetPoint("TOP")
+	-- (0.70.0) The light behind the banner, on its own texture and layer. The sunburst painted into
+	-- the banner art cannot do this: it is the same flat texture as the frame, so it can never
+	-- brighten, breathe or sit behind anything. Added rather than drawn over, and tinted per result.
+	over.glow = over:CreateTexture(nil, "BACKGROUND", nil, 1)
+	over.glow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Result_Glow")
+	over.glow:SetBlendMode("ADD")
+	-- wider than the banner (440x214) and taller than it, so the light carries past the painted
+	-- burst's hard edge on every side instead of stopping with it
+	over.glow:SetSize(640, 440)
+	over.glow:SetPoint("CENTER", over.art, "CENTER", 0, 0)
+	over.glow:SetAlpha(0.78)
+	local pulse = over.glow:CreateAnimationGroup()
+	pulse:SetLooping("BOUNCE")
+	local fade = pulse:CreateAnimation("Alpha")
+	if fade.SetFromAlpha then fade:SetFromAlpha(0.62) fade:SetToAlpha(0.95) end
+	fade:SetDuration(1.7)
+	fade:SetSmoothing("IN_OUT")
+	over.glowPulse = pulse
+	-- (The banners briefly had a solid backing behind the plaque here: the first art had Draw and
+	-- Defeat exported at alpha 46 and 135, so the board showed through the words. The art delivered
+	-- on 2026-10-15 is opaque inside on all three, so the backing is gone. If a future export is
+	-- translucent again, that is the symptom, and the fix belongs in the art.)
 	over:SetFrameLevel(frame:GetFrameLevel() + 120)
 	over:EnableMouse(true)
 	frame.overTitle = over:CreateFontString(nil, "OVERLAY")
@@ -3892,8 +3965,93 @@ function Refresh()
 	frame.status:SetText(status)
 end
 
+-- (0.70.0) Nobody in the other seat yet: a wisp drifts in the ring.
+--
+-- The seat used to take the game's question mark icon, which is a 64 pixel square with its own
+-- black border, and the round opening cut it to pieces. A model has no edge to crop and it moves,
+-- which says "waiting for someone" far better than a placeholder does.
+--
+-- 10045 is this client's own display for the Wisp (npc 3681), read off the Forever data rather than
+-- guessed: the guesses before it were 2027, which is a human, and 4449, which is an imp. A model
+-- that loads says nothing about what it is, so the only way to be right here was to look it up.
+-- SetCreature is kept after it, for a client whose display numbers differ; if nothing loads at all,
+-- the seat shows the deck's own card back - a facedown card, which is at least the right language
+-- for an opponent who hasn't turned up, and which fills a round opening cleanly.
+WG.WISP_NPC = 3681                      -- Wisp
+WG.WISP_DISPLAY = { 10045 }
+-- (fields rather than locals: this chunk is at Lua's limit of 200)
+WG.CARD_BACK = "Interface\\AddOns\\AzerothAlmanac\\Media\\CardBack_Almanac"
+
+function WG.SeatCardBack(p)
+	if p.wisp then p.wisp:Hide() end
+	if p.seatBack then p.seatBack:Hide() end
+	p.portrait:SetTexture(WG.CARD_BACK)
+	p.portrait:SetTexCoord(0, 1, 0.25, 0.75)   -- the middle of the card: its rose, no card edges
+end
+
+-- step 0 is the creature itself, then each of WISP_DISPLAY in turn. A model loads a frame or two
+-- late, so whether it took is looked at on a timer rather than straight away.
+function WG.TryWisp(p, i)
+	local m = p.wisp
+	if not m then return end
+	if m.ClearModel then m:ClearModel() end
+	local set
+	local id = WG.WISP_DISPLAY[i]
+	if id then
+		set = pcall(m.SetDisplayInfo, m, id)
+	elseif i == #WG.WISP_DISPLAY + 1 then
+		set = m.SetCreature and pcall(m.SetCreature, m, WG.WISP_NPC)
+	else
+		WG.SeatCardBack(p)
+		return
+	end
+	if not set then WG.TryWisp(p, i + 1) return end
+	if m.SetPortraitZoom then m:SetPortraitZoom(0) end
+	if m.SetCamDistanceScale then m:SetCamDistanceScale(1.1) end
+	if m.SetPosition then m:SetPosition(0, 0, 0) end
+	C_Timer.After(0.25, function()
+		if not (m and m:IsShown()) then return end
+		local file = m.GetModelFileID and m:GetModelFileID()
+		if m.GetModelFileID and not (file and file ~= 0) then WG.TryWisp(p, i + 1) return end
+		m.loaded = id
+	end)
+end
+
+function WG.EmptySeat(p)
+	-- a model floats in whatever is behind the window, so the seat gets the same dark plate the
+	-- Whispers portraits sit on: a wisp over the painted table reads as a stray spark
+	if not p.seatBack then
+		p.seatBack = p:CreateTexture(nil, "BACKGROUND", nil, 3)
+		p.seatBack:SetSize(41, 41)   -- the carved frame's opening (47% of PORTRAIT_FRAME)
+		p.seatBack:SetPoint("CENTER", p.portrait, "CENTER", 0, 0)
+		p.seatBack:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\WW_PortraitBack")
+		p.seatBack:SetVertexColor(0.62, 0.70, 0.85)   -- dimmed, so the wisp is the brightest thing in it
+	end
+	p.seatBack:Show()
+	if not p.wisp then
+		local m = CreateFrame("PlayerModel", nil, p)
+		m:SetPoint("CENTER", p.portrait, "CENTER", 0, 0)
+		m:SetSize(p.portrait:GetWidth() * 1.5, p.portrait:GetHeight() * 1.5)
+		m:EnableMouse(false)
+		-- turning slowly: a wisp that just hangs there reads as a frozen model
+		m:SetScript("OnUpdate", function(self, elapsed)
+			self.t = (self.t or 0) + elapsed
+			if self.SetFacing then self:SetFacing(self.t * 0.5) end
+		end)
+		p.wisp = m
+	end
+	p.portrait:SetTexture(nil)
+	p.portrait:SetTexCoord(0, 1, 0, 1)
+	p.wisp:Show()
+	if not p.wisp.loaded then WG.TryWisp(p, 1) end
+end
+
 -- one player's corner of the header: portrait, the round's class emblem, name, cards owned
 function PaintPlayer(p, name, portrait, class, color, score)
+	if portrait ~= nil then
+		if p.wisp then p.wisp:Hide() end
+		if p.seatBack then p.seatBack:Hide() end
+	end
 	p.name:SetText(name)
 	-- as large as fits beside the vs (14 down to 9)
 	local file, _, flags = p.name:GetFont()
@@ -3923,6 +4081,9 @@ function PaintPlayer(p, name, portrait, class, color, score)
 		-- wandered out of sight: its face as learnt
 		SetPortraitTextureFromCreatureDisplayID(p.portrait, portrait.display)
 		p.portrait:SetTexCoord(0, 1, 0, 1)
+	elseif portrait == nil then
+		-- nobody chosen yet
+		WG.EmptySeat(p)
 	else
 		if SetPortraitToTexture then SetPortraitToTexture(p.portrait, "Interface\\Icons\\INV_Misc_QuestionMark") else p.portrait:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark") end
 		-- a creature out of sight whose face isn't known yet: learn it from its ID (a few tries)
@@ -4057,7 +4218,7 @@ local function EndGame(forfeit)
 		title, color = "A stalemate gambit", { 0.8, 0.85, 1 }
 		PlayEnd(SND.draw)
 	end
-	frame.over.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Result_" .. (won and "Victory" or lost and "Defeat" or "Draw"))
+	WG.SetResultArt(won and "Victory" or lost and "Defeat" or "Draw")
 	frame.overTitle:SetText(title)
 	frame.overTitle:SetTextColor(color[1], color[2], color[3])
 	frame.overSub:SetText(game.tutorial and ("|cffffffff%d - %d|r\n|cffc8bca0Tutorial complete! You're ready for a real gambit.|r"):format(mine, theirs)
@@ -4082,7 +4243,7 @@ function WG:CancelGame(chat, why)
 	if frame.waitNote then frame.waitNote:Hide() end
 	if frame.silentNote then frame.silentNote:Hide() end
 	if g.pvp then WG.lastGame = { pvp = g.pvp.opp } WG.net = nil end
-	frame.over.art:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Result_Draw")
+	WG.SetResultArt("Draw")
 	frame.overTitle:SetText("Cancelled")
 	frame.overTitle:SetTextColor(0.8, 0.8, 0.8)
 	frame.overSub:SetText("|cffc8bca0Not counted.|r" .. (why and ("\n|cff999999" .. why .. "|r") or ""))
@@ -6914,6 +7075,9 @@ end
 do
 	WG.D = {
 		Game = function() return game end, Frame = function() return frame end, DB = function() return db end,
+		-- (0.70.0) NewCard: the deck screen (WildGambitDeck.lua) lays your collection out as the
+		-- real cards, so it builds them the same way the table does
+		NewCard = NewCard,
 		SetCard = SetCard, SetOwner = SetOwner, Deal = Deal, Vanish = Vanish, Flash = Flash,
 		PutOnBoard = PutOnBoard, BoardPlace = BoardPlace, SlotCenter = SlotCenter, Note = Note, Tell = Tell,
 		Play = Play, ShowHands = ShowHands, PaintEffects = PaintEffects, EndGame = EndGame, Reborn = Reborn,

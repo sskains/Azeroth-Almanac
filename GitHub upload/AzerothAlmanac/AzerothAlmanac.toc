@@ -2,7 +2,7 @@
 ## Title: Azeroth Almanac
 ## Notes: An adventurer's journal for WoW Forever: everything you discover, across all your characters. /aa
 ## Author: Olaris
-## Version: 0.70.0
+## Version: 1.0.0
 ## SavedVariables: AzerothAlmanacDB
 ## IconTexture: Interface\AddOns\AzerothAlmanac\Media\Logo_Almanac
 
@@ -29,7 +29,7 @@ Data\Quests.lua
 Modules\QuestDB.lua
 Data\Dungeons.lua
 Modules\Dungeons.lua
-Modules\ArtScan.lua
+UI\UnitMenu.lua
 QoL\Core.lua
 Data\QoLData.lua
 QoL\WindowUtil.lua
@@ -51,6 +51,7 @@ QoL\WildGambitLogic.lua
 QoL\WildGambitDungeons.lua
 QoL\WildGambit.lua
 QoL\WildGambitDungeonsUI.lua
+QoL\WildGambitDeck.lua
 QoL\FlightCrew.lua
 QoL\WingsWhispers.lua
 QoL\InventoryWindow.lua

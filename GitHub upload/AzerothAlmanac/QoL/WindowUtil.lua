@@ -393,12 +393,53 @@ function ns.Ornament(fs, size, ruleLen)
 	return o
 end
 
--- The holiday on now, by the calendar: "HallowsEnd" (18 Oct - 1 Nov), "WinterVeil" (16 Dec - 2 Jan) or nil.
--- Shared by Wild Gambit's holiday boards and Murloc Tac Toe's seasonal champions.
-function ns.HolidayNow()
+-- The holiday on now: "HallowsEnd", "WinterVeil" or nil. Shared by Wild Gambit's holiday boards and
+-- Murloc Tac Toe's seasonal champions and board.
+--
+-- The game's own calendar is asked first, so the dress follows the event the server is actually
+-- running rather than this addon's guess at when it starts. Classic clients differ in how much of
+-- the calendar they expose, and its day events are only there once something has loaded them, so
+-- every call is guarded and anything unanswered falls back to the dates Blizzard has kept to:
+-- Hallow's End 18 Oct - 1 Nov, Winter Veil 16 Dec - 2 Jan.
+local HOLIDAY_WORDS = {
+	{ "HallowsEnd", "hallow" },
+	{ "WinterVeil", "winter veil" },
+}
+local holidayCache, holidayAt = false, 0
+
+local function HolidayFromCalendar()
+	local C = C_Calendar
+	if not (C and C.GetDate and C.GetNumDayEvents and C.GetDayEvent) then return nil end
+	local ok, today = pcall(C.GetDate)
+	if not (ok and type(today) == "table" and today.monthDay) then return nil end
+	local okn, n = pcall(C.GetNumDayEvents, 0, today.monthDay)
+	if not (okn and type(n) == "number" and n > 0) then return nil end
+	for i = 1, n do
+		local oke, e = pcall(C.GetDayEvent, 0, today.monthDay, i)
+		local title = oke and type(e) == "table" and e.title
+		if type(title) == "string" then
+			local low = title:lower()
+			for _, pair in ipairs(HOLIDAY_WORDS) do
+				if low:find(pair[2], 1, true) then return pair[1] end
+			end
+		end
+	end
+	return nil
+end
+
+local function HolidayFromDates()
 	local ok, t = pcall(date, "*t")
 	if not (ok and type(t) == "table") then return nil end
 	local m, d = t.month, t.day
 	if (m == 10 and d >= 18) or (m == 11 and d <= 1) then return "HallowsEnd" end
 	if (m == 12 and d >= 16) or (m == 1 and d <= 2) then return "WinterVeil" end
+end
+
+function ns.HolidayNow()
+	-- asked often (every board dress and champion list), answered at most once a minute
+	local now = GetTime and GetTime() or 0
+	if holidayCache ~= false and (now - holidayAt) < 60 then return holidayCache end
+	-- (nil is a real answer and is cached as nil; `false` only ever means "not asked yet")
+	holidayCache, holidayAt = HolidayFromCalendar() or HolidayFromDates() or nil, now
+	return holidayCache
 end

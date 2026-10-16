@@ -10,6 +10,11 @@ local UI = ns.UI
 local Window = ns:NewModule("Window")
 
 local WIDTH, HEIGHT = 880, 680   -- tall enough for the Characters page's gear and professions without scrolling
+-- The side tabs' "new entries" ribbon (Media/Badge_Ribbon, 2:1). Sized by measuring the rendered
+-- badge, not by eye: at 30x17 the digits filled the red face edge to edge and read as clipped, and
+-- 36x22 left 5px of slack above and below a 7px number and swallowed the tab. This keeps about
+-- 2-3px of clearance. Measure a screenshot before changing it.
+local BADGE_MIN_W, BADGE_H = 32, 16
 local frame, pages, order, current = nil, {}, {}, nil
 
 -- pages merged into another keep their key as an alias (Merchants lives in People now)
@@ -179,7 +184,8 @@ function UI:UpdateBadges()
 		if tab.badge then
 			tab.badge:SetShown(n > 0)
 			tab.badge.text:SetText(n > 99 and "99+" or tostring(n))
-			tab.badge:SetWidth(math.max(20, tab.badge.text:GetStringWidth() + 10))
+			-- the ribbon stretches to the number; the padding keeps the digits clear of its notched ends
+			tab.badge:SetWidth(math.max(BADGE_MIN_W, tab.badge.text:GetStringWidth() + 18))
 		end
 	end
 end
@@ -303,27 +309,26 @@ local function Build()
 			hover:SetBlendMode("ADD")
 		end
 		tab.glow:Hide()
-		-- (0.69.0) the count of new entries: a small gold coin with the number, at the tab's top right
+		-- (0.70.0) the count of new entries: a red ribbon with the number, at the tab's top right.
+		-- Red because nothing else in that corner is - on the old gold coin the number was gold on
+		-- gold against the tabs' warm book art, and got lost. (The coin's circular mask never drew
+		-- either: its texture path was written with single backslashes, so it resolved to nothing.)
 		if ns.New and ns.New.KINDS[def.key] then
 			local badge = CreateFrame("Frame", nil, tab)
-			badge:SetSize(20, 20)
-			badge:SetPoint("CENTER", tab, "TOPRIGHT", tab.native and -12 or -4, tab.native and -12 or -4)
+			badge:SetSize(BADGE_MIN_W, BADGE_H)
+			-- Anchored by its RIGHT edge, not its centre: the ribbon grows leftward over the icon as
+			-- the number gets wider, so every tab's tail hangs the same amount past the tab's edge
+			-- (centred, "99+" stuck out into the world twice as far as "2" did). Dropped 4px from
+			-- the top as well, so it rides the icon's edge instead of the tab's shoulder.
+			badge:SetPoint("RIGHT", tab, "TOPRIGHT", tab.native and 4 or 6, tab.native and -16 or -8)
 			badge:SetFrameLevel(tab:GetFrameLevel() + 5)
-			badge.rim = badge:CreateTexture(nil, "BACKGROUND")
-			badge.rim:SetPoint("TOPLEFT", -1, 1)
-			badge.rim:SetPoint("BOTTOMRIGHT", 1, -1)
-			badge.rim:SetColorTexture(0.25, 0.14, 0.02, 1)
-			badge.bg = badge:CreateTexture(nil, "BORDER")
+			badge.bg = badge:CreateTexture(nil, "BACKGROUND")
+			badge.bg:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Badge_Ribbon")
 			badge.bg:SetAllPoints()
-			badge.bg:SetColorTexture(0.86, 0.62, 0.12, 1)
-			for _, t in ipairs({ badge.rim, badge.bg }) do
-				local mask = badge:CreateMaskTexture()
-				mask:SetTexture("Interface\CharacterFrame\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-				mask:SetAllPoints(t)
-				if t.AddMaskTexture then t:AddMaskTexture(mask) end
-			end
 			badge.text = badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 			badge.text:SetPoint("CENTER", 0, 0)
+			badge.text:SetTextColor(1, 1, 1)
+			badge.text:SetShadowColor(0, 0, 0, 0.9)
 			badge.text:SetShadowOffset(1, -1)
 			badge:Hide()
 			tab.badge = badge

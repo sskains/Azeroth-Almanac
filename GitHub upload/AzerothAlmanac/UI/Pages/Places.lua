@@ -621,16 +621,21 @@ local function FillContinentBanner(row, r)
 	for _, t in ipairs(row.banner.edges) do t:SetColorTexture(c[1] * 0.8, c[2] * 0.8, c[3] * 0.8, 1) end
 end
 
-local function FillZoneBanner(row, z, folded, cont)
+-- `shown` is how many of the zone's places this list will actually draw, which is not always all
+-- of them: a place found since you last looked is lifted out into the "New since you last looked"
+-- group, and a search drops the ones that don't match. The expander has to count those, not the
+-- zone's whole list, or a zone whose only place is new offers a "+" that opens onto nothing.
+local function FillZoneBanner(row, z, folded, cont, shown)
 	local name = z.rec.name or "?"
 	local total, done = ns.Places:Exploration(name)
-	local n = #z.subs
+	local all = #z.subs             -- everything the zone holds, for the card's own count
+	local n = shown or all          -- what the list will draw, for the expander
 	FillBanner(row, {
 	name = name, art = ZoneArt(name), icon = W.KindIcon("zone"), left = 14, top = 4, tint = ContColor(cont),
 		flags = BattlegroundType(name) and true or nil,
 		count = BattlegroundType(name) and ("|cffffd100" .. L["Battleground"] .. "|r |cffcccccc\194\183 " .. BattlegroundType(name) .. "|r")
 			or total and ((done >= total and "|cff40ff40" or "|cffcccccc") .. (L["%d / %d explored"]):format(done, total) .. "|r")
-			or ("|cffcccccc" .. ns.N(n, "place", "places") .. "|r"),
+			or ("|cffcccccc" .. ns.N(all, "place", "places") .. "|r"),
 		pill = n > 0 and {
 			sign = folded and "+" or "-",
 			label = folded and (L["Show areas (%d)"]):format(n) or L["Hide areas"],
@@ -697,7 +702,8 @@ local function Collect()
 			local tot, dn = ns.Places:Exploration(z.rec.name)
 			if tot and dn and dn >= tot then contRow.explored = contRow.explored + 1 end
 			if not collapsed[contRow.key] then
-				rows[#rows + 1] = { kind = "zone", z = z, id = z.id, cont = cont } -- (id: so Back finds this row again)
+				-- (id: so Back finds this row again; shown: what the expander may promise)
+				rows[#rows + 1] = { kind = "zone", z = z, id = z.id, cont = cont, shown = #e.subs }
 				if not collapsed[z.id] or filter ~= "" then
 					for _, s in ipairs(e.subs) do rows[#rows + 1] = { kind = "subzone", s = s, id = s.id, cont = cont } end
 				end
@@ -793,7 +799,7 @@ function page:Build(parent, header)
 			row.icon:SetTexture(nil)
 			row.text:SetText("")
 			row.right:SetText("")
-			FillZoneBanner(row, r.z, collapsed[r.z.id], r.cont)
+			FillZoneBanner(row, r.z, collapsed[r.z.id], r.cont, r.shown)
 			elseif r.kind == "dungeoncard" then
 			row.icon:SetPoint("LEFT", 20, 0)
 			row.icon:SetTexture(nil)

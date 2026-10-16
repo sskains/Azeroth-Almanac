@@ -1905,27 +1905,31 @@ end
 -- Right-click menus on players (the game's Menu system, when it has one)
 ---------------------------------------------------------------------------
 
+-- (0.70.0) through A.UnitMenu now, between "Ask how far to their next level" (40) and "Play Wild
+-- Gambit" (50), sharing the Almanac's one divider instead of adding a second one below it.
+local MENU_ICON = "|TInterface\\AddOns\\AzerothAlmanac\\Media\\MurlocTacToe_Icon:16:16:0:0|t "
+
 local function AddMenus()
-	if not (Menu and Menu.ModifyMenu) then return end
-	local function Add(_, root, ctx)
-		if not (db.menu and root and root.CreateButton and ctx) then return end
-		local name, server = ctx.name, ctx.server
-		local unit = ctx.unit
+	if not (A.UnitMenu and A.UnitMenu.Register) then return end
+	A.UnitMenu:Register(45, function(ctx)
+		if not db.menu then return end
+		local unit, name, server = ctx.unit, nil, nil
 		if unit and UnitExists(unit) then
 			if not UnitIsPlayer(unit) or UnitIsUnit(unit, "player") then return end
 			if UnitFactionGroup(unit) ~= UnitFactionGroup("player") then return end
 			name, server = UnitName(unit)
+		else
+			-- the guild, communities and chat-roster menus have a name but no unit
+			name = ctx.context and ctx.context.name
+			server = ctx.context and ctx.context.server
 		end
 		if not name or (name == UnitName("player") and (not server or server == "" or server == Realm())) then return end
 		local full = (server and server ~= "") and (name .. "-" .. server) or name
-		if root.CreateDivider then root:CreateDivider() end
-		root:CreateButton("|cff59ff80Murloc Tac Toe|r", function() MT:Challenge(full) end)
-	end
-	for _, tag in ipairs({ "MENU_UNIT_PLAYER", "MENU_UNIT_PARTY", "MENU_UNIT_RAID_PLAYER", "MENU_UNIT_FRIEND",
-		"MENU_UNIT_TARGET", "MENU_UNIT_FOCUS", "MENU_UNIT_GUILD", "MENU_UNIT_COMMUNITIES_GUILD_MEMBER",
-		"MENU_UNIT_COMMUNITIES_MEMBER", "MENU_UNIT_CHAT_ROSTER" }) do
-		pcall(Menu.ModifyMenu, tag, Add)
-	end
+		return {
+			text = MENU_ICON .. "|cff59ff80Murloc Tac Toe|r",
+			func = function() MT:Challenge(full) end,
+		}
+	end)
 end
 
 ---------------------------------------------------------------------------
@@ -2206,7 +2210,7 @@ function MT:Command(rest)
 		Refresh()
 	elseif low == "season" then
 		db.anySeason = not db.anySeason
-		Say("seasonal champions " .. (db.anySeason and "are offered all year (for trying them out)." or "are offered only in their holiday."))
+		Say("seasonal champions and the holiday board " .. (db.anySeason and "show all year (for trying them out)." or "show only during their holiday."))
 		Refresh()
 	elseif low == "champions" then
 		for _, k in ipairs(ROSTER) do

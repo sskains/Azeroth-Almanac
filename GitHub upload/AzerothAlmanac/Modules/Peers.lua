@@ -7,12 +7,16 @@
 --   I|version|g   "I'm here"            never answered
 --   (#59, DESIGN 81) g: the mini games' protocol ranges, "wg:12-12,mtt:1-1,gem:1-1" (older copies
 --   send no g and ignore it). Each game lists its range in ns.GAME_PROTOCOLS[key] = { min, max }.
+--   (0.70.0) Q|xp          "how far are you through your level?"  whisper only
+--   (0.70.0) X|lvl|pct|left  the answer, by whisper; see the experience section below
 -- Who gets a hello: the guild at login, the group when it changes, online friends (spaced out), and
 -- a player you target or mouse over (once in a while each). No realm-wide channel.
 -- A newer version seen on someone else's copy brings up the "New Version Available" quest
 -- (UI/UpdateQuest.lua), once per version.
--- Settings (AzerothAlmanacDB.settings.peers): share (answer and say hello), tooltip, nudge.
--- Known players (AzerothAlmanacDB.peers): [key] = { n = name, v = version, via = how, t = last seen }.
+-- Settings (AzerothAlmanacDB.settings.peers): share (answer and say hello), tooltip, nudge,
+-- xpAsk (offer the menu entry), xpShare (who is answered unasked), xpExact, xpAlways.
+-- Known players (AzerothAlmanacDB.peers): [key] = { n = name, v = version, via = how, t = last seen,
+-- xp = { lvl, pct, left, t } the last experience answer they gave }.
 
 local _, ns = ...
 local P = ns:NewModule("Peers")
@@ -28,6 +32,39 @@ local known                   -- ns.db.peers
 local lastReply, lastPing = {}, {}
 local queue, sending = {}, false
 local nudgedThisSession = {}
+
+---------------------------------------------------------------------------
+-- (0.70.0) Sharing how far you are through your level
+--
+-- Asked for from a player's right-click menu, one question at a time. Nothing is broadcast and
+-- nothing is sent unasked: your level and percent go out only when someone asks and your settings
+-- allow it, or you say yes to the prompt. "No" and "away from the keyboard" look identical to
+-- whoever asked, so turning someone down costs nothing.
+--
+--   Q|xp           "how far are you through your level?"
+--   X|lvl|pct|left  the answer; pct is rounded (XP_ROUND), left (exact XP remaining) only if opted in
+--
+-- Why the rounding and the answer-side throttle: an exact number sampled over and over is a record
+-- of how fast someone plays and when they are at the keyboard. Rounding, and refusing to answer the
+-- same person too often, keep a curious question from turning into that record. Throttling only the
+-- asking side would not do it - that limits polite copies of the addon, not rude ones.
+---------------------------------------------------------------------------
+
+ns.GAME_PROTOCOLS = ns.GAME_PROTOCOLS or {}
+ns.GAME_PROTOCOLS.xp = { 1, 1 }   -- (the "games" field is really a capability list)
+
+local XP_ROUND = 5            -- percent is rounded to this on the wire
+local XP_ANSWER_GAP = 180     -- seconds before answering the same player again, however often they ask
+local XP_ASK_GAP = 60         -- seconds before you can ask the same player again
+local XP_PROMPT_GAP = 300     -- seconds before the same player can raise a prompt again
+local XP_TIMEOUT = 15         -- seconds before an unanswered question is called "no answer"
+local XP_POPUP = "AZEROTHALMANAC_XP_REQUEST"
+
+local lastXPAnswer, lastXPAsk, lastXPPrompt = {}, {}, {}
+local xpWaiting = {}          -- key -> true while an answer is still wanted
+
+-- declared here because OnMessage, further up the file, hands the two experience messages to them
+local AskedForXP, HeardXP
 
 local function S() return ns.db.settings.peers end
 
@@ -182,6 +219,19 @@ local function OnMessage(text, channel, sender)
 		end
 		return
 	end
+	-- (0.70.0) "how far are you through your level?", and the answer
+	if kind == "Q" and version == "xp" then
+		if channel == "WHISPER" then AskedForXP(sender) end
+		return
+	end
+	if kind == "X" then
+		-- X|level|pct|left: the fourth field is empty unless they share exact experience
+		if channel == "WHISPER" then
+			local _, lvl, pct, left = strsplit("|", text)
+			HeardXP(sender, lvl, pct, left)
+		end
+		return
+	end
 	if (kind ~= "H" and kind ~= "I") or not version or version == "" then return end
 	Remember(sender, version, ViaOf(channel, sender), ParseGames(extra))
 	if kind == "H" and S().share then
@@ -272,6 +322,216 @@ function P:CompatText(nameOrUnit, game)
 	return c and P.COMPAT_TEXT[c] or nil, c
 end
 
+---------------------------------------------------------------------------
+-- Experience: answering
+---------------------------------------------------------------------------
+
+-- ViaOf() reads the channel a message came in on, and an experience question always arrives by
+-- whisper, so it would call a guildmate a passer-by. These ask the game instead.
+local guildKeys, guildKeysAt = nil, 0
+
+local function InMyGuild(name)
+	if not (IsInGuild and IsInGuild() and GetNumGuildMembers and GetGuildRosterInfo) then return false end
+	local now = GetTime()
+	if not guildKeys or now - guildKeysAt > 60 then
+		guildKeys, guildKeysAt = {}, now
+		for i = 1, (GetNumGuildMembers() or 0) do
+			local member = GetGuildRosterInfo(i)
+			local key = member and Key(member)
+			if key then guildKeys[key] = true end
+		end
+	end
+	return guildKeys[Key(name) or ""] == true
+end
+
+local function IsMyFriend(name)
+	if not (C_FriendList and C_FriendList.GetFriendInfo) then return false end
+	local ok, info = pcall(C_FriendList.GetFriendInfo, Ambiguate and Ambiguate(name, "short") or name)
+	return ok and info ~= nil
+end
+
+local function InMyGroup(name)
+	local short = Ambiguate and Ambiguate(name, "short") or name
+	if UnitInParty and UnitInParty(short) then return true end
+	if UnitInRaid and UnitInRaid(short) then return true end
+	return false
+end
+
+-- Who gets an answer without the Almanac asking you first. Returns true (answer now),
+-- false (put a prompt up), or nil (never answer, never prompt).
+local function XPAllowed(sender)
+	local s = S()
+	local tier = s.xpShare or "known"
+	if not s.share or tier == "off" then return nil end
+	local key = Key(sender)
+	if key and s.xpAlways and s.xpAlways[key] then return true end
+	if tier == "all" then return true end
+	if tier == "ask" then return false end
+	if InMyGroup(sender) then return true end
+	if tier == "known" and (InMyGuild(sender) or IsMyFriend(sender)) then return true end
+	return false
+end
+
+-- Our own numbers; nil at max level or when the game has no experience for us.
+-- Exact by default: nothing goes out unless someone asks and you allow it, so there is no stream
+-- of samples to round away - the precision only ever reaches a player who asked once. Turning
+-- xpExact off rounds the percent (XP_ROUND) and drops the amount, for anyone who wants that.
+local function MyXP()
+	local level = UnitLevel("player")
+	local max = GetMaxPlayerLevel and GetMaxPlayerLevel()
+	if not level or (max and level >= max) then return nil end
+	local cur, total = UnitXP("player"), UnitXPMax("player")
+	if not (cur and total and total > 0) then return nil end
+	if not S().xpExact then
+		local pct = math.floor((cur / total) * 100 / XP_ROUND + 0.5) * XP_ROUND
+		return level, math.min(pct, 100), nil
+	end
+	return level, math.floor((cur / total) * 100), total - cur
+end
+
+local function SendXP(to)
+	local level, pct, left = MyXP()
+	if not level then return false end
+	Send(("X|%d|%d|%s"):format(level, pct, left and tostring(left) or ""), "WHISPER", to)
+	return true
+end
+
+-- answer them if we are allowed to and have not answered them lately
+local function AnswerXP(sender, prompted)
+	local key = Key(sender)
+	if not key then return end
+	local now = GetTime()
+	if not prompted and lastXPAnswer[key] and now - lastXPAnswer[key] < XP_ANSWER_GAP then return end
+	lastXPAnswer[key] = now
+	if SendXP(sender) and prompted then
+		ns.Print((L["Told %s how far you are through your level."]):format(Ambiguate and Ambiguate(sender, "short") or sender))
+	end
+end
+
+StaticPopupDialogs[XP_POPUP] = {
+	text = L["%s asks how far you are through your level.\n\nShare your level and progress with them?"],
+	button1 = YES or "Yes",
+	button2 = NO or "No",
+	button3 = L["Always"],
+	timeout = XP_TIMEOUT + 15,
+	whileDead = 1,
+	hideOnEscape = 1,
+	preferredIndex = 3,
+	OnAccept = function(self) AnswerXP(self.data, true) end,
+	OnAlt = function(self)
+		local key = Key(self.data)
+		if key then
+			local s = S()
+			s.xpAlways = s.xpAlways or {}
+			s.xpAlways[key] = Ambiguate and Ambiguate(self.data, "short") or self.data
+		end
+		AnswerXP(self.data, true)
+	end,
+	-- "No" sends nothing at all: to whoever asked it looks the same as being away from the keyboard
+}
+
+function AskedForXP(sender)
+	local allowed = XPAllowed(sender)
+	if allowed == nil then return end
+	if allowed then AnswerXP(sender) return end
+	-- a prompt costs attention, so one per player per XP_PROMPT_GAP, and never mid-fight
+	local key = Key(sender)
+	local now = GetTime()
+	if lastXPPrompt[key] and now - lastXPPrompt[key] < XP_PROMPT_GAP then return end
+	if InCombatLockdown and InCombatLockdown() then return end
+	if not MyXP() then return end -- nothing to share (max level): stay quiet
+	lastXPPrompt[key] = now
+	local popup = StaticPopup_Show(XP_POPUP, Ambiguate and Ambiguate(sender, "short") or sender)
+	if popup then popup.data = sender end
+end
+
+---------------------------------------------------------------------------
+-- Experience: asking
+---------------------------------------------------------------------------
+
+local function XPLine(rec)
+	local xp = rec and rec.xp
+	if not xp then return nil end
+	local who = rec.n or "?"
+	if not xp.pct then return (L["%s is level %d."]):format(who, xp.lvl or 0) end
+	if xp.left then
+		-- exact: they answered a question you asked, so say the real numbers
+		return (L["%s is level %d, %d%% of the way to %d - %s experience to go."])
+			:format(who, xp.lvl, xp.pct, xp.lvl + 1, BreakUpLargeNumbers and BreakUpLargeNumbers(xp.left) or xp.left)
+	end
+	-- they share a rounded percent only
+	return (L["%s is level %d, about %d%% of the way to %d."]):format(who, xp.lvl, xp.pct, xp.lvl + 1)
+end
+
+function P:AskXP(nameOrUnit)
+	local name = nameOrUnit
+	if type(nameOrUnit) == "string" and UnitExists(nameOrUnit) and UnitIsPlayer(nameOrUnit) then name = UnitFull(nameOrUnit) end
+	local key = Key(name)
+	if not key or IsMe(name) then return end
+	local short = Ambiguate and Ambiguate(name, "short") or name
+	if not S().share then
+		ns.Print(L["Turn on \"Let other Almanac players see me\" in the Almanac's settings to ask this."])
+		return
+	end
+	local now = GetTime()
+	if lastXPAsk[key] and now - lastXPAsk[key] < XP_ASK_GAP then
+		ns.Print((L["You asked %s a moment ago - give them a chance to answer."]):format(short))
+		return
+	end
+	lastXPAsk[key] = now
+	xpWaiting[key] = true
+	Send("Q|xp", "WHISPER", name)
+	ns.Print((L["Asked %s how far they are through their level..."]):format(short))
+	C_Timer.After(XP_TIMEOUT, function()
+		if xpWaiting[key] then
+			xpWaiting[key] = nil
+			ns.Print((L["No answer from %s."]):format(short))
+		end
+	end)
+end
+
+-- they answered
+function HeardXP(sender, level, pct, left)
+	local key = Key(sender)
+	if not key then return end
+	local rec = known[key]
+	if not rec then return end
+	level, pct, left = tonumber(level), tonumber(pct), tonumber(left)
+	if not level then return end
+	rec.xp = { lvl = level, pct = pct, left = left, t = time() }
+	if not xpWaiting[key] then return end -- we did not ask: say nothing
+	xpWaiting[key] = nil
+	local line = XPLine(rec)
+	if line then ns.Print(line) end
+end
+
+-- (0.70.0) "Ask how far to their next level", above Play Wild Gambit in a player's right-click menu.
+-- The Almanac's own logo stands in here on purpose: a texture path that does not resolve draws a
+-- blank square with no error, so this wants a path checked in the client before it changes. Wild
+-- Gambit ships its own (Media\Icon_WildGambit) rather than borrow one, which is the safe pattern.
+local XP_MENU_ICON = "|T" .. ns.ICON .. ":16:16:0:0|t "
+local function XPMenuEntry(ctx)
+	if not S().xpAsk then return end
+	local unit, name = ctx.unit, ctx.name
+	if unit then
+		if not (UnitExists(unit) and UnitIsPlayer(unit)) or UnitIsUnit(unit, "player") then return end
+		name = UnitFull(unit)
+		-- their level is public: no point asking someone with nothing left to earn
+		local lvl, max = UnitLevel(unit), GetMaxPlayerLevel and GetMaxPlayerLevel()
+		if lvl and max and lvl >= max then return end
+	end
+	if not name or IsMe(name) then return end
+	if not P:Get(name) then return end                       -- not a known Almanac player
+	-- GameCompat also answers "theyOld"/"weOld", which are versions that cannot hold this
+	-- conversation: only offer the entry when there is a protocol in common.
+	local compat = P:GameCompat(name, "xp")
+	if compat ~= "same" and compat ~= "limited" then return end
+	return {
+		text = XP_MENU_ICON .. "|cffffd100" .. L["Ask how far to their next level"] .. "|r",
+		func = function() P:AskXP(name) end,
+	}
+end
+
 local function TooltipBadge(tooltip)
 	if not S().tooltip then return end
 	local _, unit = tooltip:GetUnit()
@@ -347,6 +607,14 @@ function P:OnLogin()
 		if C_FriendList and C_FriendList.ShowFriends then pcall(C_FriendList.ShowFriends) end
 		HelloFriends()
 	end)
+
+	-- (0.70.0) above Play Wild Gambit, which registers at 50
+	if ns.UnitMenu and ns.UnitMenu.Register then
+		ns.UnitMenu:Register(40, function(ctx)
+			local ok, entry = pcall(XPMenuEntry, ctx)
+			if ok then return entry end
+		end)
+	end
 
 	if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
 		TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)

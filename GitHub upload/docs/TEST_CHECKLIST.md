@@ -6,7 +6,29 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
-## Unreleased
+## 1.0.0 (full game restart: new files QoL/WildGambitDeck.lua, UI/UnitMenu.lua and new textures Deck_Glow, Result_Glow, Badge_Ribbon, Board_DarkPortal, WW_Wing)
+
+- [ ] **Wild Gambit, the deck button:** at the pick table and in the lobby the painted deck breathes a gold outline on its own, brightens under the mouse, and the outline follows the card's edge with no seam and nothing lit inside the card's face. The whole card is clickable and nothing beside it is.
+
+- [ ] **Wild Gambit, Your deck:** clicking the deck opens the collection over the table. Only one Back arrow; no player nameplates, Begin button, shuffle lettering or stray card glow showing through; the panel's top clears the window's portrait and dragon, and its left margin matches its right. Cards are five to a row, scroll smoothly, and the inset border is the quest log's. Search, each sort, each tier and "starred only" all filter. Back returns to the table with the header, Begin and the deck's outline all restored. Closing the whole window with the collection open and reopening it is clean.
+
+- [ ] **Wild Gambit, starring from the collection:** clicking a card stars it (heart on the card, the count rises); a sixth is refused with the message naming the cap; unstarring works; starred cards sort first; the stars match the Creatures page both ways. With "starred only" and nothing to show, the screen says so rather than going blank.
+
+- [ ] **Wild Gambit, dead stars:** opening the collection with a favourite you no longer hold a card for prints "unstarred <names> - you no longer hold that card" once and frees the slot; opening it again says nothing.
+
+- [ ] **Wild Gambit, the empty seat:** before an opponent is chosen the other portrait shows a wisp turning slowly on a dark plate, with no square icon edges and nothing of the world behind it. Choosing an opponent replaces it with their face; going back to the lobby brings the wisp back.
+
+- [ ] **Wild Gambit, result banners:** win, lose and draw each show their banner with the light behind it fading out into the scene rather than stopping at a visible edge, and no magenta anywhere. Check a stalemate too.
+
+- [ ] **Holiday dress follows the calendar:** before 18 October the Murloc Tac Toe board and the Wild Gambit boards are the ordinary ones and the seasonal champions are not offered; `/aa mtt season` turns them on all year and says so; during Hallow's End itself the dress comes on by itself. (Asia: check your board is the plain one.)
+
+- [ ] **Ask how far to their next level:** right-click another Almanac player's portrait: the XP entry sits above Murloc Tac Toe and Play Wild Gambit with its icon; they get the prompt, "Allow once" answers, "Always allow" answers without asking again; the reply prints the exact amount and percentage. Someone not running the Almanac has no entry.
+
+- [ ] **Tab counts:** the "new" numbers sit on their red ribbon, legible on every tab, at every window size.
+
+- [ ] **Places:** a zone with no sub-places offers no fold arrow; one with them opens onto its cards.
+
+- [ ] **Back arrows:** the table's and the collection's red arrows are the smaller size, and the table's stays that size after hovering it (it used to settle larger).
 
 - [ ] Recipes, one card per profession (`/reload`): there is no "Blacksmith" or "Miner" card; those recipes are under "Blacksmithing" and "Mining" with their pictures and the counts added together; a profession trainer's recipes (their title may name the worker) land with the same profession's; your skill bar and the profession's page still match.
 
