@@ -86,6 +86,7 @@ Ported from Plus Everything, by the same author, and built on as the Almanac has
 
 - **Quest targeter**: which mobs drop the quest item you still need, from your own Almanac and from what you learn by looting.
 - **Gathering highlight**: a sparkle on the node you're facing, in the style and colour you choose.
+- **Node tooltips that say where you stand**: hovering a herb, vein, pool or chest shows the skill it needs against your own, coloured the way the game colours gathering, and under it the node's rank, its badge, how many times you've gathered it and how many more to the next rank.
 - **Tracker buttons** and **raid markers** on your quest tracker, and a ping on your target so your group can see where you're going.
 
 ### In a group
@@ -93,6 +94,7 @@ Ported from Plus Everything, by the same author, and built on as the Almanac has
 - **Follow button** on your target frame, which only appears on someone you can actually follow and greys out when they're too far away.
 - **Healer Assist**: a clickable spell icon for each group member, lit when it fits their state and flashing on the best choice. For shamans, priests, druids, paladins and mages.
 - **Threat monitor**: your threat on your target, a warning before you pull it off the tank, and coloured edges on enemy nameplates.
+- **How far away a mob is, under its nameplate**. The game doesn't tell addons the distance to anything outside your party, so it's worked out from what the game will answer — whether a spell or an item would reach — and smoothed between those steps, so the number counts down as you walk in and settles when you stop. Everything with a nameplate, enemies only, or just your target.
 - **Group nameplates and unit frames**, and **auto-invite** for anyone who asks with a keyword.
 
 ### Spells and talents
