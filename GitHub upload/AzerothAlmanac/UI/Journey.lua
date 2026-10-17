@@ -33,8 +33,21 @@ local GLOW = "Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64"
 local GAP = 2 * 3600
 local JUMP = 0.35
 -- (2026-10-09, Shannon: 1x 90% slower than first built, so a busy week can be followed; 8x added to skim)
-local PLAY_TIME = 80         -- seconds for the whole time lapse at 1x in the small pane
-local FULL_TIME = { today = 200, yesterday = 200, week = 300, month = 300, all = 300 } -- (#47) the full-size tab
+-- How long the time lapse runs comes from how much there is to show, not from which time frame is
+-- chosen. The play clock already squeezes idle time (BuildWarp below), so the warp's total weight is
+-- a fair measure of "how much happened": a week of three short evenings weighs little, a week of long
+-- days weighs a lot. The length follows it, but not in proportion - a week with ten times the travel
+-- of a day must not take ten times as long to watch. The curve saturates instead, rising quickly at
+-- first and flattening towards the cap, so no journey can make the replay outstay its welcome:
+--
+--     length = PLAY_MIN + (cap - PLAY_MIN) * (1 - e ^ -(weight / PLAY_SCALE))
+--
+-- (a quiet evening ~34s, a full day ~83s, a busy week ~130s, anything larger creeping to the cap.)
+-- Before this the frames had fixed lengths and a week always took five minutes, however little was
+-- in it.
+local PLAY_MIN = 20          -- seconds: even one hop is worth a moment
+local PLAY_SCALE = 5400      -- weighted seconds at which about 63% of the range is used up
+local PLAY_CAP = { small = 80, full = 150 }   -- the small pane, and (#47) the full-size tab
 local SPEEDS = { 1, 2, 4, 8 }
 local ZOOM_MAX = 3.5         -- (zoom to the journey: at most this much past the whole map)
 local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
@@ -99,11 +112,9 @@ J.RANGES = {
 	{ key = "today", label = L["Today"] },
 	{ key = "yesterday", label = L["Yesterday"] },
 	{ key = "week", label = L["Week"] },
-	{ key = "month", label = L["Month"] },
-	{ key = "all", label = L["All"] },
 }
 
--- when a time frame starts: today from midnight; week and month the last 7 and 30 days
+-- when a time frame starts: today from midnight; the week, the last 7 days
 function J.From(range)
 	local now = time()
 	if range == "today" or range == "yesterday" then
@@ -114,8 +125,7 @@ function J.From(range)
 			return time({ year = y.year, month = y.month, day = y.day, hour = 0 })
 		end
 		return midnight
-	elseif range == "week" then return now - 7 * 86400
-	elseif range == "month" then return now - 30 * 86400 end
+	elseif range == "week" then return now - 7 * 86400 end
 	return 0
 end
 
@@ -737,6 +747,7 @@ function W.JourneyPane(parent, opts)
 	local warpT, warpW = {}, {}
 	local function BuildWarp(all)
 		wipe(warpT) wipe(warpW)
+		f.playWeight = 0
 		if #all == 0 then return end
 		local w = 0
 		warpT[1], warpW[1] = all[1].t, 0
@@ -754,6 +765,7 @@ function W.JourneyPane(parent, opts)
 				warpT[#warpT + 1], warpW[#warpW + 1] = p.t, w
 			end
 		end
+		f.playWeight = w   -- (what PlayTime measures the time lapse against)
 	end
 	local function TimeAt(frac)
 		local n = #warpT
@@ -1017,8 +1029,10 @@ function W.JourneyPane(parent, opts)
 
 	local slider
 	local function PlayTime()
-		if full then return FULL_TIME[state.range] or 30 end
-		return PLAY_TIME
+		local cap = full and PLAY_CAP.full or PLAY_CAP.small
+		local weight = f.playWeight or 0
+		if weight <= 0 then return PLAY_MIN end
+		return PLAY_MIN + (cap - PLAY_MIN) * (1 - math.exp(-weight / PLAY_SCALE))
 	end
 	local function SetSlider(frac)
 		if not slider then return end

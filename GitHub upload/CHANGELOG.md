@@ -4,6 +4,55 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## 1.1.0 (2026-10-17)
+
+- **How far away a mob is, under its nameplate** (Shannon). Settings > Group Settings > Distance on
+  nameplates (off by default): everything with a plate, enemies only, or just your target. The game
+  will not tell an addon the distance to a unit outside your party - UnitPosition answers for you and
+  your party alone, UnitDistanceSquared reports "not measured" for anything else, this client's
+  ClosestUnitPosition (which documents itself as returning a distance for a creature id) answers for
+  nothing we could find, and nameplate scale reads the same at melee range as at forty yards. What
+  the game will answer is "would this spell or item reach?", so the number is built from those:
+  LibRangeCheck-3.0 turns them into a bracket about five yards wide, and the display estimates inside
+  it - on a bracket change you have just crossed an edge, so it snaps there, measures your speed from
+  the time since the last crossing, and free-runs between samples, clamped. It can never be further
+  out than one bracket is wide and corrects itself when you change direction. The approach is from
+  Shannon's AggroRadar. New: `Libs\LibStub`, `Libs\LibRangeCheck-3.0` (MIT, mitch0 and the WoWUIDev
+  community, `Licenses\LibRangeCheck-MIT.txt`) and `QoL\NameplateDistance.lua` - the Almanac's first
+  bundled library.
+
+- **Gathering tooltips: the rank, and two columns** (Shannon's Silverleaf screenshot). A node's
+  tooltip read "Herbalism  (needs 1, you: 52)". It now reads as the game's own tooltips do, the need
+  on the left and your skill on the right, and under it the node's rank with its badge and how many
+  times you have gathered it ("Journeyman Herbalist / 14 gathers", "3 more to Expert"), in the rank's
+  colour. The rank row is added rather than appended, so a chest or a fishing pool - which has no
+  skill line to append to - gets it too. Settings > Gathering > Tooltips picks how much: nothing, the
+  skill only, or all of it.
+
+- **The Journey: Today, Yesterday and Week** (Shannon). Month and All are gone, and the length of the
+  time lapse now comes from how much there is to show rather than from which frame is chosen. The
+  play clock already squeezes idle time, so its total weight measures what actually happened; the
+  length follows it on a curve that flattens towards a cap, because a week with ten times a day's
+  travel must not take ten times as long to watch. A week used to run a flat five minutes however
+  little was in it; it now runs between about 20 seconds and 2.5 minutes, and the same quiet day
+  takes the same time whether you look at it under Today or under Week.
+
+- **The welcome guide, painted** (Shannon). The seven pages a new character sees were a flat dark
+  rectangle. They are now read off tooled leather (`Media\Window_Leather`, which was painted for this
+  and had never been used), over the game's own recessed inset rather than instead of it, and each
+  page carries a faint watermark of the Almanac's art behind the text: the logo, a tier badge, the
+  Wild Gambit logo, the painting of the zone you are standing in, and your own class's crest.
+
+- **Wild Gambit: the deck outline no longer hangs over the board** (Shannon's screenshot). It sits in
+  its own frame over the table rather than on the button, so hiding the pick table left it behind -
+  and the OnUpdate that fades it belongs to the button, which stops when the button hides. It stayed
+  lit in the board's corner for the whole match. It now hides and shows with the button.
+
+- **`/aa rangeprobe`** (developer command, `/aa debug`). Asks this client everything it might answer
+  about how far away a unit is and keeps the answers in saved variables. Each step records its name
+  before it runs, because UnitInRange takes the whole function down on this client in a way pcall
+  cannot hold - which is how that was found.
+
 ## 1.0.0 (2026-10-16)
 
 First public release, for CurseForge.

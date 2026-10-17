@@ -451,6 +451,16 @@ function G:NeedText(rec, plain)
 	return self:NeedColor(lo, rank) .. text .. "|r", skill, lo, rogue
 end
 
+-- (1.0.1) How much the Almanac adds to a node's tooltip in the world.
+--   off    nothing
+--   skill  the skill line only: "Herbalism 1" with your own skill against it
+--   full   that, and the node's rank, title and how many times you have gathered it
+G.TIP_MODES = { "off", "skill", "full" }
+function G:TipMode()
+	local m = ns.db and ns.db.settings and ns.db.settings.nodes
+	return (m and m.tooltip) or "full"
+end
+
 -- (2026-10-15, Shannon) your own skill after a node's need: "  (you: 87)", coloured as the game
 -- colours gathering (red too low ... grey no more skill-ups). key: another character's (a lock seen
 -- through the account's rogue). nil for a lock you haven't the skill for (only rogues pick locks).
@@ -472,11 +482,66 @@ function G:YouText(skill, level, key, showNeed)
 	return "  " .. self:NeedColor(level or 0, rank) .. "(" .. need .. who .. rank .. ")|r"
 end
 
+-- (1.0.1) The same answer as YouText, split for a two-column tooltip line: the need on the left
+-- ("Herbalism 1"), your own skill on the right ("you 52"), coloured as the game colours gathering.
+-- The game's own tooltips read this way, and it drops a line's worth of brackets and labels.
+function G:SkillColumns(skill, level, name)
+	local rank = self:SkillRank(self.NEED_SKILL[skill])
+	if rank == nil then rank = self:CharSkill(skill) end
+	local left = name or (self.NEED_SKILL[skill] or "?")
+	if level then left = left .. " " .. level end
+	if rank == nil then
+		if skill == 1 then return nil end
+		return "|cffd9d9d9" .. left .. "|r", "|cffd9d9d9" .. L["you: not learned"] .. "|r"
+	end
+	local c = self:NeedColor(level or 0, rank)
+	return c .. left .. "|r", c .. L["you: "] .. rank .. "|r"
+end
+
+-- (1.0.1) stage 2: what the Almanac knows about this node, as a tooltip row -
+-- "[badge] Journeyman Herbalist" on the left, "14 gathered" on the right. Nothing for a node that
+-- has only ever been sighted: the rank line would say less than the name already does.
+function G:RankColumns(rec)
+	if not rec then return nil end
+	local n = self:Count(rec)
+	if n <= 0 then return nil end
+	local tier, togo = self:Tier(rec)
+	local B = ns.Bestiary
+	local col = B and B.TIER_COLORS and B.TIER_COLORS[tier]
+	local hex = col and ("|cff%02x%02x%02x"):format(col[1] * 255, col[2] * 255, col[3] * 255) or "|cffffffff"
+	local left = self:TierMarkup(tier, 14, rec.kind) .. " " .. hex .. self:Title(tier, rec.kind) .. "|r"
+	local right = hex .. (ns.N(n, L["gather"], L["gathers"])) .. "|r"
+	return left, right, togo, tier
+end
+
 -- the game's tooltip on a node: "Requires Herbalism (125)" and the like corrects the database, and
 -- gets your own skill added after it
 local YOU_MARK = "|cff" -- (our addition starts with a colour code; the game's line doesn't)
+
+-- (1.0.1) the rank row, added under whatever the game put in the tooltip. Added rather than
+-- appended, because a chest or a fishing pool has no skill line to append to - which is why this is
+-- its own step and not part of the skill line's.
+local function AddRank(tip, rec)
+	if G:TipMode() ~= "full" then return end
+	local left, right, togo, tier = G:RankColumns(rec)
+	if not left then return end
+	-- never twice: the game rewrites a world tooltip in place, so this can run again over its own work
+	for i = 2, tip:NumLines() do
+		local l = _G[tip:GetName() .. "TextLeft" .. i]
+		if l and l:GetText() == left then return end
+	end
+	tip:AddDoubleLine(left, right)
+	if togo then
+		tip:AddLine(("|cff9d9d9d" .. L["%d more to %s"] .. "|r"):format(togo, G.TIERS[(tier or 1) + 1] or "?"), nil, nil, nil, true)
+	end
+	G.rankText = left
+end
+
+-- the game's tooltip on a node: "Requires Herbalism (125)" and the like corrects the database, and
+-- gets your own skill put beside it, in two columns
 local function ReadTooltip(tip)
 	if not (ns.db and tip and tip.NumLines) or (tip.GetUnit and tip:GetUnit()) or (tip.GetItem and tip:GetItem()) then return end
+	if G:TipMode() == "off" then return end
 	local first = _G[tip:GetName() .. "TextLeft1"]
 	local name = first and R(first:GetText())
 	if type(name) ~= "string" then return end
@@ -502,10 +567,19 @@ local function ReadTooltip(tip)
 							ns:Fire("CHANGED", "node", name)
 						end
 						if not text:find(YOU_MARK, 1, true) then
-							local you = G:YouText(skill, level or nil, nil, fromDB)
-							if you then
-								line:SetText(text .. you)
-								G.youLine, G.youText = line, text .. you
+							local left, right = G:SkillColumns(skill, level or nil, sname)
+							if left then
+								line:SetText(left)
+								-- the right column, where the line has one; otherwise it all goes left
+								local rightFS = _G[tip:GetName() .. "TextRight" .. i]
+								if rightFS and right then
+									rightFS:SetText(right)
+									rightFS:Show()
+								elseif right then
+									line:SetText(left .. "  " .. right)
+								end
+								G.youLine, G.youText = line, line:GetText()
+								AddRank(tip, rec)
 								tip:Show() -- (re-sizes it to the longer line)
 							end
 						end
@@ -514,6 +588,12 @@ local function ReadTooltip(tip)
 				end
 			end
 		end
+	end
+	-- no skill line at all: a chest, a fishing pool, or a node the game says nothing about. The rank
+	-- row still has something to say, so it is added on its own.
+	if rec then
+		AddRank(tip, rec)
+		tip:Show()
 	end
 end
 G.ReadTooltip = ReadTooltip

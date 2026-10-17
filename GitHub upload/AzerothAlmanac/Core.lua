@@ -8,7 +8,7 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "1.0.0"
+ns.VERSION = "1.1.0"
 -- (0.69.0) the Almanac's own art: the logo (a closed crimson journal, its gold compass) and the journal
 -- badge (the open journal, a page burning with gold writing), for journal entries
 ns.ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_Almanac"
@@ -34,7 +34,7 @@ ns.defaults = {
 	-- ticked "Always" for, by peer key.
 	peers = { share = true, tooltip = true, nudge = true, accepted = nil,
 		xpAsk = true, xpShare = "known", xpExact = true, xpAlways = {} },
-	nodes = { map = true, minimap = true, herb = true, ore = true, chest = true, sighted = true, size = 14, mmSize = 7, mmButton = true },
+	nodes = { map = true, minimap = true, herb = true, ore = true, chest = true, sighted = true, size = 14, mmSize = 7, mmButton = true, tooltip = "full" },
 	nav = { enabled = true, clearPin = true, eta = true, scale = 1 },
 	townsfolk = { enabled = true, mapHidden = false, factionOnly = true, myClassOnly = true, continent = false, rims = false, size = 16, groups = {} },
 	journalMax = 5000,
@@ -367,7 +367,124 @@ StaticPopupDialogs.AZEROTHALMANAC_RESET = {
 	timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
 }
 
-local DEV_COMMANDS = { toast = true, wgdungeon = true, cardtoast = true, ringzoom = true }
+local DEV_COMMANDS = { toast = true, wgdungeon = true, cardtoast = true, ringzoom = true, rangeprobe = true }
+
+-- (dev, /aa debug) Everything this client might answer about how far away a unit is, in one go.
+-- The chat box takes one command per line and caps at 255 characters, so a battery of /dump lines
+-- cannot be pasted; this runs them all against your target (or "/aa rangeprobe mouseover"), prints
+-- them and keeps them in saved variables, where a whole run can be read after a /reload instead of
+-- being scrolled through. Nothing here is used by the addon: it is for finding out whether WoW
+-- Forever offers anything Blizzard's client does not.
+--
+-- Each step writes its name into the log before it runs, so if one of them takes the whole function
+-- down the log still says which. That is not hypothetical: a first version died silently after
+-- UnitDistanceSquared, and a pcall did not catch it - the game raises a few of its refusals in a way
+-- that pcall cannot hold. The order below is deliberate for the same reason: the answers that cost
+-- nothing and cannot be refused come first.
+function ns.RangeProbe(unit)
+	unit = (unit and unit ~= "" and unit) or "target"
+	if not UnitExists(unit) then ns.Print("rangeprobe: nothing at " .. tostring(unit)) return end
+	local log = {}
+	ns.db.probe = { at = date("%Y-%m-%d %H:%M:%S"), unit = unit, name = UnitName(unit), lines = log }
+	ns.Print(("|cff9be36brangeprobe|r %s: %s (combat %s)")
+		:format(unit, tostring(UnitName(unit)), tostring(InCombatLockdown and InCombatLockdown())))
+
+	-- run one step: its name goes in first, so a step that kills the function names itself
+	local function Step(name, fn)
+		local at = #log + 1
+		log[at] = name .. " = (did not return)"
+		local res = { pcall(fn) }
+		local out = {}
+		for i = 2, #res do out[#out + 1] = tostring(res[i]) end
+		log[at] = ("%s = %s%s"):format(name, res[1] and "" or "ERROR ", #out > 0 and table.concat(out, ", ") or "-")
+		ns.Print(("|cffffd100%s|r  %s"):format(name, log[at]:match("= (.*)$") or "-"))
+	end
+
+	local npcID
+	do
+		local guid = UnitGUID(unit)
+		if guid then npcID = tonumber((select(6, strsplit("-", guid)))) end
+	end
+	Step("guid / npcID", function() return UnitGUID(unit), npcID end)
+
+	-- 1. ClosestUnitPosition is the only thing on this client that offers a distance outright. Its own
+	-- error message gives the signature: local xPos, yPos, distance = ClosestUnitPosition(creatureID).
+	-- Called with the targeted creature's id it returned nothing at all, so something else decides
+	-- whether it answers. These ask it about the target, about every creature with a nameplate up, and
+	-- about a couple of ids that are certainly around, and count what comes back.
+	local function Closest(id)
+		local r = { ClosestUnitPosition(id) }
+		if #r == 0 then return "no answer (0 values)" end
+		return unpack(r)
+	end
+	Step("ClosestUnitPosition(target npcID)", function() return Closest(npcID) end)
+	Step("ClosestUnitPosition for each plated creature", function()
+		local out = {}
+		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+			local u = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+			local g = u and UnitGUID(u)
+			local id = g and tonumber((select(6, strsplit("-", g))))
+			if id then
+				local r = { ClosestUnitPosition(id) }
+				out[#out + 1] = ("%s[%d]=%s"):format(tostring(UnitName(u)), id,
+					#r == 0 and "none" or table.concat({ tostring(r[1]), tostring(r[2]), tostring(r[3]) }, "/"))
+			end
+		end
+		return #out > 0 and table.concat(out, " ") or "no plates"
+	end)
+	Step("ClosestUnitPosition(player npcID 0/1)", function()
+		return "0:", Closest(0), "1:", Closest(1)
+	end)
+
+	-- 2. the bands, and what they are worth. IsActionInRange exists; the sweep that failed last time
+	-- died on GetSpellInfo, which this client has moved to C_Spell.GetSpellInfo.
+	Step("CheckInteractDistance 1-5 (28/11.1/9.9/28 yd)", function()
+		local r = {}
+		for i = 1, 5 do r[i] = tostring(CheckInteractDistance(unit, i)) end
+		return unpack(r)
+	end)
+	Step("IsActionInRange slots that answer", function()
+		local SpellName = (C_Spell and C_Spell.GetSpellInfo) and function(id)
+			local i = C_Spell.GetSpellInfo(id)
+			return i and i.name or id
+		end or function(id) return id end
+		local out = {}
+		for slot = 1, 120 do
+			if HasAction(slot) then
+				local r = IsActionInRange(slot, unit)
+				if r ~= nil then
+					local kind, id = GetActionInfo(slot)
+					out[#out + 1] = ("%s=%s"):format(tostring(kind == "spell" and SpellName(id) or id), tostring(r))
+				end
+			end
+		end
+		return #out > 0 and table.concat(out, " ") or "no slot answered"
+	end)
+	Step("spell ranges known to the client", function()
+		if not (C_Spell and C_Spell.GetSpellInfo) then return "no C_Spell.GetSpellInfo" end
+		local out = {}
+		for slot = 1, 120 do
+			if HasAction(slot) then
+				local kind, id = GetActionInfo(slot)
+				if kind == "spell" then
+					local i = C_Spell.GetSpellInfo(id)
+					local mn, mx = C_Spell.GetSpellRange and C_Spell.GetSpellRange(id)
+					if i and (mx or 0) > 0 then out[#out + 1] = ("%s %s-%s"):format(i.name, tostring(mn), tostring(mx)) end
+				end
+			end
+		end
+		return #out > 0 and table.concat(out, ", ") or "no ranged actions"
+	end)
+
+	-- 3. for the record, at whatever distance this run was taken
+	Step("UnitPosition(player)", function() return UnitPosition("player") end)
+	Step("nameplate scale (constant here: 0.768 near and far)", function()
+		local plate = C_NamePlate.GetNamePlateForUnit(unit)
+		return plate and plate:GetScale() or "no plate"
+	end)
+
+	ns.Print("|cff9be36bsaved|r - /reload and the whole run is in AzerothAlmanacDB.probe")
+end
 
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
@@ -481,6 +598,8 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		if ns.CardToast then ns.CardToast:Test(rest) end
 	elseif cmd == "wgdungeon" then
 		if ns.WildGambit and ns.WildGambit.DebugDungeon then ns.WildGambit:DebugDungeon(rest) end
+	elseif cmd == "rangeprobe" then
+		ns.RangeProbe(rest)
 	elseif cmd == "reset" then
 		StaticPopup_Show("AZEROTHALMANAC_RESET")
 	else

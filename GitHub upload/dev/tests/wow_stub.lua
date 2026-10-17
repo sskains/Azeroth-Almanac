@@ -65,6 +65,14 @@ function time() return 1791600000 + math.floor(NOW or 100) end
 date = os.date
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 tinsert, tremove = table.insert, table.remove
+-- the game's own aliases for the string library: addon code uses either name, and a bundled
+-- library may use nothing else (LibStub's NewLibrary calls strmatch)
+strmatch, strfind, strsub, strrep, strupper, strlower, strbyte, strchar =
+	string.match, string.find, string.sub, string.rep, string.upper, string.lower, string.byte, string.char
+format, gsub, gmatch = string.format, string.gsub, string.gmatch
+strjoin = function(sep, ...) return table.concat({ ... }, sep) end
+strconcat = function(...) return table.concat({ ... }) end
+tContains = function(t, v) for _, x in pairs(t or {}) do if x == v then return true end end return false end
 strsplit = function(sep, s, n)
 	local out, i = {}, 1
 	for piece in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do out[#out + 1] = piece end
@@ -118,8 +126,14 @@ local deepMeta = {}
 deepMeta.__index = function(t, k) if type(k) ~= "string" then return nil end local d = setmetatable({}, deepMeta) rawset(t, k, d) return d end
 deepMeta.__call = function() return nil end
 function Deep() return setmetatable({}, deepMeta) end
+-- ...except names a bundled library defines for itself. LibStub's first act is
+--   if not LibStub or LibStub.minor < 2 then
+-- so handing it a stub table instead of nil compares a table with a number and takes the whole
+-- addon down at load. Anything under Libs\ that tests _G for its own name belongs here.
+local NOT_STUBBED = { LibStub = true }
 setmetatable(_G, { __index = function(t, k)
 	-- (CamelCase only: ALL_CAPS names are constants or the tests' own globals, nil until set)
+	if NOT_STUBBED[k] then return nil end
 	if type(k) == "string" and k:match("^[A-Z]") and k:match("%l") then local m = Deep() rawset(t, k, m) return m end
 end })
 function CreateFont(name) local f = Mock("Font") if name then rawset(_G, name, f) end return f end

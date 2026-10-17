@@ -116,6 +116,37 @@ local function Ticks(page, list, anchor)
 	return last
 end
 
+-- The Almanac's own painted art behind a page, large and faint in the bottom right corner. A
+-- watermark rather than an illustration beside the text: the paragraphs are the width of the page,
+-- so anything placed in a corner at full strength would be read through. Drawn on the BACKGROUND
+-- layer, under the lettering, and masked so it fades out instead of ending on a straight edge.
+local WATERMARK_ALPHA = 0.17   -- faint enough to read through; the one number to turn if it isn't
+local function Watermark(page, file, size)
+	if not file then return nil end
+	local t = page:CreateTexture(nil, "BACKGROUND", nil, 1)
+	t:SetSize(size or 210, size or 210)
+	t:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 14, -6)
+	t:SetTexture(MEDIA .. file)
+	t:SetAlpha(WATERMARK_ALPHA)
+	t:SetDesaturated(true)
+	-- rounded off at the corners, as the icons are (W.RoundIcon), so it does not end on a hard
+	-- square. Guarded the same way: not every client has mask textures.
+	if page.CreateMaskTexture and t.AddMaskTexture then
+		local mask = page:CreateMaskTexture()
+		mask:SetTexture(MEDIA .. "Icon_Mask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+		mask:SetAllPoints(t)
+		t:AddMaskTexture(mask)
+	end
+	page.watermark = t
+	return t
+end
+
+-- the painting for the zone the player is standing in (Places keeps the list), else the catch-all
+local function HereArt()
+	local here = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+	return (ns.ZoneArt and ns.ZoneArt(here)) or "Zone_Elsewhere"
+end
+
 local function MoreIn(page, text)
 	local fs = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	fs:SetPoint("BOTTOMLEFT", 0, 4)
@@ -138,6 +169,7 @@ BUILD[1] = function(p)
 		{ "Show an alert for new discoveries", L["An alert for each new discovery"] },
 		{ "Play a sound with the alert", L["A sound with the alert"] },
 	}, c)
+	Watermark(p, "Logo_Almanac", 230)
 	MoreIn(p, L["Next: a quick look round. You can skip this guide at any time; it's in Settings > General."])
 	return last
 end
@@ -209,6 +241,7 @@ BUILD[3] = function(p)
 	local K = B and B.TIER_KILLS and B.TIER_KILLS.normal or {}
 	local row = TierRow(p, a, 1, 6, { L["seen"], L["1 kill"], K.studied and ns.N(K.studied, L["kill"], L["kills"]) or "", K.mastered and ns.N(K.mastered, L["kill"], L["kills"]) or "",
 		K.revered and ns.N(K.revered, L["kill"], L["kills"]) or "", K.exalted and ns.N(K.exalted, L["kill"], L["kills"]) or "" })
+	Watermark(p, "Badge_Tier", 190)
 	local b = Para(p, L["Herbs, veins, chests and fishing waters climb ranks the same way, each time you gather from them. Your firsts (a new zone, a level, a rare) go into the Journal, and milestones mark the big steps."], row, 14)
 	Para(p, L["Rares and bosses need fewer kills. Settings > Progression has the full table."], b, 10, "GameFontDisableSmall")
 end
@@ -226,6 +259,7 @@ BUILD[4] = function(p)
 		{ "Accept challenges", L["Let other players challenge me to Murloc Tac Toe"] },
 		{ "Share my best scores with my guild, group and friends", L["Share my Gem Match best scores"] },
 	}, d)
+	Watermark(p, "Logo_WildGambit", 220)
 	return last
 end
 
@@ -241,6 +275,8 @@ BUILD[5] = function(p)
 		{ "Almanac line on creature tooltips", L["Almanac line on creature tooltips"], L["kills and research tier"] },
 		{ "Quests on quest givers' tooltips", L["Quests on quest givers' tooltips"], L["what they offer"] },
 	}, a)
+	-- the zone you are actually standing in, so the page is about where you are
+	Watermark(p, HereArt(), 240)
 	MoreIn(p, L["More in Settings: Quest Targeter, Gathering, People."])
 end
 
@@ -257,6 +293,7 @@ BUILD[6] = function(p)
 		{ "Replace old ranks on my bars when I train a new one", L["Swap old spell ranks on my bars when I train"] },
 		{ "Follow button", L["A follow button on my target's frame"] },
 	}, a)
+	Watermark(p, "Icon_Merchant", 190)
 	MoreIn(p, L["More in Settings: Merchants, Auction House, Bags and bank, Flights, Spell Ranks, Group Settings."])
 end
 
@@ -272,6 +309,7 @@ BUILD[7] = function(p)
 	local _, classFile = UnitClass("player")
 	if HEALERS[classFile or ""] then list[#list + 1] = { "Healer Assist", L["Healer Assist"], L["spell icons for each group member"] } end
 	local last = Ticks(p, list, a)
+	if classFile then Watermark(p, "Crest_" .. classFile, 215) end   -- your own class's painted crest
 	Para(p, L["You're set. Everything here, and much more, is in Settings (the gear on the minimap button's menu, or /aa settings). Happy hunting!"], last, 18)
 end
 
@@ -328,6 +366,22 @@ local function Build()
 	body:SetPoint("BOTTOMRIGHT", -10, 46)
 	body:SetFrameLevel(frame:GetFrameLevel() + 2)
 	frame.body = body
+
+	-- The Almanac is a book, so its pages are read off tooled leather: Media\Window_Leather, which
+	-- was painted for this and had never been used. It goes over the inset's own background (the
+	-- game's recipe-list leather, which W.Inset lays down) rather than instead of it, so the game's
+	-- recessed frame still holds the page, and it is dimmed and warmed to stay well behind the
+	-- lettering. The border painted into the art is cropped off: the inset already has one, and two
+	-- frames inside each other read as a mistake.
+	local hide = body.listBg
+	local leather = (hide and hide:GetParent() or body):CreateTexture(nil, "BACKGROUND", nil, 3)
+	leather:SetPoint("TOPLEFT", 4, -4)
+	leather:SetPoint("BOTTOMRIGHT", -4, 4)
+	leather:SetTexture(MEDIA .. "Window_Leather")
+	leather:SetTexCoord(0.09, 0.91, 0.09, 0.91)
+	leather:SetVertexColor(1, 0.94, 0.85)
+	leather:SetAlpha(0.62)
+	frame.leather = leather
 
 	-- the footer above the window's border and background (NativeWindow lifts its chrome to +50)
 	local foot = CreateFrame("Frame", nil, frame)

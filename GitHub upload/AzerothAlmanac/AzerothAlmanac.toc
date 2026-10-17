@@ -2,9 +2,12 @@
 ## Title: Azeroth Almanac
 ## Notes: An adventurer's journal for WoW Forever: everything you discover, across all your characters. /aa
 ## Author: Olaris
-## Version: 1.0.0
+## Version: 1.1.0
 ## SavedVariables: AzerothAlmanacDB
 ## IconTexture: Interface\AddOns\AzerothAlmanac\Media\Logo_Almanac
+
+Libs\LibStub\LibStub.lua
+Libs\LibRangeCheck-3.0\LibRangeCheck-3.0.lua
 
 Locale.lua
 Core.lua
@@ -59,6 +62,7 @@ QoL\BagBank.lua
 QoL\Social.lua
 QoL\UnitFrames.lua
 QoL\PartyPlates.lua
+QoL\NameplateDistance.lua
 QoL\ThreatMonitor.lua
 QoL\FollowButton.lua
 QoL\SpellRanker.lua

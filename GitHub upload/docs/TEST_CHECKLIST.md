@@ -6,6 +6,33 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## 1.1.0 (full game restart: new files Libs/LibStub, Libs/LibRangeCheck-3.0, QoL/NameplateDistance.lua)
+
+- [ ] **Distance on nameplates:** Settings > Group Settings > Distance on nameplates, on. A number
+  appears under enemy plates and counts down as you walk towards one, up as you back away, and
+  settles rather than drifting when you stand still. It does not jump about wildly, and it is gone
+  when the plate goes. Try each of the three choices (everything / enemies only / my target), and
+  turn "count smoothly" off to see the raw steps. In a camp of several mobs there is no stutter.
+  If no number appears at all, `/aa debug` then `/aa rangeprobe` and check what GetRange gives.
+
+- [ ] **Gathering tooltip:** hover a herb you can gather: "Herbalism 1" on the left, "you 52" on the
+  right, coloured by difficulty, then the rank row with its badge and "N gathers", then "N more to
+  <rank>". Hover one you cannot gather yet (red), one of a profession you have not learnt, a fishing
+  pool and a chest - the chest and pool have no skill line and should still show the rank row. Hover
+  a node you have only sighted: no rank row. Settings > Gathering > Tooltips set to "nothing" and to
+  "my skill only" each do what they say. The lines do not flicker or double up while hovering.
+
+- [ ] **The Journey:** the time frame drop-down offers only Today, Yesterday and Week. A quiet week
+  plays in well under a minute; a busy one is longer but never runs away. Scrubbing and 1x/2x/4x/8x
+  still work, and the same day watched under Today and under Week takes about the same time.
+
+- [ ] **The welcome guide** (`/aa welcome`): leather behind the pages, readable lettering on all
+  seven, the watermarks faint enough not to fight the text (logo, tier badge, Wild Gambit logo, your
+  current zone's painting, your class crest), nothing overlapping the tick boxes on pages 5-7.
+
+- [ ] **Wild Gambit:** start a match from the table - nothing is left lit in the board's top left
+  corner, and the deck's outline is back when you return to the table.
+
 ## 1.0.0 (full game restart: new files QoL/WildGambitDeck.lua, UI/UnitMenu.lua and new textures Deck_Glow, Result_Glow, Badge_Ribbon, Board_DarkPortal, WW_Wing)
 
 - [ ] **Wild Gambit, the deck button:** at the pick table and in the lobby the painted deck breathes a gold outline on its own, brightens under the mouse, and the outline follows the card's edge with no seam and nothing lit inside the card's face. The whole card is clickable and nothing beside it is. Starting a match, the outline goes with the table: nothing is left lit in the board's top left corner, and it comes back when you return to the table.

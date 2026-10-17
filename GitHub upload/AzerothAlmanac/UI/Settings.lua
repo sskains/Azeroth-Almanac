@@ -1009,6 +1009,20 @@ local function BuildNodes(P)
 	P:Stepper(L["World map pin size"], 10, 24, 2, function() return m.size end, function(v) m.size = v R() end, 1)
 	P:Stepper(L["Minimap pin size"], 4, 20, 1, function() return m.mmSize end, function(v) m.mmSize = v R() end, 1)
 
+	P:Section(L["Tooltips"], L["What the Almanac adds to a herb, vein, pool or chest's tooltip out in the world."])
+	do
+		local tips = {
+			{ name = L["Nothing"], key = "off" },
+			{ name = L["My skill beside the one it needs"], key = "skill" },
+			{ name = L["That, and its rank and how often I've gathered it"], key = "full" },
+		}
+		P:Picker(L["On a node in the world"], tips, function()
+			local now = (m.tooltip or "full")
+			for i, t in ipairs(tips) do if t.key == now then return i end end
+			return 3
+		end, function(i) m.tooltip = tips[i].key end)
+	end
+
 	P:Section(L["Game display"])
 	P:Check(L["The game's interact icon (pickaxe, cog ...)"], nil, function() return db.gameIcon end, function(v) db.gameIcon = v NH:Refresh() end)
 	P:Check(L["The object's name above it"], nil, function() return db.showName end, function(v) db.showName = v NH:Refresh() end)
@@ -1347,6 +1361,26 @@ local function BuildUnitFrames(P)
 	P:Check(L["Beacon over their heads"], nil, function() return pp.beacon end, SetPP("beacon"), 1)
 	P:Stepper(L["Name size %"], 100, 150, 5, function() return pp.nameScale or 100 end, function(v) pp.nameScale = v PP:Refresh() end, 1)
 	P:Check(L["Raid members too"], nil, function() return pp.raid end, SetPP("raid"), 1)
+	P:Section(L["Distance on nameplates"], L["How far away a mob is, under its nameplate. The game does not tell addons the distance to a unit outside your party, so this is worked out from what it will answer - whether a spell or an item would reach - which steps in about 5 yard jumps. Smoothing estimates between those steps; the number can never be further out than one step is wide."])
+	do
+		local u = Q.db.unitFrames
+		local ND = Q.NameplateDistance
+		P:Check(L["Show the distance under nameplates"], nil, function() return u.distance end,
+			function(v) u.distance = v if ND then ND:Refresh() end end)
+		local who = {
+			{ name = L["Everything with a nameplate"], key = "all" },
+			{ name = L["Enemies only"], key = "enemies" },
+			{ name = L["My target only"], key = "target" },
+		}
+		P:Picker(L["Show it on"], who, function()
+			local now = u.distanceWho or "enemies"
+			for i, w in ipairs(who) do if w.key == now then return i end end
+			return 2
+		end, function(i) u.distanceWho = who[i].key if ND then ND:Refresh() end end, nil, 1)
+		P:Check(L["Count smoothly between steps"], L["Off: the middle of the range it is known to be in, which changes in jumps."],
+			function() return u.distanceSmooth ~= false end, function(v) u.distanceSmooth = v end, 1)
+	end
+
 	P:Section(L["NPC nameplates"], L["Out in the world (the game locks friendly nameplates in dungeons and raids)."])
 	P:Check(L["NPC titles under friendly nameplates, like <Cooking Supplier>"], nil, function() return pp.npcTitles end, function(v) pp.npcTitles = v PP:RefreshTitles() end)
 end

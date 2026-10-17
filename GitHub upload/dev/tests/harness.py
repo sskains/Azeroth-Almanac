@@ -15,9 +15,14 @@ STUB = open(os.path.join(HERE, "wow_stub.lua")).read()
 WG_FILES = ["Locale.lua", "Core.lua", "Modules/Store.lua", "Modules/Bestiary.lua", "QoL/Core.lua", "QoL/WindowUtil.lua", "QoL/WildGambitLogic.lua",
             "QoL/WildGambitDungeons.lua", "QoL/WildGambit.lua", "QoL/WildGambitDungeonsUI.lua", "UI/Widgets.lua", "UI/Toast.lua", "UI/CardToast.lua", "Modules/Peers.lua"]
 
-# every Lua file the addon loads, in .toc order (the whole Almanac)
+# Every Lua file the addon loads, in .toc order (the whole Almanac), except the bundled libraries.
+# Those are third-party and not what these tests are for: LibRangeCheck builds its checker list from
+# a real spellbook and bags, which the stub cannot supply, and it would fail here while working in
+# the game. Code that uses a library must cope with it being absent anyway - QoL/NameplateDistance
+# asks LibStub for it and goes quiet when it is nil - so skipping them also tests that.
 ALL_FILES = [l.strip().replace("\\", "/") for l in open(os.path.join(ROOT, "AzerothAlmanac.toc"), encoding="utf-8")
-             if l.strip().endswith(".lua") and not l.startswith("#")]
+             if l.strip().endswith(".lua") and not l.startswith("#")
+             and not l.strip().lower().startswith("libs")]
 
 
 class Player:

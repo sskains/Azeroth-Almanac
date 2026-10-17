@@ -68,7 +68,10 @@ p.lua("PANE.play:GetScript('OnClick')(PANE.play)")
 check(p.eval("PANE:IsPlaying()") and "Journey_Pause" in (p.eval("PANE.play.tex._tex") or ""), "Play plays, and turns into Pause")
 p.lua("PANE:GetScript('OnUpdate')(PANE, 0.1)")
 check(not p.eval("PANE.playGlow:IsShown()"), "the glow goes once it's played")
-p.lua("for i = 1, 300 do NOW = NOW + 0.1 PANE:GetScript('OnUpdate')(PANE, 0.1) end PANE.play:GetScript('OnClick')(PANE.play)")
+# (1.1.0) 100 ticks, not 300: the time lapse no longer runs for a fixed 80 seconds, it is as long
+# as the journey has in it, down to a 20 second floor. 300 ticks ran past the end of a short one,
+# which finishes it and clears the kept place; 10 seconds is still partway through the shortest.
+p.lua("for i = 1, 100 do NOW = NOW + 0.1 PANE:GetScript('OnUpdate')(PANE, 0.1) end PANE.play:GetScript('OnClick')(PANE.play)")
 at = p.eval("A.Journey.KeptPlace('today')")
 check(at is not None and 0 < at < 1 and "Journey_Play" in (p.eval("PANE.play.tex._tex") or ""), "Pause keeps the place (%s) and shows Play" % at)
 p.lua("PANE:Hide() PANE:Show() RunTimers(0.1)")
@@ -112,7 +115,7 @@ check(p.eval("PANE.who:GetText()") == p.eval("A.CharName(A.CharKey(), true)"), "
 p.lua("local real = time time = function(t) if t then return os.time(t) end return real() end")  # (the stub's time() ignores a date table)
 y = p.eval("A.Journey.From('yesterday')"); t = p.eval("A.Journey.From('today')")
 check(t - y in (82800, 86400, 90000) and p.eval("A.Journey.To('yesterday')") == t, "Yesterday: midnight to midnight")
-check([r for r in p.eval("(function() local t = {} for _, r in ipairs(A.Journey.RANGES) do t[#t + 1] = r.key end return table.concat(t, ',') end)()").split(",")] == ["today", "yesterday", "week", "month", "all"], "time frames: Today, Yesterday, Week, Month, All")
+check([r for r in p.eval("(function() local t = {} for _, r in ipairs(A.Journey.RANGES) do t[#t + 1] = r.key end return table.concat(t, ',') end)()").split(",")] == ["today", "yesterday", "week"], "time frames: Today, Yesterday, Week (Month and All dropped in 1.1.0)")
 p.lua("PANE:SetLarge(true)")
 check("Journey_Smaller" in (p.eval("PANE.big.tex._tex") or ""), "Larger is a picture button; enlarged it shows Smaller")
 

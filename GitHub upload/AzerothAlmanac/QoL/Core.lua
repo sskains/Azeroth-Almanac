@@ -80,7 +80,8 @@ ns.defaults = {
 		enabled = true, solo = true, meter = true, rows = 6, locked = false, warn = true, warnAt = 70,
 		aggroAt = 100, sound = true, flash = true, plates = true, tankMode = "auto", panelAlpha = 0.8,
 	},
-	unitFrames = { classBadge = true, classColor = true, xpNeeded = true, xpAlways = true, druidMana = true },
+	unitFrames = { classBadge = true, classColor = true, xpNeeded = true, xpAlways = true, druidMana = true,
+		distance = false, distanceWho = "enemies", distanceSmooth = true },
 	spellRanker = { autoCheck = true, checkOnOpen = true, autoReplace = true, ignore = {} },
 	talentPlanner = {
 		enabled = true,         -- the Planner tab on the Talents window

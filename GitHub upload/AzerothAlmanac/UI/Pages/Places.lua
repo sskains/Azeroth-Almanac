@@ -394,6 +394,7 @@ local function ZoneArt(name)
 	local k = NormName(name)
 	return ART_BY_NAME[k] or (k:find("darkspear", 1, true) and ART_BY_NAME.darkspearislands) or nil
 end
+ns.ZoneArt = ZoneArt   -- (the welcome guide paints the zone you are standing in)
 
 -- (0.70.1) battlegrounds: their own group, "Battlegrounds", under the continents; each card says what kind it is, with
 -- a small blue and red flag in front (Alliance against Horde). Sizes only where Blizzard has given them.
