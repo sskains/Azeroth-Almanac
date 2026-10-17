@@ -8,7 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## 1.0.0 (full game restart: new files QoL/WildGambitDeck.lua, UI/UnitMenu.lua and new textures Deck_Glow, Result_Glow, Badge_Ribbon, Board_DarkPortal, WW_Wing)
 
-- [ ] **Wild Gambit, the deck button:** at the pick table and in the lobby the painted deck breathes a gold outline on its own, brightens under the mouse, and the outline follows the card's edge with no seam and nothing lit inside the card's face. The whole card is clickable and nothing beside it is.
+- [ ] **Wild Gambit, the deck button:** at the pick table and in the lobby the painted deck breathes a gold outline on its own, brightens under the mouse, and the outline follows the card's edge with no seam and nothing lit inside the card's face. The whole card is clickable and nothing beside it is. Starting a match, the outline goes with the table: nothing is left lit in the board's top left corner, and it comes back when you return to the table.
 
 - [ ] **Wild Gambit, Your deck:** clicking the deck opens the collection over the table. Only one Back arrow; no player nameplates, Begin button, shuffle lettering or stray card glow showing through; the panel's top clears the window's portrait and dragon, and its left margin matches its right. Cards are five to a row, scroll smoothly, and the inset border is the quest log's. Search, each sort, each tier and "starred only" all filter. Back returns to the table with the header, Begin and the deck's outline all restored. Closing the whole window with the collection open and reopening it is clean.
 

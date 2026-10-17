@@ -524,6 +524,20 @@ local function BuildButton()
 		self.lit:SetAlpha(a * GLOW_ALPHA)
 	end)
 	b:SetScript("OnClick", function() WG:ToggleDeck() end)
+
+	-- The outline hides with the button. It has to be said out loud because the outline is not on
+	-- the button: it sits in its own frame over the table (see above), parented to the window, so
+	-- hiding the table leaves it behind - and the OnUpdate that would fade it belongs to the button,
+	-- which has just stopped running. It hung lit over the board for the whole match.
+	b:HookScript("OnHide", function(self)
+		self.hover = false
+		if self.lit then self.lit:SetAlpha(0) end
+		if self.liftHolder then self.liftHolder:Hide() end
+	end)
+	b:HookScript("OnShow", function(self)
+		if self.liftHolder then self.liftHolder:Show() end
+	end)
+
 	b:Place()
 	deckButton = b
 	frame.deckButton = b
