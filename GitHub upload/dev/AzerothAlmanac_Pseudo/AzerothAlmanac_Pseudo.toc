@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: Azeroth Almanac - Pseudo-localization (dev)
+## Notes: Developers only. Makes every translatable Azeroth Almanac string accented and longer, so untranslated text and layout overflow stand out. Disable it for normal play.
+## Version: 1.0
+Pseudo.lua

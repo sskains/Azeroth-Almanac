@@ -39,7 +39,7 @@ local BOARD_TOP = TOP + ART_Y
 local GOLD = { 1, 0.82, 0.25 }
 -- a spell's colour (target glow, spell card gem): red removes, gold protects, purple swaps
 local AIM = { remove = { 1, 0.22, 0.15 }, protect = { 1, 0.8, 0.25 }, swap = { 0.72, 0.32, 1 } }
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local TITLE_FONT = A.TITLE_FONT
 local GEM = "Interface\\Icons\\INV_Misc_Gem_Diamond_01"
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 
@@ -279,7 +279,7 @@ function WG:SetHint(text)
 	local fs = frame.pickHint
 	local plain = (text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 	local heading = #plain <= 24
-	fs:SetFont("Fonts\\MORPHEUS.TTF", heading and 24 or 15, "")
+	fs:SetFont(A.TITLE_FONT, heading and 24 or 15, "")
 	fs:SetText(text)
 	frame.hintOrn:Layout(heading)
 	-- ...and again next frame. The ornament sets its rules from fs:GetStringWidth(), which still
@@ -1377,7 +1377,7 @@ local function NewCard(parent)
 	f.kill.icon:SetSize(7.5, 7.5)
 	f.kill.icon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
 	f.kill.text = f.kill:CreateFontString(nil, "OVERLAY")
-	f.kill.text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 7.3, "OUTLINE")
+	f.kill.text:SetFont(A.BODY_FONT, 7.3, "OUTLINE")
 	f.kill.text:SetTextColor(1, 1, 1)
 	f.kill.text:SetShadowOffset(0.5, -0.5)
 	f.kill.text:SetPoint("LEFT", f.kill.icon, "RIGHT", 1.2, 0)
@@ -5533,6 +5533,7 @@ end
 WG.whispered = {}
 local notFoundPattern
 local function NotFoundFilter(_, _, text)
+	text = A.Readable(text) -- (a secret system message can't be matched: let it through untouched)
 	if type(text) ~= "string" or not ERR_CHAT_PLAYER_NOT_FOUND_S then return false end
 	if not notFoundPattern then
 		notFoundPattern = "^" .. ERR_CHAT_PLAYER_NOT_FOUND_S:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)") .. "$"

@@ -4076,7 +4076,10 @@ local function getCachedRange(unit, noItems, maxCacheAge)
   -- compose cache key out of unit guid and noItems
   local guid = UnitGUID(unit)
   -- unfortunately, caching on GUID is not possible due to secrets, using unit instead
-  local cacheKey = (isMidnight and issecretvalue(guid) and unit or guid) .. (noItems and "-1" or "-0")
+  -- Azeroth Almanac: the WoW Forever beta client hands out secret GUIDs too (isMidnight is false
+  -- there), and a secret key cannot index a table - key on the unit token whenever the GUID is secret
+  local secret = guid == nil or issecretvalue == nil or issecretvalue(guid)
+  local cacheKey = (secret and unit or guid) .. (noItems and "-1" or "-0")
   local cacheItem = rangeCache[cacheKey] or nil
 
   local currentTime = GetTime()

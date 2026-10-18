@@ -8,7 +8,12 @@ local ADDON_NAME, ns = ...
 local L = ns.L
 AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 
-ns.VERSION = "1.1.0"
+-- (2026-10-18) read from the TOC, so a version bump can't leave it behind (1.1.1 still said 1.1.0
+-- here, and other players' copies were told the old number)
+do
+	local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+	ns.VERSION = (meta and meta(ADDON_NAME, "Version")) or "1.1.1"
+end
 -- (0.69.0) the Almanac's own art: the logo (a closed crimson journal, its gold compass) and the journal
 -- badge (the open journal, a page burning with gold writing), for journal entries
 ns.ICON = "Interface\\AddOns\\AzerothAlmanac\\Media\\Logo_Almanac"
@@ -122,6 +127,21 @@ function ns.CostText(price, cost)
 	return table.concat(parts, " ")
 end
 
+-- the client's name for a spell ID (nil when the game doesn't know it)
+function ns.SpellLocal(id)
+	if not id then return nil end
+	local name
+	if C_Spell and C_Spell.GetSpellName then
+		local ok, n = pcall(C_Spell.GetSpellName, id)
+		name = ok and n or nil
+	elseif GetSpellInfo then
+		local ok, n = pcall(GetSpellInfo, id)
+		name = ok and n or nil
+	end
+	name = ns.Readable(name)
+	return type(name) == "string" and name or nil
+end
+
 -- a Lua pattern from one of the game's own message formats ("Discovered %s: %d experience gained")
 function ns.Pattern(fmt)
 	if type(fmt) ~= "string" then return nil end
@@ -217,11 +237,34 @@ function ns.NumSkillLines()
 	end
 	return 0
 end
+-- (2026-10-18, localization) Skill lines carry the client's own name ("Kräuterkunde"); the Almanac
+-- compares and stores skills by their English name. A skill line the game gives an ID is returned
+-- under its English name, and its local name is kept for display: ns.SkillLocal("Herbalism").
+ns.SKILL_IDS = {
+	Herbalism = 182, Mining = 186, Skinning = 393, Fishing = 356, Lockpicking = 633, Cooking = 185, ["First Aid"] = 129,
+	Alchemy = 171, Blacksmithing = 164, Enchanting = 333, Engineering = 202, Leatherworking = 165, Tailoring = 197,
+	Axes = 44, ["Two-Handed Axes"] = 172, Bows = 45, Guns = 46, Maces = 54, ["Two-Handed Maces"] = 160, Polearms = 229,
+	Swords = 43, ["Two-Handed Swords"] = 55, Staves = 136, ["Fist Weapons"] = 473, Daggers = 173, Thrown = 176,
+	Crossbows = 226, Wands = 228, Unarmed = 162, Defense = 95,
+	Cloth = 415, Leather = 414, Mail = 413, ["Plate Mail"] = 293, Shield = 433,
+}
+local SKILL_BY_ID = {}
+for name, id in pairs(ns.SKILL_IDS) do SKILL_BY_ID[id] = name end
+ns.SKILL_LOCAL = {} -- English name -> the client's name, as read from the skill lines
+function ns.SkillLocal(name) return name and (ns.SKILL_LOCAL[name] or name) end
+
+-- name (English for skills the Almanac knows), isHeader, rank, max, the client's own name
 function ns.SkillLine(i)
 	local R = ns.Readable
 	if C_SkillInfo and C_SkillInfo.GetSkillLineInfo then
 		local ok, info = pcall(C_SkillInfo.GetSkillLineInfo, i)
-		if ok and type(info) == "table" then return R(info.name), R(info.isHeader), R(info.rank), R(info.maxRank) end
+		if ok and type(info) == "table" then
+			local name = R(info.name)
+			local id = R(info.skillID) or R(info.skillLineID)
+			local eng = id and SKILL_BY_ID[id]
+			if eng and type(name) == "string" then ns.SKILL_LOCAL[eng] = name end
+			return eng or name, R(info.isHeader), R(info.rank), R(info.maxRank), name
+		end
 		return nil
 	elseif GetSkillLineInfo then
 		local ok, name, isHeader, _, rank, _, _, max = pcall(GetSkillLineInfo, i)

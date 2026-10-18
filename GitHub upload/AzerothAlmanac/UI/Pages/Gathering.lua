@@ -406,7 +406,7 @@ end
 local PROF_H, TALLY_H = 76, 30
 local PROFS = { "herb", "ore", "treasure", "fish", "skin" }
 local PROF_LABEL = { herb = L["Herbalism"], ore = L["Mining"], treasure = L["Treasure"], fish = L["Fishing"], skin = L["Skinning"] }
-local PROF_SKILL = { herb = L["Herbalism"], ore = L["Mining"], fish = L["Fishing"], skin = L["Skinning"] }
+local PROF_SKILL = { herb = "Herbalism", ore = "Mining", fish = "Fishing", skin = "Skinning" } -- (English keys: ns.SkillLocal shows them)
 local PROF_ICON = {
 	herb = { 133939, "Trade_Herbalism", "INV_Misc_Herb_07" }, ore = { "Trade_Mining", "INV_Ore_Copper_01" },
 	treasure = { 1450989, 132594, "INV_Box_02" }, fish = { "Trade_Fishing", "INV_Misc_Fish_02" },
@@ -471,11 +471,11 @@ local function MySkill(prof)
 	local G = ns.Gathering
 	if prof == "treasure" then
 		local rogue, rank = G:LockRogue()
-		return rogue == ns.CharKey() and rank and (L["Lockpicking"] .. " " .. rank) or nil
+		return rogue == ns.CharKey() and rank and (ns.SkillLocal("Lockpicking") .. " " .. rank) or nil
 	end
 	local c = ns.db and ns.db.chars[ns.CharKey()]
 	local s = c and c.skills and c.skills[PROF_SKILL[prof] or ""]
-	return s and s.rank and (PROF_SKILL[prof] .. " " .. s.rank) or nil
+	return s and s.rank and (ns.SkillLocal(PROF_SKILL[prof]) .. " " .. s.rank) or nil
 end
 
 local function Collect()

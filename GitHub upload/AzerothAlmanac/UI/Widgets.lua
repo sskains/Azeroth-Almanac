@@ -1403,7 +1403,7 @@ W.Section = Banner
 
 -- a name in the window's title font (the My Characters name: Morpheus, large)
 function W.HeroFont(fs, size)
-	if not pcall(fs.SetFont, fs, "Fonts\\MORPHEUS.TTF", size or 24, "") then
+	if not pcall(fs.SetFont, fs, ns.TITLE_FONT, size or 24, "") then
 		fs:SetFontObject(W.Font("GameFontNormalHuge", "GameFontNormalLarge"))
 	end
 	fs:SetShadowOffset(1, -1)

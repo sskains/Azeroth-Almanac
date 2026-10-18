@@ -37,11 +37,23 @@ G.TIER_HINTS = {
 }
 
 -- the gathering spell just cast decides the kind, and which skill to read
-local SPELLS = {
-	[L["Herb Gathering"]] = "herb", [L["Mining"]] = "ore", [L["Opening"]] = "chest", [L["Opening - No Text"]] = "chest",
-	[L["Fishing"]] = "fish",
-}
-local SKILL = { herb = L["Herbalism"], ore = L["Mining"], fish = L["Fishing"] }
+-- (2026-10-18, localization) by the client's own names for these spell IDs, and the English names
+local SPELL_IDS = { [2366] = "herb", [2575] = "ore", [3365] = "chest", [22810] = "chest", [7620] = "fish" }
+local SPELLS_EN = { ["Herb Gathering"] = "herb", Mining = "ore", Opening = "chest", ["Opening - No Text"] = "chest", Fishing = "fish" }
+local SPELLS
+local function Spells()
+	if SPELLS then return SPELLS end
+	local t, all = {}, true
+	for name, kind in pairs(SPELLS_EN) do t[name] = kind end
+	for id, kind in pairs(SPELL_IDS) do
+		local n = ns.SpellLocal(id)
+		if n then t[n] = kind else all = false end
+	end
+	if all then SPELLS = t end -- (spell data still loading: ask again next time)
+	return t
+end
+-- skills by their English names (ns.SkillLine returns those for the skills it knows)
+local SKILL = { herb = "Herbalism", ore = "Mining", fish = "Fishing" }
 G.KINDS = {
 	{ key = "herb", label = L["Herbs"], icon = { 133939, "Trade_Herbalism", "INV_Misc_Herb_07" }, flavor = "Herbalism" },
 	{ key = "ore", label = L["Ore and stone"], icon = { "Trade_Mining", "INV_Ore_Copper_01" }, flavor = "Mining" },
@@ -86,7 +98,7 @@ ns:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spellID)
 	if unit ~= "player" then return end
 	spellID = R(spellID)
 	if type(spellID) ~= "number" then return end
-	local kind = SPELLS[SpellName(spellID) or ""]
+	local kind = Spells()[SpellName(spellID) or ""]
 	if kind then lastCast, lastKind = GetTime(), kind end
 end)
 
@@ -351,7 +363,8 @@ end
 -- game wins). skill: 1 Lockpicking, 2 Herbalism, 3 Mining.
 ---------------------------------------------------------------------------
 
-G.NEED_SKILL = { [1] = L["Lockpicking"], [2] = L["Herbalism"], [3] = L["Mining"] }
+-- English names: the keys of the skill lines and characters' skills (ns.SkillLocal for display)
+G.NEED_SKILL = { [1] = "Lockpicking", [2] = "Herbalism", [3] = "Mining" }
 local byName -- [object name] = { skill, lo, hi } over every object ID with that name
 
 local function NameIndex()
@@ -446,7 +459,7 @@ function G:NeedText(rec, plain)
 	else
 		rank = self:CharSkill(skill)
 	end
-	local text = (self.NEED_SKILL[skill] or "?") .. " " .. (lo == hi and tostring(lo) or (lo .. "-" .. hi))
+	local text = (ns.SkillLocal(self.NEED_SKILL[skill]) or "?") .. " " .. (lo == hi and tostring(lo) or (lo .. "-" .. hi))
 	if plain then return text, skill, lo, rogue end
 	return self:NeedColor(lo, rank) .. text .. "|r", skill, lo, rogue
 end
@@ -488,7 +501,7 @@ end
 function G:SkillColumns(skill, level, name)
 	local rank = self:SkillRank(self.NEED_SKILL[skill])
 	if rank == nil then rank = self:CharSkill(skill) end
-	local left = name or (self.NEED_SKILL[skill] or "?")
+	local left = name or (ns.SkillLocal(self.NEED_SKILL[skill]) or "?")
 	if level then left = left .. " " .. level end
 	if rank == nil then
 		if skill == 1 then return nil end
@@ -550,7 +563,8 @@ local function ReadTooltip(tip)
 		local line = _G[tip:GetName() .. "TextLeft" .. i]
 		local text = line and R(line:GetText())
 		if type(text) == "string" then
-			for skill, sname in pairs(G.NEED_SKILL) do
+			for skill, ename in pairs(G.NEED_SKILL) do
+				local sname = ns.SkillLocal(ename) -- (the tooltip is in the client's language)
 				if text:find(sname, 1, true) then
 					local level = tonumber(text:match("%((%d+)%)") or text:match(sname .. "%s+(%d+)"))
 					-- (Shannon's Silverleaf screenshot: when you can gather it the game says just
@@ -632,7 +646,8 @@ end
 -- Lockboxes (items) aren't counted here: what came out of one is on its item page, as containers are.
 ---------------------------------------------------------------------------
 
-local PICK = L["Pick Lock"]
+local PICK_ID = 1804 -- Pick Lock (matched by the client's name for it, any rank)
+local function IsPick(id) return id == PICK_ID or (ns.SpellLocal(id) or "") == (ns.SpellLocal(PICK_ID) or "Pick Lock") end
 
 function G:PickCount(rec)
 	if not rec then return 0 end
@@ -672,7 +687,7 @@ local function OnPick(failed)
 	local rec, name = PickedChest()
 	if not rec then return end
 	local me = ns.CharKey()
-	local rank = G:SkillRank(L["Lockpicking"])
+	local rank = G:SkillRank("Lockpicking")
 	if failed then
 		local _, lo = G:Needs(rec)
 		if rank and lo and rank < lo then
@@ -703,7 +718,7 @@ local function PickEvent(failed)
 	return function(_, unit, _, spellID)
 		if unit ~= "player" then return end
 		spellID = R(spellID)
-		if type(spellID) ~= "number" or SpellName(spellID) ~= PICK then return end
+		if type(spellID) ~= "number" or not IsPick(spellID) then return end
 		local ok, err = pcall(OnPick, failed)
 		if not ok then ns.Debug("pick lock: " .. tostring(err)) end
 	end

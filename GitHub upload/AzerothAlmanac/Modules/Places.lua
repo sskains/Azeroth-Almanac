@@ -189,7 +189,20 @@ local function BuildExploreIndex()
 	if not (GetCategoryList and GetCategoryNumAchievements and GetAchievementInfo) then return end
 	local ok, cats = pcall(GetCategoryList)
 	if not ok or type(cats) ~= "table" then return end
-	local prefix = (ns.L["Explore %s"]):gsub("%%s", "(.+)")
+	local prefix = ("Explore %s"):gsub("%%s", "(.+)")
+	-- (2026-10-18, localization) the client's own wording: one known achievement ("Explore Elwynn
+	-- Forest", 776) with its zone's name (Elwynn, map 1429) cut out
+	local okE, _, title = pcall(GetAchievementInfo, 776)
+	local zone = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(1429)
+	zone = zone and ns.Readable(zone.name)
+	title = okE and ns.Readable(title)
+	if type(title) == "string" and type(zone) == "string" then
+		local a, b = title:find(zone, 1, true)
+		if a then
+			local esc = function(s) return (s:gsub("[%^%$%(%)%.%[%]%*%+%-%?%%]", "%%%0")) end
+			prefix = esc(title:sub(1, a - 1)) .. "(.+)" .. esc(title:sub(b + 1))
+		end
+	end
 	for _, cat in ipairs(cats) do
 		local okN, n = pcall(GetCategoryNumAchievements, cat, true)
 		for i = 1, (okN and tonumber(n) or 0) do

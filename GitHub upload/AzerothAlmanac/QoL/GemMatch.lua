@@ -40,7 +40,7 @@ local BURST_TIME = 0.45
 local BOARD_ART = "Interface\\TalentFrame\\MageFrost-"
 local GOLD_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border"
 local DIALOG_BG = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark"
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local TITLE_FONT = A.TITLE_FONT
 local GOLD = { 1, 0.82, 0.25 }
 
 -- The six gems (item icons) and the prism.
@@ -232,7 +232,7 @@ local function Float(text, x, y, color)
 	end
 	if not fs then
 		fs = frame.overlay:CreateFontString(nil, "OVERLAY")
-		fs:SetFont("Fonts\\FRIZQT__.TTF", 18, "OUTLINE")
+		fs:SetFont(A.BODY_FONT, 18, "OUTLINE")
 		tinsert(frame.floating, fs)
 	end
 	fs.active, fs.t, fs.x, fs.y = true, 0, x, y
@@ -1195,7 +1195,7 @@ local function Build()
 	frame.score:SetTextColor(1, 1, 1)
 	frame.score:SetPoint("RIGHT", plaque, "RIGHT", -38, 2)
 	frame.cascade = side:CreateFontString(nil, "OVERLAY")
-	frame.cascade:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+	frame.cascade:SetFont(A.BODY_FONT, 14, "OUTLINE")
 	frame.cascade:SetTextColor(0.4, 0.85, 1)
 	frame.cascade:SetPoint("TOPLEFT", PAD, -258) -- (under the best score, clear of the moves number)
 

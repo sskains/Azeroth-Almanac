@@ -401,6 +401,8 @@ end
 
 local PROFESSION_HEADERS = { [TRADE_SKILLS or "Professions"] = true, [SECONDARY_SKILLS or "Secondary Skills"] = true,
 	Professions = true, ["Secondary Skills"] = true }
+-- (2026-10-18) SECONDARY_SKILLS ends in a colon ("Secondary Skills:"); the skill-line header doesn't
+if SECONDARY_SKILLS then PROFESSION_HEADERS[(SECONDARY_SKILLS:gsub(":%s*$", ""))] = true end
 
 local function ScanProfessions()
 	if not (C_SkillInfo and C_SkillInfo.GetNumSkillLines) then return end

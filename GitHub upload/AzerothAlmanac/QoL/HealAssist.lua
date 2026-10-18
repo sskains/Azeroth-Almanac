@@ -117,6 +117,12 @@ local DIM, OFF, ABSENT = 0.22, 0.55, 0.12 -- (not needed: faint, so a recommenda
 local DANGER_PCT = 0.3 -- under this the recommendation throbs red (the default; Settings: Danger level)
 local db -- (the saved settings, set at login; declared here so DangerPct reads it, not a global: 2026-10-11)
 local function DangerPct() return ((db and db.danger) or 30) / 100 end
+
+-- (2026-10-17, Shannon's raid screenshot) in a raid, on the raid frames: the icons go INSIDE each
+-- frame (beside it they ran over the next group's column), only as many as fit, heals first; the
+-- "maybe" cures offered while the game hides debuffs are left out, and the best icon stands out.
+-- /aa heal raid toggles it (db.raidCompact), /aa heal raidicons N sets how many (db.raidIcons, 3).
+local function RaidCompact() return db and db.mode == "frames" and db.raidCompact ~= false and IsInRaid and IsInRaid() end
 local HIGHLIGHT_ATLAS = "UI-HUD-ActionBar-IconFrame-Mouseover"
 local SOUND_ALERT = 8959
 
@@ -188,6 +194,30 @@ local CATALOG = {
 -- A cure that's already ticking: its debuff type needs no new cure.
 local ABOLISH = { Poison = "Abolish Poison", Disease = "Abolish Disease" }
 
+-- (2026-10-18, localization) The catalog's names are English; the game names spells, buffs and
+-- debuffs in the client's language. Each name's rank-1 spell ID gives the client's own name for it:
+-- LOC[english] = local name, ENG[local name] = english. The English names stay the internal keys,
+-- spellbook and aura names are translated back to them, and anything handed to the game (the button's
+-- spell, range, cooldown, usable) uses the local name. On an English client both are the same.
+local SPELL_IDS = {
+	["Healing Wave"] = 331, ["Lesser Healing Wave"] = 8004, ["Chain Heal"] = 1064, ["Cure Poison"] = 526,
+	["Cure Disease"] = 2870, ["Ancestral Spirit"] = 2008,
+	["Lesser Heal"] = 2050, ["Heal"] = 2054, ["Greater Heal"] = 2060, ["Flash Heal"] = 2061, ["Renew"] = 139,
+	["Power Word: Shield"] = 17, ["Abolish Disease"] = 552, ["Dispel Magic"] = 527, ["Resurrection"] = 2006,
+	["Power Word: Fortitude"] = 1243, ["Prayer of Fortitude"] = 21562, ["Divine Spirit"] = 14752, ["Prayer of Spirit"] = 27681,
+	["Healing Touch"] = 5185, ["Regrowth"] = 8936, ["Rejuvenation"] = 774, ["Abolish Poison"] = 2893,
+	["Remove Curse"] = 2782, ["Rebirth"] = 20484, ["Mark of the Wild"] = 1126, ["Gift of the Wild"] = 21849, ["Thorns"] = 467,
+	["Holy Light"] = 635, ["Flash of Light"] = 19750, ["Purify"] = 1152, ["Cleanse"] = 4987, ["Redemption"] = 7328,
+	["Mend Pet"] = 136, ["Revive Pet"] = 982, ["Call Pet"] = 883,
+	["Health Funnel"] = 755, ["Summon Imp"] = 688, ["Summon Voidwalker"] = 697, ["Summon Succubus"] = 712, ["Summon Felhunter"] = 691,
+	["Arcane Intellect"] = 1459, ["Arcane Brilliance"] = 23028,
+	["Weakened Soul"] = 6788,
+	-- (no ID here: "Revive" and "Summon Felguard" - WoW Forever's own or later spells - match by English name only)
+}
+local LOC, ENG = {}, {}
+local function LocalName(name) return LOC[name] or name end
+local function EnglishName(name) return name and (ENG[name] or name) end
+
 ---------------------------------------------------------------------------
 -- State
 ---------------------------------------------------------------------------
@@ -208,6 +238,17 @@ local maxCache = {}      -- token -> last readable maximum health, for members w
 local holder             -- the secure frame all the icons live in
 local shownState = nil
 local selfCast = nil     -- { target = name } while you're casting one of your heals
+
+-- (Shannon's error report, 2026-10-17) on WoW Forever the cast target's name and UnitName can be
+-- secret strings in combat; comparing one errors ("attempt to compare a secret string value"), so a
+-- secret on either side counts as "not casting on them"
+local function CastingOn(token)
+	local t = selfCast and selfCast.target
+	if t == nil or A.IsSecret(t) then return false end
+	local n = UnitName(token)
+	if n == nil or A.IsSecret(n) then return false end
+	return t == n
+end
 local amountCache = {}
 local alerted = {}
 local flashFrame
@@ -295,6 +336,14 @@ local function SpellAmount(m)
 				if a then value = (Num(a) + Num(b)) / 2 break end
 				local single = text:match("for (%d[%d,]*) over") or text:match("absorbs (%d[%d,]*)")
 				if single then value = Num(single) break end
+				-- (other languages, 2026-10-18) the description is the tooltip's last line: two numbers a
+				-- short word apart are a range ("573 bis 663"), else its first number is the amount
+				if i == tip:NumLines() and A.LOCALE ~= "enUS" and A.LOCALE ~= "enGB" then
+					local x, gap, y = text:match("(%d[%d.,]*)(%D+)(%d[%d.,]*)")
+					if x and #gap <= 8 then value = (Num(x:gsub("%.", "")) + Num(y:gsub("%.", ""))) / 2 break end
+					local first = text:match("(%d[%d.,]*)")
+					if first then value = Num(first:gsub("%.", "")) break end
+				end
 			end
 		end
 	end
@@ -319,6 +368,11 @@ end
 -- Your spells from the catalog, at their highest rank.
 local function ResolveSpells()
 	wipe(mine)
+	-- (English clients keep the English names: nothing to translate, and a wrong ID can't misfire)
+	for eng, id in pairs((A.LOCALE ~= "enUS" and A.LOCALE ~= "enGB") and SPELL_IDS or {}) do
+		local n = R(SpellName(id))
+		if type(n) == "string" and n ~= "" and n ~= eng then LOC[eng], ENG[n] = n, eng end
+	end
 	local _, class = UnitClass("player")
 	local list = CATALOG[class]
 	if not list or not (C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines) then return end
@@ -334,7 +388,7 @@ local function ResolveSpells()
 			for index = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
 				local item = C_SpellBook.GetSpellBookItemInfo(index, bank)
 				if item and item.itemType == Enum.SpellBookItemType.Spell and item.spellID then
-					local name = item.name or SpellName(item.spellID)
+					local name = EnglishName(R(item.name or SpellName(item.spellID)))
 					if name and wanted[name] then
 						local rank = RankOf(item.spellID)
 						if not found[name] or rank > found[name].rank then found[name] = { id = item.spellID, rank = rank } end
@@ -358,6 +412,7 @@ end
 local function InRange(name, token)
 	if token == "player" then return true end
 	local r
+	name = LocalName(name)
 	if C_Spell and C_Spell.IsSpellInRange then r = C_Spell.IsSpellInRange(name, token)
 	elseif IsSpellInRange then r = IsSpellInRange(name, token) end
 	r = R(r)
@@ -366,6 +421,7 @@ local function InRange(name, token)
 end
 
 local function Cooldown(name)
+	name = LocalName(name)
 	local start, duration
 	if C_Spell and C_Spell.GetSpellCooldown then
 		local info = C_Spell.GetSpellCooldown(name)
@@ -387,7 +443,7 @@ local function CantCast(name, token, m, rel)
 	if m.cost > (R(UnitPower("player", 0)) or math.huge) then return true end
 	local usable = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell
 	if usable then
-		local ok, can = pcall(usable, name)
+		local ok, can = pcall(usable, LocalName(name))
 		if ok and R(can) == false then return true end
 	end
 	local start, duration = Cooldown(name)
@@ -497,10 +553,10 @@ local function ScanAuras(e)
 		end
 	end
 	each("HARMFUL", function(name, kind)
-		if name then debuffNames[name] = true end
+		if name then debuffNames[EnglishName(name)] = true end
 		if type(kind) == "string" and kind ~= "" then debuffTypes[kind] = true end
 	end)
-	each("HELPFUL", function(name) if name then buffNames[name] = true end end)
+	each("HELPFUL", function(name) if name then buffNames[EnglishName(name)] = true end end)
 	if blocked and e.debuffTypes then
 		-- keep what we knew from before combat rather than forgetting it
 		e.auraBlocked = true
@@ -705,8 +761,9 @@ local function Evaluate(e, now)
 		end
 	end
 	if cure then res.score = res.score + 400 end
-	if e.auraBlocked then
+	if e.auraBlocked and not RaidCompact() then
 		-- debuffs can't be seen in combat: offer the cures anyway, a little dimmer, never flashing
+		-- (not in a raid: on every member of a raid it was a wall of icons)
 		for _, m in ipairs(mine) do
 			if m.spell.kind == "cleanse" and not res.rel[m.spell.name] then
 				res.rel[m.spell.name] = true
@@ -717,7 +774,7 @@ local function Evaluate(e, now)
 	end
 
 	-- heals
-	local casting = selfCast and selfCast.target and selfCast.target == UnitName(token)
+	local casting = CastingOn(token)
 	if pct then
 		local incoming = type(UnitGetIncomingHeals) == "function" and R(UnitGetIncomingHeals(token)) or 0
 		if type(incoming) ~= "number" then incoming = 0 end
@@ -925,7 +982,7 @@ local function MakeButton(e, m)
 	-- option, so the button listens to both and the game's own click handler picks the right one.
 	b:RegisterForClicks("AnyUp", "AnyDown")
 	b:SetAttribute("type1", "spell")
-	b:SetAttribute("spell1", m.spell.name)
+	b:SetAttribute("spell1", LocalName(m.spell.name)) -- (the client's own name for it: an English one casts nothing on other clients)
 	-- (calling or summoning a pet targets nobody: with no pet out, "pet" would be an invalid target)
 	b:SetAttribute("unit1", m.spell.kind == "summon" and "player" or e.token)
 	b.token, b.name, b.m, b.spellID = e.token, m.spell.name, m, m.id
@@ -1068,7 +1125,7 @@ local function EnsureButtons(e)
 				-- (spells read again: a new rank, a new cost; the button follows, 0.63.0)
 				b.m, b.spellID = m, m.id
 				b.icon:SetTexture(m.icon)
-				b:SetAttribute("spell1", m.spell.name)
+				b:SetAttribute("spell1", LocalName(m.spell.name))
 			end
 			order[#order + 1] = name
 		end
@@ -1472,6 +1529,31 @@ end
 -- (a health bar placed by secret values): arithmetic on it errors, so it's treated as unknown
 local function Pos(v) return (type(v) == "number" and not A.IsSecret(v)) and v or nil end
 
+-- a raid frame's icons: inside the frame, along its bottom edge from the right, sized to the frame,
+-- heals first, then cures, then the rest, as many as fit (at most db.raidIcons). The ones left over
+-- stay hidden, so nothing covers the frame but the strip itself.
+local function RaidStrip(e, f)
+	local w, h = Pos(f.GetWidth and f:GetWidth()), Pos(f.GetHeight and f:GetHeight())
+	w, h = w or 72, h or 36
+	local size = math.max(12, math.min(db.iconSize or 26, math.floor(h * 0.42)))
+	local cap = math.min(math.max(1, math.floor((w * 0.7) / (size + GAP))), math.max(1, db.raidIcons or 3))
+	local n = 0
+	for group = 1, 3 do
+		for _, name in ipairs(e.order) do
+			local b = e.buttons[name]
+			if b and n < cap and GroupOf(b) == group then
+				b:SetSize(size, size)
+				b:ClearAllPoints()
+				Layer(b, f, 10)
+				b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -(2 + n * (size + GAP)), 2)
+				ShowButton(b)
+				n = n + 1
+			end
+		end
+	end
+	return 1
+end
+
 local function HealthDrop(f)
 	local bar = HealthBarOf(f)
 	local top, btop = Pos(f:GetTop()), bar and Pos(bar:GetTop())
@@ -1661,7 +1743,14 @@ local function Layout()
 					local f = FrameFor(e.token)
 					local owner = e.pet and placed[OwnerOf(e.token)]
 					e.ownFrame = f and e.pet or nil
-					if f then
+					e.raidCompact = nil
+					if f and RaidCompact() and f ~= PlayerFrame then
+						-- (raid) inside the member's own frame
+						e.raidCompact = true
+						placed[e.token] = { f = f, y = 0, lines = RaidStrip(e, f) }
+						PlaceMarkers(e, "frame", f)
+						keys[#keys + 1] = e.token .. "=raid:" .. (f:GetName() or tostring(f))
+					elseif f then
 						local y = db.side == "below" and -2 or -(HealthDrop(f) or NameDrop(f))
 						-- (0.65.4) a pet on its own frame lines its icons up with its owner's column
 						-- (#56) beside the frame, room for the aggro badge between frame and icons
@@ -1938,12 +2027,13 @@ local function ApplyVisuals(e, now)
 					b.redHolder:SetAlpha(0)
 					b.shownAlpha = nil
 				end
-				local alpha = DIM
+				local alpha = e.raidCompact and 0.08 or DIM
 				local desat = false
 				if res.absent then
-					alpha = ABSENT
+					alpha = e.raidCompact and 0.05 or ABSENT
 				elseif rel then
 					alpha = res.soft[name] and 0.7 or 1
+					if e.raidCompact and not res.flash[name] then alpha = 0.55 end -- (raid: the best one stands out)
 					if CantCast(name, e.token, b.m, rel) then alpha, desat = OFF, true end
 				elseif CantCast(name, e.token, b.m, rel) then
 					desat = true -- (#56: faint as before, and grey: it can't be cast here now)
@@ -1979,7 +2069,7 @@ end
 -- game gives it, everyone else's.
 local function Incoming(e)
 	local inc = 0
-	if selfCast and selfCast.target and selfCast.target == UnitName(e.token) then inc = selfCast.amount or 0 end
+	if CastingOn(e.token) then inc = selfCast.amount or 0 end
 	if type(UnitGetIncomingHeals) == "function" then
 		local v = R(UnitGetIncomingHeals(e.token))
 		if type(v) == "number" and v > inc then inc = v end
@@ -2042,7 +2132,7 @@ local function UpdateLabels()
 			if db.predict and not dead and hover and hover.token == token then
 				if hover.button and not hover.button:IsMouseOver() then
 					hover = nil
-				elseif not (selfCast and selfCast.target and selfCast.target == UnitName(token)) then
+				elseif not CastingOn(token) then
 					pInc = hover.amount or 0
 				end
 			end
@@ -2393,9 +2483,24 @@ function HA:Command(arg)
 		ns.Print("Healer assist only in combat: " .. (db.combatOnly and "on." or "off."))
 	elseif arg == "reset" then
 		HA:ResetPosition()
+	elseif arg == "raid" then
+		db.raidCompact = db.raidCompact == false
+		needLayout = true
+		HA:Apply()
+		ns.Print("Healer assist in raids: " .. (db.raidCompact ~= false and "compact, inside the raid frames." or "as in a group."))
+	elseif arg:match("^raidicons") then
+		local n = tonumber(arg:match("(%d+)"))
+		if n and n >= 1 and n <= 6 then
+			db.raidIcons = n
+			needLayout = true
+			HA:Apply()
+			ns.Print("Healer assist: up to " .. n .. " icons on each raid frame.")
+		else
+			ns.Print("/aa heal raidicons 1-6 (now " .. (db.raidIcons or 3) .. ")")
+		end
 	else
 		if ns.Settings and ns.Settings.Open then ns.Settings:Open("healer") end
-		ns.Print("/aa heal test | debug | on | off | panel | frames | reset")
+		ns.Print("/aa heal test | debug | on | off | panel | frames | reset | raid | raidicons N")
 	end
 end
 
@@ -2444,7 +2549,7 @@ function HA:OnLogin()
 				selfCast = nil
 				for _, m in ipairs(mine) do
 					if m.spell.name == name and (m.spell.kind == "heal" or m.spell.kind == "hot") then
-						selfCast = { target = target, amount = SpellAmount(m) }
+						selfCast = { target = (target ~= nil and not A.IsSecret(target)) and target or nil, amount = SpellAmount(m) }
 						break
 					end
 				end

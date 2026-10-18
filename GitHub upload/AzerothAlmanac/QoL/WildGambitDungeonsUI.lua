@@ -13,7 +13,7 @@ local WD = ns.WildDungeons
 if not (WG and WL and WD) then return end
 
 local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local TITLE_FONT = A.TITLE_FONT
 local CARD_W, CARD_H = 180, 245          -- the event card, big (the frame art is 684 x 932)
 local MINI = 0.36                        -- its scale at the board's corner (lasting events)
 -- (0.67.2) the card holds the stage first, then steps aside and the event plays out in full view; SLOW

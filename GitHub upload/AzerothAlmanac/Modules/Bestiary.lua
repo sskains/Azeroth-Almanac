@@ -858,7 +858,7 @@ end
 -- gathering casts (skinning, herbs, mining) just before a loot window
 -- (only Skinning: herbs and veins are objects, which the gathering recorder handles; a corpse looted
 -- right after a herb was picked is a corpse, not a pelt)
-local GATHER = { [L["Skinning"]] = true }
+local GATHER = { Skinning = true } -- (+ the client's name for Skinning, 8613, added at the first cast)
 ns:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spellID)
 	if unit ~= "player" then return end
 	spellID = R(spellID)
@@ -869,6 +869,10 @@ ns:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spellID)
 		name = ok and type(info) == "table" and R(info.name)
 	elseif GetSpellInfo then
 		name = GetSpellInfo(spellID)
+	end
+	if not GATHER[1] then
+		local loc = ns.SpellLocal(8613)
+		if loc then GATHER[loc], GATHER[1] = true, true end
 	end
 	if name and GATHER[name] then lastGather = GetTime() end
 end)

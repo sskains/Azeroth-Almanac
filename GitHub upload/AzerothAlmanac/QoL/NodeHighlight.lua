@@ -116,6 +116,14 @@ end
 -- Classifying nodes
 ---------------------------------------------------------------------------
 
+-- (2026-10-18, localization) by object ID first: the object database knows what each node needs
+-- (1 a lock, 2 Herbalism, 3 Mining), in any language. The names below are English only.
+local KIND_BY_SKILL = { [1] = "chest", [2] = "herb", [3] = "ore" }
+function NH.ClassifyID(id)
+	local lock = id and A.DB and A.DB.objectLock and A.DB.objectLock[id]
+	return lock and KIND_BY_SKILL[lock[1]] or nil
+end
+
 function NH.Classify(name)
 	if not name then return end
 	local custom = db.customNames[name]
@@ -520,7 +528,8 @@ local function Update()
 	local kind
 	if guid and guid:match("^GameObject") then
 		local name = ns.Readable(UnitName("softinteract"))
-		kind = (QuestObjects()[ObjectID(guid)] or NamedByQuest(name)) and "quest" or NH.Classify(name)
+		local oid = ObjectID(guid)
+		kind = (QuestObjects()[oid] or NamedByQuest(name)) and "quest" or NH.ClassifyID(oid) or NH.Classify(name)
 	end
 	-- The sparkle needs the node's nameplate; the outline doesn't.
 	if kind and db.types[kind] and (plate or WantOutline()) then

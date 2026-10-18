@@ -4,6 +4,81 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **Other languages: the Almanac now works on non-English clients** (Shannon, localization step 1).
+  Many features compared the game's text - in the client's language - with English, and silently did
+  nothing on a German or French client. Fixed:
+  - Skills are read by their skill ID (`ns.SkillLine` returns the English name for the skills it
+    knows, `ns.SkillLocal` the client's name for display): gathering ranks and needs, the Gathering
+    page, Lockpicking, weapon and armour skills for upgrades and "Can't use", Secondary Skills.
+  - Spells by spell ID: Heal Assist's catalog (spellbook, buttons, range, cooldown, buffs and
+    debuffs such as Weakened Soul; heal amounts read from the tooltip in any language), gathering
+    casts, Pick Lock, Skinning.
+  - Node highlight recognises herbs, veins and locked chests by object ID, not English names.
+  - Quest targeting reads objectives with the client's own formats ("%s getötet: %d/%d").
+  - Zone exploration totals find "Explore ..." achievements in the client's wording.
+  - Class trainers are recognised whatever the language's grammar ("Entraîneur de guerriers").
+  - Window and card titles use fonts with the client's letters (Russian, Korean and Chinese fall back
+    to the game's own fonts; Morpheus and Friz Quadrata have no Cyrillic or CJK characters).
+  - The version is read from the TOC (`ns.VERSION` still said 1.1.0 in 1.1.1, so other players'
+    copies were told the old number).
+  - Developers: `dev/AzerothAlmanac_Pseudo`, a tiny addon that turns on pseudo-localization -
+    every translatable string accented and a third longer - to find untranslated text and layouts
+    too tight for longer languages. Copy it into AddOns and enable it; never shipped.
+  Still English-only (DEGRADES, listed in the audit): creature-type rules in Wild Gambit, dungeon
+  names and bosses known by name only, travel routes, zone paintings and some trainer grouping.
+
+- **Murloc Tac Toe: "attempt to index local 'text' (a secret string value)"** (Shannon's error report).
+  WoW Forever can hand system chat messages to addons as secret strings; Murloc Tac Toe reads every
+  one to spot "No player named ... is currently playing" (the opponent went offline), and matching
+  a secret errors. Secret messages are now skipped there, in Wild Gambit's matching chat filter and
+  in the auction poster's error check, as the Items and Places modules already did.
+
+- **Talent Planner: the trees and text brought up to date** (Shannon). Regenerated from
+  talentsforever.com's data of 2026-10-16 (WoW Forever client build 1.60.1.70425; it was 2026-10-01,
+  build 1.60.1.70009). The biggest changes: Warrior Fury and Protection (Iron Will moves to
+  Protection; Lingering Rage, Furious Precision and Gore Drinker are new; Improved Cleave, Boundless
+  Rage, Precision and Toughness are gone; most of Protection moved), Shaman Elemental (Lava Burst
+  now on row 5; Trial by Fire and Elemental Mastery new), Mage Fire (Improved Fire Blast and Heating
+  Up replace Wake of Fire and Hot Streak; Critical Mass 5 ranks, Fire Power 3), Arcane (Missile
+  Barrage 2 ranks, at the top; Arcane Wrath new), Priest Shadow (Dark Inspiration new), Warlock
+  Affliction (Grim Reach and Soul Harvest), Druid Feral (Shifting Power, Improved Shifting Power,
+  Natural Instinct), plus moves in Priest Discipline and Shaman Restoration and about a hundred
+  rank texts. The generator is new, `tools/gen_talents_forever.py` (the old JavaScript one was
+  never in the repo); it keeps the Classic spell IDs of talents that kept their name and rank count.
+  Saved builds in a tree that changed may land on different talents: open them and check.
+
+- **Heal Assist in raids: inside the raid frames** (Shannon's raid screenshot). On the group frames the
+  icons sat to the right of each frame - fine in a party, but in a raid that is where the next
+  group's column is, so Group 1's icons lay over Group 2's frames and Group 3's hung out over the
+  floor. In a raid they now sit inside each member's own frame, along its bottom edge from the right,
+  sized to the frame: heals first, then cures, then the rest, only as many as fit (3 by default,
+  `/aa heal raidicons 1-6`). The "maybe" cures offered to everyone while the game hides debuffs in
+  combat are left out in a raid, unneeded icons all but vanish, and among the ones that apply the
+  best one stands out (full brightness and the flash, the others at half). `/aa heal raid` switches
+  back to the group layout. Icons can't be moved or hidden mid-fight (the game locks secure buttons
+  in combat), so the strip is set up out of combat and only its brightness changes during one.
+
+## 1.1.1 (2026-10-17)
+
+- **Nameplate distance: no more "secret keys" errors** (Shannon's error report). WoW Forever hands
+  out a nameplate unit's GUID as a secret value, and LibRangeCheck-3.0 cached its ranges by GUID; it
+  only switches to the unit token on the retail Midnight client, so here the secret went in as a table
+  key and the game raised an error for every plate four times a second ("Your AddOns are experiencing
+  a large number of errors"). The library now keys on the unit token whenever the GUID is secret or the
+  client cannot tell (`Libs\LibRangeCheck-3.0`, marked "Azeroth Almanac" in the code).
+
+- **Heal Assist: "attempt to compare a secret string value" in combat** (Shannon's error report). The
+  name of the person your heal is going to, and UnitName itself, can be secret in combat; Heal Assist
+  compared them to see whether you were already healing someone. A secret on either side now counts
+  as "not casting on them" - the only cost is that, in combat, your heal in flight isn't counted
+  towards that member's incoming healing.
+
+- **Dungeons: the portal swirl stays inside the header** (Shannon's screenshot). At 180 px it spilled
+  over the Overview / Abilities tabs above and the General heading below; it now draws in a clipping
+  frame the size of the header card, under the dungeon's name.
+
 ## 1.1.0 (2026-10-17)
 
 - **How far away a mob is, under its nameplate** (Shannon). Settings > Group Settings > Distance on

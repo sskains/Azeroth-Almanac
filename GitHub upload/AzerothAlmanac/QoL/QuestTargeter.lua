@@ -140,9 +140,30 @@ end
 ---------------------------------------------------------------------------
 
 -- Pulls the name out of "Kobold Vermin slain: 3/8", "Bear Meat: 1/3", "3/8 Kobold Vermin slain", etc.
+-- (2026-10-18, localization) the client's own objective formats first ("%s slain: %d/%d",
+-- "%s getötet: %d/%d" ...): the name is the format's text part
+local OBJ_PATTERNS
+local function FromGameFormats(text)
+	if not OBJ_PATTERNS then
+		OBJ_PATTERNS = {}
+		for _, fmt in ipairs({ QUEST_MONSTERS_KILLED, QUEST_ITEMS_NEEDED, QUEST_OBJECTS_FOUND, QUEST_PLAYERS_KILLED }) do
+			local p = A.Pattern and A.Pattern(fmt)
+			if p then OBJ_PATTERNS[#OBJ_PATTERNS + 1] = p end
+		end
+	end
+	for _, p in ipairs(OBJ_PATTERNS) do
+		local a, b, c = text:match(p)
+		for _, v in ipairs({ a, b, c }) do
+			if v and not v:match("^%d+$") then return strtrim(v) end
+		end
+	end
+end
+
 local function ObjectiveName(text)
 	if type(text) ~= "string" or text == "" then return end
 	text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("^%s*%-%s*", "")
+	local fromGame = FromGameFormats(text)
+	if fromGame and fromGame ~= "" then return fromGame end
 	local name = text:match("^(.-)%s*:%s*%d+%s*/%s*%d+$") or text:match("^%d+%s*/%s*%d+%s+(.+)$")
 	if not name then return end
 	name = strtrim((name:gsub("%s+[Ss]lain$", ""):gsub("%s+[Kk]illed$", "")))

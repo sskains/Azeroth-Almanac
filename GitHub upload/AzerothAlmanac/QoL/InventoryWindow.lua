@@ -20,7 +20,7 @@ local ROW_H = 54
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local TITLE_FONT = A.TITLE_FONT
 local GOLD = { 1, 0.82, 0.25 }
 local REST_ICON = "Interface\\CharacterFrame\\UI-StateIcon" -- the player frame's resting "Zzz"
 local REST_COORDS = { 0, 0.5, 0, 0.421875 }

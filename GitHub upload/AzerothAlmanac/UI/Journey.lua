@@ -520,7 +520,7 @@ function W.JourneyPane(parent, opts)
 		h.zz = {}
 		for i = 1, 3 do
 			local z = h:CreateFontString(nil, "OVERLAY")
-			z:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+			z:SetFont(ns.BODY_FONT, 12, "OUTLINE")
 			z:SetTextColor(0.85, 0.92, 1)
 			z:SetText("z")
 			z:Hide()
@@ -668,7 +668,7 @@ function W.JourneyPane(parent, opts)
 		if ghost then ghost:Hide() end
 	end
 	f.banner = f:CreateFontString(nil, "OVERLAY")
-	f.banner:SetFont("Fonts\\MORPHEUS.TTF", full and 30 or 18, "OUTLINE")
+	f.banner:SetFont(ns.TITLE_FONT, full and 30 or 18, "OUTLINE")
 	f.banner:SetTextColor(1, 0.82, 0.3)
 	f.banner:SetShadowOffset(2, -2)
 	f.banner:SetPoint("TOP", stage, "TOP", 0, -18)
@@ -1014,7 +1014,7 @@ function W.JourneyPane(parent, opts)
 			for i, z in ipairs(hd.zz) do
 				if asleep then
 					local ph = (now * 0.55 + i / 3) % 1
-					z:SetFont("Fonts\\FRIZQT__.TTF", math.max(9, sz * 0.4), "OUTLINE")
+					z:SetFont(ns.BODY_FONT, math.max(9, sz * 0.4), "OUTLINE")
 					z:ClearAllPoints()
 					z:SetPoint("BOTTOMLEFT", hd, "TOPRIGHT", -sz * 0.25 + ph * sz * 0.5 + math.sin(ph * 6) * 2, -sz * 0.35 + ph * sz * 0.9)
 					z:SetScale(0.7 + ph * 0.6)

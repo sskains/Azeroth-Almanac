@@ -22,7 +22,7 @@ local GOLD = { 1, 0.82, 0 }
 local GREEN = { 0.25, 1, 0.25 }
 local GREY = { 0.45, 0.45, 0.45 }
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local TITLE_FONT = A.TITLE_FONT
 local HEADER_H, TOOLBAR_H, FOOTER_H = 70, 34, 30
 -- The game's talent tree layout, measured from its window: button size, grid step, where the
 -- first row and the tree headers sit (from the top of the tree area).

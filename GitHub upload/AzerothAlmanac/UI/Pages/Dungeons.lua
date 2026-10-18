@@ -648,7 +648,18 @@ function page:Build(parent, header)
 	nameArt:SetPoint("LEFT", nameText, "LEFT", -4, 1)
 	nameArt:Hide()
 	-- (0.69.0, #45) the dungeon you're in: the portal swirls behind its name
-	local swirl = W.PortalSwirl(right.top, "BACKGROUND", 7)
+	-- (2026-10-17) held inside the header card: at 180 px the swirl spilled over the tabs above and
+	-- the General section below. A clipping frame the size of the card, under the header's text.
+	local swirlClip = CreateFrame("Frame", nil, right)
+	swirlClip:SetPoint("TOPLEFT", right.card or right.top, "TOPLEFT", 4, -4)
+	swirlClip:SetPoint("BOTTOMRIGHT", right.card or right.top, "BOTTOMRIGHT", -4, 4)
+	if swirlClip.SetClipsChildren then swirlClip:SetClipsChildren(true) end
+	swirlClip:SetFrameLevel(right.top:GetFrameLevel())
+	local swirlLayer = CreateFrame("Frame", nil, swirlClip)
+	swirlLayer:SetAllPoints(swirlClip)
+	swirlLayer:SetFrameLevel(swirlClip:GetFrameLevel() + 1)
+	right.top:SetFrameLevel(swirlLayer:GetFrameLevel() + 1) -- the name stays on top of the swirl
+	local swirl = W.PortalSwirl(swirlLayer, "BACKGROUND", 7)
 	swirl:SetSize(180, 180)   -- (0.69.1: 20% larger)
 	swirl:SetPoint("CENTER", nameText, "LEFT", 70, -6)
 	local swirlHost = CreateFrame("Frame", nil, right.top)

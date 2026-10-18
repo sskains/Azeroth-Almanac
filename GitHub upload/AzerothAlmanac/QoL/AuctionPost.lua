@@ -523,6 +523,7 @@ function AH:OnLogin()
 		elseif event == "UI_ERROR_MESSAGE" then
 			-- the server refused a post: say what was being posted (for /aa ahpost), and let it try again
 			local _, msg = ...
+			msg = A.Readable(msg) -- (secret on WoW Forever: can't be compared)
 			if pending and pending.posting and msg and (msg == ERR_AUCTION_DATABASE_ERROR or tostring(msg):find("uction")) then
 				seen.lastError = ("%s, posting %s"):format(tostring(msg), seen.lastPost or "?")
 				pending.posting = nil

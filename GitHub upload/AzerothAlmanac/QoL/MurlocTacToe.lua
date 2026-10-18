@@ -42,7 +42,7 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 local GOLD_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border"
 local DIALOG_BG = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark"
 local BOARD_ART = "Interface\\TalentFrame\\ShamanRestoration-"
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local TITLE_FONT = A.TITLE_FONT
 local GOLD = { 1, 0.82, 0.25 }
 local POPUP = "AZEROTHALMANAC_MTT_CHALLENGE"
 
@@ -840,7 +840,10 @@ end
 local function Squash(n) return (n or ""):gsub("[%s%-]", ""):lower() end
 local notFound
 local function OnSystem(text)
-	if not (game and game.opp and ERR_CHAT_PLAYER_NOT_FOUND_S) then return end
+	-- (2026-10-17, Shannon's error report) system messages can arrive as secret strings on WoW
+	-- Forever; one can't be matched against, so it's skipped
+	text = A.Readable(text)
+	if type(text) ~= "string" or not (game and game.opp and ERR_CHAT_PLAYER_NOT_FOUND_S) then return end
 	if not notFound then
 		local pattern = ERR_CHAT_PLAYER_NOT_FOUND_S:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)")
 		notFound = "^" .. pattern .. "$"

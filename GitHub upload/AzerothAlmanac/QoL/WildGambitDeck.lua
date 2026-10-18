@@ -20,7 +20,7 @@ if not (WG and WL) then return end
 -- quietly and the deck button never appeared, with nothing in the log to say why.
 local function Widgets() return A.Widgets end
 
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local TITLE_FONT = A.TITLE_FONT
 local PER_ROW = 5
 local GAP_Y = 20
 

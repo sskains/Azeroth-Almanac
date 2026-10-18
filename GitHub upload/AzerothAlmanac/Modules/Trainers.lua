@@ -242,7 +242,7 @@ function T:ReadTrainer()
 	else
 		group = "class:" .. (classFile or "?")
 		-- weapon masters, riding and other trainers that aren't your class trainer
-		if title and not title:find(UnitClass("player"), 1, true) then group = "other:" .. title end
+		if title and not T.TitleNamesClass(title, classFile) then group = "other:" .. title end
 	end
 
 	local where = ns.Where()
@@ -375,6 +375,17 @@ for _, e in ipairs({ "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE", "NEW_RECIPE_
 ns:RegisterEvent("LEARNED_SPELL_IN_TAB", function(_, id) id = R(id) if ns.db and id and Me() then Me().spells[id] = time() ns:Fire("CHANGED", "spell", id) end end)
 ns:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE", function(_, id) id = R(id) if ns.db and id and Me() then Me().spells[id] = time() ns:Fire("CHANGED", "spell", id) end end)
 
+-- (2026-10-18, localization) is this trainer title about your class? Other languages write the class
+-- in lower case, plural or inflected ("Entraîneur de guerriers", "Наставник воинов"), so the male
+-- class name is looked for without case and without its first letter.
+function T.TitleNamesClass(title, classFile)
+	local cls = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classFile or ""]) or UnitClass("player")
+	if type(title) ~= "string" or type(cls) ~= "string" or cls == "" then return false end
+	if title:find(cls, 1, true) or title:lower():find(cls:lower(), 1, true) then return true end
+	local stem = cls:gsub("^[%z\1-\127\194-\244][\128-\191]*", "") -- (the first letter, ASCII or not)
+	return #stem >= 3 and title:find(stem, 1, true) ~= nil
+end
+
 function T:ReadSkills()
 	local me = Me()
 	if not me then return end
@@ -384,7 +395,7 @@ function T:ReadSkills()
 		if isHeader then
 			header = name
 		-- (0.69.0, #37) a rogue's Lockpicking too, whichever heading it sits under
-		elseif name and rank and (name == ns.L["Lockpicking"] or header == (TRADE_SKILLS or "Professions") or header == (SECONDARY_SKILLS and SECONDARY_SKILLS:gsub(":$", "") or "Secondary Skills") or header == "Secondary Skills") then
+		elseif name and rank and (name == "Lockpicking" or header == (TRADE_SKILLS or "Professions") or header == (SECONDARY_SKILLS and SECONDARY_SKILLS:gsub(":$", "") or "Secondary Skills") or header == "Secondary Skills") then
 			me.skills[name] = { rank = rank, max = max }
 		end
 	end

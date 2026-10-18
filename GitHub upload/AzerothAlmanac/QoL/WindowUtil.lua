@@ -297,7 +297,7 @@ function ns.WoodLettering(b, size)
 	if not ns.letterFonts[size] then
 		local function Make(name, r, g, bl)
 			local f = CreateFont(name)
-			f:SetFont("Fonts\\MORPHEUS.TTF", size, "")
+			f:SetFont(A.TITLE_FONT, size, "")
 			f:SetTextColor(r, g, bl)
 			f:SetShadowColor(0, 0, 0, 0.9)
 			f:SetShadowOffset(1, -1)
@@ -360,7 +360,7 @@ end
 -- screens' Morpheus lettering in gold with a deep shadow, flanked by a thin gold rule and a small
 -- gold diamond on each side. `o:Layout()` puts the ornaments at the text's current width.
 function ns.Ornament(fs, size, ruleLen)
-	fs:SetFont("Fonts\\MORPHEUS.TTF", size, "")
+	fs:SetFont(A.TITLE_FONT, size, "")
 	fs:SetTextColor(1, 0.82, 0.4)
 	fs:SetShadowColor(0, 0, 0, 0.95)
 	fs:SetShadowOffset(1.5, -1.5)

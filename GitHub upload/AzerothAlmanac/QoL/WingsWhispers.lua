@@ -329,8 +329,8 @@ local function PlacePanel()
 	if p then panel:SetPoint(p[1], UIParent, p[2], p[3], p[4]) else panel:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 190) end
 end
 
-local TITLE_FONT = "Fonts\\MORPHEUS.TTF"   -- the quest-title font
-local BODY_FONT = "Fonts\\FRIZQT__.TTF"
+local TITLE_FONT = A.TITLE_FONT   -- the quest-title font
+local BODY_FONT = A.BODY_FONT
 
 local function Gradient(tex, left, right)
 	tex:SetTexture("Interface\\Buttons\\WHITE8X8")

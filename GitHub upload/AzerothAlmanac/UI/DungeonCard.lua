@@ -283,7 +283,7 @@ function W.DungeonCard(parent, width)
 	c.nameArt:Hide()
 	c.nameBox = { ((ART_R - ART_L) * w + 6) * W.PLATE_INNER[1], ((PLQ_B - PLQ_T) * h + 6) * W.PLATE_INNER[2] }
 	c.name = arch:CreateFontString(nil, "OVERLAY")
-	c.name:SetFont("Fonts\\MORPHEUS.TTF", math.max(9, math.floor(w / 13)), "")
+	c.name:SetFont(ns.TITLE_FONT, math.max(9, math.floor(w / 13)), "")
 	c.name:SetTextColor(1, 0.84, 0.45)
 	c.name:SetPoint("TOPLEFT", arch, "TOPLEFT", ART_L * w + 2, -PLQ_T * h - 1)
 	c.name:SetPoint("BOTTOMRIGHT", arch, "TOPLEFT", ART_R * w - 2, -PLQ_B * h + 1)
