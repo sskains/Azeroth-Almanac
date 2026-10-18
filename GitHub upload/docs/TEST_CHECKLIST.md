@@ -6,6 +6,33 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## 1.2.0 (full game restart: new fonts and Data/TalentText; dev/AzerothAlmanac_Pseudo is separate)
+
+- [ ] **A non-English client** (the point of the release). On a German or French client: gathering
+  tooltips name the skill and your own rank, the Gathering page fills in, node sparkles still find
+  herbs and veins, quest targeting counts objectives ("%s getötet: %d/%d"), class trainers are
+  recognised, zone exploration totals are found, and Heal Assist builds its spell list. Nothing
+  shows raw English where the client would use its own words.
+
+- [ ] **Pseudo-localization** (developers): copy `dev/AzerothAlmanac_Pseudo` into AddOns and enable
+  it. Every translatable string comes out accented and a third longer; walk the pages looking for
+  text that did not change (untranslated) and for anything that overflows its box.
+
+- [ ] **Fonts in other alphabets:** on a Russian, Korean or Chinese client the window titles and
+  card names are readable - they fall back to the game's own fonts, since Morpheus and Friz Quadrata
+  have no Cyrillic or CJK letters.
+
+- [ ] **Secret strings:** play Murloc Tac Toe against someone who logs out mid-game, and use the
+  one-key auction poster, without "attempt to index local 'text' (a secret string value)" appearing.
+
+- [ ] **Talent Planner:** open the Planner tab on each class. The trees match talentsforever.com
+  (Warrior Fury and Protection, Shaman Elemental, Mage Fire and Arcane, Priest Shadow, Warlock
+  Affliction and Druid Feral changed most); saved builds from before either still load or say
+  plainly that they cannot.
+
+- [ ] **The version other players see:** `/aa` prints 1.2.0, and another Almanac player's tooltip
+  shows the same (it was hardcoded and reported the previous number).
+
 ## 1.1.0 (full game restart: new files Libs/LibStub, Libs/LibRangeCheck-3.0, QoL/NameplateDistance.lua)
 
 - [ ] **Distance on nameplates:** Settings > Group Settings > Distance on nameplates, on. A number

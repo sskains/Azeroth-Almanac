@@ -4,7 +4,7 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
-## Unreleased
+## 1.2.0 (2026-10-18)
 
 - **Other languages: the Almanac now works on non-English clients** (Shannon, localization step 1).
   Many features compared the game's text - in the client's language - with English, and silently did

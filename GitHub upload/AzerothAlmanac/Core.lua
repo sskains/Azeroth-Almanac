@@ -12,7 +12,7 @@ AzerothAlmanac = ns -- global so Bindings.xml can reach the window
 -- here, and other players' copies were told the old number)
 do
 	local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
-	ns.VERSION = (meta and meta(ADDON_NAME, "Version")) or "1.1.1"
+	ns.VERSION = (meta and meta(ADDON_NAME, "Version")) or "1.2.0"
 end
 -- (0.69.0) the Almanac's own art: the logo (a closed crimson journal, its gold compass) and the journal
 -- badge (the open journal, a page burning with gold writing), for journal entries
