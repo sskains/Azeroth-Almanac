@@ -210,6 +210,19 @@ Overwrite the three `.tga` files and the placeholders are gone; delete the tool 
 The style line is rule 7's, word for word, even though this is a winter scene: the lighting is
 steered in the body of the prompt instead, so the house style stays one line everywhere.
 
+**Two things the board's renders taught us, which all three prompts now carry.**
+
+1. **Ask for a margin.** The warm second board came back with its holly and fir running off the
+   left and right edges - 186 px and 143 px of paint touching the border - where the first, plainer
+   one had a clean margin all round. `art_convert.py board` keeps the canvas whole and only keys
+   the magenta, so nothing re-crops it: a sprig cut off at the edge ships cut off. The existing
+   boards all leave a margin (the mossy one is painted inside x 18-993 of 1024).
+2. **These are small on screen, so ask for few, large shapes.** The board is drawn at 461 px (45%
+   of its texture) and carries fine detail well. The divider is drawn at **206 x 38 px** and the
+   pile at **100 x 49 px** - both about 40% - so a candy cane 20 px wide in the texture lands at
+   8 px in game. Anything intricate turns to mush at that size; both prompts now ask for a handful
+   of big, bold, well-separated shapes rather than a crowded garland.
+
 ### 1. Board — `Media\MurlocTacToe_Board_WinterVeil.tga` (1024 x 1024)
 
 Convert: `python tools/art_convert.py board docs/art_source/MurlocTacToe_Board_WinterVeil.png "<Media>/MurlocTacToe_Board_WinterVeil.tga"`
@@ -252,6 +265,10 @@ one thing that ruins the board if it drifts.
 > them: no snowflakes, no ornaments, no creatures, no bright highlights. All the detail and interest
 > belongs on the frame around them.
 >
+> Leave a clear margin of empty magenta all the way round the board, about one twentieth of the
+> picture's width: no part of the frame, the garland, the holly or any decoration may touch or run
+> off the edge of the picture.
+>
 > Warm candlelight from the lower left spilling across the snow and the gold, with cool blue
 > twilight only in the shadows and the far corners - the picture should feel snug and festive, not
 > bleak. Cosy storybook Christmas mood. No text, no letters, no numbers, no logos, no people, no
@@ -269,16 +286,22 @@ Convert: `python tools/art_convert.py banner docs/art_source/MurlocTacToe_Divide
 > and below the garland is flat pure magenta (#FF00FF).
 >
 > The garland is a rope of fresh evergreen fir, dipping very slightly in the middle, thick with
-> needles. Soft plump snow lies along the top of it in rounded clumps. Spaced evenly along its
-> length are sprigs of holly with glossy leaves and fat clusters of red berries, small gold jingle
-> bells, striped candy canes, and cheerful bows of red ribbon with their tails hanging down. The two
-> ends taper away to nothing before they reach the edges, so the garland fades out rather than
-> stopping abruptly.
+> needles. Soft plump snow lies along the top of it in rounded clumps. **Keep it bold and simple:
+> about five or six large, well-separated ornaments along the whole length and no more** - big
+> sprigs of holly with fat clusters of red berries, large round gold jingle bells, and generous
+> bows of red ribbon with their tails hanging down. Each one should be big enough to read on its
+> own; no small scattered detail, no clutter. The two ends taper away to nothing well before they
+> reach the left and right edges, so the garland fades out rather than stopping abruptly.
 >
 > The garland is a long, low band - roughly five times wider than it is tall - and must not fill
-> the height of the picture. Warm candlelit glow catching the gold bells and the berries, cool blue
-> only in the shadows under the needles; snug and festive, not bleak. Cosy storybook Christmas
-> mood. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
+> the height of the picture. Leave a clear band of empty magenta above and below it, and at both
+> ends: nothing may touch the edge of the picture.
+>
+> Gilded warm gold on the bells, deep glossy green needles, rich warm red berries and ribbon,
+> bright white snow - the same palette and the same crisp, saturated painterly finish as the
+> matching board. Warm candlelight from the left catching the gold and the berries, cool blue only
+> in the shadows under the needles; snug and festive, not bleak. Cosy storybook Christmas mood.
+> No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
 
 ### 3. Pile — `Media\MurlocTacToe_Pile_WinterVeil.tga` (256 x 256, the top 126 rows used)
 
@@ -292,12 +315,19 @@ Convert: `python tools/art_convert.py cut docs/art_source/MurlocTacToe_Pile_Wint
 > on from the front at eye level, centred, nothing cut off. Everything around the heap is flat pure
 > magenta (#FF00FF).
 >
-> Five or six boxes of different sizes, stacked and leaning against one another: deep red, forest
-> green, midnight blue and plum wrapping paper, each tied with a wide gold or cream ribbon and
-> finished with a soft bow on top. Snow has settled on the lids and along the ribbons, and the
-> lowest boxes are half buried in the drift. A sprig of holly rests against one of them.
+> **Four or five** boxes, large and simple, stacked and leaning against one another: deep warm red
+> and deep forest green wrapping paper, each tied with a wide gold or cream ribbon and finished
+> with a generous bow on top. Keep the shapes big and bold and the group uncrowded - no small
+> boxes, no fine pattern on the paper. Snow has settled on the lids and along the ribbons, and the
+> lowest boxes are half buried in the drift. One big sprig of holly with red berries rests against
+> one of them.
 >
 > The heap is a wide, low group - about twice as wide as it is tall - with the snow drift as its
-> base. Warm firelight from one side pooling on the snow and glinting off the ribbons, cool blue
-> only in the shadows between the boxes; snug and festive, not bleak. Cosy storybook Christmas
-> mood. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
+> base. Leave a clear margin of empty magenta all round it: nothing may touch the edge of the
+> picture.
+>
+> Gilded warm gold ribbon, deep glossy red and green paper, bright white snow - the same palette
+> and the same crisp, saturated painterly finish as the matching board. Warm candlelight from the
+> left pooling on the snow and glinting off the gold, cool blue only in the shadows between the
+> boxes; snug and festive, not bleak. Cosy storybook Christmas mood. No text, no letters, no
+> numbers, no logos, no people, no creatures, no user interface.
