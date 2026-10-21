@@ -387,10 +387,15 @@ sockets, never larger.
 > A heavy carved oak frame, gilded with warm gold knotwork and heaped with soft plump snow on every
 > surface that faces upwards, surrounds a large grid of **eight by eight** small square sockets -
 > sixty-four shallow dips in dark blue-green ice, evenly spaced, separated by narrow snow-dusted
-> ribs. **The grid is large: it fills the middle three-quarters of the picture, its outer edge about
-> one seventh of the picture's width in from each side, leaving only a narrow decorated frame.** **The sockets must be dark, plain and empty** - faint cracks and frozen bubbles at most,
-> nothing sitting in them, no gems, no ornaments, no bright highlights. All the detail belongs on
-> the frame.
+> ribs.
+>
+> **The grid is large.** It fills the middle three-quarters of the picture: its outer edge is about
+> one seventh of the picture's width in from each side, leaving only a narrow decorated frame
+> around it. The sockets are big, and the frame is slim.
+>
+> **The sockets must be dark, plain and empty** - faint cracks and frozen bubbles at most, nothing
+> sitting in them, no gems, no ornaments, no bright highlights. All the detail belongs on the
+> frame.
 >
 > The frame is trimmed for the holiday: a swag of fresh evergreen fir with red berries, glossy
 > holly and red ribbon across the top, a few large gold jingle bells, and a small iron lantern with
