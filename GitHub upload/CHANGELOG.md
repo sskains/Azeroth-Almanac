@@ -36,9 +36,11 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
   stretches the 3 x 4 painting onto the 256 x 512 sheet the game squashes back, and wears its outer
   edge the way `art_convert.parchment` wears the dungeon card, because neither of the other two
   backs is a clean rectangle: they are nibbled and torn and barely opaque at the outermost row.
-- **One texture still to come**: `Media/GemMatch_Board_WinterVeil.tga`. The code and the dress are
-  in, but **until it is painted, Gem Match shows its ordinary board during Winter Veil** (that is
-  the designed fallback, not a fault). Winter Veil begins 16 December.
+- **Gem Match's Winter Veil board** (`Media/GemMatch_Board_WinterVeil.tga`): the frozen pond in a
+  gilded oak frame, with a garland and bells over the top and a lantern on the lower corner. Its
+  painted grid was about a tenth smaller than the places the code draws the gems, so
+  `tools/build_winterveil_art.py` scales and shifts it onto them - every gem now sits in a socket,
+  at the cost of a little of the outer frame being cropped at the texture's edge.
 - **Murloc Tac Toe: two Winter Veil champions** (Shannon). The Tiny Snowman (creature 15710, model
   13610) and the Winter Reindeer (creature 15706, model 15904) join the roster while the Feast of
   Winter Veil is on, the same way the Hallow's End four do. The reindeer speaks with its own voice

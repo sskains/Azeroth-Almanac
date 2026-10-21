@@ -52,7 +52,12 @@ BOARD_FIELD = "170,170,852,852"
 # the gems at 139-895 across and 129-885 down (its 542 px frame, insets 73.5 / 68.5, eight 50 px
 # cells). Eleven pixels is a fifth of a cell once it is drawn, enough to see a gem sitting off its
 # socket, so the painting is scaled and shifted onto the code's grid rather than the code moved.
-GEM_PAINTED = (128, 128, 895, 895)
+# Measured off the render by counting the sockets themselves - averaging a few columns of pixels
+# down the middle of a painted column, and across a painted row - rather than by looking for the
+# ribs between them. The ribs are not reliable here: the cracks painted into the ice break a rib
+# scan into a dozen false columns, and the frame's inner shadow reads as one more. Counting the
+# dark squares gave a clean 8 x 8 both ways.
+GEM_PAINTED = (169.5, 181.5, 856.5, 854.0)
 GEM_WANTED = (139, 129, 895, 885)
 
 

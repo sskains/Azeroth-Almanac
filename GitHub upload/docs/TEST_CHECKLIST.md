@@ -16,6 +16,12 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
   all three go back to their ordinary dress. `/aa season off`: the calendar again (nothing, in
   October). `/aa season` on its own says which is in force. A `/reload` clears it.
 
+- [ ] **Gem Match's Winter Veil board:** with `/aa season winterveil`, every gem sits squarely in
+  a painted ice socket - look along the outside rows and columns especially, where a grid that was
+  slightly out would show first. The lantern in the lower right sits behind the gems rather than
+  blocking any. The board's outer frame is cropped a little at the texture's edge (the painting
+  had to be enlarged to meet the grid); say if that reads badly.
+
 - [ ] **Not yet painted:** `GemMatch_Board_WinterVeil`, `CardBack_WinterVeil` and
   `Window_WinterVeil` are wired up but have no art yet. Until they do, picking "Feast of Winter
   Veil" under Settings > Wild Gambit > Card back or Table shows nothing - expected, not a bug.
