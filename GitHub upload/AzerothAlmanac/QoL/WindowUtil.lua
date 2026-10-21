@@ -435,7 +435,17 @@ local function HolidayFromDates()
 	if (m == 12 and d >= 16) or (m == 1 and d <= 2) then return "WinterVeil" end
 end
 
+-- (2026-10-21, Shannon) A holiday can be pretended, so the seasonal dress can be looked at out of
+-- season: `/aa season winterveil`. It is deliberately NOT saved - a pretend holiday should not
+-- outlive the session it was turned on in, or it would be forgotten and mistaken for a bug in
+-- March. `false` means pretend there is no holiday at all; nil means ask the calendar again.
+function ns.PretendHoliday(key)
+	ns.pretending = key
+	holidayAt = 0 -- (so the next ask reads afresh rather than reusing the last minute's answer)
+end
+
 function ns.HolidayNow()
+	if ns.pretending ~= nil then return ns.pretending or nil end
 	-- asked often (every board dress and champion list), answered at most once a minute
 	local now = GetTime and GetTime() or 0
 	if holidayCache ~= false and (now - holidayAt) < 60 then return holidayCache end

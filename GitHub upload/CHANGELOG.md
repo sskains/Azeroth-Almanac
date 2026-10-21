@@ -6,6 +6,17 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **`/aa season`: see a holiday's dress out of season** (Shannon: "can we do a command to preview
+  all of the winter veil updates?"). `/aa season winterveil` pretends the Feast of Winter Veil is
+  on **everywhere at once** - Wild Gambit's board, card back and table, Murloc Tac Toe's board,
+  divider, pile, motes and seasonal champions, and Gem Match's board - and redraws whatever is
+  open. `hallowsend` does the same for that one, `plain` pretends no holiday is on, and `off`
+  follows the calendar again. It works because the three games already share one calendar check
+  (`ns.HolidayNow`), so the pretend goes in there and reaches all of them.
+  **Nothing is saved**: a `/reload` puts it back to the real date, deliberately - a pretend holiday
+  that outlived its session would be mistaken for a bug months later. `/aa mtt season` still works
+  for Murloc Tac Toe alone. Test: `dev/tests/test_season_preview.py`.
+
 - **Gem Match dresses for a holiday too** (Shannon). It was the only one of the three games with no
   seasonal code at all; it now takes a board painted for the season, by the same calendar check
   (`SEASON_BOARD` in `QoL/GemMatch.lua`). A holiday with no board of its own is simply not listed

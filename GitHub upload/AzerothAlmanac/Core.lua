@@ -529,6 +529,59 @@ function ns.RangeProbe(unit)
 	ns.Print("|cff9be36bsaved|r - /reload and the whole run is in AzerothAlmanacDB.probe")
 end
 
+-- (2026-10-21, Shannon: "can we do a command to preview all of the winter veil updates?") One
+-- command for the lot: it pretends the holiday is on everywhere - the calendar check is shared -
+-- and redraws whatever is open. Nothing is saved, so a /reload puts it back to the real date.
+local SEASONS = {
+	winterveil = { key = "WinterVeil", name = "the Feast of Winter Veil", dates = "16 Dec - 2 Jan" },
+	hallowsend = { key = "HallowsEnd", name = "Hallow's End", dates = "18 Oct - 1 Nov" },
+}
+local SEASON_SHOWS = {
+	WinterVeil = {
+		"Wild Gambit: the frozen board, the stag card back and the snowy table (deal a hand - a card",
+		"   already face down keeps the back it was dealt)",
+		"Murloc Tac Toe: the frozen pond board, the garland between the panels, the presents beside",
+		"   the table, snow instead of fireflies, and the Tiny Snowman and Winter Reindeer champions",
+		"Gem Match: its own board, once that one is painted (it shows the ordinary one until then)",
+	},
+	HallowsEnd = {
+		"Wild Gambit: the Hallow's End board",
+		"Murloc Tac Toe: the dark board with pumpkins and candles, the bat-and-pumpkin divider, the",
+		"   pile of pumpkins, embers instead of fireflies, and the four Hallow's End champions",
+	},
+}
+
+function ns.SeasonPreview(rest)
+	local want = (rest or ""):gsub("%s+", ""):lower()
+	local s = SEASONS[want]
+	if want == "off" or want == "none" or want == "clear" then
+		ns.QoL.PretendHoliday(nil)
+		ns.Print("seasonal dress follows the calendar again" ..
+			(ns.QoL.HolidayNow() and (": " .. (ns.QoL.HolidayNow() == "WinterVeil" and "the Feast of Winter Veil" or "Hallow's End") .. " is on now.") or " (no holiday on now)."))
+	elseif want == "plain" then
+		ns.QoL.PretendHoliday(false)
+		ns.Print("pretending no holiday is on: everything is in its ordinary dress.")
+	elseif not s then
+		local now = ns.QoL.HolidayNow()
+		ns.Print("|cffffd100/aa season winterveil|r or |cffffd100hallowsend|r shows a holiday's dress out of season; " ..
+			"|cffffd100plain|r pretends none is on; |cffffd100off|r follows the calendar again.")
+		ns.Print("now: " .. (ns.QoL.pretending == false and "pretending no holiday"
+			or ns.QoL.pretending and ("pretending " .. ns.QoL.pretending)
+			or (now and ("the calendar says " .. now) or "the calendar says no holiday")))
+		return
+	else
+		ns.QoL.PretendHoliday(s.key)
+		ns.Print(("showing %s (%s), everywhere, until you /reload or type |cffffd100/aa season off|r."):format(s.name, s.dates))
+		for _, line in ipairs(SEASON_SHOWS[s.key] or {}) do ns.Print("  " .. line) end
+		ns.Print("  |cff999999the three games' windows redraw now; textures need a full restart the first time|r")
+	end
+	-- redraw whatever is open
+	for _, m in ipairs({ "WildGambit", "MurlocTacToe", "GemMatch" }) do
+		local mod = ns.QoL and ns.QoL[m]
+		if mod and mod.SeasonChanged then pcall(mod.SeasonChanged, mod) end
+	end
+end
+
 SLASH_AZEROTHALMANAC1 = "/aa"
 SLASH_AZEROTHALMANAC2 = "/almanac"
 SlashCmdList.AZEROTHALMANAC = function(msg)
@@ -580,6 +633,8 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		else
 			ns.Print(("version |cffffffff%s|r  -  %s"):format(ns.VERSION, (L["%s known"]):format(ns.N(ns.Peers and ns.Peers:Count() or 0, "other Almanac player", "other Almanac players"))))
 		end
+	elseif cmd == "season" or cmd == "holiday" then
+		ns.SeasonPreview(rest)
 	elseif cmd == "gambit" or cmd == "wild" or cmd == "wildgambit" then
 		ns.QoL.WildGambit:Command(rest)
 	elseif cmd == "mtt" or cmd == "murloc" or cmd == "tictactoe" or cmd == "ttt" then

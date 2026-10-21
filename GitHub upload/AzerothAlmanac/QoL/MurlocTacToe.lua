@@ -2194,6 +2194,13 @@ function MT:Open()
 	Refresh()
 end
 
+-- the season changed under us (`/aa season`): the dress is compared against the last one shown,
+-- so clear that first. (false, not nil: nil is a real answer there, meaning the plain table.)
+function MT:SeasonChanged()
+	if frame then frame.season = false end
+	Refresh()
+end
+
 function MT:Toggle()
 	if frame and frame:IsShown() then frame:Hide() else self:Open() end
 end

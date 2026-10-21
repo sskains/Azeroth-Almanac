@@ -7120,6 +7120,13 @@ function WG:Dressed(which)
 	return h and which[h] or nil
 end
 function WG:BackKey() return self:Dressed(self.HOLIDAY_BACK) or (db and db.back) or "Almanac" end
+
+-- the season changed under us (`/aa season`): redraw what the holiday dresses
+function WG:SeasonChanged()
+	self:ApplyBoard()
+	self:ApplyTable()
+	-- (a card already face down keeps the back it was dealt; the next deal has the new one)
+end
 function WG:TableKey() return self:Dressed(self.HOLIDAY_TABLE) or (db and db.table) or "Dark" end
 
 -- the table under everything (custom art, Media\Window_*.tga), picked in Settings; dimmed a little

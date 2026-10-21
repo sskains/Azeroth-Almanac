@@ -1351,6 +1351,9 @@ function GM:OnLogin()
 	end)
 end
 
+-- the season changed under us (`/aa season`)
+function GM:SeasonChanged() ApplySeasonLook() end
+
 function GM:Open()
 	ApplySeasonLook() -- (the holiday may have begun since the window was built)
 	if not frame then Build() end

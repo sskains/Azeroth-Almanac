@@ -8,6 +8,14 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (**full game restart**: three new Winter Veil textures)
 
+- [ ] **`/aa season winterveil`:** everything that dresses for Winter Veil changes at once, with
+  the three windows open - Wild Gambit's board, card back (deal a hand; one already face down
+  keeps the back it was dealt) and table; Murloc Tac Toe's board, garland, presents, snow motes
+  and the two new champions; Gem Match's board once it is painted. Then `/aa season hallowsend`:
+  everything changes over cleanly with nothing of the winter one left behind. `/aa season plain`:
+  all three go back to their ordinary dress. `/aa season off`: the calendar again (nothing, in
+  October). `/aa season` on its own says which is in force. A `/reload` clears it.
+
 - [ ] **Not yet painted:** `GemMatch_Board_WinterVeil`, `CardBack_WinterVeil` and
   `Window_WinterVeil` are wired up but have no art yet. Until they do, picking "Feast of Winter
   Veil" under Settings > Wild Gambit > Card back or Table shows nothing - expected, not a bug.
