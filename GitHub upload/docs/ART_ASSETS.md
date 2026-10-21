@@ -344,3 +344,97 @@ Convert: `python tools/build_winterveil_art.py` (all three at once); it fits the
 > left pooling on the snow and glinting off the gold, cool blue only in the shadows between the
 > boxes; snug and festive, not bleak. Cosy storybook Christmas mood. No text, no letters, no
 > numbers, no logos, no people, no creatures, no user interface.
+
+## Winter Veil, further in (prompts 2026-10-21, Shannon)
+
+Three more, all wired up already - each drops in under its name and nothing else changes.
+
+- `Media\GemMatch_Board_WinterVeil.tga` - Gem Match had no seasonal dress at all; it has the hook now.
+- `Media\CardBack_WinterVeil.tga` - joins Almanac and Wild in Settings > Wild Gambit > Card back.
+- `Media\Window_WinterVeil.tga` - joins the four tables in Settings > Wild Gambit > Table.
+
+The card back and the table follow the **same switch as the holiday board** ("Holiday boards"), so
+during Winter Veil the whole table dresses together and your own choices come back afterwards.
+
+The style line is rule 7's, word for word. The palette is the one the Murloc Tac Toe board settled
+on - gilded warm gold, deep glossy green, warm red, bright white snow, candlelight - so all the
+Winter Veil art sits together. Every one of them leaves a clear margin: nothing touching the edge.
+
+### 4. Gem Match board — `Media\GemMatch_Board_WinterVeil.tga` (1024 x 1024)
+
+Convert: `python tools/art_convert.py board docs/art_source/GemMatch_Board_WinterVeil.png "<Media>/GemMatch_Board_WinterVeil.tga" 0.72 0.92 139,129,895,885`
+(the field is Gem Match's 8 x 8 socket grid in source pixels, from its 542 px frame and 73.5 / 68.5 insets)
+
+> Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
+> warm lighting, ornate but readable, original design (not from any existing game).
+>
+> A square game board for a gem-matching puzzle, seen straight from above, flat on, no tilt and no
+> perspective, centred, the whole board inside the frame and nothing cut off. The background
+> outside the board is flat pure magenta (#FF00FF).
+>
+> A heavy carved oak frame, gilded with warm gold knotwork and heaped with soft plump snow on every
+> surface that faces upwards, surrounds a large grid of **eight by eight** small square sockets -
+> sixty-four shallow dips in dark blue-green ice, evenly spaced, separated by narrow snow-dusted
+> ribs. **The sockets must be dark, plain and empty** - faint cracks and frozen bubbles at most,
+> nothing sitting in them, no gems, no ornaments, no bright highlights. All the detail belongs on
+> the frame.
+>
+> The frame is trimmed for the holiday: a swag of fresh evergreen fir with red berries, glossy
+> holly and red ribbon across the top, a few large gold jingle bells, and a small iron lantern with
+> a candle burning in it on one lower corner, throwing a pool of golden light across the snow.
+>
+> Leave a clear margin of empty magenta all the way round the board, about one twentieth of the
+> picture's width: no part of the frame or its trimmings may touch or run off the edge.
+>
+> Gilded warm gold, deep glossy green, warm red, bright white snow; warm candlelight with cool blue
+> twilight only in the shadows; snug and festive, not bleak. Cosy storybook Christmas mood. No text,
+> no letters, no numbers, no logos, no people, no creatures, no user interface.
+
+### 5. Card back — `Media\CardBack_WinterVeil.tga` (the card is 92 x 124, about 3:4 portrait)
+
+Convert: `python tools/art_convert.py cut docs/art_source/CardBack_WinterVeil.png "<Media>/CardBack_WinterVeil.tga" 256 512 fill`
+(compare it with `CardBack_Almanac.tga` first and match that file's size and bleed)
+
+> Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
+> warm lighting, ornate but readable, original design (not from any existing game).
+>
+> The back of a playing card, upright **portrait, three units wide by four tall**, seen straight on,
+> flat, no tilt and no perspective, filling the whole frame edge to edge with no border of
+> background around it.
+>
+> The design is a single symmetrical Winter Veil emblem centred on a deep forest-green field: a
+> large gold six-pointed snowflake, ornately carved like metalwork, ringed by a wreath of evergreen
+> fir with red berries and a red ribbon bow at the bottom. A narrow gilded gold border runs round
+> the very edge of the card, with a small snowflake at each corner. Soft snow is caught along the
+> top of the wreath.
+>
+> The design is the same upside down as the right way up, as a card back should be, and is
+> perfectly centred. Nothing is cut off.
+>
+> Gilded warm gold, deep glossy green, warm red, bright white snow, lit warmly from the front;
+> rich and festive. Cosy storybook Christmas mood. No text, no letters, no numbers, no logos, no
+> people, no creatures, no user interface.
+
+### 6. Table — `Media\Window_WinterVeil.tga` (the window's background, landscape)
+
+Convert: `python tools/art_convert.py full docs/art_source/Window_WinterVeil.png "<Media>/Window_WinterVeil.tga" <w> <h>`
+(match `Window_Tavern.tga`'s size; the picture is dimmed to 0.85 in code, so paint it a little
+brighter than it should finally look, and keep the middle quiet - the board sits on top of it)
+
+> Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
+> warm lighting, ornate but readable, original design (not from any existing game).
+>
+> A wide, flat surface seen straight from above, filling the whole frame edge to edge with no
+> border: the top of a heavy wooden table dusted with snow, laid for the Feast of Winter Veil.
+>
+> **The middle of the picture must stay quiet and almost empty** - plain snow-dusted wood, softly
+> lit, with no ornament in it, because a game board is laid over it. All the interest belongs round
+> the outer edges: sprigs of evergreen fir and holly with red berries in the corners, a scatter of
+> gold jingle bells, a few pine cones, a short length of red ribbon, and the warm pool of light
+> from a candle just out of frame at one side.
+>
+> Darker towards the corners, brighter in the middle, so the board reads clearly against it.
+>
+> Warm candlelit wood, deep glossy green, warm red, bright white snow; cool blue only in the deepest
+> shadows; snug and festive. Cosy storybook Christmas mood. No text, no letters, no numbers, no
+> logos, no people, no creatures, no user interface.

@@ -6,6 +6,21 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Gem Match dresses for a holiday too** (Shannon). It was the only one of the three games with no
+  seasonal code at all; it now takes a board painted for the season, by the same calendar check
+  (`SEASON_BOARD` in `QoL/GemMatch.lua`). A holiday with no board of its own is simply not listed
+  and the ordinary board stays, so Hallow's End is unchanged until there is art for it.
+- **Wild Gambit: a holiday dresses the whole table** (Shannon). The Feast of Winter Veil adds a card
+  back and a table to the pickers, and the switch that already swaps the board ("Holiday boards")
+  now swaps those too, so during the holiday the board, the back and the table change together and
+  the ones you picked come back when it ends. `WG:BackKey` / `WG:TableKey` (on `WG`, not locals:
+  that file is at Lua's 200 locals per scope). Holidays with no art of their own are absent from
+  the lists and nothing changes for them.
+- **Three more textures still to come**: `Media/GemMatch_Board_WinterVeil.tga`,
+  `CardBack_WinterVeil.tga` and `Window_WinterVeil.tga`. The code and the Settings entries are in
+  and the Gemini prompts are in `docs/ART_ASSETS.md`, but **until the art is painted, choosing
+  "Feast of Winter Veil" as a card back or a table shows nothing**. Winter Veil begins 16 December,
+  so the automatic dress can't pick them before then.
 - **Murloc Tac Toe: two Winter Veil champions** (Shannon). The Tiny Snowman (creature 15710, model
   13610) and the Winter Reindeer (creature 15706, model 15904) join the roster while the Feast of
   Winter Veil is on, the same way the Hallow's End four do. The reindeer speaks with its own voice

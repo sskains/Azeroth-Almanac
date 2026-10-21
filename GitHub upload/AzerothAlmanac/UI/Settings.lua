@@ -1526,7 +1526,7 @@ local function BuildGambit(P)
 	P:Check(L["Card voices"], L["A played card speaks: townsfolk, guards and enemies of the playable races say a greeting; other creatures give their battle cry. From the game's own sounds, 3 seconds at most."],
 		function() return db.voices ~= false end, function(v) db.voices = v end)
 	P:Check(L["Holiday boards"], L["During Hallow's End (18 October - 1 November) and the Feast of Winter Veil (16 December - 2 January) the board dresses for the season, whichever board you picked."],
-		function() return db.holidayBoards ~= false end, function(v) db.holidayBoards = v Q.WildGambit:ApplyBoard() end)
+		function() return db.holidayBoards ~= false end, function(v) db.holidayBoards = v Q.WildGambit:ApplyBoard() Q.WildGambit:ApplyTable() end)
 	local docks = Q.WildGambit.DOCKS
 	P:Picker(L["In combat"], docks, function()
 		for i, t in ipairs(docks) do if t.key == (db.combatDock or "top") then return i end end

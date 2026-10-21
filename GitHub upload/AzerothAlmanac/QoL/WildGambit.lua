@@ -1506,7 +1506,7 @@ local function NewCard(parent)
 	f.backFrame:Hide()
 	function f:FaceDown(down)
 		if down then
-			self.backTex:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\CardBack_" .. ((db and db.back) or "Almanac"))
+			self.backTex:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\CardBack_" .. WG:BackKey())
 			self.backTex:SetSize(CW, CH)
 			self.backFrame:Show()
 			self.over:SetAlpha(0)
@@ -7105,15 +7105,31 @@ function WG:ApplyBoard()
 	art:SetPoint("TOPLEFT", frame.board, "TOPLEFT", MARGIN - BOARD_PAD - a.inner[1] * w, -(MARGIN - BOARD_PAD - a.inner[2] * h))
 end
 
-WG.BACKS = { { key = "Almanac", name = "Almanac (compass)" }, { key = "Wild", name = "Wild (wolf)" } }
+WG.BACKS = { { key = "Almanac", name = "Almanac (compass)" }, { key = "Wild", name = "Wild (wolf)" },
+	{ key = "WinterVeil", name = "Feast of Winter Veil" } }
+
+-- A holiday dresses the whole table, not just the board: where there is a card back or a table
+-- painted for it, the same switch that swaps the board ("Holiday boards" in Settings) swaps those
+-- too, and the one you picked comes back when the holiday ends. Holidays with no art of their own
+-- are simply absent from these, and nothing changes for them.
+-- (on WG, not locals of their own: this file is at Lua's 200 locals per scope)
+WG.HOLIDAY_BACK = { WinterVeil = "WinterVeil" }
+WG.HOLIDAY_TABLE = { WinterVeil = "WinterVeil" }
+function WG:Dressed(which)
+	local h = db and db.holidayBoards ~= false and self:HolidayBoard()
+	return h and which[h] or nil
+end
+function WG:BackKey() return self:Dressed(self.HOLIDAY_BACK) or (db and db.back) or "Almanac" end
+function WG:TableKey() return self:Dressed(self.HOLIDAY_TABLE) or (db and db.table) or "Dark" end
 
 -- the table under everything (custom art, Media\Window_*.tga), picked in Settings; dimmed a little
 -- so the names, scores and the board stand out on it
-WG.TABLES = { { key = "Dark", name = "Almanac dark" }, { key = "Leather", name = "Leather mat" }, { key = "Tavern", name = "Tavern table" }, { key = "Stone", name = "Mossy stone" } }
+WG.TABLES = { { key = "Dark", name = "Almanac dark" }, { key = "Leather", name = "Leather mat" }, { key = "Tavern", name = "Tavern table" }, { key = "Stone", name = "Mossy stone" },
+	{ key = "WinterVeil", name = "Feast of Winter Veil" } }
 function WG:ApplyTable()
 	local dark = frame and frame.dark
 	if not dark then return end
-	local key = db and db.table or "Dark"
+	local key = self:TableKey()
 	local ok = false
 	for _, t in ipairs(self.TABLES) do if t.key == key and key ~= "Dark" then ok = true end end
 	dark:SetVertexColor(1, 1, 1)

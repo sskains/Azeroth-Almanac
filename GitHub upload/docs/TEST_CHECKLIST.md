@@ -8,6 +8,14 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (**full game restart**: three new Winter Veil textures)
 
+- [ ] **Not yet painted:** `GemMatch_Board_WinterVeil`, `CardBack_WinterVeil` and
+  `Window_WinterVeil` are wired up but have no art yet. Until they do, picking "Feast of Winter
+  Veil" under Settings > Wild Gambit > Card back or Table shows nothing - expected, not a bug.
+  Check the two pickers list the new entry and that choosing another one still works.
+- [ ] **Wild Gambit, the holiday dresses the whole table:** with art in and the holiday on (or the
+  date faked), the board, the card back and the table all change together, and turning "Holiday
+  boards" off puts all three back to what you picked. Turning it on again changes all three.
+
 - [ ] **Murloc Tac Toe, the Winter Veil champions:** `/aa mtt season winterveil`, then open the
   window and the champion picker. The Tiny Snowman and the Winter Reindeer are both offered and
   both show a model rather than a blank face or a fallback icon. **Watch the two sizes**: the

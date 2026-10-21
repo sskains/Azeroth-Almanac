@@ -929,6 +929,19 @@ function SetPaused(paused)
 	UpdatePanel()
 end
 
+-- The holiday dress: a board painted for the season, picked by the calendar check shared with
+-- Wild Gambit and Murloc Tac Toe (WindowUtil.lua). A holiday with no board of its own is simply
+-- not listed, and the ordinary board stays.
+local SEASON_BOARD = { WinterVeil = "GemMatch_Board_WinterVeil" }
+local function ApplySeasonLook()
+	if not (frame and frame.boardArt) then return end
+	local h = ns.HolidayNow()
+	local art = (h and SEASON_BOARD[h]) or "GemMatch_Board"
+	if frame.boardSeason == art then return end
+	frame.boardSeason = art
+	frame.boardArt:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. art)
+end
+
 local function Build()
 	frame = CreateFrame("Frame", "AzerothAlmanacGemMatch", UIParent, "BackdropTemplate")
 	frame:SetSize(16 + FRAME_SIZE + 14 + PANEL_W + 16, 62 + FRAME_SIZE + 16)
@@ -989,7 +1002,8 @@ local function Build()
 	frame.boardFrame = boardFrame
 	local boardArt = boardFrame:CreateTexture(nil, "BACKGROUND")
 	boardArt:SetAllPoints()
-	boardArt:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\GemMatch_Board")
+	frame.boardArt = boardArt
+	ApplySeasonLook()
 
 	local inner = CreateFrame("Frame", nil, boardFrame)
 	inner:SetPoint("TOPLEFT", INSET_X, -INSET_Y)
@@ -1338,6 +1352,7 @@ function GM:OnLogin()
 end
 
 function GM:Open()
+	ApplySeasonLook() -- (the holiday may have begun since the window was built)
 	if not frame then Build() end
 	frame:Show()
 	frame.modeShine.t = 0 -- (a sweep of light over the mode switch each time the game opens)
