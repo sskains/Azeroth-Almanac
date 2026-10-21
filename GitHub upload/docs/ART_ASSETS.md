@@ -452,9 +452,24 @@ backs it sits beside in the picker.
 > from the front, rich and restrained. Cosy storybook Christmas mood. No text, no letters, no
 > numbers, no logos, no people, no creatures, no user interface.
 
-**If a snowflake feels too plain**, the one swap worth trying is a **stag's head with spreading
-antlers** in the medallion in place of the snowflake - it would echo the wolf on the Wild back and
-the Winter Reindeer champion. Everything else in the prompt stays as it is.
+**The stag was taken** (it echoes the wolf on the Wild back and the Winter Reindeer champion) and
+two were painted. The one shipped is the second, `CardBack_WinterVeil.png`: a thinner, more
+irregular border that sits closer to the worn look of the other two. The first is kept beside it as
+`CardBack_WinterVeil_v1-medallion.png` - a heavier cream border, nearer Almanac's weight, with a
+larger snowflake roundel in each corner. To go back to it, swap the two file names and re-run
+`tools/build_winterveil_art.py`; nothing else changes.
+
+**The edge wear is the converter's job, not the prompt's.** Neither existing back is a clean
+rectangle - their borders are nibbled and torn, and peak at alpha 23 and 72 along the outermost
+row - so `cardback()` eats the edge in with the same soft noise and occasional deeper tear that
+`art_convert.parchment` gives the dungeon card, lighter. Don't ask Gemini for tattered edges as
+well: the second render painted some in and the two sit together fine, but the silhouette is what
+actually matters and only the converter can cut that.
+
+One trap worth remembering: the wear measures how far each pixel is from the nearest **clear** one,
+so a card painted edge to edge has nothing to be eaten from and comes out untouched (the first run
+wrote alpha 255 along the whole top row). `cardback()` insets the card by a pixel first, which is
+what the other backs do too.
 
 ### 6. Table — `Media\Window_WinterVeil.tga` (1024 x 1024, and it must be SQUARE)
 
