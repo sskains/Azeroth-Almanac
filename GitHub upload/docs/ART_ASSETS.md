@@ -214,6 +214,15 @@ steered in the body of the prompt instead, so the house style stays one line eve
 
 Convert: `python tools/art_convert.py board docs/art_source/MurlocTacToe_Board_WinterVeil.png "<Media>/MurlocTacToe_Board_WinterVeil.tga"`
 
+**Second go (Shannon: "although it's nice I'd like to add some more whimsy ... whimsy and warmth").**
+The first render was handsome and far too austere - a grey stone slab in blue daylight. Three things
+did it: nothing in the scene gave off light, so every highlight came out blue; the knotwork rendered
+as bare stone when the pond board's own is warm gold; and "dead vines and bare twigs" is a bleak
+instruction. So the lantern below is the real fix (it puts warm light on the snow and something for
+the cold to contrast against), the knotwork is asked for in gold, and the twigs become living
+evergreen. The nine-panes paragraph is **unchanged on purpose** - it worked first time, and it is the
+one thing that ruins the board if it drifts.
+
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).
 >
@@ -221,11 +230,20 @@ Convert: `python tools/art_convert.py board docs/art_source/MurlocTacToe_Board_W
 > perspective, centred, the whole board inside the frame and nothing cut off. The background
 > outside the board is flat pure magenta (#FF00FF).
 >
-> The board is a frozen woodland pond in deep midwinter. A heavy stone and timber frame runs round
-> the outside, carved with knotwork and furred with frost; snow lies thick on every surface that
-> faces upwards - the top of the frame, the corner studs, the carved ridges. Dead winter vines and
-> bare twigs trail across the corners, glazed in ice, with a few red winter berries and small
-> snow-capped mushrooms at the edges. Icicles hang from the lower edge of the frame.
+> The board is a frozen woodland pond on a cheerful midwinter evening, decked out for a feast. A
+> heavy stone and timber frame runs round the outside, its carved knotwork gilded in warm gold and
+> honey-coloured wood, with soft plump snow heaped on every surface that faces upwards - the top of
+> the frame, the corner studs, the carved ridges. The snow is rounded and inviting rather than
+> sharp.
+>
+> The frame is trimmed for the holiday: a swag of fresh evergreen fir, bright with red berries and
+> glossy holly, loops across the top and down one side, tied with red ribbon; small gold jingle
+> bells and a couple of striped candy canes are tucked into it; a little round wreath hangs at one
+> corner. A small iron lantern sits on the lower left corner post with a candle burning warmly
+> inside it, and a stubby candle or two stand beside it, their flames throwing a pool of golden
+> light across the snow and warm glints along the gold knotwork. A tiny snow-capped toadstool or
+> two still peep out at the edges. A few short icicles hang from the lower edge, catching the
+> candlelight.
 >
 > Inside the frame is a three by three grid of nine square panes of dark blue-green ice, sunk below
 > the frame like windows onto the frozen water beneath. The grid fills the middle two thirds of the
@@ -234,8 +252,10 @@ Convert: `python tools/art_convert.py board docs/art_source/MurlocTacToe_Board_W
 > them: no snowflakes, no ornaments, no creatures, no bright highlights. All the detail and interest
 > belongs on the frame around them.
 >
-> Cold blue winter daylight, long soft shadows, a muted palette of white, pale blue, grey stone and
-> dark green. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
+> Warm candlelight from the lower left spilling across the snow and the gold, with cool blue
+> twilight only in the shadows and the far corners - the picture should feel snug and festive, not
+> bleak. Cosy storybook Christmas mood. No text, no letters, no numbers, no logos, no people, no
+> creatures, no user interface.
 
 ### 2. Divider — `Media\MurlocTacToe_Divider_WinterVeil.tga` (512 x 128, the top 94 rows used)
 
@@ -248,15 +268,17 @@ Convert: `python tools/art_convert.py banner docs/art_source/MurlocTacToe_Divide
 > left edge to the right edge, seen straight on with no tilt and no perspective. Everything above
 > and below the garland is flat pure magenta (#FF00FF).
 >
-> The garland is a rope of dark evergreen fir, dipping very slightly in the middle, thick with
-> needles. Snow lies along the top of it in soft clumps. Spaced evenly along its length are sprigs
-> of holly with glossy dark leaves and clusters of red berries, small gold bells, and short twists
-> of red ribbon. The two ends taper away to nothing before they reach the edges, so the garland
-> fades out rather than stopping abruptly.
+> The garland is a rope of fresh evergreen fir, dipping very slightly in the middle, thick with
+> needles. Soft plump snow lies along the top of it in rounded clumps. Spaced evenly along its
+> length are sprigs of holly with glossy leaves and fat clusters of red berries, small gold jingle
+> bells, striped candy canes, and cheerful bows of red ribbon with their tails hanging down. The two
+> ends taper away to nothing before they reach the edges, so the garland fades out rather than
+> stopping abruptly.
 >
 > The garland is a long, low band - roughly five times wider than it is tall - and must not fill
-> the height of the picture. Cold blue winter light, deep green, white snow, red berries, a little
-> gold. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
+> the height of the picture. Warm candlelit glow catching the gold bells and the berries, cool blue
+> only in the shadows under the needles; snug and festive, not bleak. Cosy storybook Christmas
+> mood. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
 
 ### 3. Pile — `Media\MurlocTacToe_Pile_WinterVeil.tga` (256 x 256, the top 126 rows used)
 
@@ -276,5 +298,6 @@ Convert: `python tools/art_convert.py cut docs/art_source/MurlocTacToe_Pile_Wint
 > lowest boxes are half buried in the drift. A sprig of holly rests against one of them.
 >
 > The heap is a wide, low group - about twice as wide as it is tall - with the snow drift as its
-> base. Cold blue winter light with a warm glow from one side, as if from a nearby fire. No text,
-> no letters, no numbers, no logos, no people, no creatures, no user interface.
+> base. Warm firelight from one side pooling on the snow and glinting off the ribbons, cool blue
+> only in the shadows between the boxes; snug and festive, not bleak. Cosy storybook Christmas
+> mood. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
