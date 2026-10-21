@@ -203,9 +203,14 @@ Three pieces, the same three Hallow's End has: the board, the divider between th
 panels, and the pile that stands beside the table. The code is in already (`SEASON_LOOK.WinterVeil`
 in `QoL/MurlocTacToe.lua`), so these drop straight in under these names and nothing else changes.
 
-**Placeholders are shipping now.** `tools/build_winterveil_art.py` derives a stand-in set from the
-existing board - the same mossy pond frozen over - so the dress works before the paintings exist.
-Overwrite the three `.tga` files and the placeholders are gone; delete the tool when they are.
+**Done, 2026-10-21.** All three painted and in (`docs/art_source/MurlocTacToe_*_WinterVeil.png`,
+Gemini on magenta). `tools/build_winterveil_art.py` is the converter now - it used to derive the
+placeholders. The board took two goes (the first was handsome and austere); the divider and pile
+came right first time, off the prompts the board's second render taught us to write.
+
+One flaw kept on purpose: the board render has holly and fir running off the left and right edges
+(186 px and 143 px of paint on the border), so those sprigs show a flat cut edge. The prompt now
+ends with a margin instruction, so a re-roll fixes it; it is not worth holding the feature for.
 
 The style line is rule 7's, word for word, even though this is a winter scene: the lighting is
 steered in the body of the prompt instead, so the house style stays one line everywhere.
@@ -225,7 +230,10 @@ steered in the body of the prompt instead, so the house style stays one line eve
 
 ### 1. Board — `Media\MurlocTacToe_Board_WinterVeil.tga` (1024 x 1024)
 
-Convert: `python tools/art_convert.py board docs/art_source/MurlocTacToe_Board_WinterVeil.png "<Media>/MurlocTacToe_Board_WinterVeil.tga"`
+Convert: `python tools/build_winterveil_art.py` (all three at once); the board goes through
+`art_convert.board` with the playfield measured off this render, `170,170,852,852`, not the
+default - that is what darkens the nine ice panes and leaves the frame bright, so a creature
+standing on one still reads.
 
 **Second go (Shannon: "although it's nice I'd like to add some more whimsy ... whimsy and warmth").**
 The first render was handsome and far too austere - a grey stone slab in blue daylight. Three things
@@ -276,7 +284,12 @@ one thing that ruins the board if it drifts.
 
 ### 2. Divider — `Media\MurlocTacToe_Divider_WinterVeil.tga` (512 x 128, the top 94 rows used)
 
-Convert: `python tools/art_convert.py banner docs/art_source/MurlocTacToe_Divider_WinterVeil.png "<Media>/MurlocTacToe_Divider_WinterVeil.tga" 512 128`
+Convert: `python tools/build_winterveil_art.py` (all three at once).
+**Not** `art_convert.py banner`, which this first said: banner writes an opaque RGB picture, for
+zone art, and the divider has to keep its transparency. Nor `art_convert.py cut`, which fills the
+canvas and pins the piece top-left - the garland's render is 3.84:1, so filling 512 x 128 would
+draw it 51 px tall in game, where the three rules it sits between are 100 px apart and the
+Hallow's End divider is 38. The tool fits it into the same 94-row band instead and centres it.
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).
@@ -305,8 +318,8 @@ Convert: `python tools/art_convert.py banner docs/art_source/MurlocTacToe_Divide
 
 ### 3. Pile — `Media\MurlocTacToe_Pile_WinterVeil.tga` (256 x 256, the top 126 rows used)
 
-Convert: `python tools/art_convert.py cut docs/art_source/MurlocTacToe_Pile_WinterVeil.png "<Media>/MurlocTacToe_Pile_WinterVeil.tga" 256 256`
-(then check nothing crosses row 126: the texture is cropped there and anything below it is cut off)
+Convert: `python tools/build_winterveil_art.py` (all three at once); it fits the pile inside its
+126 rows and centres it, so nothing can cross the crop line.
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).

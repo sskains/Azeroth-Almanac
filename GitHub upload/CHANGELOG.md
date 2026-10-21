@@ -21,11 +21,13 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
   one to show out of season, for looking at it in October; `/aa mtt season` on its own still turns
   that off and on.
 - **New textures** `Media/MurlocTacToe_Board_WinterVeil.tga`, `_Divider_WinterVeil.tga` and
-  `_Pile_WinterVeil.tga`, so this needs a **full game restart**, not a `/reload`. These three are
-  **placeholders**: `tools/build_winterveil_art.py` derives them from the existing board (the same
-  mossy pond, frozen) so the dress works before the paintings exist. The Gemini prompts for the
-  real ones are in `docs/ART_ASSETS.md`; they drop in under the same names, and the tool goes when
-  they do.
+  `_Pile_WinterVeil.tga`, so this needs a **full game restart**, not a `/reload`. All three are
+  painted (Gemini on magenta; prompts and sources in `docs/ART_ASSETS.md` and `docs/art_source/`):
+  a frozen pond board lit by a lantern on its corner post, a snowed fir garland with gold bells and
+  red bows, and a heap of red and green presents in a drift. `tools/build_winterveil_art.py`
+  converts them - the board through `art_convert.board` with the playfield measured off the render
+  so the nine ice panes darken and the frame doesn't, the other two fitted and centred inside the
+  rows their textures use, which land on the same `coord` and `h` Hallow's End already uses.
 
 ## 1.3.0 (2026-10-21)
 

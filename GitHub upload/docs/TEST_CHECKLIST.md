@@ -21,9 +21,15 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
   the table and the drifting motes are white snow rather than green fireflies. Then
   `/aa mtt season hallowsend`: it changes over cleanly to pumpkins and embers with nothing of the
   winter one left behind. `/aa mtt season` off: the plain mossy board, the plain divider, no pile.
-  (The three winter textures are placeholders derived from the mossy board - they are meant to look
-  plainer than the Hallow's End painting. What matters is that they are in the right places, the
-  right way up and the right size, and that the garland and the pile are not cut off at the bottom.)
+  - The garland sits on the side panel's three rules without crowding the text above or below it;
+    it is drawn 206 x 38, the same band as the Hallow's End divider, but it is a chunkier ornament,
+    so say if it reads too heavy.
+  - The pile stands in the snow at the foot of the panel with its drift complete, not cut off.
+  - **The board's left and right edges**: the holly and fir there run off the edge of the painting
+    and show a flat cut edge. Say how badly it reads against the panel - the prompt is fixed and a
+    re-roll is cheap, but it may not be worth one.
+  - The nine ice panes are dark enough that a champion standing on one still reads clearly, and
+    the lantern's glow in the lower left doesn't wash out the pane above it.
 - [ ] **Murloc Tac Toe, out of season:** with the season switch off and no holiday on, no seasonal
   champion is offered, and an opponent playing one is still drawn properly on your screen.
 
