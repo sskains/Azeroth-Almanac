@@ -390,23 +390,34 @@ Convert: `python tools/art_convert.py board docs/art_source/GemMatch_Board_Winte
 > twilight only in the shadows; snug and festive, not bleak. Cosy storybook Christmas mood. No text,
 > no letters, no numbers, no logos, no people, no creatures, no user interface.
 
-### 5. Card back — `Media\CardBack_WinterVeil.tga` (the card is 92 x 124, about 3:4 portrait)
+### 5. Card back — `Media\CardBack_WinterVeil.tga` (256 x 512, painted tall on purpose)
 
 Convert: `python tools/art_convert.py cut docs/art_source/CardBack_WinterVeil.png "<Media>/CardBack_WinterVeil.tga" 256 512 fill`
-(compare it with `CardBack_Almanac.tga` first and match that file's size and bleed)
+
+**Painted tall, drawn short.** The texture is 256 x 512 and the game draws it at 92 x 124 with no
+texture coordinates, so it is *squashed*, not fitted: everything loses a quarter of its height
+(vertical ends up 0.674 of horizontal). `CardBack_Almanac` is painted that way - its compass sits
+in a tall oval on the sheet and comes out a circle in play. So the prompt asks for a 1:2 card and
+for round things to be painted about **1.5 times taller than they are wide**. Ask for a 3:4 card
+with a round emblem and it will look squashed beside the other two backs.
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).
 >
-> The back of a playing card, upright **portrait, three units wide by four tall**, seen straight on,
-> flat, no tilt and no perspective, filling the whole frame edge to edge with no border of
-> background around it.
+> The back of a playing card, upright portrait, **tall and narrow: one unit wide by two tall**,
+> seen straight on, flat, no tilt and no perspective, filling the whole frame edge to edge with no
+> border of background around it.
 >
 > The design is a single symmetrical Winter Veil emblem centred on a deep forest-green field: a
 > large gold six-pointed snowflake, ornately carved like metalwork, ringed by a wreath of evergreen
 > fir with red berries and a red ribbon bow at the bottom. A narrow gilded gold border runs round
 > the very edge of the card, with a small snowflake at each corner. Soft snow is caught along the
 > top of the wreath.
+>
+> **Everything round is drawn as a tall oval, about one and a half times taller than it is wide** -
+> the wreath, the snowflake and the field inside the border are all stretched upwards like a
+> reflection in a tall mirror. This is deliberate: the card is squeezed back to a normal shape when
+> it is used, and a circular wreath here would come out squashed there.
 >
 > The design is the same upside down as the right way up, as a card back should be, and is
 > perfectly centred. Nothing is cut off.
@@ -417,8 +428,8 @@ Convert: `python tools/art_convert.py cut docs/art_source/CardBack_WinterVeil.pn
 
 ### 6. Table — `Media\Window_WinterVeil.tga` (the window's background, landscape)
 
-Convert: `python tools/art_convert.py full docs/art_source/Window_WinterVeil.png "<Media>/Window_WinterVeil.tga" <w> <h>`
-(match `Window_Tavern.tga`'s size; the picture is dimmed to 0.85 in code, so paint it a little
+Convert: `python tools/art_convert.py full docs/art_source/Window_WinterVeil.png "<Media>/Window_WinterVeil.tga" 1024 1024`
+(the size the other three tables use. The picture is dimmed to 0.85 in code, so paint it a little
 brighter than it should finally look, and keep the middle quiet - the board sits on top of it)
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
