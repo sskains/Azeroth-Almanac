@@ -91,6 +91,74 @@ def band(src, dst, cw, ch, used):
     return h, w
 
 
+def cardback(src, dst, cw=256, ch=512):
+    """A card back: cut from its dark surround, stretched to the sheet, and its edge worn.
+
+    The sheet is 256 x 512 and the game draws it at 92 x 124 with no texture coordinates, so the
+    stretch here is what makes it look right in play - Gemini paints an ordinary 3 x 4 card and
+    this squashes nothing, it just fills the taller sheet.
+
+    The wear is the point of the rest. CardBack_Almanac and CardBack_Wild are not clean rectangles:
+    their cream borders are nibbled and torn, and barely opaque at the outermost row (alpha peaks
+    of 23 and 72 there). A crisp new card stands out badly beside them, so the same treatment
+    `art_convert.parchment` gives the dungeon card is given here: the edge eaten in irregularly by
+    soft noise with a few deeper tears, and darkened as it goes, like a card long in a pocket.
+    """
+    from scipy import ndimage
+
+    a = np.array(Image.open(src).convert("RGB"), dtype=np.float32)
+    h, w, _ = a.shape
+    lum = a.mean(-1)
+
+    # the only thing outside the card is its four rounded corners: grow in from each of them
+    outside = np.zeros((h, w), bool)
+    dark = lum < 32
+    for cy, cx in ((0, 0), (0, w - 1), (h - 1, 0), (h - 1, w - 1)):
+        if dark[cy, cx]:
+            outside[cy, cx] = True
+    while True:
+        grown = outside.copy()
+        grown[1:, :] |= outside[:-1, :]
+        grown[:-1, :] |= outside[1:, :]
+        grown[:, 1:] |= outside[:, :-1]
+        grown[:, :-1] |= outside[:, 1:]
+        grown &= dark
+        if (grown == outside).all():
+            break
+        outside = grown
+
+    rgba = np.dstack([a, np.where(outside, 0.0, 255.0)])
+    ys, xs = np.where(~outside)
+    card = Image.fromarray(rgba[ys.min():ys.max() + 1, xs.min():xs.max() + 1].astype(np.uint8), "RGBA")
+    # A margin of clear pixels round the card, for two reasons: the wear below measures how far
+    # each pixel is from the nearest clear one, so a card touching the canvas edge has nothing to
+    # be eaten from (the first go came out untouched, alpha 255 along the top row); and the backs
+    # it sits beside leave one themselves - CardBack_Almanac is 98.2% opaque, about two pixels.
+    pad = 1
+    canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    canvas.paste(card.resize((cw - 2 * pad, ch - 2 * pad), Image.LANCZOS), (pad, pad))
+    out = np.asarray(canvas, dtype=np.float32)
+
+    rng = np.random.default_rng(7)
+    solid = out[..., 3] > 128
+    filled = ndimage.binary_fill_holes(solid)
+    d = ndimage.distance_transform_edt(filled)
+    n1 = ndimage.gaussian_filter(rng.random((ch, cw)), 2.0)
+    n2 = ndimage.gaussian_filter(rng.random((ch, cw)), 7.0)
+    n1 = (n1 - n1.min()) / (n1.max() - n1.min())
+    n2 = (n2 - n2.min()) / (n2.max() - n2.min())
+    # (lighter than the dungeon card's: that one is meant to look abandoned, this one just old.
+    # Tuned to leave about as much of the sheet opaque as CardBack_Almanac does, 98%.)
+    bite = 0.6 + 1.8 * n1 + 5.0 * np.clip((n2 - 0.70) / 0.30, 0, 1) ** 2
+    keep = np.clip((d - bite) / 1.4, 0, 1)
+    out[..., 3] *= keep
+    out[..., :3] *= (1 - 0.38 * np.exp(-np.maximum(d - bite, 0) / 3.5))[..., None]
+
+    img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+    art_convert.write_tga(img, dst)
+    return int(np.asarray(img)[0, :, 3].max()), 100.0 * (np.asarray(img)[..., 3] > 200).mean()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=LIVE_MEDIA, help="where to write (default: the live Media folder)")
@@ -121,6 +189,12 @@ def main():
         art_convert.board(tmp, gm_dst, field="%d,%d,%d,%d" % GEM_WANTED)
         os.remove(tmp)
         print("%-40s 1024 x 1024   (sockets %s)" % ("GemMatch_Board_WinterVeil.tga", "%d,%d,%d,%d" % GEM_WANTED))
+
+    cb_src = os.path.join(args.source, "CardBack_WinterVeil.png")
+    if os.path.exists(cb_src):
+        edge, opaque = cardback(cb_src, os.path.join(args.out, "CardBack_WinterVeil.tga"))
+        print("%-40s 256 x 512   edge alpha %d, opaque %.1f%%  (Almanac: 23 / 98.2%%)"
+              % ("CardBack_WinterVeil.tga", edge, opaque))
 
     for name, cw, ch, used in (("Divider", 512, 128, 94), ("Pile", 256, 256, 126)):
         dst = os.path.join(args.out, "MurlocTacToe_%s_WinterVeil.tga" % name)
