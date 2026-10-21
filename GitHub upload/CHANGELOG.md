@@ -16,11 +16,14 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
   the ones you picked come back when it ends. `WG:BackKey` / `WG:TableKey` (on `WG`, not locals:
   that file is at Lua's 200 locals per scope). Holidays with no art of their own are absent from
   the lists and nothing changes for them.
-- **Three more textures still to come**: `Media/GemMatch_Board_WinterVeil.tga`,
-  `CardBack_WinterVeil.tga` and `Window_WinterVeil.tga`. The code and the Settings entries are in
-  and the Gemini prompts are in `docs/ART_ASSETS.md`, but **until the art is painted, choosing
-  "Feast of Winter Veil" as a card back or a table shows nothing**. Winter Veil begins 16 December,
-  so the automatic dress can't pick them before then.
+- **Wild Gambit's Winter Veil table** (`Media/Window_WinterVeil.tga`): a dark snow-dusted timber
+  table with fir, holly, bells and a low candle round its edges, matched to the tavern table's own
+  dimness (mean 41 against its 44) so the players' names and scores still read over it.
+- **Two textures still to come**: `Media/GemMatch_Board_WinterVeil.tga` and
+  `CardBack_WinterVeil.tga`. The code and the Settings entries are in and the Gemini prompts are in
+  `docs/ART_ASSETS.md`, but **until they are painted, choosing "Feast of Winter Veil" as a card
+  back shows nothing**. Winter Veil begins 16 December, so the automatic dress can't pick them
+  before then.
 - **Murloc Tac Toe: two Winter Veil champions** (Shannon). The Tiny Snowman (creature 15710, model
   13610) and the Winter Reindeer (creature 15706, model 15904) join the roster while the Feast of
   Winter Veil is on, the same way the Hallow's End four do. The reindeer speaks with its own voice

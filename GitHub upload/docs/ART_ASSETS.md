@@ -403,41 +403,58 @@ sockets, never larger.
 > twilight only in the shadows; snug and festive, not bleak. Cosy storybook Christmas mood. No text,
 > no letters, no numbers, no logos, no people, no creatures, no user interface.
 
-### 5. Card back — `Media\CardBack_WinterVeil.tga` (256 x 512, painted tall on purpose)
+### 5. Card back — `Media\CardBack_WinterVeil.tga` (256 x 512)
 
 Convert: `python tools/art_convert.py cut docs/art_source/CardBack_WinterVeil.png "<Media>/CardBack_WinterVeil.tga" 256 512 fill`
 
-**Painted tall, drawn short.** The texture is 256 x 512 and the game draws it at 92 x 124 with no
-texture coordinates, so it is *squashed*, not fitted: everything loses a quarter of its height
-(vertical ends up 0.674 of horizontal). `CardBack_Almanac` is painted that way - its compass sits
-in a tall oval on the sheet and comes out a circle in play. So the prompt asks for a 1:2 card and
-for round things to be painted about **1.5 times taller than they are wide**. Ask for a 3:4 card
-with a round emblem and it will look squashed beside the other two backs.
+**Written again 2026-10-21** (Shannon, on the first one: "it's skewed", then "I don't like the
+design"). Both were my fault, and the first one need never have come up:
+
+1. **Don't ask Gemini to paint it stretched.** The sheet is 256 x 512 and the game draws it at
+   92 x 124 with no texture coordinates, so it is squashed to 0.674 of its height - which is why
+   `CardBack_Almanac`'s compass sits in a tall oval on the sheet and reads as a circle in play. The
+   first prompt therefore asked for a 1:2 card with everything painted half again as tall. It came
+   back looking skewed because it *was* skewed. Pointless: `art_convert cut ... fill` stretches a
+   picture to fill the canvas, so asking for an ordinary 3 x 4 card and letting the conversion do
+   the stretch gives the same texture with none of the fighting. Judge the render as a normal card.
+2. **Follow the family.** Both existing backs are the same design: a pale cream border with a thin
+   gold rule and small ornaments in the corners, a deep coloured field with a faint damask, and a
+   single **circular medallion** in the middle - a gold compass rose on dark red (Almanac), a
+   bronze wolf's head in a jewelled ring on dark green with flowering vines (Wild). The first
+   Winter Veil attempt was a huge wreath filling the whole card, which broke that pattern and
+   fought its own border. This one is a medallion like the others.
+
+The field colour is deliberately **cold blue-green**: dark red and dark green are taken by the two
+backs it sits beside in the picker.
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).
 >
-> The back of a playing card, upright portrait, **tall and narrow: one unit wide by two tall**,
-> seen straight on, flat, no tilt and no perspective, filling the whole frame edge to edge with no
-> border of background around it.
+> The back of a playing card, upright portrait, **three units wide by four tall**, seen straight
+> on, flat, no tilt and no perspective, filling the whole frame edge to edge.
 >
-> The design is a single symmetrical Winter Veil emblem centred on a deep forest-green field: a
-> large gold six-pointed snowflake, ornately carved like metalwork, ringed by a wreath of evergreen
-> fir with red berries and a red ribbon bow at the bottom. A narrow gilded gold border runs round
-> the very edge of the card, with a small snowflake at each corner. Soft snow is caught along the
-> top of the wreath.
+> A pale cream border runs round the outside of the card, with a thin gold rule inside it and a
+> small gold snowflake ornament in each of the four corners. Inside that is a deep, cold
+> blue-green field, almost teal, covered in a faint darker damask of frost ferns - a pattern you
+> notice only on looking, never bold.
 >
-> **Everything round is drawn as a tall oval, about one and a half times taller than it is wide** -
-> the wreath, the snowflake and the field inside the border are all stretched upwards like a
-> reflection in a tall mirror. This is deliberate: the card is squeezed back to a normal shape when
-> it is used, and a circular wreath here would come out squashed there.
+> Centred on the field is a single **round gold medallion**, ornately carved like old metalwork:
+> a six-pointed snowflake in relief, set in a raised ring. A narrow garland of dark evergreen fir
+> with small red berries is wound round the outside of the ring, and a small red ribbon is tied at
+> the bottom of it. A little snow rests on the top of the ring.
 >
-> The design is the same upside down as the right way up, as a card back should be, and is
-> perfectly centred. Nothing is cut off.
+> The medallion is **perfectly round** and sits in the middle of the card with a generous margin of
+> plain field all round it - it takes up about half the card's width. The whole design is
+> symmetrical left to right, and reads the same upside down as the right way up, as a card back
+> should. Nothing is cut off.
 >
-> Gilded warm gold, deep glossy green, warm red, bright white snow, lit warmly from the front;
-> rich and festive. Cosy storybook Christmas mood. No text, no letters, no numbers, no logos, no
-> people, no creatures, no user interface.
+> Deep cold blue-green, antique gold, dark green, a little warm red, soft white snow; lit evenly
+> from the front, rich and restrained. Cosy storybook Christmas mood. No text, no letters, no
+> numbers, no logos, no people, no creatures, no user interface.
+
+**If a snowflake feels too plain**, the one swap worth trying is a **stag's head with spreading
+antlers** in the medallion in place of the snowflake - it would echo the wolf on the Wild back and
+the Winter Reindeer champion. Everything else in the prompt stays as it is.
 
 ### 6. Table — `Media\Window_WinterVeil.tga` (1024 x 1024, and it must be SQUARE)
 
