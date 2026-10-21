@@ -4,6 +4,29 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **Murloc Tac Toe: two Winter Veil champions** (Shannon). The Tiny Snowman (creature 15710, model
+  13610) and the Winter Reindeer (creature 15706, model 15904) join the roster while the Feast of
+  Winter Veil is on, the same way the Hallow's End four do. The reindeer speaks with its own voice
+  (creature sound set 187: its grunts as it places a piece, its bellow on a win, its death on a
+  loss). The snowman has no voice at all - every slot of its sound set is empty - so it borrows the
+  Freezing Trap's icy snap for placing a piece, as the slime and the squashling borrow theirs; its
+  winning and losing sounds are still to be chosen (`/aa mtt sound <file ID>` auditions one,
+  `/aa mtt voice snowman win <file IDs>` keeps it).
+- **Murloc Tac Toe: the seasonal dress is per holiday, not Hallow's End or nothing** (Shannon).
+  `SEASON_LOOK` holds a board, divider, pile and mote colour for each holiday, so Winter Veil gets
+  its own table: the pond frozen over, a snowed garland between the players and a heap of presents
+  where the pumpkins stand. `/aa mtt season hallowsend` / `/aa mtt season winterveil` picks which
+  one to show out of season, for looking at it in October; `/aa mtt season` on its own still turns
+  that off and on.
+- **New textures** `Media/MurlocTacToe_Board_WinterVeil.tga`, `_Divider_WinterVeil.tga` and
+  `_Pile_WinterVeil.tga`, so this needs a **full game restart**, not a `/reload`. These three are
+  **placeholders**: `tools/build_winterveil_art.py` derives them from the existing board (the same
+  mossy pond, frozen) so the dress works before the paintings exist. The Gemini prompts for the
+  real ones are in `docs/ART_ASSETS.md`; they drop in under the same names, and the tool goes when
+  they do.
+
 ## 1.3.0 (2026-10-21)
 
 - **Wild Gambit: Execute reaches across the board** (Shannon). The warrior's Execute removes any

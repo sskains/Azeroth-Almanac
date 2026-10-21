@@ -6,6 +6,27 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased (**full game restart**: three new Winter Veil textures)
+
+- [ ] **Murloc Tac Toe, the Winter Veil champions:** `/aa mtt season winterveil`, then open the
+  window and the champion picker. The Tiny Snowman and the Winter Reindeer are both offered and
+  both show a model rather than a blank face or a fallback icon. **Watch the two sizes**: the
+  reindeer's model is drawn small (scale 0.3) and the snowman's is a half-scale variant, so either
+  may sit too low, too high or too small in a cell or on the champion card - say which and roughly
+  how far out. Place a piece as each: the reindeer grunts, the snowman gives an icy snap.
+  Win and lose as the reindeer (its bellow, then its death). The snowman has no win or lose sound
+  yet, so silence there is expected, not a fault.
+- [ ] **Murloc Tac Toe, the Winter Veil table:** with `/aa mtt season winterveil` the board is the
+  frozen one, the garland runs between the two players' panels, the pile of presents stands beside
+  the table and the drifting motes are white snow rather than green fireflies. Then
+  `/aa mtt season hallowsend`: it changes over cleanly to pumpkins and embers with nothing of the
+  winter one left behind. `/aa mtt season` off: the plain mossy board, the plain divider, no pile.
+  (The three winter textures are placeholders derived from the mossy board - they are meant to look
+  plainer than the Hallow's End painting. What matters is that they are in the right places, the
+  right way up and the right size, and that the garland and the pile are not cut off at the bottom.)
+- [ ] **Murloc Tac Toe, out of season:** with the season switch off and no holiday on, no seasonal
+  champion is offered, and an opponent playing one is still drawn properly on your screen.
+
 ## 1.3.0 (**full game restart**: the new texture `Media/Deck_Card.tga`. The rest is `/reload`)
 
 - [ ] **Wild Gambit, the hint's ornament:** start a deal. "Shuffling the deck..." is in the large

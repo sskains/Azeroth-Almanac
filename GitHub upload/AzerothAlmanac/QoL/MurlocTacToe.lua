@@ -115,6 +115,30 @@ local CHAMPS = {
 		place = 559315, win = 559315, lose = 559315, -- CockroachDeath (RoachDeath), the one sound it has
 		color = { 0.7, 0.6, 0.25 }, hex = "b39940", cheer = "Skitter skitter!", bot = "Plagued Cockroach",
 	},
+	-- Winter Veil: the two creatures from under the tree. Both carry their display outright - these
+	-- are old models and the same on every client - with `npc` kept as the way back if one isn't.
+	snowman = {
+		name = "Tiny Snowmen", one = "Tiny Snowman", item = 21309, -- Snowman Kit (the pet's item)
+		display = 13610, npc = 15710, -- Tiny Snowman, model 1831
+		season = "WinterVeil",
+		-- It has no voice of its own: every slot of its sound set is empty, so this one is borrowed,
+		-- as the slime's and the squashling's are. The Freezing Trap's snap is ice and is already
+		-- known to play on this client (WildGambitLogic's TRAP_SOUND). Winning and losing are still
+		-- to be found: audition with /aa mtt sound <file ID>, keep one with
+		-- /aa mtt voice snowman win <file IDs>.
+		place = { 1454153, 568770 },
+		color = { 0.75, 0.92, 1 }, hex = "bfebff", cheer = "Crunch crunch!", bot = "Tiny Snowman",
+	},
+	reindeer = {
+		name = "Winter Reindeer", one = "Winter Reindeer", item = 21211, -- Reindeer Dust (what frees Metzen)
+		display = 15904, npc = 15706, -- Winter Reindeer, model 2233 (it is drawn small, scale 0.3)
+		season = "WinterVeil",
+		-- its own voice, from creature sound set 187: the grunts, the bellow and the death
+		place = { 550257, 550258, 550256 }, -- its injury grunts, the shortest it has
+		win = 550253,                        -- its aggro bellow
+		lose = 550251,                       -- its death
+		color = { 0.85, 0.62, 0.38 }, hex = "d99e61", cheer = "Jingle jingle!", bot = "Winter Reindeer",
+	},
 	slime = {
 		name = "Excitable Slimes", one = "Excitable Slime", icon = "INV_Misc_Slime_01", npc = 266735, -- Excitable Slime (WoW Forever)
 		color = { 0.7, 1, 0.3 }, hex = "b3ff4d", cheer = "Blorp blorp!", bot = "Excitable Slime",
@@ -127,7 +151,7 @@ local CHAMPS = {
 }
 -- the order they are offered in
 -- (each champion knows its own key, for the voices set in game)
-local ROSTER = { "murloc", "gnoll", "faerie", "slime", "squashling", "bombay", "roach" }
+local ROSTER = { "murloc", "gnoll", "faerie", "slime", "squashling", "bombay", "roach", "snowman", "reindeer" }
 -- the ring round a face follows the ROLE (who moves first), not the champion, so two players who
 -- chose the same champion can still be told apart
 local ROLE_RINGS = {
@@ -1088,30 +1112,63 @@ local function SetCard(card, side, name, sub, active)
 	card.turnGem:SetShown(active and true or false)
 end
 
--- Hallow's End dress: a darker board with pumpkins and candles, and bat-and-pumpkin dividers (the same
--- dates as the seasonal champions; /aa mtt season shows it early)
+-- The seasonal dress, one entry per holiday: Hallow's End is a darker board with pumpkins and
+-- candles, Winter Veil the same pond frozen over with snow on the stones. Each names its board, its
+-- divider, the pile that stands beside the table and the colour the drifting motes take. The dates
+-- are the seasonal champions' (the shared calendar check in WindowUtil); /aa mtt season shows one
+-- early. (2026-10-21, Shannon) Keyed by holiday now, rather than a Hallow's End yes/no.
 local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+local SEASON_NAME = { HallowsEnd = "Hallow's End", WinterVeil = "the Feast of Winter Veil" }
+local PLAIN_DIVIDER = { tex = "GemMatch_Divider", coord = 0.6719, h = 43 }
+local SEASON_LOOK = {
+	HallowsEnd = {
+		board = "MurlocTacToe_Board_HallowsEnd",
+		divider = { tex = "MurlocTacToe_Divider_HallowsEnd", coord = 0.7344, h = 94, drop = 8 },
+		pile = { tex = "MurlocTacToe_Pile_HallowsEnd", coord = 0.4922, h = 126 },
+		motes = { 1, 0.6, 0.2 },        -- embers, not fireflies
+	},
+	WinterVeil = {
+		board = "MurlocTacToe_Board_WinterVeil",
+		divider = { tex = "MurlocTacToe_Divider_WinterVeil", coord = 0.7344, h = 94, drop = 8 },
+		pile = { tex = "MurlocTacToe_Pile_WinterVeil", coord = 0.4922, h = 126 },
+		motes = { 0.85, 0.94, 1 },      -- falling snow, not fireflies
+	},
+}
+
+-- the holiday to dress for, or nil for the plain table: the one the calendar says, else (with
+-- /aa mtt season, for trying them out) the one chosen with /aa mtt season <name>
+local function SeasonKey()
+	local now = ns.HolidayNow()
+	if now and SEASON_LOOK[now] then return now end
+	if db and db.anySeason then return SEASON_LOOK[db.seasonShown or ""] and db.seasonShown or "HallowsEnd" end
+	return nil
+end
+
 local function ApplySeasonLook()
 	if not (frame and frame.boardArt) then return end
-	local hallow = ns.HolidayNow() == "HallowsEnd" or (db and db.anySeason)
-	if frame.hallow == hallow then return end
-	frame.hallow = hallow
-	frame.pile:SetShown(hallow)
-	frame.boardArt:SetTexture(MEDIA .. (hallow and "MurlocTacToe_Board_HallowsEnd" or "MurlocTacToe_Board"))
+	local key = SeasonKey()
+	if frame.season == key then return end
+	frame.season = key
+	local look = key and SEASON_LOOK[key]
+	frame.pile:SetShown(look ~= nil)
+	if look then
+		frame.pile:SetTexture(MEDIA .. look.pile.tex)
+		frame.pile:SetTexCoord(0, 1, 0, look.pile.coord)
+		frame.pile:SetSize(100, 100 * look.pile.h / 256)
+	end
+	frame.boardArt:SetTexture(MEDIA .. (look and look.board or "MurlocTacToe_Board"))
 	for _, f in ipairs(frame.flies) do
-		f.tex:SetVertexColor(unpack(hallow and { 1, 0.6, 0.2 } or { 0.9, 1, 0.5 })) -- (embers, not fireflies)
+		f.tex:SetVertexColor(unpack(look and look.motes or { 0.9, 1, 0.5 }))
 	end
 	for _, line in ipairs(frame.ropes or {}) do
+		local d = (look and look.divider) or PLAIN_DIVIDER
 		line:ClearAllPoints()
-		if hallow then
-			line:SetTexture(MEDIA .. "MurlocTacToe_Divider_HallowsEnd")
-			line:SetTexCoord(0, 1, 0, 0.7344)
-			line:SetSize(206, 206 * 94 / 512)
-			line:SetPoint("CENTER", line:GetParent(), "TOPLEFT", 62 + 103, line.y - 8)
+		line:SetTexture(MEDIA .. d.tex)
+		line:SetTexCoord(0, 1, 0, d.coord)
+		line:SetSize(206, 206 * d.h / 512)
+		if d.drop then
+			line:SetPoint("CENTER", line:GetParent(), "TOPLEFT", 62 + 103, line.y - d.drop)
 		else
-			line:SetTexture(MEDIA .. "GemMatch_Divider")
-			line:SetTexCoord(0, 1, 0, 0.6719)
-			line:SetSize(206, 206 * 43 / 512)
 			line:SetPoint("TOPLEFT", 62, line.y)
 		end
 	end
@@ -1760,10 +1817,8 @@ local function Build()
 	end)
 	frame.musicButton:SetPoint("LEFT", frame.soundButton, "RIGHT", 8, 0)
 	-- Hallow's End: a heap of pumpkins and sweets along the panel's foot (shown in season only)
+	-- (its texture, crop and size are the season's: ApplySeasonLook sets them)
 	frame.pile = side:CreateTexture(nil, "ARTWORK")
-	frame.pile:SetTexture(MEDIA .. "MurlocTacToe_Pile_HallowsEnd")
-	frame.pile:SetTexCoord(0, 1, 0, 0.4922)
-	frame.pile:SetSize(100, 100 * 126 / 256)
 	frame.pile:SetPoint("BOTTOM", side, "BOTTOM", 0, 8)
 	frame.pile:Hide()
 
@@ -2211,14 +2266,31 @@ function MT:Command(rest)
 		if db.music == false then self:StopMusic() else self:StartMusic() end
 		Say("music " .. (db.music == false and "off." or "on."))
 		Refresh()
-	elseif low == "season" then
-		db.anySeason = not db.anySeason
-		Say("seasonal champions and the holiday board " .. (db.anySeason and "show all year (for trying them out)." or "show only during their holiday."))
-		Refresh()
+	elseif low == "season" or low:match("^season ") then
+		local want = rest:match("^%S+%s+(%S+)")
+		if want then
+			-- /aa mtt season wintereil | hallowsend: which dress to show out of season
+			local pick
+			for k in pairs(SEASON_LOOK) do if k:lower() == want:lower() then pick = k end end
+			if not pick then
+				Say("no such holiday. /aa mtt season hallowsend, /aa mtt season winterveil, or /aa mtt season on its own.")
+			else
+				db.seasonShown, db.anySeason = pick, true
+				-- (false, not nil: nil is a real answer there, meaning the plain table)
+				if frame then frame.season = false end
+				Say(("showing %s, all year (for trying it out)."):format(SEASON_NAME[pick] or pick))
+				Refresh()
+			end
+		else
+			db.anySeason = not db.anySeason
+			if frame then frame.season = false end
+			Say("seasonal champions and the holiday board " .. (db.anySeason and "show all year (for trying them out)." or "show only during their holiday."))
+			Refresh()
+		end
 	elseif low == "champions" then
 		for _, k in ipairs(ROSTER) do
 			local c = CHAMPS[k]
-			Say(("%s (%s): %s"):format(c.name, k, (c.season and "[Hallow's End only] " or "") .. (c.display and ("model " .. c.display) or (c.npc and ("creature " .. c.npc .. ", model not found yet (try /reload)") or "no model yet: target one and type /aa mtt champion " .. k))))
+			Say(("%s (%s): %s"):format(c.name, k, (c.season and ("[" .. (SEASON_NAME[c.season] or c.season) .. " only] ") or "") .. (c.display and ("model " .. c.display) or (c.npc and ("creature " .. c.npc .. ", model not found yet (try /reload)") or "no model yet: target one and type /aa mtt champion " .. k))))
 		end
 	elseif low:match("^champion ") then
 		local key, second, third = rest:match("^%S+%s+(%S+)%s*(%S*)%s*(%S*)")

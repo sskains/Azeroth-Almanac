@@ -196,3 +196,85 @@ save as `Media/Icon_People_<key>.tga` and add the key to `PAINTED` in `UI/Pages/
 | vendor_poisons | Poisons | green vials, a skull-marked bottle and a dagger |
 | vendor_other | Other vendors | a market stall with assorted wares |
 | mailbox | Mailboxes | a post box with letters |
+
+## Murloc Tac Toe, the Feast of Winter Veil (prompts 2026-10-21, Shannon)
+
+Three pieces, the same three Hallow's End has: the board, the divider between the two players'
+panels, and the pile that stands beside the table. The code is in already (`SEASON_LOOK.WinterVeil`
+in `QoL/MurlocTacToe.lua`), so these drop straight in under these names and nothing else changes.
+
+**Placeholders are shipping now.** `tools/build_winterveil_art.py` derives a stand-in set from the
+existing board - the same mossy pond frozen over - so the dress works before the paintings exist.
+Overwrite the three `.tga` files and the placeholders are gone; delete the tool when they are.
+
+The style line is rule 7's, word for word, even though this is a winter scene: the lighting is
+steered in the body of the prompt instead, so the house style stays one line everywhere.
+
+### 1. Board — `Media\MurlocTacToe_Board_WinterVeil.tga` (1024 x 1024)
+
+Convert: `python tools/art_convert.py board docs/art_source/MurlocTacToe_Board_WinterVeil.png "<Media>/MurlocTacToe_Board_WinterVeil.tga"`
+
+> Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
+> warm lighting, ornate but readable, original design (not from any existing game).
+>
+> A square game board for noughts and crosses, seen straight from above, flat on, no tilt and no
+> perspective, centred, the whole board inside the frame and nothing cut off. The background
+> outside the board is flat pure magenta (#FF00FF).
+>
+> The board is a frozen woodland pond in deep midwinter. A heavy stone and timber frame runs round
+> the outside, carved with knotwork and furred with frost; snow lies thick on every surface that
+> faces upwards - the top of the frame, the corner studs, the carved ridges. Dead winter vines and
+> bare twigs trail across the corners, glazed in ice, with a few red winter berries and small
+> snow-capped mushrooms at the edges. Icicles hang from the lower edge of the frame.
+>
+> Inside the frame is a three by three grid of nine square panes of dark blue-green ice, sunk below
+> the frame like windows onto the frozen water beneath. The grid fills the middle two thirds of the
+> picture, evenly spaced, separated by narrow snow-dusted stone ribs. **The nine panes must be
+> dark, plain and almost empty** - faint cracks and frozen bubbles at most. Nothing may sit inside
+> them: no snowflakes, no ornaments, no creatures, no bright highlights. All the detail and interest
+> belongs on the frame around them.
+>
+> Cold blue winter daylight, long soft shadows, a muted palette of white, pale blue, grey stone and
+> dark green. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
+
+### 2. Divider — `Media\MurlocTacToe_Divider_WinterVeil.tga` (512 x 128, the top 94 rows used)
+
+Convert: `python tools/art_convert.py banner docs/art_source/MurlocTacToe_Divider_WinterVeil.png "<Media>/MurlocTacToe_Divider_WinterVeil.tga" 512 128`
+
+> Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
+> warm lighting, ornate but readable, original design (not from any existing game).
+>
+> A single horizontal Winter Veil garland, lying straight across the middle of the picture from the
+> left edge to the right edge, seen straight on with no tilt and no perspective. Everything above
+> and below the garland is flat pure magenta (#FF00FF).
+>
+> The garland is a rope of dark evergreen fir, dipping very slightly in the middle, thick with
+> needles. Snow lies along the top of it in soft clumps. Spaced evenly along its length are sprigs
+> of holly with glossy dark leaves and clusters of red berries, small gold bells, and short twists
+> of red ribbon. The two ends taper away to nothing before they reach the edges, so the garland
+> fades out rather than stopping abruptly.
+>
+> The garland is a long, low band - roughly five times wider than it is tall - and must not fill
+> the height of the picture. Cold blue winter light, deep green, white snow, red berries, a little
+> gold. No text, no letters, no numbers, no logos, no people, no creatures, no user interface.
+
+### 3. Pile — `Media\MurlocTacToe_Pile_WinterVeil.tga` (256 x 256, the top 126 rows used)
+
+Convert: `python tools/art_convert.py cut docs/art_source/MurlocTacToe_Pile_WinterVeil.png "<Media>/MurlocTacToe_Pile_WinterVeil.tga" 256 256`
+(then check nothing crosses row 126: the texture is cropped there and anything below it is cut off)
+
+> Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
+> warm lighting, ornate but readable, original design (not from any existing game).
+>
+> A small heap of wrapped Winter Veil presents sitting in a shallow drift of snow, seen straight
+> on from the front at eye level, centred, nothing cut off. Everything around the heap is flat pure
+> magenta (#FF00FF).
+>
+> Five or six boxes of different sizes, stacked and leaning against one another: deep red, forest
+> green, midnight blue and plum wrapping paper, each tied with a wide gold or cream ribbon and
+> finished with a soft bow on top. Snow has settled on the lids and along the ribbons, and the
+> lowest boxes are half buried in the drift. A sprig of holly rests against one of them.
+>
+> The heap is a wide, low group - about twice as wide as it is tall - with the snow drift as its
+> base. Cold blue winter light with a warm glow from one side, as if from a nearby fire. No text,
+> no letters, no numbers, no logos, no people, no creatures, no user interface.
