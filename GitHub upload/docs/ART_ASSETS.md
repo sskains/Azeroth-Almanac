@@ -362,8 +362,20 @@ Winter Veil art sits together. Every one of them leaves a clear margin: nothing 
 
 ### 4. Gem Match board — `Media\GemMatch_Board_WinterVeil.tga` (1024 x 1024)
 
-Convert: `python tools/art_convert.py board docs/art_source/GemMatch_Board_WinterVeil.png "<Media>/GemMatch_Board_WinterVeil.tga" 0.72 0.92 139,129,895,885`
-(the field is Gem Match's 8 x 8 socket grid in source pixels, from its 542 px frame and 73.5 / 68.5 insets)
+Convert: `python tools/build_winterveil_art.py` (it lines the grid up, then darkens it)
+
+**The grid's size is the thing to get right, and it can't be fixed afterwards.** Gem Match draws
+its gems at fixed places - 139 to 895 of 1024 across, 8 cells of 94.5 px - and the board art has
+to meet them, because `boardArt:SetAllPoints()` maps the texture straight onto the frame with no
+fitting. The first render painted its 64 sockets only 631 px across (cells of 78.9), so every gem
+would have overhung its socket by 15.6 px and the outer ones sat on the frame. Scaling the art up
+the 20% needed would push the painted frame off the canvas, so there is no saving it in
+conversion - hence the sentence about the grid filling three-quarters of the picture. A small
+offset *is* fixable (the tool shifts and scales onto the code's grid); the wrong *size* is not.
+
+Murloc Tac Toe's board was checked the same way and is correct: its card cells sit inside the
+painted ice panes with a margin, which is what you want - the cells smaller than the painted
+sockets, never larger.
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).
@@ -375,7 +387,8 @@ Convert: `python tools/art_convert.py board docs/art_source/GemMatch_Board_Winte
 > A heavy carved oak frame, gilded with warm gold knotwork and heaped with soft plump snow on every
 > surface that faces upwards, surrounds a large grid of **eight by eight** small square sockets -
 > sixty-four shallow dips in dark blue-green ice, evenly spaced, separated by narrow snow-dusted
-> ribs. **The sockets must be dark, plain and empty** - faint cracks and frozen bubbles at most,
+> ribs. **The grid is large: it fills the middle three-quarters of the picture, its outer edge about
+> one seventh of the picture's width in from each side, leaving only a narrow decorated frame.** **The sockets must be dark, plain and empty** - faint cracks and frozen bubbles at most,
 > nothing sitting in them, no gems, no ornaments, no bright highlights. All the detail belongs on
 > the frame.
 >

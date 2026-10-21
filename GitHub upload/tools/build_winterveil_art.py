@@ -48,6 +48,23 @@ SOURCE = os.path.join(HERE, "docs", "art_source")
 # the nine ice panes on this render, for art_convert.board's field darkening
 BOARD_FIELD = "170,170,852,852"
 
+# Gem Match's eight-by-eight socket grid. Gemini painted it at 128-895 on both axes; the code draws
+# the gems at 139-895 across and 129-885 down (its 542 px frame, insets 73.5 / 68.5, eight 50 px
+# cells). Eleven pixels is a fifth of a cell once it is drawn, enough to see a gem sitting off its
+# socket, so the painting is scaled and shifted onto the code's grid rather than the code moved.
+GEM_PAINTED = (128, 128, 895, 895)
+GEM_WANTED = (139, 129, 895, 885)
+
+
+def align(im, painted, wanted, fill=(255, 0, 255)):
+    """Scale and shift a render so a box in it lands exactly on a box the code expects."""
+    sx = (wanted[2] - wanted[0]) / (painted[2] - painted[0])
+    sy = (wanted[3] - wanted[1]) / (painted[3] - painted[1])
+    ox, oy = wanted[0] - painted[0] * sx, wanted[1] - painted[1] * sy
+    print("%-40s align x%.4f/%.4f, offset %+.1f/%+.1f px" % ("", sx, sy, ox, oy))
+    return im.transform(im.size, Image.AFFINE, (1 / sx, 0, -ox / sx, 0, 1 / sy, -oy / sy),
+                        resample=Image.BICUBIC, fillcolor=fill)
+
 
 def keyed(path):
     """The render with its magenta taken out, cropped to the paint, as RGBA."""
@@ -91,6 +108,19 @@ def main():
     board_dst = os.path.join(args.out, "MurlocTacToe_Board_WinterVeil.tga")
     art_convert.board(src("Board"), board_dst, field=BOARD_FIELD)
     print("%-40s 1024 x 1024   (playfield %s)" % ("MurlocTacToe_Board_WinterVeil.tga", BOARD_FIELD))
+
+    # Gem Match: lined up first, then the same field darkening, so the sockets sit back and the
+    # frame stays bright. (The lantern Gemini hung over the last column stays: the gems are drawn
+    # on top of the board, so it shows between them rather than blocking anything - Shannon's call.)
+    gm_src = os.path.join(args.source, "GemMatch_Board_WinterVeil.png")
+    if os.path.exists(gm_src):
+        lined = align(Image.open(gm_src).convert("RGB"), GEM_PAINTED, GEM_WANTED)
+        tmp = os.path.join(args.out, "_gm_aligned.png")
+        lined.save(tmp)
+        gm_dst = os.path.join(args.out, "GemMatch_Board_WinterVeil.tga")
+        art_convert.board(tmp, gm_dst, field="%d,%d,%d,%d" % GEM_WANTED)
+        os.remove(tmp)
+        print("%-40s 1024 x 1024   (sockets %s)" % ("GemMatch_Board_WinterVeil.tga", "%d,%d,%d,%d" % GEM_WANTED))
 
     for name, cw, ch, used in (("Divider", 512, 128, 94), ("Pile", 256, 256, 126)):
         dst = os.path.join(args.out, "MurlocTacToe_%s_WinterVeil.tga" % name)
