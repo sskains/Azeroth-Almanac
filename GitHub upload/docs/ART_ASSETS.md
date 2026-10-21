@@ -439,26 +439,49 @@ with a round emblem and it will look squashed beside the other two backs.
 > rich and festive. Cosy storybook Christmas mood. No text, no letters, no numbers, no logos, no
 > people, no creatures, no user interface.
 
-### 6. Table — `Media\Window_WinterVeil.tga` (the window's background, landscape)
+### 6. Table — `Media\Window_WinterVeil.tga` (1024 x 1024, and it must be SQUARE)
 
 Convert: `python tools/art_convert.py full docs/art_source/Window_WinterVeil.png "<Media>/Window_WinterVeil.tga" 1024 1024`
-(the size the other three tables use. The picture is dimmed to 0.85 in code, so paint it a little
-brighter than it should finally look, and keep the middle quiet - the board sits on top of it)
+
+**Written again 2026-10-21 after the first render.** Two things were wrong in the first version of
+this prompt, both mine:
+
+1. **It must be square.** The Wild Gambit window is 816 x 788 - as near square as makes no odds -
+   and the texture is stretched straight onto it. The first render came back 1.83:1 landscape,
+   which would have been drawn **1.72x taller than painted**: round bells into tall ovals.
+2. **It must be dark.** `Window_Tavern.tga` averages 44/255 - a dim tavern table in low light. The
+   first prompt said to paint it *brighter* than it should end up, which is backwards: the picture
+   is dimmed only slightly (0.85) in code, and the players' names, scores and the board are drawn
+   over it in white and gold. A bright table makes all of that hard to read.
+
+Also worth knowing: the board and the two hand columns cover the middle of it. Only a band around
+the outside is ever seen - roughly a sixth of the width down each side, a quarter across the top
+and an eighth across the bottom. So the decoration belongs in that band, while the middle stays a
+plain continuous surface, as the tavern table's does.
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).
 >
-> A wide, flat surface seen straight from above, filling the whole frame edge to edge with no
-> border: the top of a heavy wooden table dusted with snow, laid for the Feast of Winter Veil.
+> **A square picture, exactly as tall as it is wide.** The top of a heavy dark wooden table seen
+> straight from above, flat on, with no tilt and no perspective, filling the whole frame edge to
+> edge. No border, no frame, no background around it - the table is the whole picture.
 >
-> **The middle of the picture must stay quiet and almost empty** - plain snow-dusted wood, softly
-> lit, with no ornament in it, because a game board is laid over it. All the interest belongs round
-> the outer edges: sprigs of evergreen fir and holly with red berries in the corners, a scatter of
-> gold jingle bells, a few pine cones, a short length of red ribbon, and the warm pool of light
-> from a candle just out of frame at one side.
+> It is a **dark, dim scene lit by one low candle somewhere off to the left**: deep brown timber,
+> almost black in the corners, with a soft warm pool of light that never becomes bright. Think of
+> an old tavern table late at night rather than a bright Christmas photograph. The wood grain,
+> knots and worn edges run right across the picture, including the middle.
 >
-> Darker towards the corners, brighter in the middle, so the board reads clearly against it.
+> A fine dusting of snow has settled on the table, heavier round the outside and thinning to almost
+> nothing in the middle.
 >
-> Warm candlelit wood, deep glossy green, warm red, bright white snow; cool blue only in the deepest
-> shadows; snug and festive. Cosy storybook Christmas mood. No text, no letters, no numbers, no
-> logos, no people, no creatures, no user interface.
+> **The middle of the picture must stay plain and quiet** - bare snow-dusted wood, no ornament, no
+> props, nothing bright - because a game board is laid over it and covers it. All the decoration
+> sits in a band round the **outer edge**: a few sprigs of evergreen fir and holly with red
+> berries, two or three gold jingle bells, a pine cone, a short twist of red ribbon. Keep them
+> sparse and tucked into the corners and edges, not crowded, and let the shadows swallow them at
+> the very edge.
+>
+> Dark and restrained overall - deep brown wood, muted green, dark red, soft grey-white snow, a
+> little dull gold, and one warm pool of candlelight. Low contrast, nothing glaring. Snug and
+> festive but dim. No text, no letters, no numbers, no logos, no people, no creatures, no user
+> interface.
