@@ -1,8 +1,8 @@
 # Project status
 
-**Version 1.2.0** · 2026-10-18 · WoW Forever beta (interface 16001)
+**Version 1.3.0** · 2026-10-21 · WoW Forever beta (interface 16001)
 
-First public release, built for CurseForge (`Releases\1.2.0\AzerothAlmanac-1.2.0.zip`). Everything in CHANGELOG.md's 1.2.0 section still needs its in-game pass: see `docs/TEST_CHECKLIST.md`.
+Built for CurseForge (`Releases\1.3.0\AzerothAlmanac-1.3.0.zip`); 1.2.0 was the first public build. A Wild Gambit pass: Execute reaches any smaller card, Mind Control up to 10 spikes, three new sounds, a white flash on a capture, one wave for Blackfathom Deeps, a sparkle burst on the card you choose, and the deck reading as a button. Everything in CHANGELOG.md's 1.3.0 section still needs its in-game pass: see `docs/TEST_CHECKLIST.md` - it wants a **full game restart**, not a `/reload`, because `Media/Deck_Card.tga` is new.
 
 Status key: ✅ verified in game · 🧪 built, needs in-game testing · ⏳ not started
 

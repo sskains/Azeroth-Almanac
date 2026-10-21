@@ -49,11 +49,17 @@ local FACE = {
 	Elemental = "Mining", Giant = "Mining", Dragonkin = "Blacksmithing", Mechanical = "Blacksmithing",
 	Critter = "Herbalism",
 }
--- sounds (file IDs from the game's sound files)
+-- sounds (file IDs from the game's sound files). A newer file may be missing on an older client,
+-- so the ones Shannon picked carry the sound they replaced as a fallback (see Play).
 local SND = {
 	place = 569767,       -- NatureCast
-	capture = 568636,     -- EntanglingRoots
+	capture = 1600378,    -- the artifact forge's trait unlocked (sound kit 83682)
+	capture2 = 568636,    -- EntanglingRoots, if this client hasn't got that file
 	big = 569022,         -- Thorns (a capture by 3 or more)
+	pick = 4555731,       -- a fast whoosh as a card is chosen (sound kit 218933)
+	pick2 = 569423,       -- the rogue's Stealth, if this client hasn't got that file
+	fate = 5201077,       -- the dice roll fate makes (sound kit 229319)
+	fate2 = 840222,       -- the old die, if this client hasn't got that file
 	win = 567439,         -- iQuestComplete (short, under 3 seconds)
 	loss = 567459,        -- igQuestFailed
 	draw = 567400,        -- iQuestActivate
@@ -1573,6 +1579,79 @@ local function EdgePoint(d)
 end
 
 local FLIP_TIME = 0.33 -- (half again slower than it was)
+-- A burst of gold sparkles for the moment a card is chosen on the pick screen.
+--
+-- They are NOT on the card. Clicking a card means the mouse is on it, so Zoom() has laid the close
+-- look over it and set the card itself to alpha 0 ("nothing of it, its glow or its model can show
+-- through") - and anything parented to the card goes invisible with it. They are on a layer of
+-- their own over the window instead, placed where the card is at the moment of the click and left
+-- there, so nothing that happens to the card afterwards moves or hides them.
+-- (On WG, not a local of its own: this file is at Lua's 200 locals per scope.)
+function WG.Sparkle(c)
+	if not (frame and c) then return end
+	-- the card actually on screen: the close look if it is up over this card, else the card
+	local z = frame.zoom
+	local anchor = (z and z:IsShown() and z.under == c) and z or c
+	local cx, cy = anchor:GetCenter()
+	if not cx then return end
+	local fs, ws = anchor:GetEffectiveScale(), frame:GetEffectiveScale()
+	cx, cy = cx * fs / ws - frame:GetLeft(), cy * fs / ws - frame:GetBottom()
+	local w = anchor:GetWidth() * fs / ws
+	local h = anchor:GetHeight() * fs / ws
+	local k = w / CW -- (the close look is far bigger: its sparkles are too)
+	if not frame.sparkLayer then
+		frame.sparkLayer = CreateFrame("Frame", nil, frame)
+		frame.sparkLayer:SetAllPoints()
+		-- above the close look, which is itself above the table
+		frame.sparkLayer:SetFrameLevel(frame:GetFrameLevel() + 260)
+	end
+	local L = frame.sparkLayer
+	if not L.sparks then
+		L.sparks = {}
+		for i = 1, 14 do
+			local t = L:CreateTexture(nil, "OVERLAY", nil, 7)
+			t:SetTexture(GLOW_TEX)
+			t:SetBlendMode("ADD")
+			t:SetVertexColor(1, 0.92, 0.6)
+			t:SetAlpha(0)
+			L.sparks[i] = { tex = t }
+		end
+	end
+	for i, s in ipairs(L.sparks) do
+		s.age = -0.03 * i -- (they kindle one after another rather than all at once)
+		s.life = 0.7 + math.random() * 0.35
+		s.cx, s.cy = cx, cy
+		s.x = (math.random() - 0.5) * w * 1.05
+		s.y = (math.random() - 0.5) * h * 0.5 - h * 0.08
+		s.size = (7 + math.random() * 9) * k
+		s.speed = (26 + math.random() * 26) * k
+	end
+	L.sparking = true
+end
+
+-- the sparkles rise, twinkle and go out; the layer stops stepping when the last one has
+function WG.StepSparks(elapsed)
+	local L = frame and frame.sparkLayer
+	if not (L and L.sparking) then return end
+	local live = false
+	for _, s in ipairs(L.sparks) do
+		s.age = s.age + elapsed
+		if s.age < 0 then
+			live = true
+		elseif s.age < s.life then
+			live = true
+			local p = s.age / s.life
+			s.tex:ClearAllPoints()
+			s.tex:SetPoint("CENTER", frame, "BOTTOMLEFT", s.cx + s.x, s.cy + s.y + s.speed * s.age)
+			s.tex:SetSize(s.size, s.size)
+			s.tex:SetAlpha(0.9 * math.sin(math.pi * p) * (0.7 + 0.3 * math.sin(s.age * 19)))
+		else
+			s.tex:SetAlpha(0)
+		end
+	end
+	L.sparking = live
+end
+
 function CardBling(c, elapsed, clock)
 	local card = c.card
 	if not (card and c:IsShown()) then return end
@@ -2890,8 +2969,11 @@ local function Build()
 			if frame.shuffling then return end
 			if frame.fate then WG:Fate(false) end -- (a card picked after all: the cards turn back up)
 			frame.chosen = (frame.chosen == self.card) and nil or self.card
-			-- it slips into stealth: the rogue's Stealth sound as it's chosen
-			if frame.chosen and db and db.sound ~= false then PlaySoundFile(569423, "SFX") end
+			-- the card is swept up: a fast whoosh and a burst of sparkles as it's chosen
+			if frame.chosen then
+				Play(SND.pick, SND.pick2)
+				WG.Sparkle(self)
+			end
 			WG:PaintPick()
 			if self:IsMouseOver() then Zoom(self) end -- (the close look follows the card's new size)
 		end)
@@ -3493,6 +3575,7 @@ local function Build()
 			end
 		end
 		WG:StepFX(elapsed)
+		WG.StepSparks(elapsed)
 		if self.ghost and self.ghost:IsShown() then CardBling(self.ghost, elapsed, clock) end
 		if self.zoom and self.zoom:IsShown() then CardBling(self.zoom, elapsed, clock) end
 		-- the hovered square's glow breathes
@@ -3660,6 +3743,9 @@ function WG:RefreshHands() ShowHands() end
 local FX = {
 	banish = { "FX_Banish", glow = true, spin = -3, grow = 0.9 },
 	execute = { "FX_Execute", glow = true, grow = 0.35 },
+	-- a capture on the board: Execute's painting in white. (`color` alone can't do it: a vertex
+	-- colour multiplies, so it only ever darkens the red art. The colour is taken out first.)
+	capture = { "FX_Execute", glow = true, grow = 0.35, desat = true, color = { 1, 1, 1 } },
 	polymorph = { "FX_Polymorph", glow = true, spin = 1, grow = 0.6 },
 	shield = { "FX_DivineShield", glow = true, grow = 0.5 },
 	mc = { "FX_MindControl", glow = true, spin = 2, grow = 0.4 },
@@ -3682,6 +3768,11 @@ function WG:FX(key, target, delay, size)
 	local t = table.remove(fxPool) or frame.fxLayer:CreateTexture(nil, "OVERLAY", nil, 7)
 	t:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. spec[1])
 	t:SetBlendMode(spec.glow and "ADD" or "BLEND")
+	-- (the textures are pooled: a tinted effect has to put the colour and the saturation back for
+	-- the next one, or the next effect comes out white)
+	if t.SetDesaturated then t:SetDesaturated(spec.desat and true or false) end
+	if spec.color then t:SetVertexColor(spec.color[1], spec.color[2], spec.color[3])
+	else t:SetVertexColor(1, 1, 1) end
 	t:ClearAllPoints()
 	t:SetPoint("CENTER", target, "CENTER")
 	t.base = (size or 1.25) * CW * (target:GetScale() or 1)
@@ -3834,7 +3925,8 @@ local function Bump(winner, loser, side, color, diamond, delay, big)
 			SetOwner(loser, color, diamond)
 			Flash(loser, color)
 			Act(loser, ANIM_HIT)
-			Play(big and SND.big or SND.capture)
+			WG:FX("capture", loser, 0, big and 1.5 or 1.3)
+			if big then Play(SND.big) else Play(SND.capture, SND.capture2) end
 		end })
 	C_Timer.After(delay, function() Act(winner, ANIM_STRIKE) end)
 end
@@ -4107,12 +4199,18 @@ end
 
 TARGET_HINT = {
 	mine = "click one of your cards on the board", theirs = "click an enemy card on the board",
-	small = "click an enemy card with %d spikes or fewer", execute = "click an enemy card next to a bigger card of yours",
+	small = "click an enemy card with %d spikes or fewer", execute = "click an enemy card smaller than your biggest (%d spikes)",
 	empty = "click an empty square", hands = "click a card in your hand to trade",
 }
 function Hint(ab)
 	if ab.target == "hands" and game and game.pocket then return ("now click their card to take (up to +%d)"):format(ab.up or 2) end
-	return (TARGET_HINT[ab.target] or ""):format(ab.max or 8)
+	if ab.target == "execute" then
+		-- (the reach is your biggest card on the board, so the hint carries the number)
+		if WL.OldExecute and WL.OldExecute() then return "click an enemy card next to a bigger card of yours" end
+		local _, best = WL.Biggest(game and game.board or {}, "me")
+		return (TARGET_HINT.execute):format(best or 0)
+	end
+	return (TARGET_HINT[ab.target] or ""):format(WL.SmallMax and WL.SmallMax(ab) or ab.max or 8)
 end
 
 -- a line in the status for a moment (abilities)
@@ -4733,10 +4831,17 @@ function WG:ApplyAbility(side, cell, cell2)
 				end)
 				Vanish(f, 1.1, (rem.cell % 3 == 0) and 1 or -1)
 			elseif ab.key == "execute" and rem.from and game.frames[rem.from] then
-				-- the executioner strikes; the card falls
+				-- the executioner strikes; the card falls. (2026-10-20: Execute reaches across the
+				-- board, so a strike from further off is aimed at the victim's square.)
 				local d
 				for _, nb in ipairs(WL.Neighbours(rem.from)) do if nb[1] == rem.cell then d = nb[2] end end
 				local a = DIR[d or 1]
+				if not d then
+					local ex, ey = (rem.from - 1) % 3, math.floor((rem.from - 1) / 3)
+					local vx, vy = (rem.cell - 1) % 3, math.floor((rem.cell - 1) / 3)
+					local span = math.max(math.abs(vx - ex), math.abs(vy - ey))
+					if span > 0 then a = { (vx - ex) / span, (vy - ey) / span } end
+				end
 				tinsert(frame.anims, { f = game.frames[rem.from], kind = "strike", t = -0.1, dx = a[1], dy = a[2] })
 				C_Timer.After(0.1, function() Act(game.frames[rem.from], ANIM_STRIKE) end)
 				C_Timer.After(0.25, function() Flash(f, AIM.remove) Act(f, ANIM_HIT) end)
@@ -4776,6 +4881,9 @@ function WG:ApplyAbility(side, cell, cell2)
 end
 
 function WG:PlaceSelected(cell)
+	-- (no cell: board[nil] reads as nil in Lua, so without this a square-less call slipped the
+	-- guard below and the move went out with a nil cell)
+	if not cell then return end
 	if not game or game.over or game.turn ~= "me" or not game.selected or game.board[cell] then return end
 	for h, e in ipairs(game.hands.me) do
 		if e == game.selected then Play1("me", h, cell) return end
@@ -4788,7 +4896,7 @@ function WG:Fate(on)
 	frame.fate = on and true or false
 	if on then frame.chosen = nil end
 	-- the die rolls; the class picker greys out (fate picks the class too)
-	if on and db and db.sound ~= false then PlaySoundFile(({ 840222, 840224, 840226 })[math.random(3)], "SFX") end
+	if on then Play(SND.fate, SND.fate2) end
 	self:PaintClassPicker()
 	Zoom(nil)
 	local now = GetTime()
@@ -5118,7 +5226,10 @@ function WG:Shuffle(shown)
 	Zoom(nil)
 	frame.shuffling = { t = 0, shown = shown, chosen = chosen, dealt = {}, riffled = {} }
 	frame.chosen = nil
-	frame.pickHint:SetText("|cffffd100Shuffling the deck...|r")
+	-- through SetHint, not the font string: it is what re-lays the rules and diamonds (and sets
+	-- the heading font) for the new words. Setting the text here left them where the shorter
+	-- "Choose a card" had put them, so they ran through the lettering.
+	self:SetHint("|cffffd100Shuffling the deck...|r")
 	frame.beginButton:SetEnabled(false)
 	frame.beginButton:SetAlpha(0.55)
 	if db.sound ~= false then
@@ -5459,7 +5570,7 @@ end
 -- checked against the rules (and the creature's real level); a wrong one ends the game.
 ---------------------------------------------------------------------------
 
-local PREFIX, PROTO = "AzAlmWG", "13" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends; 12: Pick Pocket trades hand cards; 13: Banish only up to 10 spikes)
+local PREFIX, PROTO = "AzAlmWG", "14" -- (9: cards carry their kill count; 10: picked cards play at full strength; 11: the pick cap, heartbeats, resends; 12: Pick Pocket trades hand cards; 13: Banish only up to 10 spikes; 14: Execute reaches any smaller card, Mind Control up to 10)
 local POPUP = "AZEROTHALMANAC_WG_CHALLENGE"
 
 -- (#59, DESIGN 81) Playing across versions. Each copy plays a range of protocols; two players use
@@ -5473,7 +5584,7 @@ WG.PROTO_MIN, WG.PROTO_MAX = 12, tonumber(PROTO) -- (12: a copy from before the 
 A.GAME_PROTOCOLS = A.GAME_PROTOCOLS or {}
 A.GAME_PROTOCOLS.wg = { WG.PROTO_MIN, WG.PROTO_MAX }
 -- the protocol each feature first came in (a match on an older protocol plays without it)
-WG.FEATURE_PROTO = { pickpocket = 12, banishCap = 13 }
+WG.FEATURE_PROTO = { pickpocket = 12, banishCap = 13, executeAny = 14, mcTen = 14 }
 function WG:Feature(name)
 	local need = self.FEATURE_PROTO[name]
 	local p = (self.net and self.net.proto) or self.PROTO_MAX
@@ -5481,6 +5592,10 @@ function WG:Feature(name)
 end
 -- (a protocol 12 match: Banish takes any enemy card, as the other copy's rules say)
 WL.OldBanish = function() return not WG:Feature("banishCap") end
+-- (protocol 13 and under: Execute only reached a neighbour of a bigger card of yours, and Mind
+-- Control stopped at 8 spikes. Both sides must play by the same rules, so the older one wins.)
+WL.OldExecute = function() return not WG:Feature("executeAny") end
+WL.OldMC = function() return not WG:Feature("mcTen") end
 function WG.Accepts(p)
 	p = tonumber(p)
 	return p ~= nil and p >= WG.PROTO_MIN and p <= WG.PROTO_MAX

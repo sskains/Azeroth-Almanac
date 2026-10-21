@@ -4,6 +4,70 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## 1.3.0 (2026-10-21)
+
+- **Wild Gambit: Execute reaches across the board** (Shannon). The warrior's Execute removes any
+  enemy card with fewer spikes in total than your biggest card on the board, wherever the two
+  stand; it used to need the card to be next to a bigger card of yours. Your biggest card is the
+  one you own *now*, so losing it shortens the reach, and a frozen card (nobody's, out of play)
+  sets no reach at all. With nothing of yours on the board the spell can't be cast. The striker is
+  that biggest card: its lunge is aimed at the victim's square, now that it can come from a
+  distance. The card is still removed, not taken, and its owner is dealt a new one.
+- **Wild Gambit: Mind Control up to 10 spikes** (Shannon); it was 8.
+- **Wild Gambit: protocol 14.** Both rules above change what the two screens have to agree on, so
+  the protocol goes up (`FEATURE_PROTO.executeAny` and `.mcTen`). A copy on protocol 12 or 13 still
+  plays: that match keeps the old Execute (`WL.OldExecute`, a neighbour of a bigger card of yours)
+  and the old 8-spike Mind Control (`WL.OldMC`), as the older copy's rules say. `PROTO_MIN` stays 12.
+- **Wild Gambit: a capture is marked** (Shannon). The painting Execute uses, in white, flashes over
+  a card as it changes hands, larger for a capture by 3 or more. `WG:FX` effects can carry a colour
+  and have their own colour taken out (`desat`): a vertex colour multiplies, so on its own it could
+  only darken the red art, never whiten it. Both are put back on the pooled texture afterwards, so
+  no later effect comes out tinted or white.
+- **Wild Gambit: Blackfathom Deeps' Rising Tide is one wave** (Shannon). A single sheet of water
+  rises over the whole board, instead of three separate columns of bubbles.
+- **Wild Gambit: three new sounds** (Shannon, picked on Wowhead). Choosing a card on the pick
+  screen is a fast whoosh (sound kit 218933, file 4555731) in place of the rogue's Stealth sound;
+  a capture is the artifact forge's trait-unlocked chime (kit 83682, file 1600378) in place of
+  Entangling Roots; "Let fate decide" is the dice roll (kit 229319, file 5201077) in place of the
+  three old dice. Each keeps the sound it replaced as a fallback: these files are newer than the
+  rest of the addon's, and `PlaySoundFile` says whether it will play, so a client without one is
+  not left silent. A capture by three or more still plays Thorns.
+- **Wild Gambit: "Shuffling the deck..." no longer runs through its own ornament** (Shannon,
+  screenshot). The deal set the hint's font string straight, instead of going through `WG:SetHint`,
+  which is what re-lays the rules and diamonds (and picks the heading font) for new words. They
+  stayed where the shorter "Choose a card" had put them, so the lettering sat on top of them.
+- **Wild Gambit: choosing a card is marked** (Shannon). A burst of gold sparkles rises off the card
+  as you pick it, beside the new whoosh; the steady lift and pulsing glow of a chosen card are
+  unchanged. The sparkles are on a layer of the window's own (`WG.Sparkle` / `WG.StepSparks`),
+  placed where the card is at the moment of the click: clicking a card means the mouse is on it, so
+  `Zoom` has laid the close look over it and set the card itself to alpha 0, and a burst parented
+  to the card was drawn but never seen. They size themselves to whichever card is on screen, so the
+  close look gets larger sparkles. Test: `dev/tests/test_wg_pick_sparkle.py`.
+- **Wild Gambit: the deck reads as a button** (Shannon: "still too subtle that it's a button").
+  The painted deck lifts and grows a little under the mouse, dips while held down, and a streak of
+  light sweeps over it every few seconds, the way the Begin plank already behaves. The deck is
+  painted into the felt and cannot move, so the card is laid over the painting as its own texture
+  (**new file `Media/Deck_Card.tga`**, cut from the felt by the existing `tools/build_deck_card.py`)
+  and hidden until the mouse is on it; it grows by more than it rises, so the lifted card always
+  covers the painted one rather than reading as a second card beside it. The sweep is masked to the
+  card's own shape, so no light falls on the felt around it. The breathing gold outline stays.
+- **Wild Gambit: a move with no square can't go out.** `WG:PlaceSelected(nil)` used to be let
+  through - `board[nil]` reads as nil in Lua, so the "that square is taken" guard didn't catch it -
+  and the move went to the other player with a nil cell, where it broke on `table.concat`. In game
+  you can't click a square that isn't there, so this was only ever reachable from a test, but the
+  guard belongs in the function.
+- Tests: `dev/tests/test_wg_abilities.py` (new) covers Execute's reach, Mind Control's limit, and
+  both old-protocol rules; `test_wg_pick_sparkle.py` (new) the sparkles when a card is chosen.
+- Tests: the whole suite passes again. Two failures had been standing: `test_wg_pvp.py` (rogue
+  against warlock) died on the nil-cell move above, because Pick Pocket leaves its player a spare
+  card, so the board fills on a *played* card - and offline that never ends the game, since
+  `EndGame` for a played card is called when the card lands and the flight runs on the window's
+  `OnUpdate`, which the stub's `RunTimers` doesn't drive. `test_wg_resume.py` was waiting on the
+  "still here" heartbeat, which is a `C_Timer` ticker, and the stub's ticker never ticks; that
+  branch now says so rather than failing. Making the stub's ticker real is a job of its own - it
+  also wakes the journey recorder's, which then writes a point in mid-flight that
+  `test_journey_smooth.py` says it shouldn't.
+
 ## 1.2.0 (2026-10-18)
 
 - **Other languages: the Almanac now works on non-English clients** (Shannon, localization step 1).

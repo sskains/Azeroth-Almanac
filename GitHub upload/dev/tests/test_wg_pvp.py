@@ -67,6 +67,8 @@ def play_out(a, b, log, edit=None, spells=False):
         if ga.over or gb.over:
             break
         mover = a if a.eval("Game().turn") == "me" else b
+        # (a turn with no square left does nothing and says so: see wg_setup's MyMove. The loop
+        # carries on delivering, because what ends the game is still on its way.)
         mover.lua("PlayTurn()" if spells else "MyMove()")
         deliver(a, b, rounds=3, log=log, edit=edit)
         if a.eval("Game().over") or b.eval("Game().over"):

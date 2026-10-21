@@ -567,15 +567,14 @@ local function Run(side, key)
 		for _, s in ipairs(slides) do Slide(s.f, s.cell, key == "mara" and 0.8 or 0.35) end
 		T = 1.3
 	elseif key == "bfd" then
-		for k = 1, 3 do
-			local x = select(1, Cell(k))
-			local b = Pic("FX_Bubbles", x, select(2, Cell(2)) + 40, d.CW * 1.7, d.CH * 1.9, true)
-			Tween(0.1 * k, 1.6, function(p)
-				b:SetAlpha(p < 0.2 and p / 0.2 or 1 - (p - 0.2) / 0.8)
-				b:ClearAllPoints()
-				b:SetPoint("CENTER", frame.board, "TOPLEFT", x, -(select(2, Cell(2)) + 40 - 130 * p))
-			end, function() Free(b) end)
-		end
+		-- (2026-10-20, Shannon) one tide rising over the whole board, not three separate waves
+		local y0 = select(2, Cell(2)) + 40
+		local b = Pic("FX_Bubbles", mx, y0, d.BW * 1.15, d.BH * 1.05, true)
+		Tween(0.1, 1.6, function(p)
+			b:SetAlpha(p < 0.2 and p / 0.2 or 1 - (p - 0.2) / 0.8)
+			b:ClearAllPoints()
+			b:SetPoint("CENTER", frame.board, "TOPLEFT", mx, -(y0 - 130 * p))
+		end, function() Free(b) end)
 		for _, l in ipairs(leaving) do Float(l.f, 0.2) end
 		for _, s in ipairs(slides) do Slide(s.f, s.cell, 0.9) end
 		T = 1.6

@@ -689,7 +689,8 @@ end
 -- sound: the spell's own sound file; sound2: an older file for a client without the newer one
 -- short: the rules on the spell card (text, the full rules, in tooltips)
 -- target: "theirs" (any enemy card), "small" (an enemy card of `max` spikes or fewer), "execute"
--- (an enemy card next to one of yours with more spikes), "mine" (one of your cards), "empty" (a
+-- (an enemy card with fewer spikes than your biggest card on the board), "mine" (one of your
+-- cards), "empty" (a
 -- square), "none" (no target), "hands" (Pick Pocket, 0.69.1: a card in your hand, then one in
 -- theirs with at most `up` spikes more; never a hidden card or the spell card)
 WL.ABILITIES = {
@@ -699,16 +700,21 @@ WL.ABILITIES = {
 		sound = 1487165, sound2 = 567950, text = "Banish an enemy card with 10 spikes or fewer from the board. Its owner is dealt a new card." },
 	MAGE = { key = "polymorph", short = "An enemy card of 10 spikes or fewer becomes a sheep and leaves. Its owner draws a new one.", kind = "remove", name = "Polymorph", icon = "Spell_Nature_Polymorph", target = "small", max = 10,
 		sound = 569526, text = "An enemy card with 10 spikes or fewer turns into a sheep and wanders off. Its owner is dealt a new card." },
-	WARRIOR = { key = "execute", short = "Remove an enemy card next to a stronger card of yours. Its owner draws a new one.", kind = "remove", name = "Execute", icon = "INV_Sword_48", target = "execute",
-		sound = 1267926, sound2 = 567983, text = "Remove an enemy card next to one of yours that has more spikes in total. Its owner is dealt a new card." },
+	-- (2026-10-20, Shannon: any card on the board with fewer spikes than your biggest; it was a
+	-- neighbour of a bigger card of yours. An older copy, protocol 13 and under, keeps the
+	-- neighbour rule: WL.OldExecute)
+	WARRIOR = { key = "execute", short = "Remove any enemy card with fewer spikes than your biggest card on the board. Its owner draws a new one.", kind = "remove", name = "Execute", icon = "INV_Sword_48", target = "execute",
+		sound = 1267926, sound2 = 567983, text = "Remove an enemy card anywhere on the board with fewer spikes in total than your biggest card on the board. Its owner is dealt a new card." },
 	PALADIN = { key = "shield", short = "One of your cards can't be taken, removed or swapped.", kind = "protect", name = "Divine Shield", icon = "Spell_Holy_DivineIntervention", target = "mine",
 		sound = 1267362, sound2 = 569738, text = "One of your cards can't be taken, removed or swapped for the rest of the match." },
 	DRUID = { key = "barkskin", short = "One of your cards gets +1 spike on every side.", kind = "protect", name = "Barkskin", icon = "Spell_Nature_StoneClawTotem", target = "mine",
 		sound = 1366188, sound2 = 569594, text = "One of your cards gets +1 spike on every side for the rest of the match." },
 	SHAMAN = { key = "reincarnation", short = "The next card of yours taken or removed comes back.", kind = "protect", name = "Reincarnation", icon = "Spell_Nature_Reincarnation", target = "none",
 		sound = 1965217, sound2 = 568648, text = "The next time one of your cards is taken or removed, it comes straight back to you." },
-	PRIEST = { key = "mc", short = "Take an enemy card of 8 spikes or fewer.", kind = "swap", name = "Mind Control", icon = "Spell_Shadow_ShadowWordDominate", target = "small", max = 8,
-		sound = 1713567, sound2 = 568399, text = "Take an enemy card on the board with 8 spikes or fewer." },
+	-- (2026-10-20, Shannon: "usable on a card with 10 spikes or fewer"; was 8. An older copy,
+	-- protocol 13 and under, keeps the old limit: WL.OldMC)
+	PRIEST = { key = "mc", short = "Take an enemy card of 10 spikes or fewer.", kind = "swap", name = "Mind Control", icon = "Spell_Shadow_ShadowWordDominate", target = "small", max = 10,
+		sound = 1713567, sound2 = 568399, text = "Take an enemy card on the board with 10 spikes or fewer." },
 	ROGUE = { key = "pickpocket", short = "Swap a card in your hand for one in theirs, at most 2 spikes bigger.", kind = "swap", name = "Pick Pocket", icon = "INV_Misc_Bag_11", target = "hands", up = 2,
 		sound = 567428, text = "Swap a card in your hand for one in your opponent's hand with no more than 2 spikes more than yours. Not their hidden card, and not a spell card." },
 	HUNTER = { key = "trap", short = "Trap an empty square. The next enemy card there freezes: nobody's, out of play.", kind = "swap", name = "Freezing Trap", icon = "Spell_Frost_ChainsOfIce", target = "empty",
@@ -735,7 +741,8 @@ local function Open(board, cell, me)
 	return slot and slot.owner ~= me and not WL.Safe(board, cell)
 end
 
--- one of your cards next to `cell` with more spikes in total than the card there (Execute), or nil
+-- one of your cards next to `cell` with more spikes in total than the card there (Execute before
+-- protocol 14; still the rule in a match with an older copy), or nil
 local function Executioner(board, cell, me)
 	local victim = Sum(board[cell].card)
 	for _, nb in ipairs(WL.Neighbours(cell)) do
@@ -743,6 +750,30 @@ local function Executioner(board, cell, me)
 		if mine and mine.owner == me and Sum(mine.card) > victim then return nb[1] end
 	end
 end
+
+-- your biggest card on the board: its cell and its spike total, or nil with none. Execute's reach
+-- from protocol 14. A frozen card is nobody's and out of play, so it doesn't count.
+-- (not WL.Best, which picks the best cards out of a collection)
+local function Biggest(board, me)
+	local bestCell, bestTotal
+	for c = 1, 9 do
+		local slot = board[c]
+		if slot and slot.owner == me and not slot.frozen then
+			local t = Sum(slot.card)
+			if not bestTotal or t > bestTotal then bestCell, bestTotal = c, t end
+		end
+	end
+	return bestCell, bestTotal
+end
+WL.Biggest = Biggest
+
+-- what a "small" target's spike limit really is right now: Mind Control's went 8 -> 10 in protocol
+-- 14, so a match with an older copy keeps 8 (WL.OldMC)
+local function SmallMax(ability)
+	if ability.key == "mc" and WL.OldMC and WL.OldMC() then return 8 end
+	return ability.max or 8
+end
+WL.SmallMax = SmallMax
 
 local function AnyOpen(board, me)
 	for c = 1, 9 do if Open(board, c, me) then return true end end
@@ -766,8 +797,12 @@ function WL.CanTarget(board, ability, cell, me, stage)
 	if not Open(board, cell, me) then return false end
 	if t == "theirs" then return true end
 	if t == "small" and ability.key == "banish" and WL.OldBanish and WL.OldBanish() then return true end
-	if t == "small" then return Sum(slot.card) <= (ability.max or 8) end
-	if t == "execute" then return Executioner(board, cell, me) ~= nil end
+	if t == "small" then return Sum(slot.card) <= SmallMax(ability) end
+	if t == "execute" then
+		if WL.OldExecute and WL.OldExecute() then return Executioner(board, cell, me) ~= nil end
+		local _, best = Biggest(board, me)
+		return best ~= nil and Sum(slot.card) < best
+	end
 	return false
 end
 
@@ -835,8 +870,12 @@ function WL.Use(board, ability, cell, me, cell2)
 		out.captured[1] = { cell = cell, side = 1, margin = 0, from = cell, mc = true }
 	elseif ability.kind == "remove" then
 		local slot = board[cell]
-		out.removed = { cell = cell, owner = slot.owner, card = slot.card,
-			from = key == "execute" and Executioner(board, cell, me) or nil }
+		local striker
+		if key == "execute" then
+			if WL.OldExecute and WL.OldExecute() then striker = Executioner(board, cell, me)
+			else striker = (Biggest(board, me)) end
+		end
+		out.removed = { cell = cell, owner = slot.owner, card = slot.card, from = striker }
 		board[cell] = nil
 	end
 	return out

@@ -6,6 +6,67 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## 1.3.0 (**full game restart**: the new texture `Media/Deck_Card.tga`. The rest is `/reload`)
+
+- [ ] **Wild Gambit, the hint's ornament:** start a deal. "Shuffling the deck..." is in the large
+  heading font with the gold rule and diamond clear of the lettering at both ends - nothing
+  crossing the words. Check the longer online messages too ("Waiting for ... to answer...") and
+  "Who will you play?", which switch between the heading and the small plain font.
+
+- [ ] **Wild Gambit, choosing a card:** click a card on the pick screen. Gold sparkles rise off it
+  and twinkle out over about a second, **in front of the close look that comes up under the
+  mouse** (they are drawn over everything; if they are hidden behind the enlarged card, say so),
+  and the card keeps its lift and pulsing glow. They should be sized to the enlarged card rather
+  than looking like a few small specks on it. Clicking another card bursts over that one instead;
+  clicking the same card again deselects it with no burst. Let fate decide, which picks for you,
+  should not set any card sparkling.
+
+- [ ] **Wild Gambit, the deck (needs the full restart):** on the pick table and in the lobby -
+  - at rest a streak of light sweeps over the deck every few seconds, **inside the card's own
+    edges**, with no light falling on the felt around it and no rectangle showing. If the sweep
+    spills outside the card, say so: the mask didn't take on this client.
+  - pointing at it: the card lifts and grows slightly, and **the painted card underneath stays
+    covered** - look for a second card's edge, a dark line or a double shadow peeking out at the
+    bottom, which is the thing most likely to go wrong.
+  - holding the mouse down dips it, releasing lifts it again, and it opens the collection.
+  - moving away: it settles back exactly onto the painting with no seam or ghost edge.
+  - the gold outline still breathes at rest and brightens under the mouse, and nothing is left
+    lit over the board once a match starts.
+
+- [ ] **Wild Gambit, Execute (warrior):** with cards of yours on the board, cast Execute. Every
+  enemy card with fewer spikes than your biggest can be clicked, wherever it stands; one the same
+  size or bigger is refused ("Not there: ..."), and the hint names your biggest card's spikes.
+  Your biggest card lunges at the victim from across the board and the card falls - the lunge is
+  aimed at the right square, not off at an angle - and its owner is dealt a new card. With nothing
+  of yours on the board the spell card is dim and can't be cast.
+
+- [ ] **Wild Gambit, Mind Control (priest):** an enemy card of exactly 10 spikes can be taken, one
+  of 11 or more can't, and the spell card and its tooltip say 10.
+
+- [ ] **Wild Gambit, a capture:** when a card changes hands a white burst flashes over it (bigger
+  for a capture by 3 or more). It reads as white, with no red left in it, it doesn't hide the card
+  turning colour, and - cast Execute straight afterwards - **Execute's own effect is still red**:
+  the effects share one pool of textures, so a white one leaking into the next is the thing to
+  watch for. Same for Banish, Polymorph and the rest.
+
+- [ ] **Wild Gambit, Blackfathom Deeps:** the Rising Tide event floods the board in one wave
+  instead of three columns of bubbles; the water covers the board's width without spilling outside
+  it, and the cards still float up and slide down as before.
+
+- [ ] **Wild Gambit, the three new sounds** (the point of the pass - listen with game sounds on,
+  then again with Wild Gambit's sound setting off, when nothing should play):
+  - choosing a card on the pick screen is a short whoosh, not the rogue's Stealth hiss;
+  - a capture is the forge's bright chime, not Entangling Roots' rustle (a capture by three or
+    more still plays Thorns, unchanged);
+  - "Let fate decide" is a dice roll, the same one every time rather than one of three.
+  **If you hear the old sound instead, the client hasn't got the new file** - each new sound falls
+  back to the one it replaced rather than going silent. Say which ones fell back and I'll find
+  files this client has.
+
+- [ ] **Wild Gambit against a 1.2.0 copy** (protocol 13): the match starts normally, and in it
+  Execute only reaches a card next to a bigger card of yours and Mind Control stops at 8 spikes -
+  the older copy's rules, since both screens must agree. Nothing is cancelled mid-match.
+
 ## 1.2.0 (full game restart: new fonts and Data/TalentText; dev/AzerothAlmanac_Pseudo is separate)
 
 - [ ] **A non-English client** (the point of the release). On a German or French client: gathering

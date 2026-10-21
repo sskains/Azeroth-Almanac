@@ -47,6 +47,11 @@ end
 C_Timer = {}
 TIMERS = {}
 function C_Timer.After(t, fn) TIMERS[#TIMERS + 1] = { at = (NOW or 100) + (t or 0), fn = fn } end
+-- A ticker that never ticks. Nothing built on one runs in a test: Wild Gambit's "still here" to
+-- the other player every 15 seconds, its gone-quiet note at a minute and its give-up at five.
+-- Making it real is a job of its own - it also starts the journey recorder's own ticker, which
+-- then writes a point in mid-flight that test_journey_smooth says it shouldn't, so that has to be
+-- looked at in the same breath. Until then, don't write a test that waits on a ticker.
 function C_Timer.NewTicker(t, fn) local k = { Cancel = function() end } return k end
 function C_Timer.NewTimer(t, fn) C_Timer.After(t, fn) return { Cancel = function() end } end
 -- runs the timers due by `NOW + dt` (and any they add that are also due)

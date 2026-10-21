@@ -42,6 +42,15 @@ local GLOW_W, GLOW_H, GLOW_PAD, GLOW_SHEET = 178, 177, 10, 256
 local GLOW_TINT = { 1.0, 0.74, 0.24 }   -- deep gold, not candlelight
 local GLOW_ALPHA = 1.0               -- how brightly the deck lights up under the mouse
 local PULSE_LOW, PULSE_HIGH, PULSE_SPEED = 0.5, 0.95, 2.4   -- the outline's breath at rest
+-- Media\Deck_Card (tools/build_deck_card.py): the painted card cut out of the felt onto its own
+-- texture, 158 x 157 at the top left of a 256 sheet. It is laid exactly over the painting, hidden
+-- until the mouse is on it, and it is what lifts and dips - the deck is part of the table's
+-- painting and cannot itself move, and a glow alone reads as decoration rather than a button.
+local CARD_ART_W, CARD_ART_H, CARD_SHEET = 158, 157, 256
+-- it grows as it rises, by more than it rises, so the lifted card always covers the painted one
+-- underneath: both showing at once would read as two cards.
+local LIFT_RISE, LIFT_GROW = 3, 0.08
+local SHEEN_EVERY, SHEEN_TIME = 4.2, 0.85   -- the light that sweeps over the deck, and how long it takes
 local PORTRAIT_DROP = 52     -- how far under the portrait the panel starts: clear of the dragon
 
 local panel, scroll, child, deckButton
@@ -472,6 +481,28 @@ local function BuildButton()
 			local card = GLOW_W - 2 * GLOW_PAD
 			self.lit:SetSize(w * (GLOW_W / card), h * (GLOW_H / (GLOW_H - 2 * GLOW_PAD)))
 		end
+		if self.sheenMask then
+			-- The mask is the whole sheet, sized and placed so the card on it lands exactly on the
+			-- painted card. (The sheet is scaled rather than cropped with SetTexCoord, which a mask
+			-- texture does not take on every client.) The sheen is then clipped to the card's own
+			-- shape, so no light falls on the felt around it.
+			self.sheenMask:ClearAllPoints()
+			self.sheenMask:SetSize(w * (CARD_SHEET / CARD_ART_W), h * (CARD_SHEET / CARD_ART_H))
+			self.sheenMask:SetPoint("TOPLEFT", self, "TOPLEFT", 0, 0)
+			self.sheen:SetSize(w * 0.55, h * 1.5)
+		end
+		if self.card then self:LiftTo(self.lift or 0) end
+	end
+
+	-- how far the card is lifted: 0 lying on the table, 1 fully under the mouse, 0.4 held down
+	function b:LiftTo(p)
+		self.lift = p
+		local w, h = CARD_R - CARD_L, CARD_B - CARD_T
+		local grow = 1 + LIFT_GROW * p
+		self.card:SetSize(w * grow, h * grow)
+		self.card:ClearAllPoints()
+		self.card:SetPoint("CENTER", self, "CENTER", 0, LIFT_RISE * p)
+		self.card:SetAlpha(math.min(1, p * 3))
 	end
 	frame.pick:HookScript("OnSizeChanged", function() if b.Place then b:Place() end end)
 
@@ -499,6 +530,21 @@ local function BuildButton()
 	b.lit:SetVertexColor(GLOW_TINT[1], GLOW_TINT[2], GLOW_TINT[3])
 	b.lit:SetAlpha(0)
 
+	-- the card that lifts (Deck_Card, above), and the light that sweeps over the deck
+	b.card = lift:CreateTexture(nil, "ARTWORK", nil, 1)
+	b.card:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Deck_Card")
+	b.card:SetTexCoord(0, CARD_ART_W / CARD_SHEET, 0, CARD_ART_H / CARD_SHEET)
+	b.card:SetAlpha(0)
+	b.sheen = lift:CreateTexture(nil, "ARTWORK", nil, 3)
+	b.sheen:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+	b.sheen:SetBlendMode("ADD")
+	b.sheen:SetVertexColor(1, 0.95, 0.72)
+	b.sheen:SetAlpha(0)
+	b.sheenMask = lift:CreateMaskTexture()
+	b.sheenMask:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\Deck_Card",
+		"CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	b.sheen:AddMaskTexture(b.sheenMask)
+
 	b:SetScript("OnEnter", function(self)
 		self.hover = true
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -510,8 +556,11 @@ local function BuildButton()
 	end)
 	b:SetScript("OnLeave", function(self)
 		self.hover = false
+		self.pressed = false
 		GameTooltip:Hide()
 	end)
+	b:SetScript("OnMouseDown", function(self) self.pressed = true end)
+	b:SetScript("OnMouseUp", function(self) self.pressed = false end)
 	b:SetScript("OnUpdate", function(self, elapsed)
 		-- The outline breathes quietly while the deck sits there, which is what says it can be
 		-- clicked, and comes up to full under the mouse. A caption used to do that job; the tooltip
@@ -522,6 +571,23 @@ local function BuildButton()
 		local a = (self.lit:GetAlpha() / GLOW_ALPHA)
 		a = a + (want - a) * math.min(1, elapsed * 10)
 		self.lit:SetAlpha(a * GLOW_ALPHA)
+		-- the card lifts under the mouse and dips while held down: moving is what reads as a
+		-- button, which the glow on its own never quite did
+		local lifted = self.lift or 0
+		local toward = self.hover and (self.pressed and 0.4 or 1) or 0
+		if math.abs(toward - lifted) > 0.002 then
+			self:LiftTo(lifted + (toward - lifted) * math.min(1, elapsed * 12))
+		end
+		-- and a streak of light sweeps over it every few seconds, as on the Begin plank
+		local sp = (GetTime() % SHEEN_EVERY) / SHEEN_TIME
+		if sp < 1 then
+			local cw = CARD_R - CARD_L
+			self.sheen:ClearAllPoints()
+			self.sheen:SetPoint("CENTER", self, "CENTER", -cw * 0.85 + cw * 1.7 * sp, 0)
+			self.sheen:SetAlpha(0.55 * math.sin(math.pi * sp))
+		else
+			self.sheen:SetAlpha(0)
+		end
 	end)
 	b:SetScript("OnClick", function() WG:ToggleDeck() end)
 
@@ -531,7 +597,10 @@ local function BuildButton()
 	-- which has just stopped running. It hung lit over the board for the whole match.
 	b:HookScript("OnHide", function(self)
 		self.hover = false
+		self.pressed = false
 		if self.lit then self.lit:SetAlpha(0) end
+		if self.card then self.lift = 0 self.card:SetAlpha(0) end
+		if self.sheen then self.sheen:SetAlpha(0) end
 		if self.liftHolder then self.liftHolder:Hide() end
 	end)
 	b:HookScript("OnShow", function(self)

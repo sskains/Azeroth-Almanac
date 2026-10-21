@@ -24,6 +24,12 @@ function MyMove(h, cell)
 	local g = Game()
 	if not g or g.over or g.turn ~= "me" then return false end
 	if not cell then for i = 1, 9 do if not g.board[i] then cell = i break end end end
+	-- no square left: the board is full and this screen is waiting for the game to end. (Offline it
+	-- never will on its own - EndGame for a played card is called when the card lands, and the
+	-- flight runs on the window's OnUpdate, which RunTimers doesn't drive.) Don't ask for a move
+	-- with no cell: g.board[nil] reads as nil, so PlaceSelected used to let it through and the move
+	-- went out with a nil square.
+	if not cell then return false end
 	h = h or 1
 	g.selected = g.hands.me[h]
 	g.flying = 0
