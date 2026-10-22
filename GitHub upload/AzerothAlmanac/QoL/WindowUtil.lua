@@ -503,23 +503,11 @@ end
 local SEASON_MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 local DECOR = {
 	WinterVeil = {
-		-- stripAspect is the painted strip's own width over its height. The strip is stretched
-		-- across whatever width the window is, so the number of repeats has to follow that width
-		-- or the drift flattens out: three repeats across a 900 px window stretched a 4:1 picture
-		-- to 11:1, and the snow read as a line with a few stray icicles.
-		-- (Shannon: "the top snow drift looks a little harsh"). The drift is drawn a little taller
-		-- and a little short of full strength; the rest of the softening is in the texture, whose
-		-- top is faded out by tools/build_season_decor.py so the snow comes from behind the frame
-		-- rather than ending on a straight white line.
-		-- stripCells: the texture holds that many different drifts side by side, and each patch
-		-- draws a different one. One drift reused everywhere reads as a copy-and-paste job however
-		-- it is scaled and flipped - the eye finds the repeat before it finds the snow.
-		-- The painted sheet holds four drifts, each in a cell of its own, ridges aligned along the
-		-- top. A cell is nearly square because one drift's icicle hangs three times the depth of
-		-- its own ridge, and they keep the scale they were painted at relative to each other - that
-		-- is what makes one read as deep and heavy and another as shallow. stripH is the cell's
-		-- height, not the ridge's: the ridges come out around 17 px of it.
-		strip = "Season_Snow_Top", stripH = 92, stripAspect = 1.03, stripAlpha = 0.88, stripCells = 4,
+		-- One long drift drawn across the whole top in a single piece, scaled UNIFORMLY: the height
+		-- follows the width, so nothing is ever stretched sideways. stripAspect is the picture's own
+		-- width over its height; the clamp keeps it visible on the narrowest window the Almanac has
+		-- (about 300 px) without becoming a band across the widest (about 1010).
+		strip = "Season_Snow_Top", stripAspect = 16, stripAlpha = 0.88, stripMin = 26, stripMax = 62,
 		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
 		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
 		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
@@ -553,42 +541,24 @@ local function Flakes(deco, d)
 	end
 end
 
--- (2026-10-22, Shannon: "the snow drift across the window frame just looks too in-organic, just
--- like a white streak mostly"). It was one picture tiled edge to edge, and an unbroken ribbon of
--- snow reads as a streak however soft its top is - snow gathers in drifts with bare frame between
--- them. So it is laid as separate patches of different width, depth and facing, with gaps between.
--- The jitter is a fixed list rather than random, so a window looks the same each time it opens.
-local JITTER = { 0.37, 0.61, 0.29, 0.83, 0.17, 0.71, 0.43, 0.95 }
-
+-- (2026-10-22, Shannon: "would one long image that just scales with the window not be better?")
+-- Yes. This was a sheet of drifts laid along the top as separate patches, and before that one
+-- drift tiled edge to edge. Both read as placed copies: the eye finds the arrangement before it
+-- finds the snow. One long picture drawn in a single piece has no repeat in it to find.
+--
+-- It is scaled UNIFORMLY - the height follows the width - so nothing is ever stretched sideways.
+-- A window half the width simply gets finer snow, which no one notices; a drift squashed to half
+-- its proportions, with fat stubby icicles, everyone does. The clamp keeps it visible on a narrow
+-- window and stops it becoming a band across a very wide one.
 local function Lay(deco, d, width)
 	width = math.floor(width or 0)
 	if width < 2 or deco.laidAt == width then return end
 	deco.laidAt = width
-	local n = math.min(#deco.patches, math.max(2, math.floor(width / 150 + 0.5)))
-	local seg, aspect = width / n, d.stripAspect or 4
-	for i, tex in ipairs(deco.patches) do
-		if i > n then
-			tex:Hide()
-		else
-			local j = (i - 1) % #JITTER
-			local ph = d.stripH * (0.72 + 0.46 * JITTER[j + 1])
-			local pw = math.min(seg, ph * aspect * (0.92 + 0.22 * JITTER[(j + 1) % #JITTER + 1]))
-			local x = seg * (i - 1) + math.max(0, seg - pw) * JITTER[(j + 3) % #JITTER + 1]
-			tex:SetTexture(SEASON_MEDIA .. d.strip)
-			tex:SetSize(pw, ph)
-			tex:ClearAllPoints()
-			tex:SetPoint("TOPLEFT", deco, "TOPLEFT", x, 0)
-			-- a different drift from the sheet for each patch, and every third one faces the other
-			-- way, so neighbours never repeat even when the sheet runs out
-			local cells = d.stripCells or 1
-			local c = (i - 1) % cells
-			local u0, u1 = c / cells, (c + 1) / cells
-			if i % 3 == 0 then u0, u1 = u1, u0 end
-			tex:SetTexCoord(u0, u1, 0, 1)
-			tex:SetAlpha(d.stripAlpha or 1)
-			tex:Show()
-		end
-	end
+	local h = width / (d.stripAspect or 16)
+	deco.strip:SetHeight(math.max(d.stripMin or 26, math.min(d.stripMax or 62, h)))
+	deco.strip:SetAlpha(d.stripAlpha or 1)
+	deco.strip:SetTexture(SEASON_MEDIA .. d.strip)
+	deco.strip:Show()
 end
 
 local function Drive()
@@ -644,10 +614,9 @@ function ns.DressForSeason(frame, opts)
 	deco:EnableMouse(false)
 	deco:SetFrameLevel(frame:GetFrameLevel() + 60)
 	if deco.SetClipsChildren then pcall(deco.SetClipsChildren, deco, true) end
-	deco.patches = {}
-	for k = 1, 7 do
-		deco.patches[k] = deco:CreateTexture(nil, "OVERLAY", nil, 2)
-	end
+	deco.strip = deco:CreateTexture(nil, "OVERLAY", nil, 2)
+	deco.strip:SetPoint("TOPLEFT", 0, 0)
+	deco.strip:SetPoint("TOPRIGHT", 0, 0)
 	deco.corners = {}
 	for i, c in ipairs(CORNERS) do
 		local t = deco:CreateTexture(nil, "OVERLAY", nil, 1)

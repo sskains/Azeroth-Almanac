@@ -151,7 +151,7 @@ def seamless(img, blend=0.18):
     return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 
-def key_background(img, near=40.0, far=100.0):
+def key_background(img, near=55.0, far=110.0, floor=0.10):
     """Take out the flat background, whatever shade of magenta it actually is.
 
     art_convert.key_magenta is tuned for pure #FF00FF and measures how magenta a pixel is. These
@@ -169,6 +169,9 @@ def key_background(img, near=40.0, far=100.0):
     bg = np.median(border, axis=0)
     d = np.sqrt(((a - bg) ** 2).sum(2))
     alpha = np.clip((d - near) / (far - near), 0, 1)
+    # anything barely above the background goes fully clear. Left in, that haze is invisible on its
+    # own but survives a crop, and every piece then carries a soft rectangle around it.
+    alpha[alpha < floor] = 0.0
     safe = np.maximum(alpha, 1e-3)[..., None]
     rgb = np.clip((a - bg * (1.0 - alpha[..., None])) / safe, 0, 255)
     return Image.fromarray(np.dstack([rgb, alpha * 255]).astype(np.uint8), "RGBA")
@@ -280,6 +283,65 @@ def make_sheet(img, cols=4, take=0.55):
     return sheet
 
 
+def long_strip(img, out=(2048, 128), keep=85, factor=0.55, n=7):
+    """One continuous drift across the whole window, instead of patches of a repeated one.
+
+    A sheet of four drifts, laid as separate patches, still reads as placed copies - the eye finds
+    the arrangement. One long picture stretched across the window has no repeat to find, and is
+    drawn in one piece: the window scales it uniformly (height follows width) so nothing distorts.
+
+    Until a long one is painted, it is composed here from the drifts that were: several of them
+    along the strip at varied size, spacing and facing, with their icicles shortened so they do not
+    hang over the window's own buttons.
+    """
+    runs = find_drifts(img)[0]
+    src = img.convert("RGBA")
+    cells = []
+    for x0, x1 in runs:
+        cell = shorten_icicles(src.crop((x0, 0, x1 + 1, src.height)), keep, factor)
+        cell = cell.crop(cell.getbbox()) if cell.getbbox() else cell
+        # fade each drift's own ends, not just the strip's: cropped square they leave a visible
+        # rectangle round every one of them once they are laid side by side
+        cells.append(soften_ends(cell, 0.14))
+    if not cells:
+        return None
+    W, H = out
+    strip = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    JIT = (0.62, 0.95, 0.74, 1.0, 0.68, 0.88, 0.80)
+    span = W / n
+    for i in range(n):
+        c = cells[i % len(cells)]
+        scale = (H * JIT[i % len(JIT)]) / c.height
+        w2, h2 = max(1, int(c.width * scale)), max(1, int(c.height * scale))
+        piece = c.resize((w2, h2), Image.LANCZOS)
+        if i % 3 == 1:
+            piece = piece.transpose(Image.FLIP_LEFT_RIGHT)
+        x = int(i * span + max(0, span - w2) * ((i * 37) % 10) / 10.0)
+        strip.alpha_composite(piece, (min(x, W - w2), 0))
+    return strip
+
+
+def shorten_icicles(img, keep=85, factor=0.5):
+    """Squash what hangs below the ridge, leaving the ridge itself alone.
+
+    This painting's icicles are long - one hangs three times the depth of its own ridge - and drawn
+    at a size where the snow reads properly they reached down over the window's own buttons. Making
+    the whole thing smaller would have taken the snow with it, which is the part worth seeing, so
+    only the rows below `keep` are compressed. The ridge keeps its weight, the icicles lose half
+    their reach, and the cell stays the same height with clear space under them.
+    """
+    a = img.convert("RGBA")
+    w, h = a.size
+    if h <= keep:
+        return a
+    tail = a.crop((0, keep, w, h))
+    short = tail.resize((w, max(1, int((h - keep) * factor))), Image.LANCZOS)
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    out.paste(a.crop((0, 0, w, keep)), (0, 0))
+    out.paste(short, (0, keep))
+    return out
+
+
 def soften_cells(img, cols=4, frac=0.10):
     """Fade each drift on the sheet away at its own ends, not just the sheet's.
 
@@ -323,9 +385,10 @@ def painted(src, size, strip=False, corner=False):
         img = trim(img)
     if strip:
         img = soften_top(trim(img))
-        built = sheet_from_drifts(img)
-        img = built if built is not None else make_sheet(img)
-        img = soften_cells(img, cols=4)
+        built = long_strip(img)
+        if built is not None:
+            return soften_ends(built).resize(size, Image.LANCZOS)
+        img = shorten_icicles(soften_cells(img, cols=4))
     return img.resize(size, Image.LANCZOS)
 
 
@@ -338,7 +401,7 @@ def write_tga(img, path):
         f.write(hdr + img.transpose(Image.FLIP_TOP_BOTTOM).tobytes("raw", "BGRA"))
 
 
-WANTED = {"Season_Snow_Top": (1024, 256), "Season_Frost_Corner": (128, 128),
+WANTED = {"Season_Snow_Top": (2048, 128), "Season_Frost_Corner": (128, 128),
           "Season_Emblem_Sprig": (128, 128), "Season_Minimap_Cap": (64, 64)}
 
 

@@ -6,6 +6,18 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **One long drift across the window's top, scaled with it** (Shannon: "would one long image that
+  just scales with the window not be better?" - it is). It has been three things: one drift tiled
+  edge to edge, which read as a white streak; a sheet of four laid as separate patches, which read
+  as placed copies, because the eye finds the arrangement before it finds the snow. A single long
+  picture has no repeat in it to find, and is far less code besides.
+  It is scaled **uniformly** - the height follows the width - so nothing is ever stretched
+  sideways: a narrow window gets finer snow, which nobody notices, rather than fat stubby icicles,
+  which everybody does. Clamped between 26 and 62 px for the narrowest and widest windows.
+  Until a long one is painted, `long_strip` composes one from the four-drift sheet with the icicles
+  shortened, since at a size where the snow read properly they hung over the window's own buttons.
+  The prompt for a painted one is in `docs/ART_ASSETS.md`.
+
 - **The painted sheet of drifts is in**: four drifts actually painted apart, so no two patches
   along a window's top are the same picture. Taking it needed more than keying:
   - **The drifts are found, not counted.** Asked for four panels, the render has five runs of paint

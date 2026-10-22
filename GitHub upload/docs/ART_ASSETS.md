@@ -815,48 +815,52 @@ shapes than the emblem's. 64 x 64.
 >
 > **Only the snow is painted** - no button, no circle, no shadow on the magenta. No text, no logos.
 
-### `Season_Snow_Top`, second go - four drifts, not one
+### `Season_Snow_Top` - one long drift (2026-10-22, Shannon)
 
-**2026-10-22** (Shannon: "it does kind of just look segmented... it just looks kind of like a lazy
-copy and paste job"). Quite right, and no amount of code fixes it. The window lays the drift along
-its top edge as separate patches with gaps between - which is what snow does - but every patch was
-drawing the same picture. Scaling it, flipping it and varying the gaps does not help: the eye finds
-the repeat before it finds the snow.
+Three goes at this, and the third was Shannon's question rather than my answer: "would one long
+image that just scales with the window not be better?" It is. The first version tiled one drift
+edge to edge and read as a white streak. The second laid a sheet of four as separate patches, which
+read as placed copies - the eye finds the arrangement before it finds the snow. **A single long
+picture has no repeat in it to find.**
 
-Until a better source exists the converter makes a sheet of four out of the one painting, by taking
-four overlapping stretches of it and mirroring every other one (`make_sheet`). That gives genuinely
-different icicles in each patch, which is a real improvement, but all four still share the painting's
-one silhouette. Four drifts actually painted apart would be better.
+It is drawn in one piece and scaled **uniformly** - the height follows the width - so nothing is
+ever stretched sideways. A narrow window simply gets finer snow, which nobody notices; a drift
+squashed to half its proportions, with fat stubby icicles, everybody does. `stripMin`/`stripMax` in
+`QoL/WindowUtil.lua` clamp it for the narrowest window the Almanac has (about 300 px) and the widest
+(about 1010).
 
-The texture is **1024 x 64, four drifts side by side, each in its own 256-wide quarter**. The window
-draws one quarter per patch.
+Until a long one is painted, `long_strip` composes one from the four-drift sheet: several drifts
+along it at varied size, spacing and facing, each one's icicles shortened so they do not hang over
+the window's own buttons. It works, but a strip painted in one go would have the variety and the
+continuity without the compositing.
+
+**The texture is 2048 x 128** - sixteen times as wide as it is tall. A source wider than ten times
+its height is taken as a finished strip and used as it is; anything squarer is composed as above.
 
 > Hand-painted fantasy game art, World of Warcraft style, painterly and ornate but readable.
 >
-> **A long horizontal banner, sixteen times as wide as it is tall**, on a flat magenta background,
-> divided into **four equal panels side by side**.
+> **An extremely long, thin horizontal banner - sixteen times as wide as it is tall** - on a flat
+> magenta background.
 >
-> In each panel, a separate ridge of fresh snow lying along the **top edge**, as it would settle on
-> the top of a wooden window frame. **The four must be clearly different from one another** - not
-> the same shape repeated:
+> A continuous run of fresh snow lying along the **top edge** of the picture, as it would settle
+> along the top of a long wooden window frame. It is **uneven all the way across and never repeats
+> itself**: deep heaped drifts in some places, thinning almost to nothing in others, with two or
+> three stretches of bare frame where no snow has settled at all. Think of a real roof edge after a
+> snowfall, not a decorative border.
 >
-> - the first is long and shallow, with three slender icicles close together near its left;
-> - the second is deeper and heavier in the middle, sagging, with one long thick icicle;
-> - the third is broken and patchy, a low ridge with a gap in it, and four short icicles spread out;
-> - the fourth is a fat rounded heap towards its right, with two icicles of very different lengths
->   and a small clump of snow dropping away below it.
+> Icicles hang from the underside here and there, in loose groups rather than evenly spaced - some
+> single and short, a few long and tapering, one or two in a cluster. **None of them hangs more than
+> about a third of the picture's height**, so the snow stays the main thing.
 >
-> Every ridge **fades to nothing at both its own left and right ends**, so it tapers into bare frame
-> rather than stopping square. Each stays inside its own panel and does not touch its neighbours:
-> leave a clear gap of plain magenta between them.
+> A few small clumps of snow have broken away and sit just below the ridge.
+>
+> The snow **fades to nothing at the far left and far right ends** of the picture.
 >
 > Bright clean white on top, shading to soft cold blue-grey in the hollows underneath, with a faint
 > sparkle. The icicles are clear and glassy, pale blue at the core with a bright highlight down one
 > side.
 >
 > **Only the snow and the icicles are painted.** Everything else is flat magenta, including the
-> whole lower part of every panel. No window, no wood, no frame, no shadow cast onto the magenta.
+> whole lower half of the picture. No window, no wood, no frame, no shadow cast onto the magenta.
 > No text, no logos.
 
-**On arrival** it is detected automatically: a source wider than eight times its height is taken as
-a sheet already and used as it is, anything squarer is cut into four by `make_sheet` as now.
