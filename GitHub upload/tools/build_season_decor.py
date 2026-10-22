@@ -4,10 +4,12 @@ Azeroth Almanac - the seasonal dress for the Almanac's own windows (placeholder 
 Four small textures, generated rather than painted so the code can be finished and looked at before
 the real art exists. Every one is alpha-keyed and meant to sit over the window's own border.
 
-  Season_Snow_Top      256 x 64    a drift of snow with a few icicles. Drawn across the top edge of
-                                   every window, TILED horizontally - windows run from about 300 to
-                                   900 px wide and one stretched copy would smear - so the left and
-                                   right edges of this texture must match.
+  Season_Snow_Top     1024 x 64    FOUR different drifts of snow side by side, each in its own
+                                   quarter. The window lays them along its top edge as separate
+                                   patches with gaps; one drift reused for all of them reads as a
+                                   copy-and-paste job however much it is scaled and flipped, which
+                                   is what four of them are for. Each quarter is faded to nothing
+                                   at its own left and right ends and along its top.
   Season_Frost_Corner  128 x 128   frost creeping in from the top-left corner; the other three
                                    corners are this one mirrored, so it must look right flipped.
   Season_Emblem_Sprig   64 x 64    a cap of snow for the top of the round gold emblem.
@@ -48,15 +50,29 @@ def rgba(rgb, a):
     return Image.fromarray(out.astype(np.uint8), "RGBA")
 
 
-def snow_top(w=256, h=64):
+def snow_sheet(cols=4, w=256, h=64):
+    """Four generated drifts side by side, each a little different, as the painted sheet will be."""
+    sheet = Image.new("RGBA", (w * cols, h), (0, 0, 0, 0))
+    for c in range(cols):
+        sheet.paste(snow_top(w, h, seed=c), (c * w, 0))
+    return sheet
+
+
+def snow_top(w=256, h=64, seed=0):
     """Snow lying along the top, its lower edge uneven, with a few icicles under it."""
     yy, xx = np.mgrid[0:h, 0:w]
     # the drift's depth varies along the strip; wrap-safe, so tiling does not show a seam
     k = 2 * np.pi / w
-    depth = 20 + 7 * np.sin(k * xx) + 4 * np.sin(2 * k * xx + 1.1) + 3 * np.sin(3 * k * xx + 2.3)
+    s = 1.0 + 0.7 * seed
+    depth = (17 + 4 * seed + 7 * np.sin(k * xx * s) + 4 * np.sin(2 * k * xx + 1.1 * s)
+             + 3 * np.sin(3 * k * xx + 2.3 * s))
     a = np.clip((depth - yy) / 4.0, 0, 1)
     # icicles: a few narrow spikes hanging from the drift
-    for cx, length, width in ((38, 26, 2.0), (96, 17, 1.6), (150, 30, 2.2), (206, 20, 1.8)):
+    spikes = (((38, 26, 2.0), (96, 17, 1.6), (150, 30, 2.2), (206, 20, 1.8)),
+              ((60, 20, 1.8), (128, 31, 2.1), (196, 14, 1.5)),
+              ((24, 15, 1.6), (84, 28, 2.0), (140, 19, 1.7), (188, 25, 1.9), (232, 12, 1.4)),
+              ((70, 33, 2.3), (160, 18, 1.7)))[seed % 4]
+    for cx, length, width in spikes:
         d = np.abs(xx - cx)
         tip = depth + length
         spike = (yy > depth - 3) & (yy < tip) & (d < width * (1 - (yy - depth) / max(length, 1)))
@@ -181,6 +197,47 @@ def soften_top(img, frac=0.22, blur=1.4):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
 
 
+def make_sheet(img, cols=4, take=0.55):
+    """Build a sheet of several drifts out of a painting that holds only one.
+
+    The ideal source is four drifts painted separately. Until there is one, four different stretches
+    of a single painted drift are taken - overlapping, so each gets its own lumps and its own
+    icicles - and every other one is mirrored. That is real variety, not the same picture scaled:
+    the window draws a different cell for each patch, and the eye stops finding the repeat.
+    """
+    a = img.convert("RGBA")
+    w, h = a.size
+    cw = int(w * take)
+    step = (w - cw) / max(cols - 1, 1)
+    sheet = Image.new("RGBA", (cw * cols, h), (0, 0, 0, 0))
+    for c in range(cols):
+        x = int(c * step)
+        cell = a.crop((x, 0, x + cw, h))
+        if c % 2 == 1:
+            cell = cell.transpose(Image.FLIP_LEFT_RIGHT)
+        sheet.paste(cell, (c * cw, 0))
+    return sheet
+
+
+def soften_cells(img, cols=4, frac=0.10):
+    """Fade each drift on the sheet away at its own ends, not just the sheet's.
+
+    The sheet holds four drifts side by side and the window draws one at a time, so a fade at the
+    sheet's outer edges would leave the two inner drifts cut off where they meet their neighbours.
+    """
+    a = np.asarray(img.convert("RGBA"), np.float32)
+    w = a.shape[1]
+    cw = w // cols
+    n = max(2, int(cw * frac))
+    ramp = np.clip(np.linspace(0.0, 1.0, n), 0, 1) ** 1.3
+    for c in range(cols):
+        x0 = c * cw
+        x1 = x0 + cw
+        a[:, x0:x0 + n, 3] *= ramp[None, :]
+        a[:, x1 - n:x1, 3] *= ramp[::-1][None, :]
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
+
+
 def soften_ends(img, frac=0.10):
     """Fade the drift away at both ends.
 
@@ -204,7 +261,10 @@ def painted(src, size, strip=False, corner=False):
     if corner:
         img = trim(img)
     if strip:
-        img = soften_ends(soften_top(trim(img)))
+        img = soften_top(trim(img))
+        if img.width < img.height * 8:        # one drift painted, not a sheet of them
+            img = make_sheet(img)
+        img = soften_cells(img)
     return img.resize(size, Image.LANCZOS)
 
 
@@ -217,12 +277,12 @@ def write_tga(img, path):
         f.write(hdr + img.transpose(Image.FLIP_TOP_BOTTOM).tobytes("raw", "BGRA"))
 
 
-WANTED = {"Season_Snow_Top": (256, 64), "Season_Frost_Corner": (128, 128),
+WANTED = {"Season_Snow_Top": (1024, 64), "Season_Frost_Corner": (128, 128),
           "Season_Emblem_Sprig": (128, 128), "Season_Minimap_Cap": (64, 64)}
 
 
 def main(media, art=None):
-    for name, img in (("Season_Snow_Top", snow_top()),
+    for name, img in (("Season_Snow_Top", snow_sheet()),
                       ("Season_Frost_Corner", frost_corner()),
                       ("Season_Emblem_Sprig", cap(128)),
                       ("Season_Minimap_Cap", cap(64, 0.40, 0.10, 1.25, ((-0.15, 0.05), (0.14, 0.06))))):

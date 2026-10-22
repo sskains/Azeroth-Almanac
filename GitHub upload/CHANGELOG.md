@@ -6,6 +6,14 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Each drift along the window's top is a different drift** (Shannon: "it just looks kind of like
+  a lazy copy and paste job"). Laying the snow as separate patches fixed the ribbon, but every
+  patch still drew the same picture, and scaling and flipping it does not hide that - the eye finds
+  the repeat before it finds the snow. The texture is a **sheet of four** now and each patch draws
+  a different one. Until four are painted apart, the converter builds the sheet out of the single
+  painting by taking four overlapping stretches of it and mirroring every other one, which gives
+  each patch its own icicles. The prompt for a properly painted sheet is in `docs/ART_ASSETS.md`.
+
 - **The snow lies in drifts, not a ribbon** (Shannon: "the snow drift across the window frame just
   looks too in-organic, just like a white streak mostly"). Softening its top edge helped but could
   not fix it: one picture tiled edge to edge is a continuous band of white, and snow does not do

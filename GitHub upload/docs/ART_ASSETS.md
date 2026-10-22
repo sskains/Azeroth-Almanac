@@ -814,3 +814,49 @@ shapes than the emblem's. 64 x 64.
 > very small, and fine detail would turn to mush.
 >
 > **Only the snow is painted** - no button, no circle, no shadow on the magenta. No text, no logos.
+
+### `Season_Snow_Top`, second go - four drifts, not one
+
+**2026-10-22** (Shannon: "it does kind of just look segmented... it just looks kind of like a lazy
+copy and paste job"). Quite right, and no amount of code fixes it. The window lays the drift along
+its top edge as separate patches with gaps between - which is what snow does - but every patch was
+drawing the same picture. Scaling it, flipping it and varying the gaps does not help: the eye finds
+the repeat before it finds the snow.
+
+Until a better source exists the converter makes a sheet of four out of the one painting, by taking
+four overlapping stretches of it and mirroring every other one (`make_sheet`). That gives genuinely
+different icicles in each patch, which is a real improvement, but all four still share the painting's
+one silhouette. Four drifts actually painted apart would be better.
+
+The texture is **1024 x 64, four drifts side by side, each in its own 256-wide quarter**. The window
+draws one quarter per patch.
+
+> Hand-painted fantasy game art, World of Warcraft style, painterly and ornate but readable.
+>
+> **A long horizontal banner, sixteen times as wide as it is tall**, on a flat magenta background,
+> divided into **four equal panels side by side**.
+>
+> In each panel, a separate ridge of fresh snow lying along the **top edge**, as it would settle on
+> the top of a wooden window frame. **The four must be clearly different from one another** - not
+> the same shape repeated:
+>
+> - the first is long and shallow, with three slender icicles close together near its left;
+> - the second is deeper and heavier in the middle, sagging, with one long thick icicle;
+> - the third is broken and patchy, a low ridge with a gap in it, and four short icicles spread out;
+> - the fourth is a fat rounded heap towards its right, with two icicles of very different lengths
+>   and a small clump of snow dropping away below it.
+>
+> Every ridge **fades to nothing at both its own left and right ends**, so it tapers into bare frame
+> rather than stopping square. Each stays inside its own panel and does not touch its neighbours:
+> leave a clear gap of plain magenta between them.
+>
+> Bright clean white on top, shading to soft cold blue-grey in the hollows underneath, with a faint
+> sparkle. The icicles are clear and glassy, pale blue at the core with a bright highlight down one
+> side.
+>
+> **Only the snow and the icicles are painted.** Everything else is flat magenta, including the
+> whole lower part of every panel. No window, no wood, no frame, no shadow cast onto the magenta.
+> No text, no logos.
+
+**On arrival** it is detected automatically: a source wider than eight times its height is taken as
+a sheet already and used as it is, anything squarer is cut into four by `make_sheet` as now.

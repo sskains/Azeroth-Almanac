@@ -511,7 +511,10 @@ local DECOR = {
 		-- and a little short of full strength; the rest of the softening is in the texture, whose
 		-- top is faded out by tools/build_season_decor.py so the snow comes from behind the frame
 		-- rather than ending on a straight white line.
-		strip = "Season_Snow_Top", stripH = 36, stripAspect = 4, stripAlpha = 0.88,
+		-- stripCells: the texture holds that many different drifts side by side, and each patch
+		-- draws a different one. One drift reused everywhere reads as a copy-and-paste job however
+		-- it is scaled and flipped - the eye finds the repeat before it finds the snow.
+		strip = "Season_Snow_Top", stripH = 36, stripAspect = 4, stripAlpha = 0.88, stripCells = 4,
 		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
 		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
 		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
@@ -570,8 +573,13 @@ local function Lay(deco, d, width)
 			tex:SetSize(pw, ph)
 			tex:ClearAllPoints()
 			tex:SetPoint("TOPLEFT", deco, "TOPLEFT", x, 0)
-			-- every third drift faces the other way, so the same picture is less obviously the same
-			if i % 3 == 0 then tex:SetTexCoord(1, 0, 0, 1) else tex:SetTexCoord(0, 1, 0, 1) end
+			-- a different drift from the sheet for each patch, and every third one faces the other
+			-- way, so neighbours never repeat even when the sheet runs out
+			local cells = d.stripCells or 1
+			local c = (i - 1) % cells
+			local u0, u1 = c / cells, (c + 1) / cells
+			if i % 3 == 0 then u0, u1 = u1, u0 end
+			tex:SetTexCoord(u0, u1, 0, 1)
 			tex:SetAlpha(d.stripAlpha or 1)
 			tex:Show()
 		end
