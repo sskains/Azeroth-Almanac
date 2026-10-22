@@ -492,8 +492,13 @@ end
 local SEASON_MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 local DECOR = {
 	WinterVeil = {
-		strip = "Season_Snow_Top", stripH = 26, tile = 3,
-		corner = "Season_Frost_Corner", cornerSize = 104,
+		-- stripAspect is the painted strip's own width over its height. The strip is stretched
+		-- across whatever width the window is, so the number of repeats has to follow that width
+		-- or the drift flattens out: three repeats across a 900 px window stretched a 4:1 picture
+		-- to 11:1, and the snow read as a line with a few stray icicles.
+		strip = "Season_Snow_Top", stripH = 30, stripAspect = 4,
+		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
+		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
 		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
 		mote = { 0.86, 0.94, 1 }, motes = 8, fall = 0.055,
 	},
@@ -523,6 +528,15 @@ local function Flakes(deco, d, w, h)
 	end
 end
 
+-- how many times the drift repeats across this window: enough that it is never stretched sideways
+local function Tile(deco, d, width)
+	if not (deco.strip and d.strip) then return end
+	local n = math.max(1, math.floor((width or 0) / math.max(d.stripH * (d.stripAspect or 4), 1) + 0.5))
+	if deco.tiled == n then return end
+	deco.tiled = n
+	deco.strip:SetTexCoord(0, n, 0, 1)
+end
+
 local function Drive()
 	if driver then return end
 	driver = CreateFrame("Frame")
@@ -544,11 +558,12 @@ function ns.RedressWindow(frame)
 	if not d then deco:Hide() return end
 	deco:Show()
 	deco.strip:SetTexture(SEASON_MEDIA .. d.strip)
-	deco.strip:SetTexCoord(0, d.tile or 1, 0, 1)
 	deco.strip:SetHeight(d.stripH)
+	Tile(deco, d, frame:GetWidth())
 	for i, t in ipairs(deco.corners) do
 		t:SetTexture(SEASON_MEDIA .. d.corner)
 		t:SetSize(d.cornerSize, d.cornerSize)
+		t:SetAlpha(d.cornerAlpha or 1)
 		local c = CORNERS[i]
 		t:SetTexCoord(c[2], c[3], c[4], c[5])
 	end
@@ -593,6 +608,10 @@ function ns.DressForSeason(frame, opts)
 			sp = 0.7 + (k % 4) * 0.22, sw = 0.5 + (k % 5) * 0.17, ph = k * 1.9,
 			a = 0.30 + (k % 3) * 0.10 }
 	end
+	frame:HookScript("OnSizeChanged", function(self)
+		local d = ns.SeasonDecor()
+		if d and dressed[self] then Tile(dressed[self], d, self:GetWidth()) end
+	end)
 	dressed[frame] = deco
 	Drive()
 	ns.RedressWindow(frame)

@@ -135,15 +135,42 @@ def seamless(img, blend=0.18):
     return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 
-def painted(src, size, strip=False):
-    """A painted texture: magenta keyed out, resized to what the game draws."""
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import art_convert
-    a = np.array(Image.open(src).convert("RGB"))
-    out, _ = art_convert.key_magenta(a)
-    img = Image.fromarray(out, "RGBA")
+def key_background(img, near=40.0, far=100.0):
+    """Take out the flat background, whatever shade of magenta it actually is.
+
+    art_convert.key_magenta is tuned for pure #FF00FF and measures how magenta a pixel is. These
+    renders come back on a muted pink - around (175, 55, 140) - which that test scores at 0.21, so
+    it would leave the background four fifths opaque. The background here is flat and nothing
+    painted on it is pink, so it is keyed by distance from the colour the border actually is.
+
+    The edge pixels are a mix of snow and background, so the background is then divided back out of
+    them (un-premultiplying); without that every edge keeps a pink fringe that shows against the
+    window's own art.
+    """
+    a = np.asarray(img.convert("RGB"), np.float32)
+    h, w = a.shape[:2]
+    border = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]])
+    bg = np.median(border, axis=0)
+    d = np.sqrt(((a - bg) ** 2).sum(2))
+    alpha = np.clip((d - near) / (far - near), 0, 1)
+    safe = np.maximum(alpha, 1e-3)[..., None]
+    rgb = np.clip((a - bg * (1.0 - alpha[..., None])) / safe, 0, 255)
+    return Image.fromarray(np.dstack([rgb, alpha * 255]).astype(np.uint8), "RGBA")
+
+
+def trim(img, pad=0.0):
+    """Crop to what is painted, so an inset drawing still reaches the texture's own edges."""
+    bbox = img.split()[3].point(lambda v: 255 if v > 10 else 0).getbbox()
+    return img.crop(bbox) if bbox else img
+
+
+def painted(src, size, strip=False, corner=False):
+    """A painted texture: background keyed out, resized to what the game draws."""
+    img = key_background(Image.open(src))
+    if corner:
+        img = trim(img)
     if strip:
-        img = seamless(img)
+        img = seamless(trim(img))
     return img.resize(size, Image.LANCZOS)
 
 
@@ -167,7 +194,8 @@ def main(media, art=None):
                       ("Season_Minimap_Cap", cap(64, 0.40, 0.10, 1.25, ((-0.15, 0.05), (0.14, 0.06))))):
         src = art and os.path.join(art, name + ".png")
         if src and os.path.exists(src):
-            img = painted(src, WANTED[name], strip=(name == "Season_Snow_Top"))
+            img = painted(src, WANTED[name], strip=(name == "Season_Snow_Top"),
+                          corner=(name == "Season_Frost_Corner"))
             print("  (painted: %s)" % os.path.basename(src))
         p = os.path.join(media, name + ".tga")
         write_tga(img, p)

@@ -6,6 +6,24 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The painted seasonal dress is in**: the snow drift, the frost corner and both caps are
+  Shannon's renders now rather than generated placeholders. Three things had to change to take
+  them:
+  - **The background key.** `art_convert.key_magenta` measures how magenta a pixel is, which suits
+    pure #FF00FF. These came back on a muted pink, around (175, 55, 140), which that test scores at
+    0.21 - it would have left the background four fifths opaque. `key_background` keys by distance
+    from whatever colour the border actually is, and divides the background back out of the edge
+    pixels, without which every edge keeps a pink fringe.
+  - **The drift now repeats to fit the window.** It was a fixed three times across, and the strip
+    is stretched to the window's width, so on a 900 px window a 4:1 picture was drawn at 11:1 - the
+    snow read as a line with a few stray icicles. The number of repeats follows the width now, and
+    is recalculated when a window is resized.
+  - **The frost was overwhelming.** Painted frost is far denser than the generated placeholder, and
+    four dense corners are all you can look at; it is drawn at 88 px and 45% alpha.
+  The second cap render is kept as `docs/art_source/Season_Emblem_Sprig_alt.png` - flatter and
+  whiter than the one in use, which has the blue-grey shading that gives it some volume. Swapping
+  is one file copy and one run of the tool.
+
 - **The caps of snow are snow-shaped now** (Shannon: "the minimap snow cap looks silly... we need
   something more organic along the top side, as it's fallen on a rounded object"). The first pass
   filled downwards from the top of its texture, which gives a white block with a flat top - not
