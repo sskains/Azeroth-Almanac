@@ -6,6 +6,13 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The emblem's cap sits on the ring, not on the icon.** Lifting it onto the crown was not enough
+  on its own: at 78 px it was still wide enough to lie across the icon, so it read as a hat on the
+  murloc with the gold dragon bare all round it. At 52 px it is about 42 px of snow on a ring 118
+  px across - a dusting on the ornament rather than a cap on what the ornament frames. A round cap
+  on a dragon-shaped ring will only ever be approximate; snow painted onto the ring's own
+  silhouette would be better, and wants a clean screenshot of the emblem to work from.
+
 - **The painted long drift is in**, one continuous run across the window's top with no repeat in
   it. It needed putting in proportion first. A drift drawn across a whole window wants to be about
   eighteen times as wide as it is tall; the render's painted content is **975 x 237, nearer four to

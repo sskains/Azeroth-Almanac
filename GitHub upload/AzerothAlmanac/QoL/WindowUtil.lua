@@ -321,11 +321,18 @@ end
 -- which is exactly how Wild Gambit came to be the only window without snow on its emblem.
 local emblems = setmetatable({}, { __mode = "k" })
 -- (Shannon: "the snowcap looks funny sitting on the icon where the gold elite dragon is above it
--- with no snow"). Snow settles on the topmost thing, and the topmost thing here is the gold dragon
--- ring, not the icon inside it. So the cap is small and lifted to rest on the ring's crown rather
--- than drawn across the middle of the emblem. CAP_RISE puts the snow's own middle - which sits a
--- quarter of the way down its picture - at about the ring's top edge.
-local CAP_SIZE, CAP_RISE = 78, 34
+-- with no snow"). Snow settles on the topmost thing, and the topmost thing is the gold dragon ring,
+-- not the icon inside it.
+--
+-- Lifting it was not enough on its own: at 78 px the cap was still wide enough to lie across the
+-- icon, so it read as a hat on the murloc with the dragon bare around it. It is small enough now
+-- to sit on the ring itself - about 42 px of snow on a ring 118 px across. CAP_RISE puts the
+-- snow's own middle, which sits a quarter of the way down its picture, at the ring's top edge.
+--
+-- A round cap on a dragon-shaped ornament will only ever be approximate. Snow painted onto the
+-- ring's own silhouette would be better, and wants a clean screenshot of the emblem to work from:
+-- `/aa season plain`, a window dragged somewhere dark, and the corner alone.
+local CAP_SIZE, CAP_RISE = 52, 48
 
 function ns.RedressEmblem(e)
 	if not (e and e.cap) then return end
