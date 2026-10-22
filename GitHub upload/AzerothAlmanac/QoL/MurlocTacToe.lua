@@ -186,11 +186,19 @@ local function Known(key)
 	return c and c.display and true or false
 end
 
+-- (2026-10-22, Shannon: "ensure the champions for Halloween are not still available after
+-- halloween, or for Winter's Veil") `/aa mtt season` used to write this to the saved variables, so
+-- one use of it while testing left every seasonal champion offered all year, for good, on that
+-- character. It lives for the session only now, exactly as `/aa season`'s pretend holiday does, and
+-- for the same reason: a trying-it-out switch that outlives the session it was turned on in gets
+-- forgotten and is then mistaken for a bug.
+local anySeason, seasonShown = false, nil
+
 -- what you may choose: known, and (for a seasonal one) its holiday is on (`/aa mtt season` shows them all year)
 local function Playable(key)
 	local c = CHAMPS[key]
 	if not (c and c.display) then return false end
-	return not c.season or (db and db.anySeason) or ns.HolidayNow() == c.season
+	return not c.season or anySeason or ns.HolidayNow() == c.season
 end
 
 local function MyChamp()
@@ -198,6 +206,11 @@ local function MyChamp()
 	if k and Playable(k) then return k end
 	return "murloc"
 end
+
+-- (exposed for dev/tests, which cannot see the locals: the rule that a seasonal champion is
+-- offered only while its own holiday is on, and the champion that rule leaves you playing)
+function MT:Playable(key) return Playable(key) end
+function MT:Champion() return MyChamp() end
 
 -- a champion key from the other player: theirs if we know it, else the role's classic one
 local function ValidChamp(key, fallback)
@@ -1140,7 +1153,7 @@ local SEASON_LOOK = {
 local function SeasonKey()
 	local now = ns.HolidayNow()
 	if now and SEASON_LOOK[now] then return now end
-	if db and db.anySeason then return SEASON_LOOK[db.seasonShown or ""] and db.seasonShown or "HallowsEnd" end
+	if anySeason then return SEASON_LOOK[seasonShown or ""] and seasonShown or "HallowsEnd" end
 	return nil
 end
 
@@ -2009,6 +2022,9 @@ function MT:OnInitialize(saved)
 	db.cam = db.cam or {} -- { champion = { card = zoom, piece = zoom } } set in game
 	db.voices = db.voices or {}   -- { champion = { place = { ids }, win = ..., lose = ... } } set in game
 	db.ambient = db.ambient or {} -- file IDs of the quiet swamp sounds
+	-- older versions saved `/aa mtt season`'s "show them all year" switch; clear it, or a character
+	-- that ever used it would go on offering Hallow's End champions in July
+	db.anySeason, db.seasonShown = nil, nil
 	for key, display in pairs(db.display) do
 		if CHAMPS[key] and type(display) == "number" then CHAMPS[key].display = display end
 	end
@@ -2287,16 +2303,16 @@ function MT:Command(rest)
 			if not pick then
 				Say("no such holiday. /aa mtt season hallowsend, /aa mtt season winterveil, or /aa mtt season on its own.")
 			else
-				db.seasonShown, db.anySeason = pick, true
+				seasonShown, anySeason = pick, true
 				-- (false, not nil: nil is a real answer there, meaning the plain table)
 				if frame then frame.season = false end
 				Say(("showing %s, all year (for trying it out)."):format(SEASON_NAME[pick] or pick))
 				Refresh()
 			end
 		else
-			db.anySeason = not db.anySeason
+			anySeason = not anySeason
 			if frame then frame.season = false end
-			Say("seasonal champions and the holiday board " .. (db.anySeason and "show all year (for trying them out)." or "show only during their holiday."))
+			Say("seasonal champions and the holiday board " .. (anySeason and "show all year (for trying them out); a /reload puts it back." or "show only during their holiday."))
 			Refresh()
 		end
 	elseif low == "champions" then

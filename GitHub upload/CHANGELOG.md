@@ -6,6 +6,28 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The Almanac itself dresses for a holiday**, not only the three games' boards (Shannon: "winter
+  touches to the Almanac"). A drift of snow along the top edge, frost creeping in at the four
+  corners, a few flakes drifting inside, a cap of snow on the round gold emblem, and one on the
+  minimap button - the only piece that shows when nothing of the Almanac is open. It hangs off
+  `ns.DressForSeason` in `QoL/WindowUtil.lua`, called from two places: `ns.NativeWindow`, which
+  builds the chrome for Wild Gambit, Gem Match, Murloc Tac Toe, Welcome and the update notice, and
+  the main window's own `Build`, where every page already lives in one frame. It draws above the
+  border and never takes the mouse, so it cannot swallow a click, and the windows are held weakly
+  so closing one does not leak it. A **table of holidays, not code written for Winter Veil**:
+  Hallow's End costs art and a row. **Seasonal decoration** in Settings turns it off, separately
+  from the games' "Holiday boards", and `/aa season` redraws it. The four textures are placeholders
+  from `tools/build_season_decor.py`, so the code could be finished and judged before the art
+  exists.
+- **A seasonal champion is offered only during its own holiday** (Shannon: "ensure the champions
+  for Murloc Tac Toe that are for Halloween are not still available after halloween, or for
+  Winter's Veil"). The rule was already right - and a champion chosen in season already falls back
+  to the murloc out of it - but `/aa mtt season` **wrote its "show them all year" switch to the
+  saved variables**, so a single use of it while testing left every seasonal champion offered all
+  year on that character, for good. It is a session switch now, exactly as `/aa season`'s pretend
+  holiday is and for the same reason, and one saved by an older version is cleared on login.
+  Test: `dev/tests/test_mtt_seasonal_champions.py`.
+
 - **Wild Gambit's Winter Veil board is in** - the sixth painting, and the first that could be used
   as it came. The sticking point was never style, it was arithmetic: the card grid needs a bare
   panel of about 624 x 705 of a 1024 square, which leaves a border near 200 px, and every earlier
