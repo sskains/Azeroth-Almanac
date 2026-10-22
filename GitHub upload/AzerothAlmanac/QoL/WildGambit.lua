@@ -7087,6 +7087,16 @@ end
 WG.BOARDS = { { key = "Glade", name = "Forest glade" }, { key = "Ruin", name = "Moonlit ruin" }, { key = "Tavern", name = "Tavern table" },
 	{ key = "HallowsEnd", name = "Hallow's End" }, { key = "WinterVeil", name = "Feast of Winter Veil" } }
 WG.DEFAULT_BOARD = "Glade"
+-- (2026-10-22, Shannon, in game) A holiday board listed here is still offered in the picker but is
+-- NOT dressed automatically: the Feast of Winter Veil's painting puts its corner ornaments inside
+-- the card area, and its clear stone is so small a part of the picture that ApplyBoard must magnify
+-- it to 616 x 688 - where the window has room for 552 x 628 - so the frame spills 36 px over the
+-- left hand column and 21 px past the bottom edge. Both faults are the painting's composition, and
+-- no value of `inner` fixes them: a re-roll is prompted in docs/ART_ASSETS.md section 7a. The
+-- holiday still dresses the card back, the table and the deck, so only the board falls back to the
+-- one you picked. Take the entry out again when the new painting is in.
+-- (on WG, not a local: this file is at Lua's 200 locals per scope)
+WG.BOARD_WITHHELD = { WinterVeil = true }
 -- the holiday on now, by the calendar (Hallow's End 18 Oct - 1 Nov, Winter Veil 16 Dec - 2 Jan)
 function WG:HolidayBoard() return ns.HolidayNow() end -- (the calendar check is shared: WindowUtil.lua)
 
@@ -7094,7 +7104,9 @@ function WG:HolidayBoard() return ns.HolidayNow() end -- (the calendar check is 
 function WG:ApplyBoard()
 	local art = frame and frame.boardArt
 	if not art then return end
-	local key = (db and db.holidayBoards ~= false and self:HolidayBoard()) or (db and db.board) or WG.DEFAULT_BOARD
+	local h = db and db.holidayBoards ~= false and self:HolidayBoard()
+	if h and WG.BOARD_WITHHELD[h] then h = nil end
+	local key = h or (db and db.board) or WG.DEFAULT_BOARD
 	local a = BOARDS[key] or BOARDS.Glade
 	local gw, gh = 3 * CW + 2 * GAP + 2 * BOARD_PAD, 3 * CH + 2 * GAP + 2 * BOARD_PAD
 	local w = gw / (a.inner[3] - a.inner[1])

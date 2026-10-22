@@ -19,10 +19,12 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
       Then `/aa season off` - out of season it must be the compass again.
 - [ ] **Murloc Tac Toe's champion tooltip:** hover the arrows beside the champion. The tooltip
       should appear to the right of the window, clear of the two champion cards.
-- [ ] **KNOWN BAD - Wild Gambit's Winter Veil board:** the corner ornaments cut into all four
-      corner card slots. This is the painting's composition and no code setting fixes it; a
-      re-rolled board is prompted in `docs/ART_ASSETS.md` section 7. Don't raise it again until
-      that art is in.
+- [ ] **Wild Gambit's board during Winter Veil:** with `/aa season winterveil`, the board should
+      be whichever one you picked in Settings (Forest glade by default) - NOT the Winter Veil one,
+      which is withheld until its painting is replaced. The card back, the table and the deck
+      should all still be Winter Veil. The Winter Veil board is still selectable by hand in the
+      picker, and when picked it will show its known faults: ornaments over the corner card slots,
+      and the frame spilling over the left hand column and the bottom edge.
 
 - [ ] **`/aa season winterveil`:** everything that dresses for Winter Veil changes at once, with
   the three windows open - Wild Gambit's board, card back (deal a hand; one already face down

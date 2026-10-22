@@ -6,6 +6,18 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Wild Gambit's Winter Veil board is withheld until its painting is replaced** (Shannon, in game:
+  "the cards are going over the background/board... the board is oddly cropped on the bottom edge,
+  going over the deck boxes"). Both faults are one fault. The painting's clear stone is too small a
+  share of the picture, so `ApplyBoard` magnifies it to **616 x 688** where the window has room for
+  **552 x 628** - against 549 x 626 for Forest glade and 578 x 658 for the Tavern table, the worst
+  of the others. It therefore spills **36 px over the left hand column** (a third of its width) and
+  21 px past the bottom edge, and the corner ornaments still sit inside the card area. No value of
+  `inner` fixes either: see `docs/ART_ASSETS.md` section 7a, which prompts the re-roll and gives
+  the measurements. During the holiday the board now falls back to the one you picked, while the
+  **card back, the table and the deck still dress** - `WG.BOARD_WITHHELD`. The board stays in the
+  picker for anyone who wants it. Take the entry out when the new painting is in.
+
 - **Gem Match's Winter Veil board, repainted** (Shannon: "the cropping on the top especially... too
   clean looking, losing some of the texture, making it look too flat"). The sockets are chiselled
   hollows now, bevelled and shadowed, rather than squares drawn on flat ice. It also needs
