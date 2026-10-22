@@ -507,7 +507,11 @@ local DECOR = {
 		-- across whatever width the window is, so the number of repeats has to follow that width
 		-- or the drift flattens out: three repeats across a 900 px window stretched a 4:1 picture
 		-- to 11:1, and the snow read as a line with a few stray icicles.
-		strip = "Season_Snow_Top", stripH = 30, stripAspect = 4,
+		-- (Shannon: "the top snow drift looks a little harsh"). The drift is drawn a little taller
+		-- and a little short of full strength; the rest of the softening is in the texture, whose
+		-- top is faded out by tools/build_season_decor.py so the snow comes from behind the frame
+		-- rather than ending on a straight white line.
+		strip = "Season_Snow_Top", stripH = 34, stripAspect = 4, stripAlpha = 0.88,
 		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
 		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
 		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
@@ -570,6 +574,7 @@ function ns.RedressWindow(frame)
 	deco:Show()
 	deco.strip:SetTexture(SEASON_MEDIA .. d.strip)
 	deco.strip:SetHeight(d.stripH)
+	deco.strip:SetAlpha(d.stripAlpha or 1)
 	Tile(deco, d, deco:GetWidth())
 	for i, t in ipairs(deco.corners) do
 		t:SetTexture(SEASON_MEDIA .. d.corner)

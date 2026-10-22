@@ -6,6 +6,14 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The snow drift is softer** (Shannon: "the top snow drift looks a little harsh"). The harshness
+  was a hard edge, not brightness: the painted drift runs to the very top of its picture, so drawn
+  at 30 px it ended in a straight horizontal cut of white across the window. `soften_top` in
+  `tools/build_season_decor.py` takes the alpha smoothly to nothing over the top fifth of the
+  texture, so the snow appears to come out from under the window's own border - which is where it
+  would have settled. It is also drawn a little taller (34 px) and a little short of full strength
+  (88%).
+
 - **The seasonal dress stays inside the window** (Shannon: "the effects need to be constrained to
   inside of the window outline"). It was anchored to the whole frame, so the drift lay over the
   title bar and the frost bled past the rounded corners. It is inset to the window's own border

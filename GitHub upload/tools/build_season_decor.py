@@ -164,13 +164,30 @@ def trim(img, pad=0.0):
     return img.crop(bbox) if bbox else img
 
 
+def soften_top(img, frac=0.22, blur=1.4):
+    """Fade the top of the drift out, so it comes from behind the frame instead of ending on a line.
+
+    The painted drift runs to the very top of its picture. Drawn at 30 px that top is a straight
+    horizontal cut of bright white across the window - which is what reads as harsh. Taking the
+    alpha smoothly to nothing over the top fifth makes the snow appear to emerge from under the
+    window's own border, which is where it would have settled.
+    """
+    a = np.asarray(img.convert("RGBA"), np.float32)
+    h = a.shape[0]
+    n = max(2, int(h * frac))
+    ramp = np.clip(np.linspace(0.0, 1.0, n), 0, 1) ** 1.6
+    a[:n, :, 3] *= ramp[:, None]
+    a[..., 3] = gaussian_filter(a[..., 3], blur)
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
+
+
 def painted(src, size, strip=False, corner=False):
     """A painted texture: background keyed out, resized to what the game draws."""
     img = key_background(Image.open(src))
     if corner:
         img = trim(img)
     if strip:
-        img = seamless(trim(img))
+        img = soften_top(seamless(trim(img)))
     return img.resize(size, Image.LANCZOS)
 
 
