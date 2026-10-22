@@ -39,7 +39,7 @@ local BOARDS = {
 	-- stone. tools/build_wg_board_slab.py, which imposed a panel on a painting that lacked one, is
 	-- kept for the next time a render is close but fouls its corners.
 	WinterVeil = { name = "Feast of Winter Veil", file = "Interface\\AddOns\\AzerothAlmanac\\Media\\Board_WinterVeil",
-		inner = { 134 / 1024, 98 / 1024, 890 / 1024, 920 / 1024 } },
+		inner = { 150 / 1024, 118 / 1024, 874 / 1024, 906 / 1024 } },
 }
 local BOARD_PAD = 36 -- the outer spikes and clear of the frame's carved inner corners
 local ART_X, ART_Y = 78, 68     -- room round the board for the painting's stone frame
