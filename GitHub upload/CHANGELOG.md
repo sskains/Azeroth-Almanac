@@ -6,6 +6,16 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The seasonal dress stays inside the window** (Shannon: "the effects need to be constrained to
+  inside of the window outline"). It was anchored to the whole frame, so the drift lay over the
+  title bar and the frost bled past the rounded corners. It is inset to the window's own border
+  now, everything is anchored to that inset frame - including the flakes, which measure it rather
+  than the window - and the frame clips its children where the client supports it.
+- **The cap sits on the emblem's crown** rather than across the middle of it (Shannon: "the snowcap
+  looks funny sitting on the icon where the gold elite dragon is above it with no snow"). Snow
+  settles on the topmost thing, and the topmost thing is the gold dragon ring, not the icon inside
+  it. The cap is smaller and lifted so its own middle lands at about the ring's top edge.
+
 - **The painted seasonal dress is in**: the snow drift, the frost corner and both caps are
   Shannon's renders now rather than generated placeholders. Three things had to change to take
   them:

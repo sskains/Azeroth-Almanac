@@ -320,7 +320,12 @@ end
 -- so a window opened before `/aa season` was typed never got one however often the season changed -
 -- which is exactly how Wild Gambit came to be the only window without snow on its emblem.
 local emblems = setmetatable({}, { __mode = "k" })
-local CAP_SIZE = 106
+-- (Shannon: "the snowcap looks funny sitting on the icon where the gold elite dragon is above it
+-- with no snow"). Snow settles on the topmost thing, and the topmost thing here is the gold dragon
+-- ring, not the icon inside it. So the cap is small and lifted to rest on the ring's crown rather
+-- than drawn across the middle of the emblem. CAP_RISE puts the snow's own middle - which sits a
+-- quarter of the way down its picture - at about the ring's top edge.
+local CAP_SIZE, CAP_RISE = 78, 34
 
 function ns.RedressEmblem(e)
 	if not (e and e.cap) then return end
@@ -355,7 +360,13 @@ function ns.GoldEmblem(frame, icon)
 	-- the art leaves room above the circle it caps (its disc is 0.8 of the texture), so drawn at the
 	-- socket's own size the snow would be cut off at the top.
 	e.cap = e:CreateTexture(nil, "OVERLAY", nil, 3)
-	Put(e.cap, CAP_SIZE)
+	e.cap:SetSize(CAP_SIZE, CAP_SIZE)
+	e.cap:ClearAllPoints()
+	if anchor and anchor.GetCenter then
+		e.cap:SetPoint("CENTER", anchor, "CENTER", 0, CAP_RISE)
+	else
+		e.cap:SetPoint("CENTER", frame, "TOPLEFT", 28, -28 + CAP_RISE)
+	end
 	emblems[e] = true
 	ns.RedressEmblem(e)
 	e.icon = e:CreateTexture(nil, "ARTWORK")
@@ -517,7 +528,9 @@ end
 local CORNERS = { { "TOPLEFT", 0, 1, 0, 1 }, { "TOPRIGHT", 1, 0, 0, 1 },
 	{ "BOTTOMLEFT", 0, 1, 1, 0 }, { "BOTTOMRIGHT", 1, 0, 1, 0 } }
 
-local function Flakes(deco, d, w, h)
+local function Flakes(deco, d)
+	local w, h = deco:GetWidth(), deco:GetHeight()
+	if not (w and h and w > 1 and h > 1) then return end
 	local t = GetTime and GetTime() or 0
 	for i, m in ipairs(deco.motes) do
 		local y = (m.y + t * d.fall * m.sp) % 1.08 - 0.04
@@ -542,9 +555,7 @@ local function Drive()
 	driver = CreateFrame("Frame")
 	driver:SetScript("OnUpdate", function()
 		for frame, deco in pairs(dressed) do
-			if deco.on and frame:IsVisible() then
-				Flakes(deco, deco.on, frame:GetWidth(), frame:GetHeight())
-			end
+			if deco.on and frame:IsVisible() then Flakes(deco, deco.on) end
 		end
 	end)
 end
@@ -559,7 +570,7 @@ function ns.RedressWindow(frame)
 	deco:Show()
 	deco.strip:SetTexture(SEASON_MEDIA .. d.strip)
 	deco.strip:SetHeight(d.stripH)
-	Tile(deco, d, frame:GetWidth())
+	Tile(deco, d, deco:GetWidth())
 	for i, t in ipairs(deco.corners) do
 		t:SetTexture(SEASON_MEDIA .. d.corner)
 		t:SetSize(d.cornerSize, d.cornerSize)
@@ -583,13 +594,19 @@ end
 function ns.DressForSeason(frame, opts)
 	if not frame or dressed[frame] then return end
 	opts = opts or {}
+	-- (2026-10-22, Shannon: "the effects need to be constrained to inside of the window outline")
+	-- Inset to the window's own border rather than covering it: the drift was lying over the title
+	-- bar and the frost bled past the rounded corners. Everything is anchored to this frame and the
+	-- flakes measure it, so nothing can reach outside it.
 	local deco = CreateFrame("Frame", nil, frame)
-	deco:SetAllPoints(frame)
+	deco:SetPoint("TOPLEFT", opts.inset or 10, -(opts.top or 24))
+	deco:SetPoint("BOTTOMRIGHT", -(opts.inset or 10), opts.bottom or 10)
 	deco:EnableMouse(false)
 	deco:SetFrameLevel(frame:GetFrameLevel() + 60)
+	if deco.SetClipsChildren then pcall(deco.SetClipsChildren, deco, true) end
 	deco.strip = deco:CreateTexture(nil, "OVERLAY", nil, 2)
-	deco.strip:SetPoint("TOPLEFT", opts.inset or 3, opts.top or -2)
-	deco.strip:SetPoint("TOPRIGHT", -(opts.inset or 3), opts.top or -2)
+	deco.strip:SetPoint("TOPLEFT", 0, 0)
+	deco.strip:SetPoint("TOPRIGHT", 0, 0)
 	deco.corners = {}
 	for i, c in ipairs(CORNERS) do
 		local t = deco:CreateTexture(nil, "OVERLAY", nil, 1)
@@ -610,7 +627,7 @@ function ns.DressForSeason(frame, opts)
 	end
 	frame:HookScript("OnSizeChanged", function(self)
 		local d = ns.SeasonDecor()
-		if d and dressed[self] then Tile(dressed[self], d, self:GetWidth()) end
+		if d and dressed[self] then Tile(dressed[self], d, dressed[self]:GetWidth()) end
 	end)
 	dressed[frame] = deco
 	Drive()
