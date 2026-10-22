@@ -581,3 +581,63 @@ of clear panel. That is the target, and it is the one thing the first prompt nev
 `{ 190/1024, 150/1024, 830/1024, 870/1024 }` if it lands on the numbers above. (The present entry
 divides x by **841** where every other board divides by 825; that was measured hastily and should
 not be copied.)
+
+### 8. Gem Match board, re-rolled — `Media\GemMatch_Board_WinterVeil.tga` (1024 x 1024, SQUARE)
+
+Convert: `python tools/art_convert.py board docs/art_source/GemMatch_Board_WinterVeil.png "<Media>/GemMatch_Board_WinterVeil.tga" 1024 1024`
+— and if the grid lands where this prompt asks, **that is the whole conversion**: no scaling, no
+offset, nothing cropped. Delete `GEM_PAINTED` from `tools/build_winterveil_art.py` when it does.
+
+**Re-rolled 2026-10-22** (Shannon, in game: "the cropping on the top especially... too clean
+looking, losing some of the texture, making it look too flat").
+
+What actually happened, measured: the first painting's socket grid was about a tenth too small and
+sat low in the frame, so the conversion had to enlarge it 1.100 x 1.124 and shift it up to put the
+sockets under the gems. That pushes the painting off the canvas unevenly — **75 px lost from the
+top** against 47 left, 55 right and 52 bottom — and the garland and bells live in exactly those top
+75 px. That is the cropping.
+
+The flatness is **not** lost sharpness, which is worth knowing before anyone sharpens anything: the
+shipped board measures 9.29 of fine detail against the ordinary Gem Match board's 4.78, so it is
+already nearly twice as crisp as the one beside it. Enlarging cost 10% (10.31 → 9.29). What reads
+as flat is the cropped garland plus an ice field plainer than the ordinary board's carved knotwork.
+So: put the garland back by not cropping it, and give the ice more to look at.
+
+**The one thing that must be right.** The game draws the gems in a fixed place: an 8 x 8 grid
+filling **x 139–895, y 129–885** of the 1024 square — **756 px square, each cell 94.5 px**, with a
+frame of about **135 px** around it. Match that and nothing is scaled or cropped.
+
+> Hand-painted fantasy game art, World of Warcraft style, rich painterly textures, warm lighting,
+> ornate but readable, original design (not from any existing game).
+>
+> **A square picture, exactly as tall as it is wide**, seen straight from above, flat, with no tilt
+> and no perspective, filling the whole frame edge to edge.
+>
+> A frozen pond set in a broad frame of carved golden oak, decorated for midwinter: a garland of
+> dark evergreen fir with red berries and gold jingle bells lying along the top of the frame, and a
+> lit brass lantern resting against the bottom right corner of the frame.
+>
+> Set into the ice is a grid of **exactly eight rows and eight columns** of identical square
+> sockets — sixty-four in all — like a chocolate box or an ice cube tray, each one a shallow square
+> hollow with a slightly darker floor, divided from its neighbours by narrow raised ribs of pale
+> ice. Every socket is the same size and perfectly square, the rows and columns are straight and
+> evenly spaced, and the whole grid is square overall.
+>
+> **The grid of sockets fills the middle of the picture**, taking up about three quarters of its
+> width and three quarters of its height, centred, leaving an even border of carved frame about an
+> eighth of the picture's width on every side — the same width at the top as at the bottom.
+>
+> The ice itself is rich and worth looking at: deep blue-green under the surface, with frost ferns,
+> trapped bubbles, fine hairline cracks catching the light, and a cold sheen across it. **But keep
+> all of that inside the sockets and the ribs** — the garland, the bells and the lantern stay on
+> the wooden frame and must never reach over any socket, because a gem is drawn in every one.
+>
+> Deep blue-green ice, warm golden oak, dark evergreen, deep red berries, antique gold, one small
+> warm lantern flame. Rich and painterly, cosy midwinter. No text, no letters, no numbers, no
+> logos, no people, no creatures, no user interface.
+
+**When it comes back**, count the sockets down one column and across one row before anything else.
+Do not scan for the ribs: the cracks painted into the ice break one rib scan into a dozen false
+columns and the frame's inner shadow reads as another — that is how the first one was miscounted as
+8 x 9 and a row was cut out of it by mistake. Counting the dark socket runs, averaged down a column
+and across a row, gave a clean 8 x 8 first time.
