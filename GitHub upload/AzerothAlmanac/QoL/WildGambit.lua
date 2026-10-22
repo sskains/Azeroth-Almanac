@@ -30,13 +30,16 @@ local BOARDS = {
 	-- the holidays' boards (on their own during the holiday when Holiday boards is on)
 	HallowsEnd = { name = "Hallow's End", file = "Interface\\AddOns\\AzerothAlmanac\\Media\\Board_HallowsEnd",
 		inner = { 108 / 825, 108 / 1024, 722 / 825, 915 / 1024 } },
-	-- (2026-10-22) Winter Veil's clear panel is imposed by tools/build_wg_board_slab.py rather than
-	-- painted: the corner medallions always came back wider than the border beside them, so no
-	-- render could hold both a big enough panel and its ornaments off the cards. These are the
-	-- slab's own edges against the room the window gives the picture, so the art is drawn 553 x 628
-	-- into 552 x 628 - no spill over the hand columns, and all nine cards inside the stone.
+	-- (2026-10-22) Six renders went into this one. What finally worked was a generator that drew the
+	-- corner medallions small enough to sit inside the border: every earlier painting made them
+	-- wider than the border beside them, which forced a choice between a panel big enough for the
+	-- cards and keeping the ornaments off them. Its bare panel is x 185-853, y 98-899; these are
+	-- that panel's centre with the room the window gives the picture, so the art is drawn 553 x 629
+	-- into 552 x 628 - no spill over the hand columns - and the nearest card sits 22 px inside the
+	-- stone. tools/build_wg_board_slab.py, which imposed a panel on a painting that lacked one, is
+	-- kept for the next time a render is close but fouls its corners.
 	WinterVeil = { name = "Feast of Winter Veil", file = "Interface\\AddOns\\AzerothAlmanac\\Media\\Board_WinterVeil",
-		inner = { 134 / 1024, 101 / 1024, 890 / 1024, 923 / 1024 } },
+		inner = { 141 / 1024, 88 / 1024, 897 / 1024, 909 / 1024 } },
 }
 local BOARD_PAD = 36 -- the outer spikes and clear of the frame's carved inner corners
 local ART_X, ART_Y = 78, 68     -- room round the board for the painting's stone frame

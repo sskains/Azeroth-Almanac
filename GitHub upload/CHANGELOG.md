@@ -6,31 +6,23 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
-- **Wild Gambit's Winter Veil board works, by imposing its panel instead of asking for one**
-  (Shannon, after five renders: "Gemini is just not following the instruction"). It wasn't
-  carelessness on the generator's part, it was arithmetic: the card grid needs a bare panel of
-  about 624 x 705 of a 1024 square, which leaves a border near 200 px, and the corner medallions
-  kept coming back about 290 px across. A 290 px disc cannot sit in a 200 px band without hanging
-  over the panel, so every render either kept its ornaments and fouled the corner cards or obeyed
-  and shrank the panel until `ApplyBoard` had to magnify the picture and run its frame off the
-  window. `tools/build_wg_board_slab.py` lays a rectangle exactly the size the game needs over the
-  middle of the painting; the medallions keep their painted size and tuck behind its edge, which
-  reads as a stone plate set into the frame. The painting's own stone, cracks and grain are kept -
-  only the four corners, where ring, beard, antlers and horn reach in, are repainted with stone
-  sampled from further into the same slab. The art is now drawn **553 x 628** into the 552 x 628
-  the window allows - no spill over the hand columns, no cropped bottom edge - and the closest any
-  card comes to the slab's edge is **10.7 px**. The raw render is kept as `Board_WinterVeil_raw.jpg`.
-- (superseded) Wild Gambit's Winter Veil board was briefly withheld (Shannon, in game:
-  "the cards are going over the background/board... the board is oddly cropped on the bottom edge,
-  going over the deck boxes"). Both faults are one fault. The painting's clear stone is too small a
-  share of the picture, so `ApplyBoard` magnifies it to **616 x 688** where the window has room for
-  **552 x 628** - against 549 x 626 for Forest glade and 578 x 658 for the Tavern table, the worst
-  of the others. It therefore spills **36 px over the left hand column** (a third of its width) and
-  21 px past the bottom edge, and the corner ornaments still sit inside the card area. No value of
-  `inner` fixes either: see `docs/ART_ASSETS.md` section 7a, which prompts the re-roll and gives
-  the measurements. During the holiday the board now falls back to the one you picked, while the
-  **card back, the table and the deck still dress** - `WG.BOARD_WITHHELD`. The board stays in the
-  picker for anyone who wants it. Take the entry out when the new painting is in.
+- **Wild Gambit's Winter Veil board is in** - the sixth painting, and the first that could be used
+  as it came. The sticking point was never style, it was arithmetic: the card grid needs a bare
+  panel of about 624 x 705 of a 1024 square, which leaves a border near 200 px, and every earlier
+  render drew its corner medallions about 290 px across. A 290 px disc cannot sit in a 200 px band
+  without hanging over the panel, so each one either kept its ornaments and fouled the corner cards
+  or obeyed and shrank the panel until `ApplyBoard` had to magnify the picture and run its frame
+  over the hand columns. This one draws the medallions small enough to fit the border, so its bare
+  panel is **668 x 801** and nothing has to be moved. The art is drawn **553 x 629** into the
+  552 x 628 the window allows - no spill, no cropped bottom edge - and the nearest card sits
+  **23 px** inside the stone. A second render of the same brief is kept as
+  `docs/art_source/Board_WinterVeil_alt.png` if the denser garland is preferred; swapping is one
+  conversion and one `inner`.
+- `tools/build_wg_board_slab.py` imposes a clean rectangular panel on a painting that has none, by
+  laying a slab over the middle and letting the ornaments tuck behind its edge, keeping the
+  painting's own stone everywhere but the four corners. It was written for the fifth render and is
+  no longer needed, but it is kept: it is the answer when a painting is close and only fouls its
+  corners.
 
 - **Gem Match's Winter Veil board, repainted** (Shannon: "the cropping on the top especially... too
   clean looking, losing some of the texture, making it look too flat"). The sockets are chiselled
