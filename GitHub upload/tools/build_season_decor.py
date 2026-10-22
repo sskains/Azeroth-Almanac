@@ -14,7 +14,12 @@ the real art exists. Every one is alpha-keyed and meant to sit over the window's
   Season_Minimap_Cap    64 x 64    the same idea for the minimap button, which is smaller and
                                    rounder, so it is drawn separately rather than scaled.
 
-Usage: python build_season_decor.py <Media dir>
+Painted replacements go in docs/art_source as Season_<name>.png, on flat magenta, and are picked
+up automatically: pass --painted. They are keyed, resized to the sizes above, and the snow strip is
+made to tile here rather than asked for - blending a strip's own edges together is a few lines, and
+no generator has yet been talked into a seamless repeat.
+
+Usage: python build_season_decor.py <Media dir> [--painted <art_source dir>]
 """
 import sys, os
 import numpy as np
@@ -118,6 +123,30 @@ def cap(s=128, circle=0.40, bulge=0.085, spread=1.15, drips=((-0.17, 0.055), (0.
     return Image.fromarray(img.astype(np.uint8), "RGBA")
 
 
+def seamless(img, blend=0.18):
+    """Make a strip repeat without a seam: cross-fade its left edge over its right."""
+    a = np.asarray(img.convert("RGBA"), np.float32)
+    h, w = a.shape[:2]
+    n = max(1, int(w * blend))
+    ramp = np.linspace(0, 1, n, dtype=np.float32)[None, :, None]
+    head, tail = a[:, :n].copy(), a[:, -n:].copy()
+    a[:, -n:] = tail * (1 - ramp) + head * ramp
+    a = a[:, : w - n]                       # the copied head is dropped, so the ends now meet
+    return Image.fromarray(a.astype(np.uint8), "RGBA")
+
+
+def painted(src, size, strip=False):
+    """A painted texture: magenta keyed out, resized to what the game draws."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import art_convert
+    a = np.array(Image.open(src).convert("RGB"))
+    out, _ = art_convert.key_magenta(a)
+    img = Image.fromarray(out, "RGBA")
+    if strip:
+        img = seamless(img)
+    return img.resize(size, Image.LANCZOS)
+
+
 def write_tga(img, path):
     import struct
     img = img.convert("RGBA")
@@ -127,18 +156,26 @@ def write_tga(img, path):
         f.write(hdr + img.transpose(Image.FLIP_TOP_BOTTOM).tobytes("raw", "BGRA"))
 
 
-def main(media):
+WANTED = {"Season_Snow_Top": (256, 64), "Season_Frost_Corner": (128, 128),
+          "Season_Emblem_Sprig": (128, 128), "Season_Minimap_Cap": (64, 64)}
+
+
+def main(media, art=None):
     for name, img in (("Season_Snow_Top", snow_top()),
                       ("Season_Frost_Corner", frost_corner()),
                       ("Season_Emblem_Sprig", cap(128)),
                       ("Season_Minimap_Cap", cap(64, 0.40, 0.10, 1.25, ((-0.15, 0.05), (0.14, 0.06))))):
+        src = art and os.path.join(art, name + ".png")
+        if src and os.path.exists(src):
+            img = painted(src, WANTED[name], strip=(name == "Season_Snow_Top"))
+            print("  (painted: %s)" % os.path.basename(src))
         p = os.path.join(media, name + ".tga")
         write_tga(img, p)
         print("%-22s %-9s %d bytes" % (name, "%dx%d" % img.size, os.path.getsize(p)))
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 4) or (len(sys.argv) == 4 and sys.argv[2] != "--painted"):
         print(__doc__)
         sys.exit(1)
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[3] if len(sys.argv) == 4 else None)
