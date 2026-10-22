@@ -19,6 +19,15 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
       Then `/aa season off` - out of season it must be the compass again.
 - [ ] **Murloc Tac Toe's champion tooltip:** hover the arrows beside the champion. The tooltip
       should appear to the right of the window, clear of the two champion cards.
+- [ ] **Snow on the elite gold dragon** (full game restart: new texture
+      `Media/Season_Emblem_Snow.tga`): with `/aa season winterveil`, look at the corner emblem of
+      Wild Gambit, Murloc Tac Toe and Gem Match. The snow should sit **on the dragon** - along its
+      neck, over its head, on the top edge of its wing, with icicles under the jaw and off the
+      wing - and not float beside or above it. What to look for if it is out: snow overhanging the
+      wing on the right, or a gap of bare gold along the back. It is cut to the ring's own box, so
+      being out at all would mean the box is wrong rather than the picture; say which way and by
+      roughly how much. Then `/aa season off` - it must come off cleanly and leave the dragon as
+      it was.
 - [ ] **Wild Gambit's Winter Veil board:** with `/aa season winterveil`, the three things that
       were wrong before: every one of the nine cards should sit on bare stone with none of the
       yeti's horns, the stags' antlers or the carved rings under it; the painted frame should stop

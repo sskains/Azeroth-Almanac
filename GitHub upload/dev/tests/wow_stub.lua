@@ -44,6 +44,13 @@ function FireEvent(ev, ...)
 		if f._events and f._events[ev] and f._scripts.OnEvent then f._scripts.OnEvent(f, ev, ...) end
 	end
 end
+-- The client's atlases, as far as the Almanac asks after any: the winged gold dragon that rings
+-- every elite - a little wider than it is tall - and the plain ring behind it.
+C_Texture = { GetAtlasInfo = function(name)
+	if name == "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged" then return { width = 136, height = 118 } end
+	if name == "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold" then return { width = 118, height = 118 } end
+end }
+
 C_Timer = {}
 TIMERS = {}
 function C_Timer.After(t, fn) TIMERS[#TIMERS + 1] = { at = (NOW or 100) + (t or 0), fn = fn } end

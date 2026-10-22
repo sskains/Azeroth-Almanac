@@ -440,13 +440,14 @@ def write_tga(img, path):
 
 
 WANTED = {"Season_Snow_Top": (2048, 128), "Season_Frost_Corner": (128, 128),
-          "Season_Emblem_Sprig": (128, 128), "Season_Minimap_Cap": (64, 64)}
+          "Season_Minimap_Cap": (64, 64)}
 
 
 def main(media, art=None):
+    # (no emblem cap here any more: the gold dragon wears snow cut to its own silhouette, built
+    #  by build_emblem_snow.py from a painting registered onto a screenshot of the real ring)
     for name, img in (("Season_Snow_Top", snow_sheet()),
                       ("Season_Frost_Corner", frost_corner()),
-                      ("Season_Emblem_Sprig", cap(128)),
                       ("Season_Minimap_Cap", cap(64, 0.40, 0.10, 1.25, ((-0.15, 0.05), (0.14, 0.06))))):
         src = art and os.path.join(art, name + ".png")
         if src and os.path.exists(src):

@@ -6,6 +6,25 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Snow painted onto the gold dragon itself.** The cap was a round dome, and a dome on a
+  dragon-shaped ornament is only ever approximate - first a hat on the icon, then a dusting
+  floating above the dragon's back. The ring is Blizzard's own art
+  (`UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged`), so it cannot be replaced, only drawn
+  over: what was wanted back from the painter was snow *alone*, lying where it would lie on that
+  particular dragon. It now lies along the neck and over the head, on the upper edge of the wing,
+  with icicles under the jaw and off the wing.
+  The painter repaints rather than edits, so what came back was its own picture at its own size
+  (1024 x 559, not the square reference). `tools/build_emblem_snow.py` registers it against a
+  screenshot of the real emblem by correlating **gradient** pictures - the palette is a repaint but
+  the shapes are not - and the two agree closely enough to lie on top of one another. The snow is
+  then keyed out by colour, which separates cleanly because nothing else in the picture is white or
+  pale blue. Two things came out: the bank of ground snow the painting stood the ring on, and a
+  couple of icicles hanging past the wing tip where the real ring has nothing to hang from.
+  The texture is cut to the ornament's own box, so the game simply gives it the ring's corners
+  (`SetAllPoints`). A client with only the plain round ring gets none - a dragon's worth of snow on
+  a bare circle would hang in the air beside it - and `Season_Emblem_Sprig`, the dome it replaces,
+  is retired.
+
 - **The emblem's cap sits on the ring, not on the icon.** Lifting it onto the crown was not enough
   on its own: at 78 px it was still wide enough to lie across the icon, so it read as a hat on the
   murloc with the gold dragon bare all round it. At 52 px it is about 42 px of snow on a ring 118

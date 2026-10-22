@@ -865,7 +865,7 @@ its height is taken as a finished strip and used as it is; anything squarer is c
 > No text, no logos.
 
 
-### `Season_Emblem_Sprig`, painted onto the ring (2026-10-22, Shannon)
+### `Season_Emblem_Snow` - snow painted onto the ring (2026-10-22, Shannon)
 
 The cap on the three games' corner emblems is a plain dome, and a dome on a dragon-shaped ornament
 will only ever be approximate: lifted and shrunk it reads as a dusting, but it does not sit in the
@@ -903,7 +903,44 @@ times, sitting low on magenta with clear room above it.
 >
 > No text, no logos.
 
-**Converting it**: the returned picture goes in beside the reference, and the snow is keyed out of
-it by colour. Check the result against the real emblem in game before keeping it - the screenshot
-the reference came from is 120 px across, so what comes back is a repaint of the ring rather than
-the ring itself, and only the snow can be trusted to line up.
+#### What came back, and what was done with it
+
+`tools/build_emblem_snow.py` turns the painting into `Media\Season_Emblem_Snow.tga` (256 x 256).
+Two pictures go in, both in `docs/art_source`:
+
+| | |
+| --- | --- |
+| `Season_Emblem_Ring_clean.png` | the screenshot of the real emblem, snow off |
+| `Season_Emblem_Ring_snowed.png` | the painter's version of it, snow on |
+
+The caveat above turned out to be the whole job. The painter **repaints rather than edits**: what
+came back was its own picture, 1024 x 559 rather than the square reference, with the dragon redrawn
+at its own size. So the two are registered against one another by correlating **gradient** pictures
+- the palette is a repaint but the shapes are not, so the edges still agree - and they agree
+closely: laid on top of each other the two dragons read as one, not as a ghosted double. The
+numbers it found (`SX 0.2225 SY 0.2325 TX -31 TY 24`) are kept in the tool so an ordinary build
+takes a second; `--fit` searches for them again and writes `Season_Emblem_Snow_check.png`, which is
+the keyed snow laid on the real emblem and the thing to look at before keeping a new render.
+
+Two things had to be taken out of the painting:
+
+- **the ground.** It stood the ring on a bank of snow running the full width of the picture, with
+  its own icicles. Handsome, and nothing to do with the ornament - it is dropped at a line (its
+  one lasting cost is that the dragon's lower coil, which the bank covered, comes back bare).
+- **the far right.** A couple of icicles hang past the wing tip, where on the real ring there is
+  nothing to hang from. Everything is faded out at the box's edge rather than cut, so no icicle
+  ends in a straight line.
+
+**Where it is drawn**: the snow is cut to the ornament's own box, measured off the screenshot
+(x 21-146, y 25-133), and stretched into a square. Blizzard's atlases are packed tight, so that box
+is also the box the ring is drawn in - which means the texture can simply be given the ring's own
+corners, `e.cap:SetAllPoints(e.ring)`, and the stretch undoes itself. The check that the box is
+right: the icon inside the ring is drawn at 74 where the ring is drawn at 118, and 74/118 of that
+box's height, centred, lands on the card art's own edge to within a pixel.
+
+Because the snow is cut to the **winged** dragon, a client that only has the plain round ring gets
+none: a dragon's worth of snow on a bare circle would hang in the air beside it.
+
+The plain dome it replaces, `Season_Emblem_Sprig`, is retired - `build_season_decor.py` no longer
+writes it, though the `cap()` that drew it is still there for the minimap's own cap and for any
+holiday that wants a generic one.

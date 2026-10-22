@@ -324,20 +324,18 @@ local emblems = setmetatable({}, { __mode = "k" })
 -- with no snow"). Snow settles on the topmost thing, and the topmost thing is the gold dragon ring,
 -- not the icon inside it.
 --
--- Lifting it was not enough on its own: at 78 px the cap was still wide enough to lie across the
--- icon, so it read as a hat on the murloc with the dragon bare around it. It is small enough now
--- to sit on the ring itself - about 42 px of snow on a ring 118 px across. CAP_RISE puts the
--- snow's own middle, which sits a quarter of the way down its picture, at the ring's top edge.
---
--- A round cap on a dragon-shaped ornament will only ever be approximate. Snow painted onto the
--- ring's own silhouette would be better, and wants a clean screenshot of the emblem to work from:
--- `/aa season plain`, a window dragged somewhere dark, and the corner alone.
-local CAP_SIZE, CAP_RISE = 52, 48
+-- A round cap on a dragon-shaped ornament was only ever approximate - first a hat on the icon,
+-- then a dome floating above the dragon's back. The snow is now painted onto the ring's own
+-- silhouette: along the neck and the top of the head, on the upper edge of the wing, with icicles
+-- under the jaw and off the wing. `Media\Season_Emblem_Snow` is cut to the ornament's own box
+-- (see `tools/build_emblem_snow.py`), so it is simply given the ring's corners and lands on it.
 
 function ns.RedressEmblem(e)
 	if not (e and e.cap) then return end
 	local d = ns.SeasonDecor()
-	if d and d.cap then
+	-- the snow is cut to the winged dragon's own silhouette, so the plain ring must go without:
+	-- a dragon's worth of snow on a bare circle would hang in the air beside it
+	if d and d.cap and e.winged and e.ring and e.ring:IsShown() then
 		e.cap:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. d.cap)
 		e.cap:Show()
 	else
@@ -363,19 +361,6 @@ function ns.GoldEmblem(frame, icon)
 	e.socket:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 	e.socket:SetVertexColor(0.04, 0.03, 0.025, 1)
 	Put(e.socket, 84)
-	-- A cap of snow during a holiday that has one. Drawn at CAP_SIZE rather than the socket's 84:
-	-- the art leaves room above the circle it caps (its disc is 0.8 of the texture), so drawn at the
-	-- socket's own size the snow would be cut off at the top.
-	e.cap = e:CreateTexture(nil, "OVERLAY", nil, 3)
-	e.cap:SetSize(CAP_SIZE, CAP_SIZE)
-	e.cap:ClearAllPoints()
-	if anchor and anchor.GetCenter then
-		e.cap:SetPoint("CENTER", anchor, "CENTER", 0, CAP_RISE)
-	else
-		e.cap:SetPoint("CENTER", frame, "TOPLEFT", 28, -28 + CAP_RISE)
-	end
-	emblems[e] = true
-	ns.RedressEmblem(e)
 	e.icon = e:CreateTexture(nil, "ARTWORK")
 	e.icon:SetTexture(icon)
 	e.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
@@ -386,17 +371,25 @@ function ns.GoldEmblem(frame, icon)
 	e.icon:AddMaskTexture(mask)
 	e.ring = e:CreateTexture(nil, "OVERLAY")
 	-- the winged gold dragon where the client has it (as on the legendary cards), else the plain ring
-	local ok, wide = false, 1
-	for _, atlas in ipairs({ "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged", "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold" }) do
+	local ok, wide, winged = false, 1, false
+	for i, atlas in ipairs({ "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged", "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold" }) do
 		if not ok and e.ring.SetAtlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
 			ok = pcall(e.ring.SetAtlas, e.ring, atlas)
+			winged = ok and i == 1
 			local info = ok and C_Texture.GetAtlasInfo(atlas)
 			if info and info.width and info.height and info.height > 0 then wide = info.width / info.height end
 		end
 	end
+	e.winged = winged
 	Put(e.ring, 118)
 	e.ring:SetWidth(118 * wide) -- (the winged one is wider than it is tall)
 	e.ring:SetShown(ok and true or false)
+	-- A cap of snow during a holiday that has one, over the ring and exactly on it: the picture is
+	-- cut to the ornament's own box, so the ring's corners are the right corners for it too.
+	e.cap = e:CreateTexture(nil, "OVERLAY", nil, 3)
+	e.cap:SetAllPoints(e.ring)
+	emblems[e] = true
+	ns.RedressEmblem(e)
 	frame.emblem = e
 	return e
 end
@@ -517,7 +510,7 @@ local DECOR = {
 		strip = "Season_Snow_Top", stripAspect = 18, stripAlpha = 0.88, stripMin = 26, stripMax = 62,
 		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
 		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
-		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
+		cap = "Season_Emblem_Snow", minimap = "Season_Minimap_Cap",
 		mote = { 0.86, 0.94, 1 }, motes = 8, fall = 0.055,
 	},
 }

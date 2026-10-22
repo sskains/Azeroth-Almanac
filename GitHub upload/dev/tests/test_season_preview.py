@@ -106,6 +106,22 @@ check(p.eval("E.cap:IsShown() == true"), "the season turning puts snow on a wind
 p.lua("Q.PretendHoliday(false)")
 p.lua("Q.RedressAll()")
 check(p.eval("E.cap:IsShown() == false"), "...and takes it off again when the holiday ends")
+
+# The snow is cut to the winged dragon's own silhouette - along its neck, over its head, on the
+# upper edge of its wing. On a client that only has the plain ring, all of that would hang in the
+# air around a bare circle, so there it goes without.
+check(p.eval("E.winged == true"), "the emblem knows it is wearing the winged dragon")
+p.lua("""WINGED = C_Texture.GetAtlasInfo
+         C_Texture.GetAtlasInfo = function(name)
+             if name == "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold" then return { width = 118, height = 118 } end
+         end""")
+p.lua("P = Q.GoldEmblem(CreateFrame('Frame'), 'Interface\\Icons\\INV_Misc_Book_09')")
+p.lua('Q.PretendHoliday("WinterVeil")')
+p.lua("Q.RedressAll()")
+check(p.eval("P.winged == false"), "a client with only the plain ring says so")
+check(p.eval("P.cap:IsShown() == false"), "...and the plain ring is left bare")
+check(p.eval("E.cap:IsShown() == true"), "...while the winged one beside it still has its snow")
+p.lua("C_Texture.GetAtlasInfo = WINGED")
 p.lua("Q.PretendHoliday(nil)")
 
 print("nothing of it is saved")
