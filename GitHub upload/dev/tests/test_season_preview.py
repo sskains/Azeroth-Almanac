@@ -93,6 +93,21 @@ check(ok is True, "a plain frame can be dressed without erroring")
 check(p.eval("select(1, pcall(Q.RedressAll))") is True, "redrawing them all is safe")
 p.lua("Q.PretendHoliday(nil)")
 
+print("the emblem's cap follows the season, not the moment the window was built")
+# This is the bug that left Wild Gambit the one window without snow: its cap was decided when the
+# window was first built, and nothing put one on later when the season changed under it.
+p.lua("Q.PretendHoliday(false)")
+p.lua("E = Q.GoldEmblem(CreateFrame('Frame'), 'Interface\\Icons\\INV_Misc_Book_09')")
+check(p.eval("E ~= nil and E.cap ~= nil"), "an emblem built out of season still has a cap to show")
+check(p.eval("E.cap:IsShown() == false"), "...hidden, out of season")
+p.lua('Q.PretendHoliday("WinterVeil")')
+p.lua("Q.RedressAll()")
+check(p.eval("E.cap:IsShown() == true"), "the season turning puts snow on a window already open")
+p.lua("Q.PretendHoliday(false)")
+p.lua("Q.RedressAll()")
+check(p.eval("E.cap:IsShown() == false"), "...and takes it off again when the holiday ends")
+p.lua("Q.PretendHoliday(nil)")
+
 print("nothing of it is saved")
 # the pretend lives on the namespace, not in the saved variables
 saved = p.eval("(function() for k in pairs(A.db or {}) do if tostring(k):lower():find('pretend') then return true end end return false end)()")

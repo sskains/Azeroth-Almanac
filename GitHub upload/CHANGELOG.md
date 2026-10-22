@@ -6,6 +6,20 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The caps of snow are snow-shaped now** (Shannon: "the minimap snow cap looks silly... we need
+  something more organic along the top side, as it's fallen on a rounded object"). The first pass
+  filled downwards from the top of its texture, which gives a white block with a flat top - not
+  what snow does on a dome. It is cut from two shapes instead: a disc a little larger than the
+  thing it caps, with a lumpy edge, and everything above a wavy line across it, with a few drips
+  hanging under. So the top follows the curve it has settled on and the bottom is where the snow
+  stops. The art leaves room above its own disc, so it is drawn **wider than the circle it caps** -
+  at the socket's 84 the snow was being cut off at the top.
+- **Wild Gambit's emblem was the one without snow**, and the reason was not its own: an emblem's cap
+  was decided once, when the window was first built, so any window opened before `/aa season` was
+  typed never got one however often the season turned afterwards. Emblems are now remembered weakly
+  and redressed with everything else (`ns.RedressEmblem`). Covered by a test that builds an emblem
+  out of season, turns the season on, and checks the snow arrives.
+
 - **The Almanac itself dresses for a holiday**, not only the three games' boards (Shannon: "winter
   touches to the Almanac"). A drift of snow along the top edge, frost creeping in at the four
   corners, a few flakes drifting inside, a cap of snow on the round gold emblem, and one on the

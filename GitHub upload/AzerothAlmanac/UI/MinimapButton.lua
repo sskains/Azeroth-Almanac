@@ -133,7 +133,7 @@ local function Build()
 	-- (2026-10-22) a cap of snow on the button during a holiday: the only piece of the Almanac
 	-- that shows when nothing of it is open
 	local snow = button:CreateTexture(nil, "OVERLAY", nil, 2)
-	snow:SetSize(26, 26)
+	snow:SetSize(28, 28)       -- (the art leaves room above its disc, so it is drawn wider than the button)
 	snow:SetPoint("CENTER", bg, "CENTER", 0, 1)
 	button.seasonSnow = snow
 	local border = button:CreateTexture(nil, "OVERLAY")

@@ -315,6 +315,24 @@ function ns.WoodLettering(b, size)
 end
 
 -- the window's corner icon, bigger and in the gold elite frame (the boss portrait's gold dragon ring,
+-- (2026-10-22) Every emblem made is remembered weakly, so its cap of snow can be put on and taken
+-- off as the season moves. Without this the cap was decided once, when the window was first built,
+-- so a window opened before `/aa season` was typed never got one however often the season changed -
+-- which is exactly how Wild Gambit came to be the only window without snow on its emblem.
+local emblems = setmetatable({}, { __mode = "k" })
+local CAP_SIZE = 106
+
+function ns.RedressEmblem(e)
+	if not (e and e.cap) then return end
+	local d = ns.SeasonDecor()
+	if d and d.cap then
+		e.cap:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. d.cap)
+		e.cap:Show()
+	else
+		e.cap:Hide()
+	end
+end
+
 -- as on the legendary cards) over the template's small round portrait, which it covers with a dark
 -- socket. Centred on where that portrait sits.
 function ns.GoldEmblem(frame, icon)
@@ -333,16 +351,13 @@ function ns.GoldEmblem(frame, icon)
 	e.socket:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 	e.socket:SetVertexColor(0.04, 0.03, 0.025, 1)
 	Put(e.socket, 84)
-	-- a cap of snow sits on the emblem during a holiday that has one
+	-- A cap of snow during a holiday that has one. Drawn at CAP_SIZE rather than the socket's 84:
+	-- the art leaves room above the circle it caps (its disc is 0.8 of the texture), so drawn at the
+	-- socket's own size the snow would be cut off at the top.
 	e.cap = e:CreateTexture(nil, "OVERLAY", nil, 3)
-	e.capPut = Put
-	local d = ns.SeasonDecor()
-	if d and d.cap then
-		e.cap:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. d.cap)
-		Put(e.cap, 84)
-	else
-		e.cap:Hide()
-	end
+	Put(e.cap, CAP_SIZE)
+	emblems[e] = true
+	ns.RedressEmblem(e)
 	e.icon = e:CreateTexture(nil, "ARTWORK")
 	e.icon:SetTexture(icon)
 	e.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
@@ -546,6 +561,7 @@ end
 
 function ns.RedressAll()
 	for frame in pairs(dressed) do ns.RedressWindow(frame) end
+	for e in pairs(emblems) do ns.RedressEmblem(e) end
 end
 
 -- ask for a window to be dressed for whatever holiday is on. Safe to call on any frame, once.

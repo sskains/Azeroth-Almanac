@@ -76,18 +76,46 @@ def frost_corner(s=128):
     return rgba((228, 240, 255), a)
 
 
-def cap(s=64, width=0.80, depth=0.34):
-    """A cap of snow for the top of something round."""
+def cap(s=128, circle=0.40, bulge=0.085, spread=1.15, drips=((-0.17, 0.055), (0.09, 0.075), (0.26, 0.045))):
+    """Snow lying on the top of a round thing.
+
+    The first attempt filled downwards from the top of the texture, which gave a white block with a
+    flat top - snow does not do that on a dome. This is the intersection of two shapes instead: a
+    disc a little larger than the object, whose edge is lumpy, and everything above a wavy line
+    across it. So the upper edge follows the curve it has settled on, with an uneven lip, and the
+    lower edge is where the snow stops, with a few drips hanging under it.
+
+    `circle` is the object's radius as a fraction of the texture, so the texture must be drawn
+    bigger than the object it caps - at circle*2 of its own width - to leave room for the snow.
+    """
     yy, xx = np.mgrid[0:s, 0:s]
-    x = (xx - s / 2) / (s / 2)
-    k = 2 * np.pi
-    lip = depth * s * (1 - 0.55 * x * x) + 2.5 * np.sin(k * xx / s * 3)
-    a = np.clip((lip - yy) / 3.0, 0, 1)
-    a[:, : int(s * (1 - width) / 2)] = 0
-    a[:, int(s * (1 + width) / 2):] = 0
-    a *= 0.6 + 0.4 * noise((s, s), 2)
-    a = gaussian_filter(a, 0.8)
-    return rgba((238, 245, 255), a)
+    x = (xx - s / 2.0) / s
+    y = (yy - s / 2.0) / s
+    r = np.hypot(x, y)
+    th = np.arctan2(x, -y)                       # 0 straight up, + to the right
+
+    lump = noise((s, s), s * 0.06, 3)
+    outer = circle + bulge * np.cos(np.clip(th / spread, -1, 1) * (np.pi / 2)) ** 0.55
+    outer = outer * (0.93 + 0.14 * lump)
+
+    # the lower edge: a wavy line, lowest in the middle where snow gathers deepest
+    line = -circle * 0.65 + 0.26 * x * x + 0.012 * np.sin(x * 24) + 0.018 * (lump - 0.5)
+    a = ((r < outer) & (y < line)).astype(np.float32)
+
+    # a few drips hanging below it
+    for dx, length in drips:
+        d = np.abs(x - dx)
+        tip = line + length
+        a = np.maximum(a, (((y > line - 0.01) & (y < tip) & (r < outer)
+                            & (d < 0.020 * np.clip(1 - (y - line) / max(length, 1e-6), 0, 1) ** 0.6)).astype(np.float32)))
+
+    a = gaussian_filter(a, s * 0.013)
+    a = np.clip((a - 0.28) / 0.5, 0, 1)      # a soft edge, without the staircase a hard cut leaves
+    shade = 0.86 + 0.14 * noise((s, s), s * 0.05)
+    img = np.zeros((s, s, 4), np.float32)
+    img[..., 0] = 238 * shade; img[..., 1] = 245 * shade; img[..., 2] = 255 * shade
+    img[..., 3] = a * 255
+    return Image.fromarray(img.astype(np.uint8), "RGBA")
 
 
 def write_tga(img, path):
@@ -102,8 +130,8 @@ def write_tga(img, path):
 def main(media):
     for name, img in (("Season_Snow_Top", snow_top()),
                       ("Season_Frost_Corner", frost_corner()),
-                      ("Season_Emblem_Sprig", cap(64, 0.72, 0.30)),
-                      ("Season_Minimap_Cap", cap(64, 0.86, 0.36))):
+                      ("Season_Emblem_Sprig", cap(128)),
+                      ("Season_Minimap_Cap", cap(64, 0.40, 0.10, 1.25, ((-0.15, 0.05), (0.14, 0.06))))):
         p = os.path.join(media, name + ".tga")
         write_tga(img, p)
         print("%-22s %-9s %d bytes" % (name, "%dx%d" % img.size, os.path.getsize(p)))
