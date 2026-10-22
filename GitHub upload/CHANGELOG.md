@@ -6,6 +6,17 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Gem Match's Winter Veil board, repainted** (Shannon: "the cropping on the top especially... too
+  clean looking, losing some of the texture, making it look too flat"). The sockets are chiselled
+  hollows now, bevelled and shadowed, rather than squares drawn on flat ice. It also needs
+  **essentially no scaling**: its grid came back within 2% of where the game draws the gems, against
+  the first painting's tenth, so nothing is enlarged and nothing is cropped - which is what the
+  "cropping on the top" was. Fine detail measures 10.07, against 9.29 for the board it replaces and
+  4.78 for the ordinary Gem Match board. The lantern covered three sockets in the bottom right
+  corner and was patched out: the sockets are a regular lattice of identical squares, so clean ones
+  were cloned over it and the frame mirrored from the other side. The raw render is kept beside the
+  source as `GemMatch_Board_WinterVeil_v2-raw.webp`.
+
 - **The deck on the Wild Gambit table wears the holiday's card back** (Shannon, in game: the deck
   was still the Almanac compass with Winter Veil on). It was the one card back the holiday did not
   reach, and not for the reason it looked: the deck lying on the table's corner is **painted into
