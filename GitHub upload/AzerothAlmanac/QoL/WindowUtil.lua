@@ -514,7 +514,12 @@ local DECOR = {
 		-- stripCells: the texture holds that many different drifts side by side, and each patch
 		-- draws a different one. One drift reused everywhere reads as a copy-and-paste job however
 		-- it is scaled and flipped - the eye finds the repeat before it finds the snow.
-		strip = "Season_Snow_Top", stripH = 36, stripAspect = 4, stripAlpha = 0.88, stripCells = 4,
+		-- The painted sheet holds four drifts, each in a cell of its own, ridges aligned along the
+		-- top. A cell is nearly square because one drift's icicle hangs three times the depth of
+		-- its own ridge, and they keep the scale they were painted at relative to each other - that
+		-- is what makes one read as deep and heavy and another as shallow. stripH is the cell's
+		-- height, not the ridge's: the ridges come out around 17 px of it.
+		strip = "Season_Snow_Top", stripH = 92, stripAspect = 1.03, stripAlpha = 0.88, stripCells = 4,
 		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
 		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
 		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
@@ -559,7 +564,7 @@ local function Lay(deco, d, width)
 	width = math.floor(width or 0)
 	if width < 2 or deco.laidAt == width then return end
 	deco.laidAt = width
-	local n = math.min(#deco.patches, math.max(2, math.floor(width / 230 + 0.5)))
+	local n = math.min(#deco.patches, math.max(2, math.floor(width / 150 + 0.5)))
 	local seg, aspect = width / n, d.stripAspect or 4
 	for i, tex in ipairs(deco.patches) do
 		if i > n then

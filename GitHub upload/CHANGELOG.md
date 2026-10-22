@@ -6,6 +6,20 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The painted sheet of drifts is in**: four drifts actually painted apart, so no two patches
+  along a window's top are the same picture. Taking it needed more than keying:
+  - **The drifts are found, not counted.** Asked for four panels, the render has five runs of paint
+    - the "broken ridge with a gap" was painted as two clumps, which is right - and that gap is no
+    wider than the gaps between panels, about eleven pixels either way, so no threshold tells them
+    apart. `sheet_from_drifts` takes the widest four instead.
+  - **Each drift gets an equal cell, ridges aligned along the top**, padded rather than stretched,
+    keeping the scale they were painted at relative to each other. That is what makes one read as
+    deep and heavy and another as shallow.
+  - **A cell is nearly square** (246 x 238), because one drift's icicle hangs three times the depth
+    of its own ridge. So `stripH` is the cell's height now, not the ridge's: at 92 the ridges come
+    out around 19 px with the icicles below them, and the texture is 1024 x 256 rather than
+    1024 x 64, which was squashing the cells fourfold.
+
 - **Each drift along the window's top is a different drift** (Shannon: "it just looks kind of like
   a lazy copy and paste job"). Laying the snow as separate patches fixed the ribbon, but every
   patch still drew the same picture, and scaling and flipping it does not hide that - the eye finds

@@ -197,6 +197,67 @@ def soften_top(img, frac=0.22, blur=1.4):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
 
 
+def find_drifts(img, gap=8, least=12):
+    """The separate drifts on a painted sheet, found by the bare columns between them.
+
+    Counting panels does not work: asked for four, the painter made the "broken ridge with a gap"
+    out of two clumps, which is right, but that makes five runs and its gap is no wider than the
+    gaps between the panels - about eleven pixels either way - so no threshold tells them apart.
+    They are simply not merged, and sheet_from_drifts keeps the widest four, which drops the
+    smaller half of the broken ridge and leaves four drifts that do differ.
+    """
+    a = np.asarray(img.convert("RGBA"), np.float32)[..., 3]
+    on = a.max(0) > 24
+    runs, s = [], None
+    for i, v in enumerate(on):
+        if v and s is None:
+            s = i
+        if not v and s is not None:
+            if i - s > least:
+                runs.append([s, i - 1])
+            s = None
+    if s is not None:
+        runs.append([s, len(on) - 1])
+    merged = []
+    for r in runs:
+        if merged and r[0] - merged[-1][1] < gap:
+            merged[-1][1] = r[1]
+        else:
+            merged.append(r)
+    return merged, a
+
+
+def sheet_from_drifts(img, want=4):
+    """Lay each painted drift into its own equal cell, ridges aligned along the top.
+
+    The drifts differ wildly in height - one has an icicle three times the depth of its own ridge -
+    so cells are sized to the tallest and the rest are padded, not stretched. They keep the scale
+    they were painted at relative to each other, which is what makes one read as deep and heavy and
+    another as shallow. Prints the cell's shape, which `stripAspect` in WindowUtil must match.
+    """
+    runs, alpha = find_drifts(img)
+    if len(runs) < 2:
+        return None
+    if len(runs) > want:                       # keep the widest, which are the ones worth seeing
+        runs = sorted(sorted(runs, key=lambda r: r[1] - r[0])[-want:], key=lambda r: r[0])
+    tops, bots = [], []
+    for x0, x1 in runs:
+        ys = np.where(alpha[:, x0:x1 + 1].max(1) > 24)[0]
+        tops.append(ys.min())
+        bots.append(ys.max())
+    top = min(tops)
+    cw = max(x1 - x0 + 1 for x0, x1 in runs)
+    ch = max(bots) - top + 1
+    sheet = Image.new("RGBA", (cw * len(runs), ch), (0, 0, 0, 0))
+    src = img.convert("RGBA")
+    for i, (x0, x1) in enumerate(runs):
+        cell = src.crop((x0, top, x1 + 1, top + ch))
+        sheet.paste(cell, (i * cw + (cw - (x1 - x0 + 1)) // 2, 0))
+    print("  %d drifts, cell %d x %d -> stripCells = %d, stripAspect = %.2f"
+          % (len(runs), cw, ch, len(runs), cw / ch))
+    return sheet
+
+
 def make_sheet(img, cols=4, take=0.55):
     """Build a sheet of several drifts out of a painting that holds only one.
 
@@ -262,9 +323,9 @@ def painted(src, size, strip=False, corner=False):
         img = trim(img)
     if strip:
         img = soften_top(trim(img))
-        if img.width < img.height * 8:        # one drift painted, not a sheet of them
-            img = make_sheet(img)
-        img = soften_cells(img)
+        built = sheet_from_drifts(img)
+        img = built if built is not None else make_sheet(img)
+        img = soften_cells(img, cols=4)
     return img.resize(size, Image.LANCZOS)
 
 
@@ -277,7 +338,7 @@ def write_tga(img, path):
         f.write(hdr + img.transpose(Image.FLIP_TOP_BOTTOM).tobytes("raw", "BGRA"))
 
 
-WANTED = {"Season_Snow_Top": (1024, 64), "Season_Frost_Corner": (128, 128),
+WANTED = {"Season_Snow_Top": (1024, 256), "Season_Frost_Corner": (128, 128),
           "Season_Emblem_Sprig": (128, 128), "Season_Minimap_Cap": (64, 64)}
 
 
