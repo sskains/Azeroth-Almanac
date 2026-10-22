@@ -6,6 +6,18 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The painted long drift is in**, one continuous run across the window's top with no repeat in
+  it. It needed putting in proportion first. A drift drawn across a whole window wants to be about
+  eighteen times as wide as it is tall; the render's painted content is **975 x 237, nearer four to
+  one** - good snow, but three times too deep for its length, with icicles hanging half the
+  picture. Drawn full width that is a 58 px band with icicles 180 px below it, straight over the
+  Journal's own buttons.
+  `normalise_strip` squeezes the ridge and the icicles by **different amounts** - the ridge gently,
+  the icicles hard - rather than the picture equally, which would have left the icicles fat and
+  stubby. The snow keeps its shape, the icicles keep their taper, and only their reach changes:
+  975 x 229 becomes 975 x 54. A strip that comes back as one unbroken run across its whole width is
+  detected and treated this way; anything made of separate drifts is composed as before.
+
 - **One long drift across the window's top, scaled with it** (Shannon: "would one long image that
   just scales with the window not be better?" - it is). It has been three things: one drift tiled
   edge to edge, which read as a white streak; a sheet of four laid as separate patches, which read

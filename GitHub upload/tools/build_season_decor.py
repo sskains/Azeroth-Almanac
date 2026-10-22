@@ -283,6 +283,40 @@ def make_sheet(img, cols=4, take=0.55):
     return sheet
 
 
+def normalise_strip(img, ridge_share=0.37, aspect=18.0):
+    """Squeeze a painted strip into the proportions the window needs.
+
+    A drift drawn across the whole top of a window wants to be about eighteen times as wide as it
+    is tall, with the snow itself roughly a third of that and the icicles the rest. What comes back
+    is nearer four to one: good snow, but painted three times too deep for its length, and with
+    icicles hanging half the picture. Drawn full width that is a 58 px band with icicles 180 px
+    below it, straight over the window's own buttons.
+
+    The ridge and the icicles are therefore squeezed by different amounts - the ridge gently, the
+    icicles hard - rather than the whole picture equally, which would leave the icicles fat and
+    stubby. The snow keeps its shape and the icicles keep their taper; only their reach changes.
+    """
+    a = img.convert("RGBA")
+    bb = a.split()[3].point(lambda v: 255 if v > 10 else 0).getbbox()
+    if not bb:
+        return a
+    a = a.crop(bb)
+    w, h = a.size
+    arr = np.asarray(a, np.float32)[..., 3]
+    dense = (arr > 24).sum(1) > 0.45 * w
+    rows = np.where(dense)[0]
+    split = int(rows.max()) + 1 if len(rows) else h // 3
+    target_h = max(8, int(round(w / aspect)))
+    ridge_h = max(4, int(round(target_h * ridge_share)))
+    tail_h = max(1, target_h - ridge_h)
+    out = Image.new("RGBA", (w, target_h), (0, 0, 0, 0))
+    out.paste(a.crop((0, 0, w, split)).resize((w, ridge_h), Image.LANCZOS), (0, 0))
+    if h > split:
+        out.paste(a.crop((0, split, w, h)).resize((w, tail_h), Image.LANCZOS), (0, ridge_h))
+    print("  strip %d x %d (ridge %d) -> %d x %d, aspect %.1f:1" % (w, h, split, w, target_h, w / target_h))
+    return out
+
+
 def long_strip(img, out=(2048, 128), keep=85, factor=0.55, n=7):
     """One continuous drift across the whole window, instead of patches of a repeated one.
 
@@ -385,6 +419,10 @@ def painted(src, size, strip=False, corner=False):
         img = trim(img)
     if strip:
         img = soften_top(trim(img))
+        runs = find_drifts(img)[0]
+        if len(runs) == 1 and (runs[0][1] - runs[0][0]) > 0.8 * img.width:
+            # already one continuous drift across the whole picture: just put it in proportion
+            return soften_ends(soften_top(normalise_strip(img), 0.14)).resize(size, Image.LANCZOS)
         built = long_strip(img)
         if built is not None:
             return soften_ends(built).resize(size, Image.LANCZOS)

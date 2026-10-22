@@ -507,7 +507,7 @@ local DECOR = {
 		-- follows the width, so nothing is ever stretched sideways. stripAspect is the picture's own
 		-- width over its height; the clamp keeps it visible on the narrowest window the Almanac has
 		-- (about 300 px) without becoming a band across the widest (about 1010).
-		strip = "Season_Snow_Top", stripAspect = 16, stripAlpha = 0.88, stripMin = 26, stripMax = 62,
+		strip = "Season_Snow_Top", stripAspect = 18, stripAlpha = 0.88, stripMin = 26, stripMax = 62,
 		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
 		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
 		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
