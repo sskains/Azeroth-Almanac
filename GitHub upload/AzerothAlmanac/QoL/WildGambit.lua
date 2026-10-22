@@ -7125,6 +7125,7 @@ function WG:BackKey() return self:Dressed(self.HOLIDAY_BACK) or (db and db.back)
 function WG:SeasonChanged()
 	self:ApplyBoard()
 	self:ApplyTable()
+	if self.DressDeck then self:DressDeck() end
 	-- (a card already face down keeps the back it was dealt; the next deal has the new one)
 end
 function WG:TableKey() return self:Dressed(self.HOLIDAY_TABLE) or (db and db.table) or "Dark" end

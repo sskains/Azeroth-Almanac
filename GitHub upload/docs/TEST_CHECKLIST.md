@@ -6,7 +6,23 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
-## Unreleased (**full game restart**: three new Winter Veil textures)
+## Unreleased (**full game restart**: the Winter Veil textures are all new)
+
+- [ ] **The deck wears the Winter Veil card back:** with `/aa season winterveil`, open the Wild
+      Gambit table and look at the deck painted on the top left corner of the felt. It should be
+      the teal stag card, not the Almanac compass. Three things to watch, because the Winter Veil
+      card is a cut-out laid over a card that is part of the painting:
+      - no rim of the old red card showing round any edge, especially the lower right;
+      - the shadow it casts on the felt still looks like the card's own shadow;
+      - point at it: it should still light up, lift and settle, and the sweep of light across it
+        should follow the card's shape and not run off its edge.
+      Then `/aa season off` - out of season it must be the compass again.
+- [ ] **Murloc Tac Toe's champion tooltip:** hover the arrows beside the champion. The tooltip
+      should appear to the right of the window, clear of the two champion cards.
+- [ ] **KNOWN BAD - Wild Gambit's Winter Veil board:** the corner ornaments cut into all four
+      corner card slots. This is the painting's composition and no code setting fixes it; a
+      re-rolled board is prompted in `docs/ART_ASSETS.md` section 7. Don't raise it again until
+      that art is in.
 
 - [ ] **`/aa season winterveil`:** everything that dresses for Winter Veil changes at once, with
   the three windows open - Wild Gambit's board, card back (deal a hand; one already face down

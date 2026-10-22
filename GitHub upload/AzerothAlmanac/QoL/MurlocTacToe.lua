@@ -1428,7 +1428,12 @@ local function Build()
 		b:GetHighlightTexture():SetAlpha(0.45)
 		b:SetScript("OnClick", function() MT:CycleChampion(dir) end)
 		b:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_TOP")
+			-- (2026-10-22, Shannon: "the tool tip when choosing a champion really gets in the way")
+			-- Anchored to the arrow, it opened upwards over the two champion cards - which are the
+			-- very thing it is describing. It goes beside the window instead, clear of the table.
+			GameTooltip:SetOwner(self, "ANCHOR_NONE")
+			GameTooltip:ClearAllPoints()
+			GameTooltip:SetPoint("TOPLEFT", frame, "TOPRIGHT", 8, -8)
 			GameTooltip:AddLine("Choose your champion", 1, 0.82, 0)
 			GameTooltip:AddLine("Who you play as: it goes with you into every game, and your opponent sees it.", 1, 1, 1, true)
 			GameTooltip:Show()

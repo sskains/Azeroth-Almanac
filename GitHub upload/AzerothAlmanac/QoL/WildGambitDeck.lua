@@ -47,6 +47,14 @@ local PULSE_LOW, PULSE_HIGH, PULSE_SPEED = 0.5, 0.95, 2.4   -- the outline's bre
 -- until the mouse is on it, and it is what lifts and dips - the deck is part of the table's
 -- painting and cannot itself move, and a glow alone reads as decoration rather than a button.
 local CARD_ART_W, CARD_ART_H, CARD_SHEET = 158, 157, 256
+-- (2026-10-22, Shannon) The deck wears a holiday's card back where one is painted for it:
+-- Media\Deck_Card_<season>.tga, cut by tools/build_deck_card_season.py from the same painting as
+-- the card back dealt into your hand. The deck in the felt cannot be retinted - it is part of the
+-- table's picture - so the cut-out that normally only shows under the mouse is simply left showing
+-- all the time during the holiday. It lies exactly over the card it was cut from and hides it.
+-- Holidays with no deck of their own are absent here and nothing changes for them.
+local SEASON_DECK = { WinterVeil = "Deck_Card_WinterVeil" }
+local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
 -- it grows as it rises, by more than it rises, so the lifted card always covers the painted one
 -- underneath: both showing at once would read as two cards.
 local LIFT_RISE, LIFT_GROW = 3, 0.08
@@ -502,7 +510,7 @@ local function BuildButton()
 		self.card:SetSize(w * grow, h * grow)
 		self.card:ClearAllPoints()
 		self.card:SetPoint("CENTER", self, "CENTER", 0, LIFT_RISE * p)
-		self.card:SetAlpha(math.min(1, p * 3))
+		self.card:SetAlpha(math.max(self.cardRest or 0, math.min(1, p * 3)))
 	end
 	frame.pick:HookScript("OnSizeChanged", function() if b.Place then b:Place() end end)
 
@@ -599,7 +607,7 @@ local function BuildButton()
 		self.hover = false
 		self.pressed = false
 		if self.lit then self.lit:SetAlpha(0) end
-		if self.card then self.lift = 0 self.card:SetAlpha(0) end
+		if self.card then self.lift = 0 self.card:SetAlpha(self.cardRest or 0) end
 		if self.sheen then self.sheen:SetAlpha(0) end
 		if self.liftHolder then self.liftHolder:Hide() end
 	end)
@@ -610,6 +618,24 @@ local function BuildButton()
 	b:Place()
 	deckButton = b
 	frame.deckButton = b
+	WG:DressDeck()
+end
+
+-- the deck's own card back, for the season we are in (`/aa season`, or the calendar). The sheen
+-- is masked by the card's own shape, so that texture has to follow it or the light would sweep
+-- over the outline of the card it is no longer wearing.
+function WG:DressDeck()
+	local b = deckButton
+	if not (b and b.card) then return end
+	local art = self:Dressed(SEASON_DECK)
+	local tex = MEDIA .. (art or "Deck_Card")
+	b.card:SetTexture(tex)
+	b.card:SetTexCoord(0, CARD_ART_W / CARD_SHEET, 0, CARD_ART_H / CARD_SHEET)
+	if b.sheenMask then
+		b.sheenMask:SetTexture(tex, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	end
+	b.cardRest = art and 1 or 0
+	b.card:SetAlpha(math.max(b.cardRest, math.min(1, (b.lift or 0) * 3)))
 end
 
 -- The painted deck is on the felt, which both the lobby and the pick table sit on, so the button

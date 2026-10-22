@@ -522,3 +522,62 @@ plain continuous surface, as the tavern table's does.
 > little dull gold, and one warm pool of candlelight. Low contrast, nothing glaring. Snug and
 > festive but dim. No text, no letters, no numbers, no logos, no people, no creatures, no user
 > interface.
+
+### 7. Wild Gambit board, re-rolled — `Media\Board_WinterVeil.tga` (1024 x 1024, SQUARE)
+
+Convert: `python tools/art_convert.py board docs/art_source/Board_WinterVeil.png "<Media>/Board_WinterVeil.tga" 1024 1024`
+
+**Re-rolled 2026-10-22** (Shannon, in game: "the card slots are over the edge art work", and then
+"doesn't look correct at the bottom either"). The painting itself is liked — keep the jovial yeti
+and the stag. What is wrong is the **composition**: the four corner medallions sit *inside* the
+stone panel and their heads, antlers and horns cut diagonally across all four corner card slots.
+
+Measured on the texture: the nine slots occupy **x 240–799, y 204–846** (559 x 643), and the
+largest ornament-free rectangle in the painting is only about **x 205–800, y 275–800** (595 x 525).
+Wide enough, **118 px too short**. No value of `inner` in `BOARDS` (`QoL/WildGambit.lua`) can fix
+that: making the grid fit vertically means drawing the art ~876 px tall instead of 688, which
+stretches the heads to about 1.4:1 and pushes the top and bottom rune beams ~95 px outside the
+window, where they are simply lost.
+
+The other four boards (Glade, Ruin, Tavern, Hallow's End) all give the grid roughly **628 x 706**
+of clear panel. That is the target, and it is the one thing the first prompt never said.
+
+> Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
+> warm lighting, ornate but readable, original design (not from any existing game).
+>
+> **A square picture, exactly as tall as it is wide**, seen straight on, flat, with no tilt and no
+> perspective, filling the whole frame edge to edge.
+>
+> A heavy carved stone game board for a card game. A broad stone border runs round the outside,
+> banded with aged copper straps and carved with glowing pale-blue runes, dusted with snow and hung
+> with small icicles, sprigs of dark evergreen fir and holly with red berries.
+>
+> At each of the four corners of the border sits a round carved medallion holding an animal's head,
+> looking out at you, cheerful and friendly: a **shaggy white-furred yeti with curling horns and a
+> broad good-natured grin** at the top left and again at the bottom right, and a **warm brown stag
+> with spreading antlers and a kind face** at the top right and again at the bottom left. They are
+> jovial and storybook, never fierce.
+>
+> **The middle of the board is one large, plain, empty rectangle of flat grey stone** — taller than
+> it is wide, about five parts wide to six parts tall — with only faint cracks and a little frost
+> across it. It takes up the middle two thirds of the picture, and it is completely bare: no
+> ornament, no carving, no snow drifts, no runes, nothing laid on it. Playing cards are dealt onto
+> this panel and must not cover anything.
+>
+> **Every decoration stays outside that middle rectangle, on the stone border.** This matters more
+> than anything else in the picture: the four animal heads sit on the border and face outward, and
+> **no horn, no antler, no fur, no holly, no berry, no icicle and no ribbon may cross into the
+> middle rectangle at any point, least of all at its four corners.** The corners of the middle
+> rectangle must be clean, empty stone. Keep the medallions small enough to sit wholly within the
+> border's width.
+>
+> Cold grey stone, aged copper, pale glacier blue runes, dark evergreen, deep red berries, soft
+> white snow, warm cream antler and horn. Lit evenly, rich and restrained, snug and festive. No
+> text, no letters, no numbers, no logos, no people, no user interface.
+
+**When it comes back**, check the clear panel before anything else: it wants to be about **640 x
+720** of the 1024 square, roughly x 190–830, y 150–870, with all four corners bare. Then set
+`BOARDS.WinterVeil.inner` in `QoL/WildGambit.lua` to those edges as fractions of 1024 —
+`{ 190/1024, 150/1024, 830/1024, 870/1024 }` if it lands on the numbers above. (The present entry
+divides x by **841** where every other board divides by 825; that was measured hastily and should
+not be copied.)

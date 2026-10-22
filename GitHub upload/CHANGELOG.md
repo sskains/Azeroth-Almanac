@@ -6,6 +6,24 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The deck on the Wild Gambit table wears the holiday's card back** (Shannon, in game: the deck
+  was still the Almanac compass with Winter Veil on). It was the one card back the holiday did not
+  reach, and not for the reason it looked: the deck lying on the table's corner is **painted into
+  the felt** (`Media/Background_Pick`), not drawn as a card, so nothing in the UI could retint it.
+  `tools/build_deck_card.py` already lifts that painted card onto its own texture so it can rise
+  under the mouse; the new `tools/build_deck_card_season.py` makes the same cut and warps a holiday
+  card back onto the card's own four corners - read off the cut's silhouette, since for a leaning
+  rectangle the topmost, rightmost, bottommost and leftmost pixels are its corners - carrying the
+  painted card's light over it so it does not read as a sticker. The UI then simply leaves that
+  cut-out showing all the time during the holiday, exactly over the card it was cut from.
+  `Media/Deck_Card_WinterVeil.tga`, `WG:DressDeck` in `QoL/WildGambitDeck.lua`.
+- **Murloc Tac Toe: the champion tooltip no longer covers the champions** (Shannon: "the tool tip
+  when choosing a champion really gets in the way here"). Anchored to the arrow button, it opened
+  upwards over the two champion cards - the very thing it was describing. It sits beside the
+  window now.
+- `tools/build_deck_card.py` is **in the repo** at last. It built a texture that has shipped since
+  0.70.0 and existed only on Shannon's machine.
+
 - **`/aa season`: see a holiday's dress out of season** (Shannon: "can we do a command to preview
   all of the winter veil updates?"). `/aa season winterveil` pretends the Feast of Winter Veil is
   on **everywhere at once** - Wild Gambit's board, card back and table, Murloc Tac Toe's board,
