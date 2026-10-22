@@ -14,8 +14,17 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
   "cropping on the top" was. Fine detail measures 10.07, against 9.29 for the board it replaces and
   4.78 for the ordinary Gem Match board. The lantern covered three sockets in the bottom right
   corner and was patched out: the sockets are a regular lattice of identical squares, so clean ones
-  were cloned over it and the frame mirrored from the other side. The raw render is kept beside the
-  source as `GemMatch_Board_WinterVeil_v2-raw.webp`.
+  were cloned over it and the frame mirrored from the other side. It was then **cut out and set
+  back down on the frame band to the right of the grid**, where it can light the board without
+  covering any of it (Shannon: "I do indeed like the lantern here if possible"). The raw render is
+  kept beside the source as `GemMatch_Board_WinterVeil_v2-raw.webp`.
+- The board's grid is now measured by **fitting a lattice to the sockets' centroids**, not by
+  thresholding their edges (`GEM_PAINTED`, `tools/build_winterveil_art.py`). The sockets are
+  bevelled - shadow on the upper left, highlight on the lower right - so any brightness threshold
+  reports them as sitting further down and right than they do, by a good 25 px a side. That is why
+  the gems sat up and left of their sockets in game. A centroid fit is blind to the bevel: it
+  deviates 2.2 px at worst across all eight columns, and the sockets now land **0.3 px** from the
+  gems' own grid - under a fifth of a pixel on screen.
 
 - **The deck on the Wild Gambit table wears the holiday's card back** (Shannon, in game: the deck
   was still the Almanac compass with Winter Veil on). It was the one card back the holiday did not

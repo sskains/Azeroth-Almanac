@@ -61,11 +61,13 @@ BOARD_FIELD = "170,170,852,852"
 # GEM_WANTED, so the picture is drawn essentially one to one - no enlargement, nothing cropped, none
 # of the softness the first one picked up. The lantern covered three sockets in the corner and was
 # patched out in docs/art_source (the raw render is kept beside it as ..._v2-raw.webp).
-# Measured the same way the result is checked - a blueness threshold at 0.6 of the picture's own
-# maximum, because the sockets are bevelled and an absolute threshold slides several pixels along
-# the slope. Measuring the painting one way and the output another put the grid 8 px out and looked
-# like a bug in the alignment, which it was not.
-GEM_PAINTED = (129.0, 139.0, 889.0, 895.0)
+# (2026-10-22) Measured by fitting a lattice to the sockets' CENTROIDS, not by thresholding their
+# edges. The sockets are bevelled - shadow on the upper left, highlight on the lower right - so any
+# brightness threshold reports the socket as sitting further down and right than it does, and the
+# error is a good 25 px a side. Thresholding put the grid out by about that much and the gems sat
+# up and left of their sockets in game. A centroid fit is blind to the bevel: it came out with a
+# maximum deviation of 2.2 px across all eight columns.
+GEM_PAINTED = (103.9, 108.1, 916.8, 922.3)
 GEM_WANTED = (139, 129, 895, 885)
 
 
