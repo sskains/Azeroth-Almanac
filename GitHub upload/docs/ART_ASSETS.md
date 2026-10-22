@@ -864,3 +864,46 @@ its height is taken as a finished strip and used as it is; anything squarer is c
 > whole lower half of the picture. No window, no wood, no frame, no shadow cast onto the magenta.
 > No text, no logos.
 
+
+### `Season_Emblem_Sprig`, painted onto the ring (2026-10-22, Shannon)
+
+The cap on the three games' corner emblems is a plain dome, and a dome on a dragon-shaped ornament
+will only ever be approximate: lifted and shrunk it reads as a dusting, but it does not sit in the
+dragon's hollows or along its back the way real snow would.
+
+The ring is **Blizzard's art**, not ours - the atlas
+`UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged`, drawn from the client's own archives - so it
+cannot be replaced, only drawn over. That means what we need back is **snow alone**, aligned to the
+ring, which the UI then lays on top of the real one.
+
+So: paint snow onto a picture of the ring, and the snow is separated out here. It separates cleanly
+because nothing else in the picture is white or pale blue - the ornament is gold, the icon is
+purple and teal, the background dark green.
+
+**The reference** is `docs/art_source/Season_Emblem_Ring_reference.png`: the emblem lifted from a
+screenshot (`/aa season plain`, so no snow was on it), cropped to the ornament and scaled eight
+times, sitting low on magenta with clear room above it.
+
+> Here is a gold dragon ornament that curls around a round emblem.
+>
+> **Add fresh snow to it, and change nothing else.** The dragon, the ring, the picture inside it,
+> the background, and their position and size all stay exactly as they are - only snow is added.
+>
+> The snow has settled on it from above, so it lies on **every upward-facing surface**: along the
+> dragon's back and neck where they curve over the top, on top of its head and snout, on the
+> upper edges of its wing, on the top of the ring itself, and in small gatherings where the coils
+> cross one another. It is deeper where the surface is flatter and thins to nothing where the gold
+> turns downward. Its edges are soft and uneven - never an even outline round the shape.
+>
+> A few short icicles hang from the overhangs underneath, the longest no more than about a sixth of
+> the picture's height.
+>
+> Bright clean white on top, shading to soft cold blue-grey underneath and in the hollows, with a
+> faint sparkle. Nothing else in the picture changes colour.
+>
+> No text, no logos.
+
+**Converting it**: the returned picture goes in beside the reference, and the snow is keyed out of
+it by colour. Check the result against the real emblem in game before keeping it - the screenshot
+the reference came from is 120 px across, so what comes back is a repaint of the ring rather than
+the ring itself, and only the snow can be trusted to line up.
