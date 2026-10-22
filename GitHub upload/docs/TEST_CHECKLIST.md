@@ -19,12 +19,12 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
       Then `/aa season off` - out of season it must be the compass again.
 - [ ] **Murloc Tac Toe's champion tooltip:** hover the arrows beside the champion. The tooltip
       should appear to the right of the window, clear of the two champion cards.
-- [ ] **Wild Gambit's board during Winter Veil:** with `/aa season winterveil`, the board should
-      be whichever one you picked in Settings (Forest glade by default) - NOT the Winter Veil one,
-      which is withheld until its painting is replaced. The card back, the table and the deck
-      should all still be Winter Veil. The Winter Veil board is still selectable by hand in the
-      picker, and when picked it will show its known faults: ornaments over the corner card slots,
-      and the frame spilling over the left hand column and the bottom edge.
+- [ ] **Wild Gambit's Winter Veil board:** with `/aa season winterveil`, the three things that
+      were wrong before: every one of the nine cards should sit on bare stone with none of the
+      yeti's horns, the stags' antlers or the carved rings under it; the painted frame should stop
+      clear of both hand columns, neither covering nor cropping them; and the bottom edge of the
+      board should be the painting's own edge, not a cut. The medallions are meant to look tucked
+      behind the stone slab - say if that reads as wrong rather than deliberate.
 
 - [ ] **`/aa season winterveil`:** everything that dresses for Winter Veil changes at once, with
   the three windows open - Wild Gambit's board, card back (deal a hand; one already face down

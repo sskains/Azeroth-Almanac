@@ -6,7 +6,21 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
-- **Wild Gambit's Winter Veil board is withheld until its painting is replaced** (Shannon, in game:
+- **Wild Gambit's Winter Veil board works, by imposing its panel instead of asking for one**
+  (Shannon, after five renders: "Gemini is just not following the instruction"). It wasn't
+  carelessness on the generator's part, it was arithmetic: the card grid needs a bare panel of
+  about 624 x 705 of a 1024 square, which leaves a border near 200 px, and the corner medallions
+  kept coming back about 290 px across. A 290 px disc cannot sit in a 200 px band without hanging
+  over the panel, so every render either kept its ornaments and fouled the corner cards or obeyed
+  and shrank the panel until `ApplyBoard` had to magnify the picture and run its frame off the
+  window. `tools/build_wg_board_slab.py` lays a rectangle exactly the size the game needs over the
+  middle of the painting; the medallions keep their painted size and tuck behind its edge, which
+  reads as a stone plate set into the frame. The painting's own stone, cracks and grain are kept -
+  only the four corners, where ring, beard, antlers and horn reach in, are repainted with stone
+  sampled from further into the same slab. The art is now drawn **553 x 628** into the 552 x 628
+  the window allows - no spill over the hand columns, no cropped bottom edge - and the closest any
+  card comes to the slab's edge is **10.7 px**. The raw render is kept as `Board_WinterVeil_raw.jpg`.
+- (superseded) Wild Gambit's Winter Veil board was briefly withheld (Shannon, in game:
   "the cards are going over the background/board... the board is oddly cropped on the bottom edge,
   going over the deck boxes"). Both faults are one fault. The painting's clear stone is too small a
   share of the picture, so `ApplyBoard` magnifies it to **616 x 688** where the window has room for

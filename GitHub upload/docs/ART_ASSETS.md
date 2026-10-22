@@ -642,32 +642,24 @@ columns and the frame's inner shadow reads as another — that is how the first 
 8 x 9 and a row was cut out of it by mistake. Counting the dark socket runs, averaged down a column
 and across a row, gave a clean 8 x 8 first time.
 
-### 7a. Wild Gambit board, second re-roll — the warmth back, and a taller panel
+### 7a. Wild Gambit board — the one rule that was missing
 
-**2026-10-22.** The first re-roll is **not a keeper** (Shannon: "I'm not particularly pleased with
-the new board anyways"). It satisfied the geometry and lost the character doing it: the original
-board was warm, dense and jovial — brown-lit stone, tinsel tangled in the stags' antlers, ornament
-everywhere — and the re-roll came back bare cold grey with plain rings round the animals. A board
-that is correct and charmless is the wrong trade; the point of the re-roll was only ever to get the
-corner ornaments off the card slots.
+**2026-10-22, third render.** The warm painting is the one to keep: the tinsel, the carved rings
+and the character are all right, and the panel is nearly the right size. Measured:
 
-So this prompt is written the other way round: **chase the first board's warmth first**, and keep
-the two geometric rules as hard constraints rather than as the subject.
+- bare panel **x 215-815, y 120-885 = 600 x 765**;
+- the nine cards, with the art sized to exactly fill the window, need **624 x 705**;
+- so the height is fine and the **width is 24 px short**.
 
-What the first re-roll did get right, and must not be lost: **all four corners of the panel came
-back clean**, with the medallions out on the border where they belong.
+The corner slots are fouled for a reason no prompt has yet stated, and it is not carelessness on
+the model's part: **the medallions are physically bigger than the border they sit on.** They are
+about 290 px across; the border band beside the panel is about 215 px. A 290 px disc cannot sit in
+a 215 px band without hanging over the panel, so "keep the ornaments off the panel" is impossible
+to obey as written. Every previous attempt either obeyed it by shrinking the panel (the cold grey
+render: a square 572 x 575 panel, which the code then has to magnify until the frame runs off the
+window) or kept the panel and broke the rule (this one).
 
-What still has to change:
-
-1. **The panel came back square** — measured 572 x 575 (recessed inner edge x 227–799, y 227–802).
-   It needs to be about **640 x 720**, clearly taller than wide. "Five parts wide to six tall" and
-   "the middle two thirds" were not enough, so this prompt gives the proportion three times in
-   different words. A square panel cannot be rescued from the code side: the art would have to be
-   drawn 730 x 898 into a window with about 552 x 628 to show it, hiding some 60% of each animal
-   behind the hand columns and running the top and bottom into the players' header.
-2. **The warmth and the whimsy** (Shannon: "missing a bit of warmth and whimsy, I liked how the
-   previous one had some tinsel tangled in the stag's antlers, and the frames that the creatures
-   are in can use a little extra detail").
+State the medallion's size instead, and both follow:
 
 > Hand-painted fantasy trading card game art, World of Warcraft style, rich painterly textures,
 > warm lighting, ornate but readable, original design (not from any existing game).
@@ -675,110 +667,39 @@ What still has to change:
 > **A square picture, exactly as tall as it is wide**, seen straight on, flat, with no tilt and no
 > perspective, filling the whole frame edge to edge.
 >
-> A heavy carved stone game board for a card game, decked out for midwinter — a **warm, cosy,
+> A heavy carved stone game board for a card game, decked out for midwinter - a **warm, cosy,
 > storybook scene**, crowded with ornament and lit as if by candles just off each corner, so that
-> copper, antler, tinsel and snow all catch a golden light. Snug and festive, never bleak or bare.
+> copper, antler, tinsel and snow all catch a golden light. Snug and festive, never bleak.
 >
-> Around the outside runs a broad carved stone border, banded with aged copper and carved with
-> glowing pale-blue runes. It is **richly decorated**: thick garlands of dark evergreen fir, sprigs
-> of holly heavy with bright red berries, twists of red ribbon, small gold jingle bells, pine
-> cones, drifts of snow along the upper edges and little icicles hanging beneath them.
+> **In the middle is one large empty upright panel of bare stone, taller than it is wide, and it is
+> big: it reaches about two thirds of the way across the picture and three quarters of the way down
+> it.** Around it runs a carved stone border, banded with aged copper, carved with glowing pale-blue
+> runes, and hung with thick garlands of dark evergreen fir, holly with red berries, twists of red
+> ribbon, gold jingle bells, pine cones, snow and small icicles. **The border is narrow - about a
+> sixth of the picture's width down each side.**
 >
-> At each of the four corners of that border sits a round medallion holding a cheerful animal's
-> head, looking out at you: a **shaggy white-furred yeti with curling horns and a broad
-> good-natured grin** at the top left and again at the bottom right, and a **warm brown stag with
-> spreading antlers and a kind face** at the top right and again at the bottom left. They are
-> jovial and storybook, never fierce — the yeti is beaming, the stag gentle.
+> At each of the four corners sits a round medallion holding a cheerful animal's head looking out at
+> you: a **shaggy white-furred yeti with curling horns and a broad good-natured grin** at the top
+> left and bottom right, and a **warm brown stag with spreading antlers and a kind face** at the top
+> right and bottom left. Jovial and storybook, never fierce. Their rings are richly carved - twisted
+> rope moulding, interlaced knotwork, copper rivets, snow along the top - and **strands of gold and
+> silver tinsel are tangled through both stags' antlers**, with a small red ribbon bow at the foot
+> of each medallion.
 >
-> **The rings around them are richly carved**: a twisted rope moulding round the outside, a band of
-> interlaced knotwork within it, aged-copper rivets at the four points, a little snow settled along
-> the top of each ring and an icicle or two beneath. **Strands of glittering gold and silver tinsel
-> are tangled through both stags' antlers**, trailing off into the garland beside them, and a small
-> red ribbon bow is tied at the foot of each medallion.
+> **Each medallion is small: no wider than the stone border it sits on, so that it fits completely
+> within the border and never reaches over the middle panel.** The same goes for every horn, antler,
+> tinsel strand, holly leaf, berry, bell, pine cone and icicle - all of them stay on the border. The
+> middle panel is bare stone from edge to edge, with clean empty corners; it carries nothing at all,
+> because playing cards are dealt onto it.
 >
-> **In the middle is one large empty upright panel of bare stone. It must be clearly taller than it
-> is wide — half again as tall as it is broad, standing upright like a door rather than lying like
-> a window. It is big: about five eighths of the picture's width, and seven tenths of its height**,
-> leaving a border only about a sixth of the picture's width down the left and right sides and a
-> seventh of its height across the top and bottom.
+> That panel is bare but **not lifeless**: warm brown-grey stone, warmest and most lit towards the
+> top, cooling towards the bottom, with painted grain, faint cracks and a little frost at its edges.
 >
-> That panel is bare of ornament but **not lifeless**: warm brown-grey stone, warmest and most lit
-> towards the top and cooling towards the bottom, with painted grain, a few faint cracks and a
-> little frost gathered at its edges. Playing cards are dealt onto it and must not cover anything.
->
-> **Every decoration stays on the border, outside that middle panel.** This matters more than
-> anything else in the picture: **no horn, no antler, no tinsel, no fur, no holly, no berry, no
-> bell, no icicle and no ribbon may cross into the middle panel at any point, least of all at its
-> four corners, which must be clean bare stone.**
->
-> Warm aged copper, gold and silver tinsel, cream antler and horn, dark evergreen, deep red
-> berries, warm-lit snow, against cool grey stone and icy blue runes. Rich, dense and painterly.
-> No text, no letters, no numbers, no logos, no people, no user interface.
+> Warm aged copper, gold and silver tinsel, cream antler and horn, dark evergreen, deep red berries,
+> warm-lit snow, against cool grey stone and icy blue runes. Rich, dense and painterly. No text, no
+> letters, no numbers, no logos, no people, no user interface.
 
-**When it comes back**, judge it as a picture first — is it warm, is it crowded, do the animals
-have character? Only then measure the panel's recessed inner edge: about **640 wide by 720 tall**
-of the 1024 square, and visibly taller than wide. If it is square again, say so rather than
-converting it.
+**Check on arrival**: the bare panel should measure at least **624 x 705** of the 1024 square, and
+each medallion should be **no more than about 190 px across**. If a medallion is wider than the
+border beside it, it will foul the corner cards however clean it looks.
 
-### 8a. Gem Match board, third go — a thicker frame, clear sockets, and real depth
-
-**2026-10-22.** The second painting missed in the opposite direction from the first.
-
-Measured: the socket grid came back **x 82–941, y 100–947 — 859 x 847**, against the 756 x 756 the
-game draws. The frame left round it is only 82 px at the sides and **3 px at the top**, where about
-135 is wanted. Fitting it would mean shrinking the painting to 0.88 and leaving 40–70 px of bare
-canvas on every edge, so the board would not reach the window's sides.
-
-And two overlaps that need no measuring: **the garland hangs over the whole top row of sockets, and
-the lantern covers the bottom right socket.** A gem is drawn in all sixty-four, so those would sit
-under holly and behind a lantern. Saying "must never reach over any socket" was not enough on its
-own — this prompt also asks for a clear band of ice between the sockets and the frame, which gives
-the decoration somewhere to sit that is not a socket.
-
-Shannon also asked for depth: "let's make sure we add some shadows etc to make this really seem 3d,
-like an actual board." That answers the earlier "too clean... too flat" note, and it has to come
-from the painting — nothing in the code casts a shadow here.
-
-> Hand-painted fantasy game art, World of Warcraft style, rich painterly textures, warm lighting,
-> ornate but readable, original design (not from any existing game).
->
-> **A square picture, exactly as tall as it is wide**, seen straight from above, flat, with no tilt
-> and no perspective, filling the whole frame edge to edge.
->
-> A frozen pond set into a broad, heavy frame of carved golden oak — **a real, solid object seen
-> from above, not a flat pattern.**
->
-> **The grid.** Set into the ice is a grid of **exactly eight rows and eight columns of identical
-> square sockets — sixty-four in all**, every one the same size and perfectly square, in straight,
-> evenly spaced rows and columns, the whole grid square overall. **The grid fills the middle three
-> quarters of the picture and no more**: leave a clear margin of about an eighth of the picture's
-> width between the outermost sockets and the frame **on all four sides, the top exactly as much as
-> the bottom**. That margin is plain bare ice — a clear border of ice all the way round the grid,
-> between the sockets and the wooden frame.
->
-> **Depth.** This is the important part. Each socket is a **deep, chiselled hollow**, not a drawn
-> square: its walls are visibly bevelled, the inside floor sits well below the surface, and a soft
-> dark shadow is cast down the inside of the upper and left walls while the lower and right walls
-> catch a pale highlight. The raised ribs between the sockets are **rounded and polished**, bright
-> along their tops, with a thin cast shadow where each meets the hollow beside it. The heavy wooden
-> frame stands clearly proud of the ice and **casts its own soft shadow inward across the bare ice
-> margin**. Everything should read as carved and solid enough to put your finger into.
->
-> **The decoration, all of it on the wooden frame.** A garland of dark evergreen fir with red
-> berries and gold jingle bells lies along the top of the frame, and a lit brass lantern rests
-> against the bottom right corner of the frame, throwing a warm pool of light and a soft shadow
-> across the wood. **Nothing — no leaf, no berry, no bell, no lantern, no shadow of them — may
-> reach past the frame's inner edge onto the ice or over any socket.** A gem is drawn into every
-> one of the sixty-four sockets, so every socket must be completely clear and unobstructed.
->
-> The ice itself is deep blue-green and worth looking at: frost ferns, trapped bubbles and fine
-> hairline cracks catching the light beneath a cold sheen.
->
-> Deep blue-green ice, warm golden oak, dark evergreen, deep red berries, antique gold, one small
-> warm lantern flame. Rich, painterly and three-dimensional. No text, no letters, no numbers, no
-> logos, no people, no creatures, no user interface.
-
-**When it comes back**: count the sockets (8 x 8, counting dark socket runs averaged down a column
-and across a row — never scan for ribs, the cracks in the ice break one rib scan into a dozen false
-columns); then check the grid measures about **756 x 756** with roughly **135 px of frame on every
-side including the top**; then check that nothing overlaps a socket.

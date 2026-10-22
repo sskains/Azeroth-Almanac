@@ -30,8 +30,13 @@ local BOARDS = {
 	-- the holidays' boards (on their own during the holiday when Holiday boards is on)
 	HallowsEnd = { name = "Hallow's End", file = "Interface\\AddOns\\AzerothAlmanac\\Media\\Board_HallowsEnd",
 		inner = { 108 / 825, 108 / 1024, 722 / 825, 915 / 1024 } },
+	-- (2026-10-22) Winter Veil's clear panel is imposed by tools/build_wg_board_slab.py rather than
+	-- painted: the corner medallions always came back wider than the border beside them, so no
+	-- render could hold both a big enough panel and its ornaments off the cards. These are the
+	-- slab's own edges against the room the window gives the picture, so the art is drawn 553 x 628
+	-- into 552 x 628 - no spill over the hand columns, and all nine cards inside the stone.
 	WinterVeil = { name = "Feast of Winter Veil", file = "Interface\\AddOns\\AzerothAlmanac\\Media\\Board_WinterVeil",
-		inner = { 148 / 841, 150 / 1024, 705 / 841, 900 / 1024 } },
+		inner = { 134 / 1024, 101 / 1024, 890 / 1024, 923 / 1024 } },
 }
 local BOARD_PAD = 36 -- the outer spikes and clear of the frame's carved inner corners
 local ART_X, ART_Y = 78, 68     -- room round the board for the painting's stone frame
@@ -7096,7 +7101,7 @@ WG.DEFAULT_BOARD = "Glade"
 -- holiday still dresses the card back, the table and the deck, so only the board falls back to the
 -- one you picked. Take the entry out again when the new painting is in.
 -- (on WG, not a local: this file is at Lua's 200 locals per scope)
-WG.BOARD_WITHHELD = { WinterVeil = true }
+WG.BOARD_WITHHELD = {}
 -- the holiday on now, by the calendar (Hallow's End 18 Oct - 1 Nov, Winter Veil 16 Dec - 2 Jan)
 function WG:HolidayBoard() return ns.HolidayNow() end -- (the calendar check is shared: WindowUtil.lua)
 
