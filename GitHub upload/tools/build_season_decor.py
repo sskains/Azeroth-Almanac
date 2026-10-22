@@ -181,13 +181,30 @@ def soften_top(img, frac=0.22, blur=1.4):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
 
 
+def soften_ends(img, frac=0.10):
+    """Fade the drift away at both ends.
+
+    The drift is no longer tiled edge to edge - it is laid along the window as separate patches,
+    because an unbroken ribbon of snow reads as a white streak however soft its top is. Each patch
+    draws the whole texture, so the texture has to end in thin air at both ends rather than being
+    cut off mid-drift.
+    """
+    a = np.asarray(img.convert("RGBA"), np.float32)
+    w = a.shape[1]
+    n = max(2, int(w * frac))
+    ramp = np.clip(np.linspace(0.0, 1.0, n), 0, 1) ** 1.3
+    a[:, :n, 3] *= ramp[None, :]
+    a[:, w - n:, 3] *= ramp[::-1][None, :]
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
+
+
 def painted(src, size, strip=False, corner=False):
     """A painted texture: background keyed out, resized to what the game draws."""
     img = key_background(Image.open(src))
     if corner:
         img = trim(img)
     if strip:
-        img = soften_top(seamless(trim(img)))
+        img = soften_ends(soften_top(trim(img)))
     return img.resize(size, Image.LANCZOS)
 
 

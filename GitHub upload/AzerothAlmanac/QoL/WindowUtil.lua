@@ -511,7 +511,7 @@ local DECOR = {
 		-- and a little short of full strength; the rest of the softening is in the texture, whose
 		-- top is faded out by tools/build_season_decor.py so the snow comes from behind the frame
 		-- rather than ending on a straight white line.
-		strip = "Season_Snow_Top", stripH = 34, stripAspect = 4, stripAlpha = 0.88,
+		strip = "Season_Snow_Top", stripH = 36, stripAspect = 4, stripAlpha = 0.88,
 		-- the frost is painted dense, and dense frost in four corners is all anyone can look at
 		corner = "Season_Frost_Corner", cornerSize = 88, cornerAlpha = 0.45,
 		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
@@ -545,13 +545,37 @@ local function Flakes(deco, d)
 	end
 end
 
--- how many times the drift repeats across this window: enough that it is never stretched sideways
-local function Tile(deco, d, width)
-	if not (deco.strip and d.strip) then return end
-	local n = math.max(1, math.floor((width or 0) / math.max(d.stripH * (d.stripAspect or 4), 1) + 0.5))
-	if deco.tiled == n then return end
-	deco.tiled = n
-	deco.strip:SetTexCoord(0, n, 0, 1)
+-- (2026-10-22, Shannon: "the snow drift across the window frame just looks too in-organic, just
+-- like a white streak mostly"). It was one picture tiled edge to edge, and an unbroken ribbon of
+-- snow reads as a streak however soft its top is - snow gathers in drifts with bare frame between
+-- them. So it is laid as separate patches of different width, depth and facing, with gaps between.
+-- The jitter is a fixed list rather than random, so a window looks the same each time it opens.
+local JITTER = { 0.37, 0.61, 0.29, 0.83, 0.17, 0.71, 0.43, 0.95 }
+
+local function Lay(deco, d, width)
+	width = math.floor(width or 0)
+	if width < 2 or deco.laidAt == width then return end
+	deco.laidAt = width
+	local n = math.min(#deco.patches, math.max(2, math.floor(width / 230 + 0.5)))
+	local seg, aspect = width / n, d.stripAspect or 4
+	for i, tex in ipairs(deco.patches) do
+		if i > n then
+			tex:Hide()
+		else
+			local j = (i - 1) % #JITTER
+			local ph = d.stripH * (0.72 + 0.46 * JITTER[j + 1])
+			local pw = math.min(seg, ph * aspect * (0.92 + 0.22 * JITTER[(j + 1) % #JITTER + 1]))
+			local x = seg * (i - 1) + math.max(0, seg - pw) * JITTER[(j + 3) % #JITTER + 1]
+			tex:SetTexture(SEASON_MEDIA .. d.strip)
+			tex:SetSize(pw, ph)
+			tex:ClearAllPoints()
+			tex:SetPoint("TOPLEFT", deco, "TOPLEFT", x, 0)
+			-- every third drift faces the other way, so the same picture is less obviously the same
+			if i % 3 == 0 then tex:SetTexCoord(1, 0, 0, 1) else tex:SetTexCoord(0, 1, 0, 1) end
+			tex:SetAlpha(d.stripAlpha or 1)
+			tex:Show()
+		end
+	end
 end
 
 local function Drive()
@@ -572,10 +596,8 @@ function ns.RedressWindow(frame)
 	deco.on = d
 	if not d then deco:Hide() return end
 	deco:Show()
-	deco.strip:SetTexture(SEASON_MEDIA .. d.strip)
-	deco.strip:SetHeight(d.stripH)
-	deco.strip:SetAlpha(d.stripAlpha or 1)
-	Tile(deco, d, deco:GetWidth())
+	deco.laidAt = nil
+	Lay(deco, d, deco:GetWidth())
 	for i, t in ipairs(deco.corners) do
 		t:SetTexture(SEASON_MEDIA .. d.corner)
 		t:SetSize(d.cornerSize, d.cornerSize)
@@ -609,9 +631,10 @@ function ns.DressForSeason(frame, opts)
 	deco:EnableMouse(false)
 	deco:SetFrameLevel(frame:GetFrameLevel() + 60)
 	if deco.SetClipsChildren then pcall(deco.SetClipsChildren, deco, true) end
-	deco.strip = deco:CreateTexture(nil, "OVERLAY", nil, 2)
-	deco.strip:SetPoint("TOPLEFT", 0, 0)
-	deco.strip:SetPoint("TOPRIGHT", 0, 0)
+	deco.patches = {}
+	for k = 1, 7 do
+		deco.patches[k] = deco:CreateTexture(nil, "OVERLAY", nil, 2)
+	end
 	deco.corners = {}
 	for i, c in ipairs(CORNERS) do
 		local t = deco:CreateTexture(nil, "OVERLAY", nil, 1)
@@ -632,7 +655,7 @@ function ns.DressForSeason(frame, opts)
 	end
 	frame:HookScript("OnSizeChanged", function(self)
 		local d = ns.SeasonDecor()
-		if d and dressed[self] then Tile(dressed[self], d, dressed[self]:GetWidth()) end
+		if d and dressed[self] then Lay(dressed[self], d, dressed[self]:GetWidth()) end
 	end)
 	dressed[frame] = deco
 	Drive()

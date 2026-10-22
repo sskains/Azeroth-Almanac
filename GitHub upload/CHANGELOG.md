@@ -6,6 +6,15 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **The snow lies in drifts, not a ribbon** (Shannon: "the snow drift across the window frame just
+  looks too in-organic, just like a white streak mostly"). Softening its top edge helped but could
+  not fix it: one picture tiled edge to edge is a continuous band of white, and snow does not do
+  that - it gathers in drifts with bare frame between them. It is laid as separate patches now,
+  each a different width, depth and facing, with gaps, placed from a fixed jitter list so a window
+  looks the same each time it opens. Two patches on a narrow window, up to seven on a wide one.
+  The texture now **fades away at both ends** as well as at the top (`soften_ends`), so each drift
+  tapers into the frame instead of being cut off; the tiling cross-fade it used to need is gone.
+
 - **The snow drift is softer** (Shannon: "the top snow drift looks a little harsh"). The harshness
   was a hard edge, not brightness: the painted drift runs to the very top of its picture, so drawn
   at 30 px it ended in a straight horizontal cut of white across the window. `soften_top` in
