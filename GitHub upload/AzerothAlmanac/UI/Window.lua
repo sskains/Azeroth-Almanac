@@ -200,6 +200,9 @@ local function Build()
 	frame:SetToplevel(true)
 	frame:HookScript("OnShow", frame.Raise) -- (a window opened comes in front: the games share this layer)
 	frame:SetClampedToScreen(true)
+	-- the holiday's snow, frost and drifting flakes (QoL\WindowUtil): one call dresses every page,
+	-- because every page lives in this one frame
+	if ns.QoL and ns.QoL.DressForSeason then ns.QoL.DressForSeason(frame) end
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
 	frame:RegisterForDrag("LeftButton")

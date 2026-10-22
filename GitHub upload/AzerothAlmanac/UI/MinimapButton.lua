@@ -130,10 +130,18 @@ local function Build()
 	icon:SetSize(20, 20)
 	icon:SetPoint("CENTER", bg, "CENTER", 0, 0)
 	icon:SetTexture(ns.ICON)
+	-- (2026-10-22) a cap of snow on the button during a holiday: the only piece of the Almanac
+	-- that shows when nothing of it is open
+	local snow = button:CreateTexture(nil, "OVERLAY", nil, 2)
+	snow:SetSize(26, 26)
+	snow:SetPoint("CENTER", bg, "CENTER", 0, 1)
+	button.seasonSnow = snow
 	local border = button:CreateTexture(nil, "OVERLAY")
 	border:SetSize(53, 53)
 	border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 	border:SetPoint("TOPLEFT")
+
+	ns.RedressMinimap()
 
 	button:SetScript("OnClick", function(self, mouse)
 		GameTooltip:Hide()
@@ -181,4 +189,16 @@ end
 function MB:ResetPosition()
 	Settings().angle = 200
 	if button then UpdatePosition() end
+end
+
+-- the snow on the button follows the season (`/aa season`, or the calendar)
+function ns.RedressMinimap()
+	if not button or not button.seasonSnow then return end
+	local d = ns.QoL and ns.QoL.SeasonDecor and ns.QoL.SeasonDecor()
+	if d and d.minimap then
+		button.seasonSnow:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. d.minimap)
+		button.seasonSnow:Show()
+	else
+		button.seasonSnow:Hide()
+	end
 end

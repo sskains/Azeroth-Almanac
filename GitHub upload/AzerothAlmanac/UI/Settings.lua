@@ -422,6 +422,13 @@ local function BuildGeneral(P)
 		function() return Opt().window.newGlow ~= false end, function(v) Opt().window.newGlow = v end)
 	P:Check(L["Portal swirl on dungeons"], L["A portal opens in a dungeon card's doorway while you hover it, and swirls on the dungeon you're in (its card and its page)."],
 		function() return Opt().window.portalSwirl ~= false end, function(v) Opt().window.portalSwirl = v end)
+	P:Check(L["Seasonal decoration"], L["During Hallow's End (18 October - 1 November) and the Feast of Winter Veil (16 December - 2 January) the Almanac's windows dress for the season: snow along the top, frost in the corners, a few flakes drifting inside, and a cap of snow on the minimap button. The games' boards have their own switch."],
+		function() return Opt().seasonalDecor ~= false end,
+		function(v)
+			Opt().seasonalDecor = v
+			if ns.QoL and ns.QoL.RedressAll then ns.QoL.RedressAll() end
+			if ns.RedressMinimap then ns.RedressMinimap() end
+		end)
 	P:Check(L["Record my journey"], L["Every few seconds while you move, where you are is noted (only for your own characters, never shared) so the Journal's Journey follows the path you really walked. Off: nothing more is recorded; the Journey joins up your discoveries instead."],
 		function() return Opt().window.journey ~= false end, function(v) Opt().window.journey = v end)
 	P:Check(L["Journey effects"], L["Bursts, dust, light and ripples as the Journey's time lapse passes flights, boats, hearths, deaths and discoveries (bigger finds, bigger moments)."],

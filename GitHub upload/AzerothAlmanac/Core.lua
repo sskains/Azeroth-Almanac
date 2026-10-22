@@ -580,6 +580,9 @@ function ns.SeasonPreview(rest)
 		local mod = ns.QoL and ns.QoL[m]
 		if mod and mod.SeasonChanged then pcall(mod.SeasonChanged, mod) end
 	end
+	-- and the Almanac's own windows, and the minimap button
+	if ns.QoL and ns.QoL.RedressAll then pcall(ns.QoL.RedressAll) end
+	if ns.RedressMinimap then pcall(ns.RedressMinimap) end
 end
 
 SLASH_AZEROTHALMANAC1 = "/aa"

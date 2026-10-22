@@ -228,6 +228,8 @@ function ns.NativeWindow(frame, opts)
 		opts.byline:SetParent(Part(chrome, "TitleContainer") or chrome)
 	end
 	frame.nativeChrome = chrome
+	-- the holiday's snow and frost, over the border it has just been given
+	ns.DressForSeason(frame)
 	return chrome
 end
 
@@ -331,6 +333,16 @@ function ns.GoldEmblem(frame, icon)
 	e.socket:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 	e.socket:SetVertexColor(0.04, 0.03, 0.025, 1)
 	Put(e.socket, 84)
+	-- a cap of snow sits on the emblem during a holiday that has one
+	e.cap = e:CreateTexture(nil, "OVERLAY", nil, 3)
+	e.capPut = Put
+	local d = ns.SeasonDecor()
+	if d and d.cap then
+		e.cap:SetTexture("Interface\\AddOns\\AzerothAlmanac\\Media\\" .. d.cap)
+		Put(e.cap, 84)
+	else
+		e.cap:Hide()
+	end
 	e.icon = e:CreateTexture(nil, "ARTWORK")
 	e.icon:SetTexture(icon)
 	e.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
@@ -452,4 +464,120 @@ function ns.HolidayNow()
 	-- (nil is a real answer and is cached as nil; `false` only ever means "not asked yet")
 	holidayCache, holidayAt = HolidayFromCalendar() or HolidayFromDates() or nil, now
 	return holidayCache
+end
+
+-- (2026-10-22, Shannon: "winter touches to the Almanac") The Almanac's own windows dress for a
+-- holiday too, not only the three games' boards: a drift of snow along the top edge, frost creeping
+-- in at the corners, and a few flakes drifting inside. One table of holidays rather than code
+-- written for Winter Veil, so Hallow's End next October costs art and a row here.
+--
+-- Everything is drawn above the window's border (frame level + 60) and never takes the mouse, so it
+-- cannot swallow a click. Every window dressed is remembered weakly, so `/aa season` can redraw
+-- them all at once and a closed window is still collected.
+local SEASON_MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+local DECOR = {
+	WinterVeil = {
+		strip = "Season_Snow_Top", stripH = 26, tile = 3,
+		corner = "Season_Frost_Corner", cornerSize = 104,
+		cap = "Season_Emblem_Sprig", minimap = "Season_Minimap_Cap",
+		mote = { 0.86, 0.94, 1 }, motes = 8, fall = 0.055,
+	},
+}
+local dressed = setmetatable({}, { __mode = "k" })
+local driver
+
+-- the holiday's decoration, or nil: no holiday, none painted for it, or the player turned it off
+function ns.SeasonDecor()
+	local s = A.db and A.db.settings
+	if s and s.seasonalDecor == false then return nil end
+	local h = ns.HolidayNow()
+	return h and DECOR[h] or nil
+end
+
+local CORNERS = { { "TOPLEFT", 0, 1, 0, 1 }, { "TOPRIGHT", 1, 0, 0, 1 },
+	{ "BOTTOMLEFT", 0, 1, 1, 0 }, { "BOTTOMRIGHT", 1, 0, 1, 0 } }
+
+local function Flakes(deco, d, w, h)
+	local t = GetTime and GetTime() or 0
+	for i, m in ipairs(deco.motes) do
+		local y = (m.y + t * d.fall * m.sp) % 1.08 - 0.04
+		local x = m.x + 0.015 * math.sin(t * m.sw + m.ph)
+		m.tex:ClearAllPoints()
+		m.tex:SetPoint("CENTER", deco, "TOPLEFT", x * w, -(y * h))
+		m.tex:SetAlpha(m.a * (0.45 + 0.4 * math.sin(t * 1.1 + m.ph)))
+	end
+end
+
+local function Drive()
+	if driver then return end
+	driver = CreateFrame("Frame")
+	driver:SetScript("OnUpdate", function()
+		for frame, deco in pairs(dressed) do
+			if deco.on and frame:IsVisible() then
+				Flakes(deco, deco.on, frame:GetWidth(), frame:GetHeight())
+			end
+		end
+	end)
+end
+
+-- dress (or undress) one window for the season it is now
+function ns.RedressWindow(frame)
+	local deco = dressed[frame]
+	if not deco then return end
+	local d = ns.SeasonDecor()
+	deco.on = d
+	if not d then deco:Hide() return end
+	deco:Show()
+	deco.strip:SetTexture(SEASON_MEDIA .. d.strip)
+	deco.strip:SetTexCoord(0, d.tile or 1, 0, 1)
+	deco.strip:SetHeight(d.stripH)
+	for i, t in ipairs(deco.corners) do
+		t:SetTexture(SEASON_MEDIA .. d.corner)
+		t:SetSize(d.cornerSize, d.cornerSize)
+		local c = CORNERS[i]
+		t:SetTexCoord(c[2], c[3], c[4], c[5])
+	end
+	for _, m in ipairs(deco.motes) do
+		m.tex:SetVertexColor(d.mote[1], d.mote[2], d.mote[3])
+		m.tex:SetShown(true)
+	end
+	for i = d.motes + 1, #deco.motes do deco.motes[i].tex:Hide() end
+end
+
+function ns.RedressAll()
+	for frame in pairs(dressed) do ns.RedressWindow(frame) end
+end
+
+-- ask for a window to be dressed for whatever holiday is on. Safe to call on any frame, once.
+function ns.DressForSeason(frame, opts)
+	if not frame or dressed[frame] then return end
+	opts = opts or {}
+	local deco = CreateFrame("Frame", nil, frame)
+	deco:SetAllPoints(frame)
+	deco:EnableMouse(false)
+	deco:SetFrameLevel(frame:GetFrameLevel() + 60)
+	deco.strip = deco:CreateTexture(nil, "OVERLAY", nil, 2)
+	deco.strip:SetPoint("TOPLEFT", opts.inset or 3, opts.top or -2)
+	deco.strip:SetPoint("TOPRIGHT", -(opts.inset or 3), opts.top or -2)
+	deco.corners = {}
+	for i, c in ipairs(CORNERS) do
+		local t = deco:CreateTexture(nil, "OVERLAY", nil, 1)
+		t:SetPoint(c[1])
+		deco.corners[i] = t
+	end
+	-- the flakes sit under the border art, so they drift behind the frame rather than over it
+	deco.motes = {}
+	for k = 1, 10 do
+		local t = deco:CreateTexture(nil, "ARTWORK", nil, 3)
+		t:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+		t:SetBlendMode("ADD")
+		local size = 5 + (k % 3) * 3
+		t:SetSize(size, size)
+		deco.motes[k] = { tex = t, x = ((k * 37) % 100) / 100, y = ((k * 61) % 100) / 100,
+			sp = 0.7 + (k % 4) * 0.22, sw = 0.5 + (k % 5) * 0.17, ph = k * 1.9,
+			a = 0.30 + (k % 3) * 0.10 }
+	end
+	dressed[frame] = deco
+	Drive()
+	ns.RedressWindow(frame)
 end

@@ -64,6 +64,35 @@ for arg in ("", "winterveil", "hallowsend", "plain", "off", "nonsense"):
     check(ok is True, "/aa season %s doesn't error" % (arg or "(on its own)"))
 check(p.eval("Q.pretending == nil"), "...and 'off' really did leave it following the calendar")
 
+print("the Almanac's own windows dress too")
+check(p.eval("type(Q.SeasonDecor) == 'function'"), "there is a decoration to ask for")
+check(p.eval("type(Q.DressForSeason) == 'function'"), "...and a way to ask for it")
+p.lua('Q.PretendHoliday("WinterVeil")')
+check(p.eval("Q.SeasonDecor() ~= nil"), "Winter Veil has decoration")
+check(p.eval('Q.SeasonDecor().strip ~= nil'), "...snow along the top")
+check(p.eval('Q.SeasonDecor().corner ~= nil'), "...frost in the corners")
+check(p.eval('Q.SeasonDecor().motes ~= nil'), "...and flakes drifting inside")
+p.lua('Q.PretendHoliday("HallowsEnd")')
+check(p.eval("Q.SeasonDecor() == nil"), "a holiday with no decoration painted yet gets none")
+p.lua("Q.PretendHoliday(false)")
+check(p.eval("Q.SeasonDecor() == nil"), "and no holiday means none")
+
+print("the switch in Settings turns it off")
+p.lua('Q.PretendHoliday("WinterVeil")')
+# the harness does not load saved variables, so make the table the game would have
+p.lua("A.db = A.db or {}; A.db.settings = A.db.settings or {}")
+p.lua("A.db.settings.seasonalDecor = false")
+check(p.eval("Q.SeasonDecor() == nil"), "off means off, holiday or not")
+p.lua("A.db.settings.seasonalDecor = nil")
+check(p.eval("Q.SeasonDecor() ~= nil"), "...and unset means on, the default")
+
+print("dressing a window")
+# it must be safe on any frame, and asking twice must not dress it twice
+ok = p.eval("select(1, pcall(Q.DressForSeason, CreateFrame('Frame')))")
+check(ok is True, "a plain frame can be dressed without erroring")
+check(p.eval("select(1, pcall(Q.RedressAll))") is True, "redrawing them all is safe")
+p.lua("Q.PretendHoliday(nil)")
+
 print("nothing of it is saved")
 # the pretend lives on the namespace, not in the saved variables
 saved = p.eval("(function() for k in pairs(A.db or {}) do if tostring(k):lower():find('pretend') then return true end end return false end)()")
