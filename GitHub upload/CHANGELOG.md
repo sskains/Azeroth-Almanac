@@ -4,7 +4,7 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
-## Unreleased
+## 1.4.0 (2026-10-23)
 
 - **Snow painted onto the gold dragon itself.** The cap was a round dome, and a dome on a
   dragon-shaped ornament is only ever approximate - first a hat on the icon, then a dusting
