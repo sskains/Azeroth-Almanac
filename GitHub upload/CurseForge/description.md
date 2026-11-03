@@ -1,12 +1,36 @@
 # Azeroth Almanac
 
-A discovery addon for **WoW Forever**. It records what your characters meet in the world — creatures, items, quests, merchants, trainers, townsfolk, flight paths, zones, dungeons, herbs, veins and fishing waters — and turns it into an adventurer's journal that grows as you explore.
+**Everything your characters discover, in one journal, and the everyday helpers you'd otherwise install separately.** Made for WoW Forever. Press **Shift+J** or type `/aa`.
 
-There are no completion percentages and no "x of y" totals. Progress is what you've found: running counts, research tiers per creature and node, milestones from your own discoveries, and a timeline of everything you've seen.
+**At a glance**
 
-Nothing is shown before you've met it in your own game. No Wowhead or Questie data.
+- **A journal that fills in as you play.** Creatures, items, quests, vendors, trainers, flight paths, zones, dungeons, herbs, veins and fishing waters, shared by all your characters. Nothing is shown before you've met it.
+- **A map arrow that leads you somewhere.** To your map pin, or to the quest you've focused: its turn-in once it's done, otherwise the nearest place you've seen what it asks for.
+- **Bags, bank, gear and gold for every character**, searchable in one window, and a "who has this?" line on item tooltips.
+- **Auction prices, crafting profit and disenchant values** on your tooltips and profession window, from your own scans.
+- **A talent planner** on your Talents window: plan any class, save builds, stage them before you apply.
+- **Card games**: Wild Gambit (your hunted creatures become cards), Murloc Tac Toe, Gem Match.
+- **Every helper has its own switch** in `/aa settings`, and a first-run guide lets you choose before anything happens.
 
-`/aa` opens it. Everything below is optional and switched on or off in `/aa settings`.
+## Already built in
+
+| If you'd otherwise look for... | The Almanac has |
+|---|---|
+| A **waypoint arrow** (TomTom-style) | The navigation arrow: map pins and focused quests, across a continent |
+| **Quest help** | Quest Targeter (which mobs drop the item you need, a target button in the tracker, raid markers), quest chains, your own records of givers and turn-ins. It doesn't draw quest pins for quests you haven't met yet: the Almanac only shows what you've found |
+| **Bags across characters** (Bagnon / Syndicator-style) | Every character's bags, bank, gear, mail, auctions, professions and gold in one searchable window (`/aa inv`), and who-has-it on tooltips |
+| **Auction prices** (Auctionator-style) | Lowest price and 7-day average on tooltips, one-key posting, sales estimates |
+| **Crafting profit** | What a recipe costs against what it sells for, on the profession window |
+| **Item tooltip extras** (new in this update) | Item level on gear, a Journal line (how you first found it, or "not in your journal yet"), vendor price, disenchant value, auction price |
+| **Upgrade arrows** | Green if it's an upgrade for the character you're on, gold if for another of yours |
+| **Flight timers** | Countdowns learned from your own flights, boat and zeppelin schedules shared with your group and guild |
+| **Gathering aids** | A sparkle on the node you face, pins for every herb, vein and chest you've found |
+| **Talent planner** | In the Talents window, with WoW Forever's own trees |
+| **Spell rank replacer** | Old ranks on your action bars are found and swapped when you train |
+| **Group tools** | Threat monitor, Healer Assist, group nameplates and unit frames, follow button, keyword auto-invite |
+| **Vendor chores** | Repair on arrival, junk sold, the quest reward with the best vendor value marked |
+
+It is not a boss mod or a damage meter, so use DBM / BigWigs and Details! for those.
 
 ---
 
@@ -26,7 +50,7 @@ Nothing is shown before you've met it in your own game. No Wowhead or Questie da
 | **Dungeons** | Dungeons and raids found, with bosses and loot as you meet them |
 | **Characters** | Every character on the account: bags, bank, gear, auctions, professions and gold |
 
-Records are account-wide. Every character adds to the same Almanac.
+Records are account-wide. Every character adds to the same Almanac. Toggle character specific info or account wide.
 
 ---
 
@@ -107,6 +131,16 @@ Ported from Plus Everything, by the same author, and built on as the Almanac has
 Repair on arrival (from guild funds first, if you like), grey junk sold, and the reward with the best vendor value marked at a quest turn-in. Each part has its own switch, and it says in chat what it did.
 
 ---
+
+## What it does for you, and how to turn it off
+
+Nothing here is a surprise if you know it is there. These are on by default and each has a switch in `/aa settings`; the first-run guide offers the main ones:
+
+- **Repairs at vendors and sells grey items**, and says so in chat.
+- **Scans the auction house** (one full scan every 15 minutes while you're there, or `/aa scan`) to build your price list.
+- **Shares** flight and boat times with your group and guild, and auction sales volume and game scores with other Almanac players, so one person's trip helps everyone.
+- **Invites people to your group** when they whisper "inv" or "invite", and **accepts group invites** from friends and guildmates.
+- **Lets other Almanac players challenge you** to Wild Gambit and Murloc Tac Toe.
 
 ## Settings
 
