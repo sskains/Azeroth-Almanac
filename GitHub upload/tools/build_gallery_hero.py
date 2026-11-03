@@ -2,7 +2,7 @@
 
     python tools/build_gallery_hero.py
 
-Writes CurseForge/AzerothAlmanac_0_Hero.png (1920x1080): the book, the name, and eight tiles for the
+Writes CurseForge/AzerothAlmanac_0_Hero.jpg (1920x1080): the book, the name, and eight tiles for the
 big pieces of the addon, over the Elwynn painting. Source pictures are docs/art_source/*. Change the
 TILES list to change what it shows.
 """
@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART = os.path.join(ROOT, "docs", "art_source")
-OUT = os.path.join(ROOT, "CurseForge", "AzerothAlmanac_0_Hero.png")
+OUT = os.path.join(ROOT, "CurseForge", "AzerothAlmanac_0_Hero.jpg")
 W, H = 1920, 1080
 GOLD = (255, 214, 102)
 GOLD_DARK = (150, 100, 20)
@@ -172,7 +172,8 @@ def main():
     shadow_text(bg, (W - 60, ybar + 6), "+ item tooltips  ·  gathering  ·  spell ranks  ·  group tools  ·  and more", font(SERIF, 25), (230, 215, 180), anchor="ra")
     shadow_text(bg, (W - 60, ybar + 46), "Made for WoW Forever   —   press  Shift+J  or type  /aa", font(SERIF_B, 27), GOLD, anchor="ra")
 
-    bg.convert("RGB").save(OUT, optimize=True)
+    # a JPEG at 95% with full colour detail: well under CurseForge's 2 MB limit (the PNG was just over)
+    bg.convert("RGB").save(OUT, quality=95, subsampling=0, optimize=True)
     print(OUT)
 
 
