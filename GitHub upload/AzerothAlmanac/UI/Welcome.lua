@@ -1,4 +1,4 @@
--- The welcome guide (Shannon, 2026-10-11; DESIGN 95): seven short pages a new character sees once,
+-- The welcome guide (Shannon, 2026-10-11; DESIGN 95): eight short pages a new character sees once,
 -- on its first login with the Almanac: what the Almanac is, its pages, how progression and Wild
 -- Gambit cards work, then the main settings as tick boxes. The tick boxes are Settings' own (found by
 -- their label with Settings:Control), so the guide changes exactly what the Settings window changes.
@@ -200,6 +200,59 @@ BUILD[2] = function(p)
 	end
 end
 
+-- 3. what's already built in (2026-11-03): so nobody installs a second addon for something the Almanac does
+-- { name, one line, Settings page id, icon }; a click opens that Settings page
+WG.FEATURES_PAGE = 3
+local FEATURES = {
+	{ L["Navigation arrow"], L["leads you to your map pin or quest"], "quests", "Ability_Hunter_SniperShot" },
+	{ L["Quest Targeter"], L["mobs that drop what a quest needs"], "quests", "INV_Misc_Note_01" },
+	{ L["Bags of every character"], L["bags, bank, gear and gold, searchable"], "inventory", "INV_Misc_Bag_08" },
+	{ L["Auction prices"], L["on tooltips, and one-key posting"], "auction", "INV_Misc_Coin_02" },
+	{ L["Crafting profit"], L["cost against sale price"], "crafting", "Trade_BlackSmithing" },
+	{ L["Item tooltips"], L["item level, Journal line, who has it"], "itemtips", "INV_Misc_Note_01" },
+	{ L["Disenchant values"], L["on green, blue and purple gear"], "disenchant", "Trade_Engraving" },
+	{ L["Talent Planner"], L["plan and stage builds"], "talents", 132222 },
+	{ L["Flight timers"], L["countdowns learned from your flights"], "travel", "Ability_Mount_Gryphon_01" },
+	{ L["Gathering"], L["sparkles and pins for herbs and veins"], "nodes", 237271 },
+	{ L["Spell ranks"], L["old ranks on your bars, replaced"], "ranks", "INV_Misc_Book_09" },
+	{ L["Group tools"], L["threat, Healer Assist, invites, follow"], "group", "INV_Letter_15" },
+}
+
+BUILD[3] = function(p)
+	local h = Heading(p, L["Already built in"])
+	local a = Para(p, L["Before you look for another addon: the Almanac already does these. Click one to open its settings (this guide closes; |cffffd100/aa features|r brings it back). It isn't a boss mod or a damage meter."], h, 12)
+	local colW = TEXT_W / 2
+	for i, f in ipairs(FEATURES) do
+		local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+		local btn = CreateFrame("Button", nil, p)
+		btn:SetSize(colW - 6, 36)
+		btn:SetPoint("TOPLEFT", a, "BOTTOMLEFT", col * colW, -12 - row * 40)
+		local icon = btn:CreateTexture(nil, "ARTWORK")
+		icon:SetSize(30, 30)
+		icon:SetPoint("LEFT", 0, 0)
+		W.SetIcon(icon, { f[4] })
+		local name = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 8, -1)
+		name:SetText(f[1])
+		local line = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		line:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
+		line:SetWidth(colW - 50)
+		line:SetJustifyH("LEFT")
+		line:SetWordWrap(false)
+		line:SetText(f[2])
+		local glow = btn:CreateTexture(nil, "BACKGROUND")
+		glow:SetAllPoints()
+		glow:SetColorTexture(1, 0.82, 0.25, 0.08)
+		glow:Hide()
+		btn:SetScript("OnEnter", function() glow:Show() end)
+		btn:SetScript("OnLeave", function() glow:Hide() end)
+		btn:SetScript("OnClick", function()
+			if frame then frame:Hide() end
+			if ns.Settings then ns.Settings:Open(f[3]) end
+		end)
+	end
+end
+
 -- a row of tier badges: the tier's icon in its colour, its name under it
 local function TierRow(p, anchor, from, to, captions)
 	local B = ns.Bestiary
@@ -233,8 +286,8 @@ local function TierRow(p, anchor, from, to, captions)
 	return holder
 end
 
--- 3. progression
-BUILD[3] = function(p)
+-- 4. progression
+BUILD[4] = function(p)
 	local h = Heading(p, L["How progression works"])
 	local a = Para(p, L["Every creature climbs a ladder of tiers as you kill it, and each tier reveals more of it on the Creatures page: its health and damage, then every ability, then its resistances and full loot table. Tiers are shared by all your characters."], h, 12)
 	local B = ns.Bestiary
@@ -246,8 +299,8 @@ BUILD[3] = function(p)
 	Para(p, L["Rares and bosses need fewer kills. Settings > Progression has the full table."], b, 10, "GameFontDisableSmall")
 end
 
--- 4. cards
-BUILD[4] = function(p)
+-- 5. cards
+BUILD[5] = function(p)
 	local h = Heading(p, L["How Wild Gambit cards work"])
 	local a = Para(p, L["Wild Gambit is a card game you can play against anyone: right-click a creature's or person's portrait and choose |cffffd100Play Wild Gambit|r. Your deck is what you've hunted."], h, 12)
 	local b = Para(p, L["|cffffd100Creatures:|r your first kill earns its card. Seeing one isn't enough: it shows in an iron ring until you slay it. The more you hunt it, the higher its tier and the stronger its card."], a)
@@ -263,8 +316,8 @@ BUILD[4] = function(p)
 	return last
 end
 
--- 5. out in the world
-BUILD[5] = function(p)
+-- 6. out in the world
+BUILD[6] = function(p)
 	local h = Heading(p, L["Out in the world"])
 	local a = Para(p, L["The Almanac can help as you play. Tick what you'd like; everything can be changed later in Settings."], h, 12)
 	Ticks(p, {
@@ -280,8 +333,8 @@ BUILD[5] = function(p)
 	MoreIn(p, L["More in Settings: Quest Targeter, Gathering, People."])
 end
 
--- 6. helpers
-BUILD[6] = function(p)
+-- 7. helpers
+BUILD[7] = function(p)
 	local h = Heading(p, L["Helpers"])
 	local a = Para(p, L["Small time-savers for towns, bags and travel."], h, 12)
 	Ticks(p, {
@@ -292,19 +345,24 @@ BUILD[6] = function(p)
 		{ "Countdown bar while flying", L["A countdown bar while flying"] },
 		{ "Replace old ranks on my bars when I train a new one", L["Swap old spell ranks on my bars when I train"] },
 		{ "Follow button", L["A follow button on my target's frame"] },
+		{ "Share flight times with my guild and group", L["Share flight times with my guild and group"], L["hidden messages to other Almanac users"] },
+		{ "Share scan results with my guild", L["Share auction sales with my guild"], L["guildmates running the Almanac"] },
 	}, a)
 	Watermark(p, "Icon_Merchant", 190)
 	MoreIn(p, L["More in Settings: Merchants, Auction House, Bags and bank, Flights, Spell Ranks, Group Settings."])
 end
 
--- 7. group and role
-BUILD[7] = function(p)
+-- 8. group and role
+BUILD[8] = function(p)
 	local h = Heading(p, L["In a group"])
 	local a = Para(p, L["For dungeons and groups."], h, 12)
 	local list = {
 		{ "Threat monitor", L["Threat monitor"], L["a warning before you pull aggro"] },
 		{ "Class emblem on player portraits", L["Class emblems on player portraits"] },
 		{ "Names in class colour", L["Names in class colour"] },
+		{ "Invite players who ask with a keyword", L["Invite anyone who whispers \"inv\" or \"invite\""], L["off: you invite people yourself"] },
+		{ "From friends", L["Join group invites from friends without asking"] },
+		{ "From guild members", L["Join group invites from guild members without asking"] },
 	}
 	local _, classFile = UnitClass("player")
 	if HEALERS[classFile or ""] then list[#list + 1] = { "Healer Assist", L["Healer Assist"], L["spell icons for each group member"] } end

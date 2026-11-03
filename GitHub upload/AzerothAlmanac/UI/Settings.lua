@@ -496,7 +496,7 @@ local function BuildGeneral(P)
 	P:Text(L["Open or close the Almanac  •  Open Almanac settings  •  Characters (bags, bank, gear)  •  Gem Match\nTarget nearest selected quest mob  •  Clear markers on nearby quest mobs"])
 
 	P:Section(L["Slash commands"])
-	P:Text("|cffffd100/aa|r " .. L["the Almanac"] .. "      |cffffd100/aa settings|r " .. L["this window"] .. "      |cffffd100/aa stats|r " .. L["what's recorded"] .. "      |cffffd100/aa welcome|r " .. L["the welcome guide"] .. "\n"
+	P:Text("|cffffd100/aa|r " .. L["the Almanac"] .. "      |cffffd100/aa settings|r " .. L["this window"] .. "      |cffffd100/aa stats|r " .. L["what's recorded"] .. "      |cffffd100/aa welcome|r " .. L["the welcome guide"] .. "      |cffffd100/aa features|r " .. L["what's built in"] .. "\n"
 		.. "|cffffd100/aa scan|r " .. L["full auction house scan"] .. "      |cffffd100/aa inv|r " .. L["Characters: bags, bank, gear"] .. "      |cffffd100/aa games|r " .. L["Gem Match"] .. "      |cffffd100/aa mtt|r " .. L["Murloc Tac Toe"] .. "\n"
 		.. "|cffffd100/aa heal|r " .. L["Healer Assist (test, debug, on, off)"] .. "      |cffffd100/aa threat|r " .. L["threat preview"] .. "\n"
 		.. "|cffffd100/aa ranks|r " .. L["old spell ranks on your bars"] .. "      |cffffd100/aa node herb/ore/chest/other|r " .. L["classify the node you face"] .. "      |cffffd100/qt|r " .. L["quest tracker buttons"])

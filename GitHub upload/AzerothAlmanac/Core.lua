@@ -670,6 +670,9 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		if ns.NavArrow and ns.NavArrow.Probe then ns.NavArrow:Probe(rest) end
 	elseif cmd == "welcome" then
 		if ns.Welcome then ns.Welcome:Show(1) end
+	elseif cmd == "features" then
+		-- (2026-11-03) the welcome guide's "Already built in" page
+		if ns.Welcome then ns.Welcome:Show(ns.Welcome.FEATURES_PAGE) end
 	elseif cmd == "where" then
 		-- (0.69.1) what the game says about where you are (dungeons it won't name)
 		if ns.Dungeons and ns.Dungeons.Report then ns.Dungeons:Report() end
