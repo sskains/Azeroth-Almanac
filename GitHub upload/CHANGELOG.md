@@ -4,6 +4,12 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **Welcome guide: "Already built in", and what runs by itself.** A new page 3 lists twelve things the Almanac already does (navigation arrow, Quest Targeter, every character's bags, auction prices, crafting profit, item tooltips, disenchant values, Talent Planner, flight timers, gathering, spell ranks, group tools), each a click that opens its settings; `/aa features` shows it again any time (listed in Settings > General > Slash commands). The Helpers page now has the switches for sharing flight times with your guild and group and auction sales with your guild, and the group page the keyword auto-invite ("inv") and joining group invites from friends and guild members: all were on by default and weren't mentioned. Nothing's default changed. Guide is now 8 pages.
+
+- **Item tooltips: item level and a Journal line.** Item tooltips get two more lines beside the vendor, auction and disenchant ones. **Item level** on gear, only when the game's own tooltip doesn't already show it. **Journal** says whether the item is in your Almanac and how it was first found ("looted from Defias Pillager", "bought", "crafted"...), or "not in your journal yet" for an uncommon-or-better item you haven't come across (chat links, auction listings, vendors). New file `QoL/ItemTips.lua`; Settings > Economy > Item tooltips (both on). Needs a full game restart (new file).
+
 ## 1.4.0 (2026-10-23)
 
 - **Snow painted onto the gold dragon itself.** The cap was a round dome, and a dome on a
@@ -486,10 +492,6 @@ First public release, for CurseForge.
 - **Release tidying** for the first public build: the art-scan commands and `Modules/ArtScan.lua` are out of the addon, the temporary `/aadeck` measuring command and its debug box are gone, and `tools/build_release.ps1` stages a clean copy and refuses to build on a byte order mark in the TOC, a TOC file that doesn't exist, an unlisted Lua file or a development file. The CurseForge listing (description, the scrubbed Murloc Tac Toe screenshot and the game icons) is in `CurseForge/`.
 
 - **New art carried over from the live folder:** `Media/Board_DarkPortal.tga` and `Media/WW_Wing.tga`.
-
-- **Welcome guide: "Already built in", and what runs by itself.** A new page 3 lists twelve things the Almanac already does (navigation arrow, Quest Targeter, every character's bags, auction prices, crafting profit, item tooltips, disenchant values, Talent Planner, flight timers, gathering, spell ranks, group tools), each a click that opens its settings; `/aa features` shows it again any time (listed in Settings > General > Slash commands). The Helpers page now has the switches for sharing flight times with your guild and group and auction sales with your guild, and the group page the keyword auto-invite ("inv") and joining group invites from friends and guild members: all were on by default and weren't mentioned. Nothing's default changed. Guide is now 8 pages.
-
-- **Item tooltips: item level and a Journal line.** Item tooltips get two more lines beside the vendor, auction and disenchant ones. **Item level** on gear, only when the game's own tooltip doesn't already show it. **Journal** says whether the item is in your Almanac and how it was first found ("looted from Defias Pillager", "bought", "crafted"...), or "not in your journal yet" for an uncommon-or-better item you haven't come across (chat links, auction listings, vendors). New file `QoL/ItemTips.lua`; Settings > Economy > Item tooltips (both on). Needs a full game restart (new file).
 
 - **Recipes: one card per profession** (Asia's screenshot): a trainer whose title names the worker ("<Blacksmith Trainer>", "<Miner Trainer>") made a "Blacksmith" and a "Miner" card beside "Blacksmithing" and "Mining", and those two had no picture. The worker's name now becomes its profession's (Blacksmith, Miner, Skinner, Herbalist, Enchanter, Engineer, Leatherworker, Tailor, Alchemist, Cook, Fisherman, Jewelcrafter; and the specialist titles such as Gnomish Engineer, Dragonscale Leatherworker and Armorsmith), by the last word of the title, including in records anyone saved earlier (they are put right the first time the Almanac loads), so each profession is one card with its picture.
 
