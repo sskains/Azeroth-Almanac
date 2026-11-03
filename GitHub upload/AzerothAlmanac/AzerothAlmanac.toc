@@ -42,6 +42,7 @@ QoL\AuctionPrices.lua
 QoL\AuctionPost.lua
 QoL\AuctionVolume.lua
 QoL\Disenchant.lua
+QoL\ItemTips.lua
 QoL\Crafting.lua
 QoL\Merchant.lua
 QoL\MerchantList.lua

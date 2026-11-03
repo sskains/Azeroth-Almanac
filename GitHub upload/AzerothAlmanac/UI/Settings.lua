@@ -1100,6 +1100,14 @@ local function BuildDisenchant(P)
 	P:Text(L["Built-in tables: the Classic 1.12 disenchant results (VMaNGOS). \"est.\" means the nearest item level with data was used."], "GameFontDisableSmall")
 end
 
+local function BuildItemTips(P)
+	local db = Q.db.itemTips
+	P:Section(L["Item tooltips"], L["Vendor, auction and disenchant values have their own pages."])
+	P:Check(L["Item level on gear"], L["Only added when the game's own tooltip doesn't already show it."], function() return db.level end, function(v) db.level = v end)
+	P:Check(L["Journal line"], L["Whether the item is in your Almanac and how it was first found; \"not in your journal yet\" for uncommon or better items you haven't come across."],
+		function() return db.journal end, function(v) db.journal = v end)
+end
+
 local function BuildCrafting(P)
 	local db = Q.db.crafting
 	local CR = Q.Crafting
@@ -1576,6 +1584,8 @@ local PAGE_LIST = {
 		desc = L["What a recipe costs to make and what it's worth, on the profession window."] },
 	{ id = "disenchant", label = L["Disenchanting"], icon = "Trade_Engraving", build = BuildDisenchant, aliases = { "de" },
 		desc = L["The expected disenchant value of green, blue and purple gear."] },
+	{ id = "itemtips", label = L["Item tooltips"], icon = "INV_Misc_Note_01", build = BuildItemTips, aliases = { "tooltip", "tooltips", "ilvl" },
+		desc = L["Item level and a Journal line on item tooltips."] },
 	{ id = "merchants", label = L["Merchants"], icon = "INV_Misc_Coin_03", build = BuildMerchants, aliases = { "merchant", "vendor" },
 		desc = L["Automatic repairs, selling junk, and a searchable vendor window."] },
 	{ cat = L["Travel"] },
@@ -1618,6 +1628,7 @@ local PAGE_ART = {
 	auction = { "Profession-overview-Card-Tailoring", "Profession-overview-Card" },
 	disenchant = { "Profession-overview-Card-Enchanting", "Profession-overview-Card" },
 	crafting = { "Profession-overview-Card-Blacksmithing", "Profession-overview-Card" },
+	itemtips = { "Profession-overview-Card-Inscription", "Profession-overview-Card" },
 	merchants = { "Profession-overview-Card-Engineering", "Profession-overview-Card" },
 	travel = { "Profession-overview-Card-Skinning", "Profession-overview-Card" },
 	wings = { "Profession-overview-Card-Skinning", "Profession-overview-Card" },

@@ -149,6 +149,7 @@ From Plus Everything: `Encyclopedia.lua` (UI and item pages). `ItemDB.lua`, `Ite
 - [ ] Item pages use the game's own tooltip and item info for discovered items only.
 - [ ] **Remove** the "search by item ID" from the Encyclopedia: the game would answer it for items never found.
 - [ ] Quality and type filters; counts of items found per type and slot.
+- [?] Item tooltips (`QoL\ItemTips.lua`, decided 2026-11-03 for the WoW Forever launch update): an Item level line (only if the game's tooltip lacks one) and a Journal line (how it was first found, or "not in your journal yet" for uncommon+ items never met). Read-only: hovering or linking an item does **not** discover it (that settles the open question above: a link isn't a find). Vendor price, auction, disenchant and bag counts already come from the Auction Prices, Disenchant and Inventory modules, so they were not duplicated.
 
 ## 5. Merchants [?] (phase 4 built 2026-10-04, version 0.4.0)
 Built: `Modules\Merchants.lua` (on opening a vendor: name, title from the tooltip, position, your standing, full stock with price, stack, limited quantity, special costs; price changes kept; purchases recorded), `UI\Pages\Merchants.lua` (by zone; search by merchant or by anything they sell; page with place and coordinates, "Show on map" sets the game's waypoint, standing, stock with icons and prices, earlier prices). Alerts for new merchants.

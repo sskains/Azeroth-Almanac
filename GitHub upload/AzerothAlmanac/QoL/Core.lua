@@ -42,6 +42,7 @@ ns.defaults = {
 	},
 	auction = { autoScan = true, tooltip = true, vendor = true, age = true, average = true, stackOnShift = true, altPost = true, realms = {} },
 	disenchant = { tooltip = true, bestHint = true, learn = true, learned = {} },
+	itemTips = { level = true, journal = true },
 	travel = {
 		bar = true, barStyle = "minimap", barLocked = false, mapTimes = true, dockPanel = true, share = true, panelAlpha = 0.8,
 		flights = {}, schedules = {}, docks = {}, speed = { yards = 0, seconds = 0 },
