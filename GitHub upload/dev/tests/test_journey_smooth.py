@@ -169,11 +169,14 @@ p.lua("""
 A.db.trail = {}
 UnitOnTaxi = function() return true end
 A.Where = function() return { map = 1437, x = 20, y = 70 } end
+-- (the recorder's own ticker writes a take-off and a landing point for a flight, by design: only the plain
+-- points a zone change writes are counted here)
+local function Plain() local n = 0 for _, pt in ipairs(A.JourneyRecorder:Points(0)) do if not pt.k then n = n + 1 end end return n end
 A.JourneyRecorder:MapChanged() RunTimers(2)
-TAXI_PTS = #A.JourneyRecorder:Points(0)
+TAXI_PTS = Plain()
 UnitOnTaxi = function() return false end
 A.JourneyRecorder:MapChanged() RunTimers(2)
-WALK_PTS = #A.JourneyRecorder:Points(0)
+WALK_PTS = Plain()
 """)
 check(p.eval("TAXI_PTS") == 0 and p.eval("WALK_PTS") == 1, "the recorder writes no point for a zone crossed in the air (%d), one on foot (%d)" % (p.eval("TAXI_PTS"), p.eval("WALK_PTS")))
 
