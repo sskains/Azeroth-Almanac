@@ -945,7 +945,11 @@ function page:Build(parent, header)
 	-- (2026-11-04) the Wild Gambit logo: your deck (every creature you've hunted, as a card)
 	local gambitBtn = W.ViewButton(cardBar, MEDIA .. "Icon_WildGambit", L["Your Wild Gambit deck"], function()
 		local WGd = ns.QoL and ns.QoL.WildGambit
-		if WGd and WGd.ShowDeck then WGd:ShowDeck() end
+		if not (WGd and WGd.ShowDeck) then return end
+		-- the Wild Gambit window is only built the first time it is opened, and ShowDeck does nothing
+		-- without it (the button clicked and nothing showed): open it first
+		if WGd.Open and not (WGd.D and WGd.D.Frame and WGd.D.Frame()) then WGd:Open() end
+		WGd:ShowDeck()
 	end)
 	gambitBtn:SetPoint("LEFT", cardBar, "LEFT", 2, 0) -- (the left end of the bar; the back arrow and crumb follow it)
 	-- the whole painted logo, large (three cards, coin and vines), not a small boxed icon: the bar grows to hold it
