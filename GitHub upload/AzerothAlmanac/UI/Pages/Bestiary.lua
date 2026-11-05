@@ -34,6 +34,7 @@ local crumb         -- the open card's label, or nil
 local cardBar, backBtn, crumbText, cardsBtn, listBtn
 local collapsedCards = {}
 local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
+local GAMBIT_BTN = 56 -- the Wild Gambit logo button's size, and so the height of the bar over the creature list
 
 local RARITY = {
 	normal = L["Normal"], trivial = L["Normal"], minus = L["Normal"],
@@ -920,7 +921,7 @@ function page:Build(parent, header)
 	cardBar = CreateFrame("Frame", nil, left)
 	cardBar:SetPoint("TOPLEFT", 4, -4)
 	cardBar:SetPoint("TOPRIGHT", -4, -4)
-	cardBar:SetHeight(26)
+	cardBar:SetHeight(GAMBIT_BTN)
 	backBtn = CreateFrame("Button", nil, cardBar)
 	backBtn:SetSize(24, 24)
 	backBtn:SetPoint("LEFT", 2, 0)
@@ -946,7 +947,15 @@ function page:Build(parent, header)
 		local WGd = ns.QoL and ns.QoL.WildGambit
 		if WGd and WGd.ShowDeck then WGd:ShowDeck() end
 	end)
-	gambitBtn:SetPoint("RIGHT", cardsBtn, "LEFT", -10, 0)
+	gambitBtn:SetPoint("RIGHT", cardsBtn, "LEFT", -8, 0)
+	-- the whole painted logo, large (three cards, coin and vines), not a small boxed icon: the bar grows to hold it
+	gambitBtn:SetSize(GAMBIT_BTN, GAMBIT_BTN)
+	gambitBtn.bg:Hide()
+	gambitBtn.edge:Hide()
+	gambitBtn.tex:ClearAllPoints()
+	gambitBtn.tex:SetAllPoints()
+	gambitBtn.tex:SetTexCoord(0, 1, 0, 1)
+	gambitBtn.hl:SetTexCoord(0, 1, 0, 1)
 	gambitBtn:SetActive(true)
 	gambitBtn:SetShown((ns.QoL and ns.QoL.WildGambit and ns.QoL.WildGambit.ShowDeck) and true or false)
 	crumbText:SetPoint("RIGHT", gambitBtn:IsShown() and gambitBtn or cardsBtn, "LEFT", -6, 0)
@@ -1041,7 +1050,7 @@ function page:Build(parent, header)
 			Show(r.npc)
 		end,
 	})
-	list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -32)
+	list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -(GAMBIT_BTN + 6))
 	list:SetPoint("BOTTOMRIGHT", left, "BOTTOMRIGHT", 0, 0)
 
 	detail = W.Detail(parent, 170)
