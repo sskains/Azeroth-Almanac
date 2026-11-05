@@ -729,6 +729,9 @@ local targetButton = CreateFrame("Button", "AzerothAlmanacQuestTargetButton", UI
 targetButton:SetAttribute("type", "macro")
 targetButton:RegisterForClicks("AnyUp", "AnyDown")
 
+targetButton:HookScript("PreClick", function(...) if QT.PreClick then QT.PreClick(...) end end)
+targetButton:HookScript("PostClick", function(...) if QT.PostClick then QT.PostClick(...) end end)
+
 -- Hidden secure button for the "clear markers" keybinding.
 local clearButton = CreateFrame("Button", "AzerothAlmanacClearMarksButton", UIParent, "SecureActionButtonTemplate")
 clearButton:SetAttribute("type", "macro")
@@ -791,6 +794,45 @@ local function UpdateCounts()
 	CountNearby()
 	PaintCounts()
 end
+
+-- (2026-11-04) Targeting must never land on a mob someone else has tagged or is fighting. The macro
+-- is only as fresh as the last nameplate scan, a mob can be tagged between scans, and the macro can't
+-- change in combat. So out of combat every click first rescans and rewrites the macros (PreClick),
+-- and whatever the click selected is checked afterwards (PostClick): one that turns out to be
+-- someone else's is dropped as the target instead of being left selected.
+local function RefreshBeforeClick()
+	if not db.enabled or InCombatLockdown() then return end
+	CountNearby()
+	for _, b in ipairs(buttons) do
+		if b.key and b.targets then
+			local macro = MacroFor(b.targets, b.kind)
+			if b.macro ~= macro then
+				b.macro = macro
+				b:SetAttribute("macrotext", macro)
+			end
+		end
+	end
+	ApplySelection()
+end
+
+local lastSkippedNote = 0
+local function DropTakenTarget()
+	if not db.enabled then return end
+	local ok, name = pcall(function()
+		if Readable(UnitExists("target")) ~= true or Readable(UnitCanAttack("player", "target")) ~= true then return nil end
+		if Readable(UnitIsDead("target")) == true or not Taken("target") then return nil end
+		return Readable(UnitName("target")) or "that one"
+	end)
+	if not (ok and name) then return end
+	pcall(ClearTarget)
+	if GetTime() - lastSkippedNote > 2 then
+		lastSkippedNote = GetTime()
+		ns.Print(("Skipped %s: someone else is fighting it."):format(name))
+	end
+	QT.Recount(0.1)
+end
+
+QT.PreClick, QT.PostClick = RefreshBeforeClick, DropTakenTarget
 
 -- one count per frame (and one per half second) however many nameplate events come together:
 -- a pack coming into view fires one event per mob
@@ -940,11 +982,13 @@ local function CreateButton(i)
 	b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
 	b.count:SetPoint("TOPLEFT", b, "TOPLEFT", -4, 4)
 
+	b:SetScript("PreClick", RefreshBeforeClick)
 	b:SetScript("PostClick", function(self)
 		if self.key and self.key ~= db.selected then
 			db.selected = self.key
 			ApplySelection()
 		end
+		DropTakenTarget()
 	end)
 	b:SetScript("OnEnter", function(self)
 		if not self.key then return end

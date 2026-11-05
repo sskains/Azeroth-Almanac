@@ -941,7 +941,15 @@ function page:Build(parent, header)
 	listBtn:SetPoint("RIGHT", -2, 0)
 	cardsBtn = W.ViewButton(cardBar, "View_Cards", L["Cards"], function() filter = "" BackToCards() end)
 	cardsBtn:SetPoint("RIGHT", listBtn, "LEFT", -4, 0)
-	crumbText:SetPoint("RIGHT", cardsBtn, "LEFT", -6, 0)
+	-- (2026-11-04) the Wild Gambit logo: your deck (every creature you've hunted, as a card)
+	local gambitBtn = W.ViewButton(cardBar, MEDIA .. "Icon_WildGambit", L["Your Wild Gambit deck"], function()
+		local WGd = ns.QoL and ns.QoL.WildGambit
+		if WGd and WGd.ShowDeck then WGd:ShowDeck() end
+	end)
+	gambitBtn:SetPoint("RIGHT", cardsBtn, "LEFT", -10, 0)
+	gambitBtn:SetActive(true)
+	gambitBtn:SetShown((ns.QoL and ns.QoL.WildGambit and ns.QoL.WildGambit.ShowDeck) and true or false)
+	crumbText:SetPoint("RIGHT", gambitBtn:IsShown() and gambitBtn or cardsBtn, "LEFT", -6, 0)
 	crumbText:SetWordWrap(false)
 	list = W.List(left, {
 		rowHeight = 26,

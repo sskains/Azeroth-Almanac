@@ -3511,6 +3511,7 @@ local function Build()
 	frame.overSub:SetPoint("TOP", frame.overTitle, "BOTTOM", 0, -4)
 	frame.overSub:SetWidth(260)
 	frame.overSub:SetSpacing(2)
+	frame.overSub:SetWordWrap(false) -- (a long line is cut, never wrapped onto a third line over the frame)
 	-- the same opponent again (back to choosing your card), or someone new
 	local again = WoodButton(A.Widgets.Button(over, "Play again", 120, function() WG:PlayAgain() end))
 	again:SetPoint("BOTTOMRIGHT", over, "BOTTOM", -4, 4)
@@ -4328,7 +4329,9 @@ local function EndGame(forfeit)
 	frame.overTitle:SetText(title)
 	frame.overTitle:SetTextColor(color[1], color[2], color[3])
 	frame.overSub:SetText(game.tutorial and ("|cffffffff%d - %d|r\n|cffc8bca0Tutorial complete! You're ready for a real gambit.|r"):format(mine, theirs)
-		or ("|cffffffff%d - %d|r\n|cffc8bca0%s: %d won, %d lost, %d drawn|r"):format(mine, theirs, game.pvp and ("Against " .. p.name) or "Practice", p.w, p.l, p.d))
+		-- (2026-11-04) two short lines: "Against Artanis Olaris: 1 won, 0 lost, 0 drawn" wrapped to three and ran over the frame
+		or ("|cffffffff%d - %d|r  |cffc8bca0%s|r\n|cffc8bca0%d won, %d lost, %d drawn|r"):format(mine, theirs,
+			game.pvp and ("vs " .. (#p.name > 18 and (p.name:sub(1, 17) .. "...") or p.name)) or "Practice", p.w, p.l, p.d))
 	-- (after the tutorial: on to a real game against a creature)
 	if frame.overAgain then frame.overAgain:SetText(game.tutorial and "Play for real" or "Play again") end
 	local g = game

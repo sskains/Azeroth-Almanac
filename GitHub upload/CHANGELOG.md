@@ -6,6 +6,12 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Quest Targeter: never lands on someone else's mob.** The target button could still leave you on a mob another player had tagged or was fighting: the macro is only as fresh as the last nameplate scan, and it can't change in combat. Now every click first rescans the nameplates and rewrites the macros (out of combat), and afterwards checks what was selected: a mob that's tapped by someone else, or in combat with someone who isn't you or your group, is dropped as your target ("Skipped Nightsaber: someone else is fighting it."), and the next click picks another. A mob fighting you stays selected. Tests: `test_qt_taken_guard.py`.
+
+- **Wild Gambit result banner: text inside the frame** (Shannon's file). "Against Artanis Olaris: 1 won, 0 lost, 0 drawn" wrapped onto a third line over the banner's frame. It is now two short lines ("5 - 4  vs Artanis Olaris" and "1 won, 0 lost, 0 drawn"), long names are cut with "...", and the text can no longer wrap.
+
+- **Creatures page: a Wild Gambit button.** The Wild Gambit logo sits beside the Cards and List buttons above the creature list; it opens your deck.
+
 - **Welcome guide: "Already built in", and what runs by itself.** A new page 3 lists twelve things the Almanac already does (navigation arrow, Quest Targeter, every character's bags, auction prices, crafting profit, item tooltips, disenchant values, Talent Planner, flight timers, gathering, spell ranks, group tools), each a click that opens its settings; `/aa features` shows it again any time (listed in Settings > General > Slash commands). The Helpers page now has the switches for sharing flight times with your guild and group and auction sales with your guild, and the group page the keyword auto-invite ("inv") and joining group invites from friends and guild members: all were on by default and weren't mentioned. Nothing's default changed. Guide is now 8 pages.
 
 - **Item tooltips: item level and a Journal line.** Item tooltips get two more lines beside the vendor, auction and disenchant ones. **Item level** on gear, only when the game's own tooltip doesn't already show it. **Journal** says whether the item is in your Almanac and how it was first found ("looted from Defias Pillager", "bought", "crafted"...), or "not in your journal yet" for an uncommon-or-better item you haven't come across (chat links, auction listings, vendors). New file `QoL/ItemTips.lua`; Settings > Economy > Item tooltips (both on). Needs a full game restart (new file).
