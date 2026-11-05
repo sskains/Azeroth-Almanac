@@ -34,7 +34,8 @@ local crumb         -- the open card's label, or nil
 local cardBar, backBtn, crumbText, cardsBtn, listBtn
 local collapsedCards = {}
 local MEDIA = "Interface\\AddOns\\AzerothAlmanac\\Media\\"
-local GAMBIT_BTN = 56 -- the Wild Gambit logo button's size, and so the height of the bar over the creature list
+local GAMBIT_BTN = 56 -- the Wild Gambit logo button's size
+local GAMBIT_PAD = 7  -- the room around it: the bar over the creature list is the button plus this above and below
 
 local RARITY = {
 	normal = L["Normal"], trivial = L["Normal"], minus = L["Normal"],
@@ -921,7 +922,7 @@ function page:Build(parent, header)
 	cardBar = CreateFrame("Frame", nil, left)
 	cardBar:SetPoint("TOPLEFT", 4, -4)
 	cardBar:SetPoint("TOPRIGHT", -4, -4)
-	cardBar:SetHeight(GAMBIT_BTN)
+	cardBar:SetHeight(GAMBIT_BTN + 2 * GAMBIT_PAD)
 	backBtn = CreateFrame("Button", nil, cardBar)
 	backBtn:SetSize(24, 24)
 	backBtn:SetPoint("LEFT", 2, 0)
@@ -951,7 +952,7 @@ function page:Build(parent, header)
 		if WGd.Open and not (WGd.D and WGd.D.Frame and WGd.D.Frame()) then WGd:Open() end
 		WGd:ShowDeck()
 	end)
-	gambitBtn:SetPoint("LEFT", cardBar, "LEFT", 2, 0) -- (the left end of the bar; the back arrow and crumb follow it)
+	gambitBtn:SetPoint("LEFT", cardBar, "LEFT", GAMBIT_PAD, 0) -- (the left end of the bar; the back arrow and crumb follow it)
 	-- the whole painted logo, large (three cards, coin and vines), not a small boxed icon: the bar grows to hold it
 	gambitBtn:SetSize(GAMBIT_BTN, GAMBIT_BTN)
 	gambitBtn.bg:Hide()
@@ -964,7 +965,7 @@ function page:Build(parent, header)
 	gambitBtn:SetShown((ns.QoL and ns.QoL.WildGambit and ns.QoL.WildGambit.ShowDeck) and true or false)
 	if gambitBtn:IsShown() then
 		backBtn:ClearAllPoints()
-		backBtn:SetPoint("LEFT", gambitBtn, "RIGHT", 6, 0)
+		backBtn:SetPoint("LEFT", gambitBtn, "RIGHT", GAMBIT_PAD + 3, 0)
 	end
 	crumbText:SetPoint("RIGHT", cardsBtn, "LEFT", -6, 0)
 	crumbText:SetWordWrap(false)
@@ -1058,7 +1059,7 @@ function page:Build(parent, header)
 			Show(r.npc)
 		end,
 	})
-	list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -(GAMBIT_BTN + 6))
+	list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -(GAMBIT_BTN + 2 * GAMBIT_PAD + 6))
 	list:SetPoint("BOTTOMRIGHT", left, "BOTTOMRIGHT", 0, 0)
 
 	detail = W.Detail(parent, 170)
