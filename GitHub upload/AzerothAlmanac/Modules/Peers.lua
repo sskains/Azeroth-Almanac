@@ -490,6 +490,47 @@ function P:AskXP(nameOrUnit)
 	end)
 end
 
+-- (2026-11-05) /aa xp [name|target]: the same question as the right-click menu entry, typed. It
+-- says why when it can't ask, where the menu simply leaves the entry out.
+function P:XPCommand(arg)
+	arg = arg or ""
+	local name
+	if arg == "" or arg:lower() == "target" then
+		if not (UnitExists("target") and UnitIsPlayer("target")) or UnitIsUnit("target", "player") then
+			ns.Print(L["/aa xp <name>, or target another Almanac player and type /aa xp."])
+			return
+		end
+		name = UnitFull("target")
+		local lvl, max = UnitLevel("target"), GetMaxPlayerLevel and GetMaxPlayerLevel()
+		if lvl and max and lvl >= max then
+			ns.Print((L["%s is already at the highest level."]):format(Ambiguate and Ambiguate(name, "short") or name))
+			return
+		end
+	else
+		name = arg
+	end
+	if IsMe(name) then
+		ns.Print(L["That's you: your experience bar has the answer."])
+		return
+	end
+	if not self:Get(name) then
+		ns.Print((L["%s isn't a known Almanac player (not seen lately)."]):format(name))
+		return
+	end
+	local compat = self:GameCompat(name, "xp")
+	if compat == "theyOld" then
+		ns.Print((L["%s's Almanac is too old to answer this: they need to update."]):format(name))
+		return
+	elseif compat == "weOld" then
+		ns.Print((L["Your Almanac is too old to ask %s this: update it."]):format(name))
+		return
+	elseif compat ~= "same" and compat ~= "limited" then
+		ns.Print((L["%s's Almanac hasn't said it can answer this."]):format(name))
+		return
+	end
+	self:AskXP(name)
+end
+
 -- they answered
 function HeardXP(sender, level, pct, left)
 	local key = Key(sender)

@@ -636,6 +636,9 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 		else
 			ns.Print(("version |cffffffff%s|r  -  %s"):format(ns.VERSION, (L["%s known"]):format(ns.N(ns.Peers and ns.Peers:Count() or 0, "other Almanac player", "other Almanac players"))))
 		end
+	elseif cmd == "xp" or cmd == "exp" or cmd == "level" then
+		-- (2026-11-05) ask another Almanac player how far they are through their level
+		ns.Peers:XPCommand(rest)
 	elseif cmd == "season" or cmd == "holiday" then
 		ns.SeasonPreview(rest)
 	elseif cmd == "gambit" or cmd == "wild" or cmd == "wildgambit" then
@@ -724,6 +727,7 @@ function ns.Help()
 	ns.Print("/aa scan - " .. L["full auction house scan (auction house open)"])
 	ns.Print("/aa inv - " .. L["Characters page on the Bags tab: every character's bags, bank and gear"])
 	ns.Print("/aa version [quest] - " .. L["which version of Azeroth Almanac is loaded (quest: preview the update quest)"])
+	ns.Print("/aa xp [name] - " .. L["ask another Almanac player how far they are through their level (no name: your target)"])
 	ns.Print("/aa games - " .. L["Gem Match"])
 	ns.Print("/aa gambit [Name|new|tutorial|leave] - " .. L["Wild Gambit, the creature card game (practice, or challenge another Almanac player)"])
 	ns.Print("/aa mtt [name|target|practice|leave|ping name|debug] - " .. L["Murloc Tac Toe: challenge another Azeroth Almanac player, or practise against a gnoll"])
