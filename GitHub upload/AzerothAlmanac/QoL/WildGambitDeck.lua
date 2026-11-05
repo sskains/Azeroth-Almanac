@@ -221,44 +221,275 @@ local function CardFrame(i)
 	return f
 end
 
+-- (2026-11-04) The page is a list of blocks, top to bottom: a stats strip, "Your hand" (the five
+-- starred cards on a shelf), then your cards in a section for each creature type. While you search
+-- or filter it is the plain grid of what matches, as before. Only the blocks (and the cards in them)
+-- on screen get frames, so a big collection costs the same as a small one.
+local STATS_H, HAND_HEAD, HEAD_H, BLOCK_GAP = 74, 38, 40, 16
+local blocks, contentH = {}, 1
+local allCards = {}       -- every card you hold, unfiltered (the stats and the hand read this)
+local headPool = {}
+
+local GOLD_LINE = { 0.78, 0.6, 0.22 }
+
+local function Line(f, layer, a)
+	local t = f:CreateTexture(nil, layer or "BORDER")
+	t:SetColorTexture(GOLD_LINE[1], GOLD_LINE[2], GOLD_LINE[3], a or 0.9)
+	t:SetHeight(1)
+	return t
+end
+
+-- the stats strip: how many cards, how strong, how they split into tiers, and the strongest
+local function EnsureStats()
+	if child.stats then return child.stats end
+	local f = CreateFrame("Frame", nil, child)
+	f:SetFrameLevel(child:GetFrameLevel()) -- (under the cards, which are one level up)
+	f.bg = f:CreateTexture(nil, "BACKGROUND")
+	f.bg:SetAllPoints()
+	f.bg:SetColorTexture(0.11, 0.08, 0.045, 0.9)
+	f.top = Line(f) f.top:SetPoint("TOPLEFT") f.top:SetPoint("TOPRIGHT")
+	f.bot = Line(f) f.bot:SetPoint("BOTTOMLEFT") f.bot:SetPoint("BOTTOMRIGHT")
+	f.big = f:CreateFontString(nil, "OVERLAY")
+	f.big:SetFont(TITLE_FONT, 36, "")
+	f.big:SetPoint("LEFT", 18, 8)
+	f.big:SetTextColor(1, 0.82, 0.35)
+	f.bigLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.bigLabel:SetPoint("TOPLEFT", f.big, "BOTTOMLEFT", 2, -1)
+	f.pips = {}
+	for t = 6, 2, -1 do
+		local p = {}
+		p.sq = f:CreateTexture(nil, "ARTWORK")
+		p.sq:SetSize(16, 16)
+		local c = WL.COLORS[t] or { 1, 1, 1 }
+		p.sq:SetColorTexture(c[1], c[2], c[3], 1)
+		p.edge = f:CreateTexture(nil, "BORDER")
+		p.edge:SetPoint("TOPLEFT", p.sq, -1, 1)
+		p.edge:SetPoint("BOTTOMRIGHT", p.sq, 1, -1)
+		p.edge:SetColorTexture(0, 0, 0, 0.8)
+		p.n = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+		p.n:SetPoint("LEFT", p.sq, "RIGHT", 6, 0)
+		p.n:SetTextColor(c[1], c[2], c[3])
+		p.name = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		p.name:SetPoint("TOPLEFT", p.sq, "BOTTOMLEFT", -1, -3)
+		p.name:SetText((WL.TIERS[t] or "?"):match("^%S+"))
+		f.pips[t] = p
+	end
+	f.strong = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	f.strong:SetPoint("RIGHT", -18, 0)
+	f.strong:SetJustifyH("RIGHT")
+	child.stats = f
+	return f
+end
+
+local function PaintStats(f, width)
+	f:SetSize(width, STATS_H)
+	local per, power, best = {}, 0, nil
+	for _, c in ipairs(allCards) do
+		per[c.tier or 2] = (per[c.tier or 2] or 0) + 1
+		power = power + (c.total or 0)
+		if not best or (c.total or 0) > (best.total or 0) then best = c end
+	end
+	f.big:SetText(#allCards)
+	f.bigLabel:SetText(("|cffc8bca0cards in your deck  ·  power %d|r"):format(power))
+	local x0, x1 = 190, width - 250
+	local step = math.max(62, (x1 - x0) / 5)
+	local i = 0
+	for t = 6, 2, -1 do
+		local p = f.pips[t]
+		p.sq:ClearAllPoints()
+		p.sq:SetPoint("TOPLEFT", f, "TOPLEFT", x0 + i * step, -16)
+		p.n:SetText(per[t] or 0)
+		p.n:SetAlpha((per[t] or 0) > 0 and 1 or 0.45)
+		i = i + 1
+	end
+	f.strong:SetText(best and ("|cffc8bca0Strongest|r\n|cffffd100" .. (best.name or "?") .. "|r  " .. (best.total or 0)) or "")
+end
+
+-- "Your hand": the five starred cards, always offered on the table and dealt to you more often,
+-- on a shelf of their own, with a dashed slot for each one still to choose
+local function EnsureHand(cw, ch)
+	if child.hand then return child.hand end
+	local f = CreateFrame("Frame", nil, child)
+	f:SetFrameLevel(child:GetFrameLevel()) -- (under the cards, which are one level up)
+	f.bg = f:CreateTexture(nil, "BACKGROUND")
+	f.bg:SetAllPoints()
+	f.bg:SetColorTexture(0.2, 0.135, 0.04, 0.42)
+	f.top = Line(f, "BORDER", 1) f.top:SetHeight(2) f.top:SetPoint("TOPLEFT") f.top:SetPoint("TOPRIGHT")
+	f.bot = Line(f, "BORDER", 1) f.bot:SetHeight(2) f.bot:SetPoint("BOTTOMLEFT") f.bot:SetPoint("BOTTOMRIGHT")
+	f.title = f:CreateFontString(nil, "OVERLAY")
+	f.title:SetFont(TITLE_FONT, 20, "")
+	f.title:SetPoint("TOPLEFT", 16, -9)
+	f.title:SetTextColor(1, 0.82, 0.35)
+	f.title:SetText("Your hand")
+	f.sub = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.sub:SetPoint("LEFT", f.title, "RIGHT", 12, -2)
+	f.slots = {}
+	for i = 1, WG.FAV_MAX do
+		local s = CreateFrame("Frame", nil, f)
+		s:SetSize(cw, ch)
+		s.bg = s:CreateTexture(nil, "BACKGROUND")
+		s.bg:SetAllPoints()
+		s.bg:SetColorTexture(0, 0, 0, 0.3)
+		for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", 1, 0 }, { "BOTTOMLEFT", "BOTTOMRIGHT", 1, 0 }, { "TOPLEFT", "BOTTOMLEFT", 0, 1 }, { "TOPRIGHT", "BOTTOMRIGHT", 0, 1 } }) do
+			local t = s:CreateTexture(nil, "BORDER")
+			t:SetColorTexture(GOLD_LINE[1], GOLD_LINE[2], GOLD_LINE[3], 0.45)
+			t:SetPoint(e[1]) t:SetPoint(e[2])
+			if e[3] == 1 then t:SetHeight(1) else t:SetWidth(1) end
+		end
+		s.plus = s:CreateFontString(nil, "OVERLAY")
+		s.plus:SetFont(TITLE_FONT, 34, "")
+		s.plus:SetPoint("CENTER", 0, 10)
+		s.plus:SetTextColor(GOLD_LINE[1], GOLD_LINE[2], GOLD_LINE[3], 0.7)
+		s.plus:SetText("+")
+		s.txt = s:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		s.txt:SetPoint("TOP", s.plus, "BOTTOM", 0, -2)
+		s.txt:SetText("Star a card")
+		f.slots[i] = s
+	end
+	child.hand = f
+	return f
+end
+
+-- a section's banner: the creature type and how many of its cards you hold
+local function HeadFrame(i)
+	if headPool[i] then return headPool[i] end
+	local f = CreateFrame("Frame", nil, child)
+	f:SetFrameLevel(child:GetFrameLevel()) -- (under the cards, which are one level up)
+	f.bg = f:CreateTexture(nil, "BACKGROUND")
+	f.bg:SetAllPoints()
+	f.bg:SetColorTexture(0.12, 0.09, 0.05, 0.85)
+	f.line = Line(f) f.line:SetPoint("BOTTOMLEFT") f.line:SetPoint("BOTTOMRIGHT")
+	f.name = f:CreateFontString(nil, "OVERLAY")
+	f.name:SetFont(TITLE_FONT, 20, "")
+	f.name:SetPoint("LEFT", 14, 1)
+	f.name:SetTextColor(1, 0.82, 0.35)
+	f.count = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.count:SetPoint("LEFT", f.name, "RIGHT", 12, -1)
+	headPool[i] = f
+	return f
+end
+
+-- the blocks for what is showing. `focus`: no search or filter, so the stats, the hand and the
+-- sections; the starred cards sit in the hand and so are left out of the sections.
+local function Blocks(rows, focus)
+	local out, at = {}, 8
+	local ch = WG.D.CH
+	local function add(b, h) b.y, b.h = at, h out[#out + 1] = b at = at + h end
+	local function gridOf(list)
+		for i = 1, #list, PER_ROW do
+			local items = {}
+			for j = i, math.min(i + PER_ROW - 1, #list) do items[#items + 1] = list[j] end
+			add({ kind = "row", items = items }, ch + GAP_Y)
+		end
+	end
+	if focus then
+		add({ kind = "stats" }, STATS_H + BLOCK_GAP)
+		add({ kind = "hand" }, HAND_HEAD + ch + 20 + BLOCK_GAP)
+		local groups, order = {}, {}
+		for _, r in ipairs(rows) do
+			if not r.fav then
+				local t = r.card.type
+				if not t or t == "" then t = "Other" end
+				if not groups[t] then groups[t] = {} order[#order + 1] = t end
+				local g = groups[t]
+				g[#g + 1] = r
+			end
+		end
+		table.sort(order, function(a, b)
+			local x, z = #groups[a], #groups[b]
+			if x ~= z then return x > z end
+			return a < b
+		end)
+		for _, t in ipairs(order) do
+			add({ kind = "head", type = t, n = #groups[t] }, HEAD_H)
+			gridOf(groups[t])
+		end
+	else
+		gridOf(rows)
+	end
+	return out, at + 8
+end
+
 local function Layout()
 	if not (scroll and child and WG.D) then return end
 	local cw, ch = WG.D.CW, WG.D.CH
-	local rowH = ch + GAP_Y
 	local width = scroll:GetWidth()
 	if width <= 1 then return end
 	local gapX = math.max(8, (width - PER_ROW * cw) / (PER_ROW + 1))
-	local total = math.ceil(#rowsData / PER_ROW)
-	local contentH = math.max(1, total * rowH + GAP_Y)
-	child:SetSize(width, contentH)
+	child:SetSize(width, math.max(1, contentH))
 	-- the scrollbar only belongs there when there is something to scroll
 	if A.Widgets and A.Widgets.FitScrollBar then A.Widgets.FitScrollBar(scroll, contentH) end
-	-- only the rows on screen get a frame, with one row of slack each way, so a big collection
-	-- costs the same as a small one
-	local rowH1 = rowH
-	local first = math.max(0, math.floor((scroll:GetVerticalScroll() or 0) / rowH1) - 1)
-	local visible = math.ceil(scroll:GetHeight() / rowH1) + 2
-	local n = 0
-	for row = first, math.min(total - 1, first + visible) do
-		for col = 0, PER_ROW - 1 do
-			local item = rowsData[row * PER_ROW + col + 1]
-			if item then
-				n = n + 1
-				local f = CardFrame(n)
-				f.deckRow = item
+	local top, view = scroll:GetVerticalScroll() or 0, scroll:GetHeight()
+	local lo, hi = top - (ch + GAP_Y), top + view + (ch + GAP_Y)
+	local n, heads = 0, 0
+	if child.stats then child.stats:Hide() end
+	if child.hand then child.hand:Hide() end
+
+	local function Card(item, x, y)
+		n = n + 1
+		local f = CardFrame(n)
+		f.deckRow = item
+		f:ClearAllPoints()
+		f:SetPoint("TOPLEFT", child, "TOPLEFT", x, -y)
+		WG.D.SetCard(f, item.card)
+		f:Show()
+	end
+
+	for _, b in ipairs(blocks) do
+		if b.y + b.h >= lo and b.y <= hi then
+			if b.kind == "stats" then
+				local f = EnsureStats()
 				f:ClearAllPoints()
-				f:SetPoint("TOPLEFT", child, "TOPLEFT", gapX + col * (cw + gapX), -(GAP_Y + row * rowH1))
-				WG.D.SetCard(f, item.card)
+				f:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -b.y)
+				PaintStats(f, width)
 				f:Show()
+			elseif b.kind == "hand" then
+				local f = EnsureHand(cw, ch)
+				f:ClearAllPoints()
+				f:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -b.y)
+				f:SetSize(width, b.h - BLOCK_GAP)
+				f.sub:SetText("the five you starred: always on the table, and dealt to you more often")
+				local favs = {}
+				for _, npc in ipairs(WG:Favorites() or {}) do
+					for _, c in ipairs(allCards) do
+						if WG.SameNpc(c.npc, npc) then favs[#favs + 1] = { card = c, fav = true } break end
+					end
+				end
+				for i, s in ipairs(f.slots) do
+					s:ClearAllPoints()
+					s:SetPoint("TOPLEFT", f, "TOPLEFT", gapX + (i - 1) * (cw + gapX), -HAND_HEAD)
+					s:SetShown(favs[i] == nil)
+				end
+				f:Show()
+				for i, item in ipairs(favs) do
+					if i <= WG.FAV_MAX then Card(item, gapX + (i - 1) * (cw + gapX), b.y + HAND_HEAD) end
+				end
+			elseif b.kind == "head" then
+				heads = heads + 1
+				local f = HeadFrame(heads)
+				f:ClearAllPoints()
+				f:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -b.y)
+				f:SetSize(width, HEAD_H - 6)
+				f.name:SetText(b.type)
+				f.count:SetText(("|cffc8bca0%d %s|r"):format(b.n, b.n == 1 and "card" or "cards"))
+				f:Show()
+			else
+				for col, item in ipairs(b.items) do
+					Card(item, gapX + (col - 1) * (cw + gapX), b.y)
+				end
 			end
 		end
 	end
 	for i = n + 1, #pool do pool[i]:Hide() end
+	for i = heads + 1, #headPool do headPool[i]:Hide() end
 end
 
 Refresh = function()
 	if not (panel and panel:IsShown()) then return end
+	allCards = WG:Collection() or {}
 	rowsData = Rows()
+	local focus = state.text == "" and state.tier == 0 and not state.favOnly and #allCards > 0
+	blocks, contentH = Blocks(rowsData, focus)
 	Layout()
 	if panel.empty then
 		panel.empty:SetText(EmptyText())
@@ -266,10 +497,11 @@ Refresh = function()
 	end
 	if panel.count then
 		panel.count:SetText(("|cffc8bca0%d of %d cards  ·  %d of %d starred|r")
-			:format(#rowsData, #(WG:Collection() or {}), CountFavorites(), WG.FAV_MAX))
+			:format(#rowsData, #allCards, CountFavorites(), WG.FAV_MAX))
 	end
 end
 WG.RefreshDeck = function() Refresh() end
+WG.DeckBlocks = function() return blocks end -- (for the tests)
 
 ---------------------------------------------------------------------------
 -- The panel
