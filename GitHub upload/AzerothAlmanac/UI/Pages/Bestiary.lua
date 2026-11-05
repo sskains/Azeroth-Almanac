@@ -947,7 +947,7 @@ function page:Build(parent, header)
 		local WGd = ns.QoL and ns.QoL.WildGambit
 		if WGd and WGd.ShowDeck then WGd:ShowDeck() end
 	end)
-	gambitBtn:SetPoint("RIGHT", cardsBtn, "LEFT", -8, 0)
+	gambitBtn:SetPoint("LEFT", cardBar, "LEFT", 2, 0) -- (the left end of the bar; the back arrow and crumb follow it)
 	-- the whole painted logo, large (three cards, coin and vines), not a small boxed icon: the bar grows to hold it
 	gambitBtn:SetSize(GAMBIT_BTN, GAMBIT_BTN)
 	gambitBtn.bg:Hide()
@@ -958,7 +958,11 @@ function page:Build(parent, header)
 	gambitBtn.hl:SetTexCoord(0, 1, 0, 1)
 	gambitBtn:SetActive(true)
 	gambitBtn:SetShown((ns.QoL and ns.QoL.WildGambit and ns.QoL.WildGambit.ShowDeck) and true or false)
-	crumbText:SetPoint("RIGHT", gambitBtn:IsShown() and gambitBtn or cardsBtn, "LEFT", -6, 0)
+	if gambitBtn:IsShown() then
+		backBtn:ClearAllPoints()
+		backBtn:SetPoint("LEFT", gambitBtn, "RIGHT", 6, 0)
+	end
+	crumbText:SetPoint("RIGHT", cardsBtn, "LEFT", -6, 0)
 	crumbText:SetWordWrap(false)
 	list = W.List(left, {
 		rowHeight = 26,
