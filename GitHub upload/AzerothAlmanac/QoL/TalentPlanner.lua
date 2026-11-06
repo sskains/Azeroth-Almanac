@@ -386,10 +386,41 @@ end
 local function Serialize(b)
 	local order = {}
 	for k, step in ipairs(b.order) do order[k] = step[1] .. ":" .. step[2] end
-	return { code = TL.Code(b), order = table.concat(order, ",") }
+	return { code = TL.Code(b), order = table.concat(order, ","), data = TL.DATA_BUILD }
+end
+
+-- (2026-11-05) A build saved against older trees moves onto these once (TL.Migrate): the original
+-- stays in saved.old, and saved.lost says how many of its points the new trees didn't take.
+local function Migrate(classFile, saved)
+	if not TL.NeedsMigrate(saved.data) then return false end
+	local b, lost = TL.Migrate(classFile, saved.code, saved.order)
+	saved.old = saved.old or { code = saved.code, order = saved.order, data = saved.data or (TL.data.moved and TL.data.moved.from) }
+	local new = Serialize(b)
+	saved.code, saved.order, saved.data, saved.lost = new.code, new.order, new.data, lost > 0 and lost or nil
+	return true, lost
+end
+
+local function MigrateAll()
+	local moved, short = 0, {}
+	for classFile, list in pairs(db.builds or {}) do
+		for _, e in ipairs(list) do
+			local did, lost = Migrate(classFile, e)
+			if did then
+				moved = moved + 1
+				if lost > 0 then short[#short + 1] = ("%s (%d)"):format(e.name or "?", lost) end
+			end
+		end
+	end
+	if moved == 0 then return end
+	ns.Print(("WoW Forever's talent trees changed (client build %s): %d saved talent build%s moved onto the new trees."):format(
+		TL.DATA_BUILD, moved, moved == 1 and "" or "s"))
+	if #short > 0 then
+		ns.Print(("Points the new trees don't allow were left out, so check: %s."):format(table.concat(short, ", ")))
+	end
 end
 
 local function Deserialize(classFile, saved)
+	Migrate(classFile, saved)
 	local b = TL.FromLink(saved.code or "", classFile) or TL.NewBuild(classFile)
 	if saved.order and saved.order ~= "" then
 		-- replay the saved order so leveling hints follow it
@@ -884,9 +915,13 @@ function TP:OnLogin()
 			end)
 		end
 	end)
+	-- (2026-11-05) the trees kept from the game are matched against the data's talents by index, so
+	-- new data makes them stale: read them again (LoadGameTrees, below) rather than trust them
+	if db.treesData ~= TL.DATA_BUILD then db.trees, db.treesData = {}, TL.DATA_BUILD end
 	for classFile, trees in pairs(db.trees or {}) do
 		if TL.LooksComplete(trees) then TL.gameTrees[classFile] = trees else db.trees[classFile] = nil end
 	end
+	MigrateAll()
 	AttachTab()
 	C_Timer.After(3, SaveMine)
 	C_Timer.After(4, LoadGameTrees)

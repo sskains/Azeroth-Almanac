@@ -6,6 +6,10 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased (/reload)
+
+- [ ] **Talent Planner, new trees:** open the Planner for a Paladin, a Rogue and a Druid: the trees match the game's own Talents window (the same talents in the same places, rank counts, arrows), every talent's tooltip has text (none blank), and a talentsforever.com link for each copied from the site loads the same build. A character that had saved builds before this update: at login one line says they were moved onto the new trees, naming any that lost points; load each one and check its points sit on the talents you'd chosen; a followed build's level-up hint names a talent that's in the tree; Stage in game still adds the points. No Lua errors.
+
 ## 1.5.0 (**full game restart**: the new file QoL/ItemTips.lua. The Winter Veil textures from 1.4.0 are new too)
 
 - [ ] **Your Deck page** (open it from the Creatures page's Wild Gambit logo or the card on the table): a stats strip at the top (card count, power, a coloured square and number for each tier, the strongest card on the right), then Your hand with the cards you've starred in the first slots and a dashed "+ Star a card" slot for each empty one, then sections by creature type (biggest first) each with a banner and its card count; nothing overlaps (cards sit above the hand shelf and the banners), the text fits the strip at a narrow and a wide window, scrolling is smooth and the scrollbar reaches the last section; clicking a card in a section stars it (it moves up into the hand), clicking one in the hand unstars it (back into its section); with five starred, the sixth says the cap; typing in Search, picking a tier or ticking Starred only drops the stats, hand and banners and shows a plain grid of the matches (clear it and they return); a brand-new character (starter cards only) still looks right; no Lua errors.
