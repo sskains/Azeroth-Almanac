@@ -27,6 +27,7 @@ python3 "dev/tests/test_upgrades.py"
 - `test_items_page.py`: the Items page (#55): cards, the tree's branches and folding, a card's filtered tree, search, "Can't use", an item opened from elsewhere.
 - `test_creatures_page.py`: the Creatures page's cards draw (smoke test).
 - `harness.ALL_FILES` loads the whole addon in .toc order, for page tests.
+- `test_tank_target.py`: the tank's target mark: found by role, moved at once by UNIT_TARGET out of combat and by the 0.25 s poll in combat, cleared for no target / a friendly / a dead or offline tank, two tanks, plates leaving and coming back, the three looks, "Also when I'm the tank", the switch, no poll without a tank, the settings section.
 - `test_upgrades.py`: upgrade arrows (#55 part 2): talents saved, the spec, green for you, "Upgrade at NN", gold for an alt with an unbound copy, soulbound and other-realm cases, rings, two-handers, the Settings override and switch.
 
 Run the tests after any change to Wild Gambit's messages or rules. When a test needs another file, add it to `WG_FILES` in `harness.py` in `.toc` order, and anything the client provides to `wow_stub.lua`.

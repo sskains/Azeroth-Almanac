@@ -1346,6 +1346,21 @@ local function BuildThreat(P)
 	P:Buttons({ { L["Preview"], 110, function() TM:Preview() end }, { L["Reset meter position"], 170, function() TM:ResetPosition() end } })
 end
 
+-- (2026-11-06) the tank's target, marked on its nameplate (QoL/TankTarget.lua)
+local function BuildTankTarget(P)
+	local db = Q.db.tankTarget
+	local TT = Q.TankTarget
+	local function Set(key) return function(v) db[key] = v TT:Refresh() end end
+	P:Section(L["Tank's target"], L["In a group with a tank (the tank role, or a raid's main tank), the enemy they have targeted is marked on its nameplate, and the mark follows them as they switch. Needs enemy nameplates on."])
+	P:Check(L["Highlight the tank's target"], nil, function() return db.enabled end, Set("enabled"))
+	P:Picker(L["Look"], TT.looks, function()
+		for i, m in ipairs(TT.looks) do if m.key == db.look then return i end end
+		return 1
+	end, function(i) db.look = TT.looks[i].key TT:Refresh() end, nil, 1, L["Marker above: the tank shield over the nameplate. Outline: a coloured edge round its health bar, outside the threat edge."])
+	P:Color(L["Outline colour"], function() return db.color end, function(r, g, b) db.color = { r, g, b } TT:Refresh() end, 1)
+	P:Check(L["Also when I'm the tank"], L["Your own target is marked by the game already; this adds the tank mark to it too."], function() return db.whenTank end, Set("whenTank"), 1)
+end
+
 local function BuildUnitFrames(P)
 	local db = Q.db.unitFrames
 	local function Set(key) return function(v) db[key] = v Q.UnitFrames:Refresh() end end
@@ -1420,6 +1435,7 @@ end
 local function BuildGroup(P)
 	BuildSocial(P)
 	BuildThreat(P)
+	BuildTankTarget(P)
 	BuildUnitFrames(P)
 	BuildFollow(P)
 end
@@ -1604,7 +1620,7 @@ local PAGE_LIST = {
 	{ id = "inventory", label = L["Bags and bank"], icon = "INV_Misc_Bag_08", build = BuildInventory, aliases = { "inv", "bags" },
 		desc = L["Bags, bank, gear, mail, auctions and professions of every character on your account."] },
 	{ cat = L["Group"] },
-	{ id = "group", label = L["Group Settings"], icon = "INV_Letter_15", build = BuildGroup, aliases = { "social", "threat", "unitframes", "follow" },
+	{ id = "group", label = L["Group Settings"], icon = "INV_Letter_15", build = BuildGroup, aliases = { "social", "threat", "tank", "unitframes", "follow" },
 		desc = L["Invites, the threat monitor, unit frames, group nameplates and the follow button."] },
 	{ id = "healer", label = L["Healer Assist"], icon = "Spell_Holy_FlashHeal", build = BuildHealer, aliases = { "heal", "healassist" },
 		desc = L["Clickable heal, cure and resurrect icons on each group member; the best choice flashes yellow."] },

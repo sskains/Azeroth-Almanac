@@ -93,6 +93,12 @@ ns.defaults = {
 		chars = {},             -- "Name-Realm" -> { class, code, time }: each character's current talents
 		trees = {},             -- classFile -> the three trees as the game has them (read from the client, merged over the data)
 	},
+	tankTarget = {
+		enabled = true,         -- the enemy your group's tank has targeted is marked on its nameplate
+		look = "marker",        -- "marker" (tank shield above the plate), "outline" (round the health bar), "both"
+		color = { 0.25, 0.6, 1 }, -- the outline's colour
+		whenTank = false,       -- mark your own target too when you're a tank
+	},
 }
 
 local function ApplyDefaults(target, defaults)
@@ -114,6 +120,15 @@ ns.Readable = A.Readable
 ns.MoneyText = A.MoneyText
 
 function ns.Print(msg) A.Print(msg) end
+
+-- (2026-11-06) A group member who is a tank: the tank role, or a raid's main tank. Shared by Healer
+-- Assist (the tank counts as more urgent) and the tank's target mark (TankTarget.lua).
+function ns.IsTankUnit(token)
+	local R = ns.Readable
+	if UnitGroupRolesAssigned and R(UnitGroupRolesAssigned(token)) == "TANK" then return true end
+	if GetPartyAssignment and R(GetPartyAssignment("MAINTANK", token)) then return true end
+	return false
+end
 
 -- The floating helpers' look (Healer Assist, Threat Monitor, the flight bar): a see-through dark
 -- mesh (custom art, Media\Panel_Mesh) inside the game's thin gold toast border. f:SetPanelAlpha(a)

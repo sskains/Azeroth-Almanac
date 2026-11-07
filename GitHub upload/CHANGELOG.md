@@ -4,6 +4,10 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **The tank's target, marked on its nameplate.** In a group with a tank (the tank role, or a raid's main tank), the enemy each tank has targeted gets a tank shield with an arrow above its nameplate, all the time, and the mark follows the tank as they switch. In combat the tanks' targets are read every 0.25 seconds (the game's own "target changed" event can be late or missing for someone far off); out of combat the events alone do it, so nothing runs then. Two tanks in a raid: both targets marked. Nothing is marked when the tank has no target, targets something friendly, or is dead or offline. Works in dungeons and raids (only friendly nameplates are locked there); needs enemy nameplates on. Settings > Group Settings > Tank's target (`/aa settings tank`): the switch (on), the look (Marker above, Outline round the health bar outside Threat Monitor's edge, or Both), the outline colour, and Also when I'm the tank (off). Healer Assist's "is this a tank" check moved to a shared helper (`ns.IsTankUnit`) that both use. New file `QoL/TankTarget.lua`: needs a full game restart. Test: `test_tank_target.py`.
+
 ## 1.5.0 (2026-11-04)
 
 - **Your Deck: a stats strip, Your hand, and sections.** The deck screen is no longer one long grid. A **stats strip** on top shows how many cards you hold and their total power, how many are at each tier (Fought to Legendary, in the tier colours) and your strongest card. **Your hand** is a shelf of the five cards you've starred, with a dashed "Star a card" slot for each one still to choose, so starring shows. Below it your cards sit in a **section for each creature type** (the biggest first), each with a banner and its card count; starred cards are in the hand, not repeated. Searching, a tier filter or Starred only still give the plain grid of what matches. Same sort, same click to star. Test: `test_deck_page.py`.
