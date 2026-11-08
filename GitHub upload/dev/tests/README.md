@@ -28,6 +28,7 @@ python3 "dev/tests/test_upgrades.py"
 - `test_creatures_page.py`: the Creatures page's cards draw (smoke test).
 - `harness.ALL_FILES` loads the whole addon in .toc order, for page tests.
 - `test_slash_xp.py`: `/aa xp [name|target]` asks a known Almanac player how far they are through their level and prints the answer; no name and no target, yourself, an unknown name, a copy with no `xp` capability, asking twice at once and a top-level target each get a line and send nothing.
+- `test_talent_migrate.py`: Talent Planner builds saved on the 1.60.1.70425 trees (read from git, commit cb313b6) moved onto the current data: each point on a talent of the same name, what's gone or over the cap counted, the original kept, once only, the cached game trees dropped.
 - `test_upgrades.py`: upgrade arrows (#55 part 2): talents saved, the spec, green for you, "Upgrade at NN", gold for an alt with an unbound copy, soulbound and other-realm cases, rings, two-handers, the Settings override and switch.
 
 Run the tests after any change to Wild Gambit's messages or rules. When a test needs another file, add it to `WG_FILES` in `harness.py` in `.toc` order, and anything the client provides to `wow_stub.lua`.

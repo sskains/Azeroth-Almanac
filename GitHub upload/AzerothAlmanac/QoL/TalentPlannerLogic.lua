@@ -200,6 +200,81 @@ function TL.Link(b)
 	return ("https://talentsforever.com/%s/60/%s"):format(c and c.slug or "", code)
 end
 
+---------------------------------------------------------------------------
+-- (2026-11-05) New trees: a build saved against older data, carried over. A saved build is a code
+-- and an order by talent index, and an update that moves, removes or re-ranks talents leaves those
+-- indexes pointing at other talents. The data names the client build it was read from (data.build)
+-- and, for the update before, where each talent went (data.moved, by name, from the generator).
+---------------------------------------------------------------------------
+
+TL.DATA_BUILD = data.build
+
+-- A build saved with `fromBuild` (nil: saved before builds were stamped) needs carrying over.
+function TL.NeedsMigrate(fromBuild)
+	return data.moved ~= nil and data.build ~= nil and fromBuild ~= data.build
+end
+
+-- Where old tree t's talent i is now: t, i, or nil when the talent is gone.
+local function MovedTo(classFile, t, i)
+	local m = data.moved and data.moved[classFile]
+	local to = m and m[t .. ":" .. i]
+	if to == false then return nil end
+	if not to then return t, i end
+	local t2, i2 = to:match("^(%d):(%d+)$")
+	return tonumber(t2), tonumber(i2)
+end
+
+-- The saved code and order (old indexes) placed on the trees as they are now. Each point follows its
+-- talent; the points go in in the saved order (or the code's, row by row, when the order doesn't
+-- match the code), passing over what's left until nothing more fits, so a point that only becomes
+-- allowed later still lands. Whatever the new trees don't allow is left out: a talent that's gone,
+-- ranks over the new cap, a row or prerequisite that's no longer met.
+-- Returns the build and how many saved points didn't make it.
+function TL.Migrate(classFile, code, order)
+	local want = {}
+	local parts = {}
+	for part in ((code or "") .. "-"):gmatch("([%d]*)%-") do parts[#parts + 1] = part end
+	for t = 1, 3 do
+		local digits = parts[t] or ""
+		for i = 1, #digits do
+			local d = tonumber(digits:sub(i, i)) or 0
+			if d > 0 then want[t .. ":" .. i] = d end
+		end
+	end
+	local steps, counted = {}, {}
+	for t, i in (order or ""):gmatch("(%d):(%d+)") do
+		steps[#steps + 1] = { tonumber(t), tonumber(i) }
+		counted[t .. ":" .. i] = (counted[t .. ":" .. i] or 0) + 1
+	end
+	local same = #steps > 0
+	for k, n in pairs(want) do if counted[k] ~= n then same = false end end
+	for k, n in pairs(counted) do if want[k] ~= n then same = false end end
+	if not same then
+		steps = {}
+		for t = 1, 3 do
+			for i = 1, #(parts[t] or "") do
+				for _ = 1, want[t .. ":" .. i] or 0 do steps[#steps + 1] = { t, i } end
+			end
+		end
+	end
+	local b = TL.NewBuild(classFile)
+	local pending, lost = {}, 0
+	for _, s in ipairs(steps) do
+		local t2, i2 = MovedTo(classFile, s[1], s[2])
+		if t2 and b.ranks[t2] and b.ranks[t2][i2] then pending[#pending + 1] = { t2, i2 } else lost = lost + 1 end
+	end
+	local progress = true
+	while progress and #pending > 0 do
+		progress = false
+		local left = {}
+		for _, s in ipairs(pending) do
+			if TL.Add(b, s[1], s[2], TL.PointsAtLevel(TL.MAX_LEVEL)) then progress = true else left[#left + 1] = s end
+		end
+		pending = left
+	end
+	return b, lost + #pending
+end
+
 -- Reads a talentsforever.com link (or "class/code", or just a code for `defaultClass`). Returns a
 -- build, or nil and why. Points are added row by row so the build also gets an order.
 -- Wowhead Classic links are refused: their codes are for the Classic trees, not Forever's.

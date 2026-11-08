@@ -9,6 +9,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 ## Unreleased (/reload)
 
 - [ ] **`/aa xp`:** with another Almanac player (party, guild or friend): `/aa xp Theirname` prints "Asked ... how far they are through their level..." and then their level, percent and experience to go (or the popup on their side, if their sharing is set to ask); targeting them and typing `/aa xp` does the same; `/aa xp` with nothing targeted gives the usage line; a level-60 target says they're already at the highest level; a name nobody's seen says it isn't a known Almanac player; asking twice in a row says to wait; `/aa help` lists it. No Lua errors.
+- [ ] **Talent Planner, new trees:** open the Planner for a Paladin, a Rogue and a Druid: the trees match the game's own Talents window (the same talents in the same places, rank counts, arrows), every talent's tooltip has text (none blank), and a talentsforever.com link for each copied from the site loads the same build. A character that had saved builds before this update: at login one line says they were moved onto the new trees, naming any that lost points; load each one and check its points sit on the talents you'd chosen; a followed build's level-up hint names a talent that's in the tree; Stage in game still adds the points. No Lua errors.
 
 ## 1.5.0 (**full game restart**: the new file QoL/ItemTips.lua. The Winter Veil textures from 1.4.0 are new too)
 
