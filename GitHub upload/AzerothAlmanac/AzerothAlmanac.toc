@@ -93,6 +93,7 @@ UI\UpdateQuest.lua
 UI\NewMarks.lua
 UI\Journey.lua
 UI\Window.lua
+UI\SearchAll.lua
 UI\Pages\Journal.lua
 UI\Pages\Bestiary.lua
 UI\Pages\Items.lua

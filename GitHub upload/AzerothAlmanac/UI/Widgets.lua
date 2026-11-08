@@ -604,6 +604,10 @@ function W.Search(parent, width, onChange)
 	box:HookScript("OnTextChanged", function(self) onChange((self:GetText() or ""):lower()) end)
 	box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+	-- (2026-11-08) a page's own search box (made in its header while the window builds it) also
+	-- searches the rest of the Almanac (UI/SearchAll.lua)
+	local building = ns.UI and ns.UI.building
+	if building and parent == building.header and ns.SearchAll then ns.SearchAll:Attach(box, building) end
 	return box
 end
 
