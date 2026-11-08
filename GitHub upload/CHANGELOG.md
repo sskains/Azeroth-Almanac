@@ -4,6 +4,10 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **Search everything from any page's search box.** Each page still filters itself as you type; now a panel under the box also lists what the rest of the Almanac holds that matches: creatures, items, quests, people and flight paths, places and their areas, dungeons, gathering nodes and fishing waters, profession recipes and class spells, grouped by page with the most matches first and the two closest names under each of the first four. Click a name to open it on its page; click a page's heading to open that page with your search already in its box. Journal text and every character's bags and bank are searched by their own pages, so the panel offers "Look in the Journal" and "Look in your characters' bags and bank" to open them with the search. It waits for two letters and a moment's pause, leaves out the page you're on, and closes when you leave the box. New file `UI/SearchAll.lua`: needs a full game restart. Test: `test_search_all.py`.
+
 ## 1.5.0 (2026-11-04)
 
 - **Your Deck: a stats strip, Your hand, and sections.** The deck screen is no longer one long grid. A **stats strip** on top shows how many cards you hold and their total power, how many are at each tier (Fought to Legendary, in the tier colours) and your strongest card. **Your hand** is a shelf of the five cards you've starred, with a dashed "Star a card" slot for each one still to choose, so starring shows. Below it your cards sit in a **section for each creature type** (the biggest first), each with a banner and its card count; starred cards are in the hand, not repeated. Searching, a tier filter or Starred only still give the plain grid of what matches. Same sort, same click to star. Test: `test_deck_page.py`.
