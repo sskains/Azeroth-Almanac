@@ -1,38 +1,32 @@
-# Azeroth Almanac: what's new (draft for the next CurseForge file)
+# Azeroth Almanac 1.5.1: what's new
 
-Paste this into the "Changelog" box when uploading the next release. It is written for players; the developer
-detail is in `CHANGELOG.md` under **Unreleased**, which becomes the version's section when it is released.
-Needs a **full game restart**, not just `/reload`: this update adds a new file (`QoL/ItemTips.lua`).
+Paste this into the "Changelog" box when uploading. It is written for players; the developer detail is in
+`CHANGELOG.md` under 1.5.1.
+
+Needs a **full game restart**, not just `/reload`: this update adds two new files (`QoL/TankTarget.lua`,
+`UI/SearchAll.lua`).
 
 ## New
 
-- **Item tooltips: item level and a Journal line.** Gear shows its item level (when the game's own tooltip
-  doesn't). A new Journal line tells you how you first found an item ("looted from Defias Pillager", "bought",
-  "crafted"), or "not in your journal yet" for an uncommon-or-better item you haven't come across. Both can be
-  switched off in /aa settings > Item tooltips.
-- **Your Deck, redesigned.** A stats strip (your cards, total power, a count for each tier, your strongest card),
-  **Your hand** (the five cards you've starred, on a shelf of their own, with a slot waiting for each one still to
-  choose) and your cards in a section for each creature type.
-- **Wild Gambit on the Creatures page.** The Wild Gambit logo sits at the top of the Creatures page and opens your
-  deck.
-- **"Already built in" in the welcome guide.** A new page lists everything the Almanac already does (map arrow,
-  every character's bags, auction prices, crafting profit, talent planner, flight timers and more), each one a
-  click to its settings. Type `/aa features` to see it any time.
-- **Clearer about what runs by itself.** The welcome guide now also shows the switches for sharing flight times and
-  auction sales, the keyword auto-invite ("inv") and joining group invites from friends and guildmates. Nothing's
-  default changed.
+- **Search the whole Almanac from any page.** Type in any page's search box and, besides filtering that page,
+  a panel lists everything else that matches: creatures, items, quests, people and flight paths, places,
+  dungeons, gathering nodes and fishing waters, recipes and class spells. Click a name to open it, or a page's
+  heading to open that page already searched. The Journal and your characters' bags and bank are a click away
+  from the same panel.
+- **The tank's target, marked.** In a group with a tank, the enemy they're targeting gets a tank shield above its
+  nameplate, and the mark follows them as they switch, all fight long. Settings > Group Settings > Tank's
+  target: a marker, an outline round the health bar, or both, in a colour of your choice. Needs enemy
+  nameplates on.
+- **Search a vendor's or trainer's list.** On People, a search box over a person's Training and For sale lists
+  narrows both as you type ("belt", "pattern", "flux").
+- **`/aa xp Name`** asks another Almanac player how far they are through their level (or `/aa xp` with them
+  targeted): the same question as the right-click menu, typed.
 
-## Fixed
+## Changed
 
-- **Quest Targeter no longer lands on someone else's mob.** It re-checks the nearby mobs on every click and drops
-  a target another player has tagged or is fighting ("Skipped Nightsaber: someone else is fighting it."); the next
-  click picks another.
-- **Wild Gambit result banner.** The win/loss text sits inside the frame instead of running over it.
+- **Talent Planner: WoW Forever's new talent trees.** The planner now has the trees from the latest client
+  (Paladin, Rogue and Druid were reworked; Warrior Fury, Mage, Shaman Elemental and Priest Holy changed too).
+  Builds you saved before move onto the new trees by themselves, each point to the talent of the same name;
+  anything the new trees no longer allow is left out, and a chat line at login names the builds to check.
 
----
-
-Short version for the "Summary of changes" line (if there is a character limit):
-
-> Item level and Journal lines on item tooltips, a redesigned Your Deck (stats, Your hand, creature-type sections),
-> a Wild Gambit button on the Creatures page, an "Already built in" welcome page (/aa features), and Quest Targeter
-> now skips mobs other players are fighting. Full game restart needed.
+Talent data: talentsforever.com (https://talentsforever.com), CC BY 4.0.
