@@ -644,11 +644,7 @@ local function ScanThreat(now)
 	end
 end
 
-local function IsTank(token)
-	if UnitGroupRolesAssigned and R(UnitGroupRolesAssigned(token)) == "TANK" then return true end
-	if GetPartyAssignment and R(GetPartyAssignment("MAINTANK", token)) then return true end
-	return false
-end
+local IsTank = ns.IsTankUnit -- (QoL/Core.lua, shared with the tank's target mark)
 
 -- The smallest heal that covers (about) what's missing, else the biggest; or the fastest.
 local function PickEfficient(cands, missing)
