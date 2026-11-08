@@ -41,7 +41,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import art_convert  # noqa: E402  (same folder: key_magenta / write_tga / edge_clean / board)
 
-LIVE_MEDIA = r"D:\World of Warcraft\_classic_beta_\Interface\AddOns\AzerothAlmanac\Media"
+LIVE_MEDIA = r"D:\World of Warcraft\_forever_\Interface\AddOns\AzerothAlmanac\Media"
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(HERE, "docs", "art_source")
 

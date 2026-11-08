@@ -44,7 +44,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageEnhance
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-MEDIA = r"D:\World of Warcraft\_classic_beta_\Interface\AddOns\AzerothAlmanac\Media"
+MEDIA = r"D:\World of Warcraft\_forever_\Interface\AddOns\AzerothAlmanac\Media"
 FONT = os.path.join(HERE, "fonts", "LifeCraft_Font.ttf")
 OUT = os.path.join(ROOT, "CurseForge", "icon.png")
 

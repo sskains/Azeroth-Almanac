@@ -52,7 +52,7 @@ Say which area you're in before starting, and avoid the other person's files unt
 
 ## 6. Code conventions
 
-- Lua, WoW Forever beta (interface 16001). Addon namespace: `local _, A = ...`; QoL modules use `A.QoL` and `ns:NewModule`.
+- Lua, WoW Forever (interface 16001). Addon namespace: `local _, A = ...`; QoL modules use `A.QoL` and `ns:NewModule`.
 - Lua's limit is 200 locals per file scope. `WildGambit.lua` is at that limit, so new helpers go in a table or a `do ... end` block.
 - A local function used before it's defined must be forward-declared.
 - Never assign to the game's own globals. Never call protected functions in combat; check `InCombatLockdown()`.

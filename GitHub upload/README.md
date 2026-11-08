@@ -8,7 +8,7 @@ Slash command: `/aa` · Saved variables: `AzerothAlmanacDB` (account-wide)
 
 ## Install
 
-Copy the `AzerothAlmanac` folder into `World of Warcraft\_classic_beta_\Interface\AddOns\` and log in. Adding new files needs a full relog; edits only need `/reload`.
+Copy the `AzerothAlmanac` folder into `World of Warcraft\_forever_\Interface\AddOns\` and log in. Adding new files needs a full relog; edits only need `/reload`.
 
 ## What's in it
 
