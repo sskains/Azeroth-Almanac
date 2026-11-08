@@ -4,6 +4,10 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **`/aa xp [name]`: ask another Almanac player how far they are through their level.** The same question as "Ask how far to their next level" in a player's right-click menu, typed: `/aa xp Name`, or `/aa xp` with a player targeted (`/aa exp` and `/aa level` work too). Where the menu just leaves its entry out, the command says why it can't ask: no name and no target, your own name, a target already at the top level, someone the Almanac hasn't met lately, or a copy too old (or too new) to answer. Their sharing settings decide the answer, as before. Listed in `/aa help`. Test: `test_slash_xp.py`; `test_smoke.py` runs it too.
+
 ## 1.5.0 (2026-11-04)
 
 - **Your Deck: a stats strip, Your hand, and sections.** The deck screen is no longer one long grid. A **stats strip** on top shows how many cards you hold and their total power, how many are at each tier (Fought to Legendary, in the tier colours) and your strongest card. **Your hand** is a shelf of the five cards you've starred, with a dashed "Star a card" slot for each one still to choose, so starring shows. Below it your cards sit in a **section for each creature type** (the biggest first), each with a banner and its card count; starred cards are in the hand, not repeated. Searching, a tier filter or Starred only still give the plain grid of what matches. Same sort, same click to star. Test: `test_deck_page.py`.

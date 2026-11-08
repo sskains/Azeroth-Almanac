@@ -6,6 +6,10 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased (/reload)
+
+- [ ] **`/aa xp`:** with another Almanac player (party, guild or friend): `/aa xp Theirname` prints "Asked ... how far they are through their level..." and then their level, percent and experience to go (or the popup on their side, if their sharing is set to ask); targeting them and typing `/aa xp` does the same; `/aa xp` with nothing targeted gives the usage line; a level-60 target says they're already at the highest level; a name nobody's seen says it isn't a known Almanac player; asking twice in a row says to wait; `/aa help` lists it. No Lua errors.
+
 ## 1.5.0 (**full game restart**: the new file QoL/ItemTips.lua. The Winter Veil textures from 1.4.0 are new too)
 
 - [ ] **Your Deck page** (open it from the Creatures page's Wild Gambit logo or the card on the table): a stats strip at the top (card count, power, a coloured square and number for each tier, the strongest card on the right), then Your hand with the cards you've starred in the first slots and a dashed "+ Star a card" slot for each empty one, then sections by creature type (biggest first) each with a banner and its card count; nothing overlaps (cards sit above the hand shelf and the banners), the text fits the strip at a narrow and a wide window, scrolling is smooth and the scrollbar reaches the last section; clicking a card in a section stars it (it moves up into the hand), clicking one in the hand unstars it (back into its section); with five starred, the sixth says the cap; typing in Search, picking a tier or ticking Starred only drops the stats, hand and banners and shows a plain grid of the matches (clear it and they return); a brand-new character (starter cards only) still looks right; no Lua errors.

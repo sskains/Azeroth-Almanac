@@ -14,7 +14,7 @@ def check(cond, what):
 SLASH = ["", "help", "journey", "options", "tf", "scan", "ahpost", "inv", "games", "version", "gambit", "mtt",
          "heal", "talents", "ranks", "threat", "wings", "node", "stats", "minimap", "welcome", "where",
          "nodes", "art", "toast", "cardtoast", "wgdungeon", "whatis", "cards", "people check",
-         "gambit voice", "gambit pet", "mtt champions"]
+         "gambit voice", "gambit pet", "mtt champions", "xp", "xp Nobody"]
 QT = ["", "why", ""]
 EVENTS = ["PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "PLAYER_TARGET_CHANGED",
           "UPDATE_MOUSEOVER_UNIT", "BAG_UPDATE", "BAG_UPDATE_DELAYED", "QUEST_LOG_UPDATE", "UNIT_QUEST_LOG_CHANGED",
