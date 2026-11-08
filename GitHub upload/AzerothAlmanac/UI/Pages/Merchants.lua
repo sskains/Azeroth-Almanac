@@ -11,7 +11,17 @@ local NOTE = "|cffbfbfbf"
 
 local function PriceText(e) return ns.CostText(e.price, e.cost) end
 
-local function Describe(npc, rec)
+-- (2026-11-08) an item's name for the People page's stock search: as recorded, else the game's
+local function ItemName(id)
+	local item = ns.Store:Get("item", id)
+	if item and item.name then return item.name end
+	local getInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+	local ok, name = pcall(getInfo, id)
+	return ok and name or nil
+end
+
+-- match(name) -> whether a stock line stays (the People page's search); nil keeps everything
+local function Describe(npc, rec, match)
 	local b = {}
 	b[#b + 1] = { "banner", L["General"] }
 	if rec.title then b[#b + 1] = { "stat", L["Title"], rec.title } end
@@ -26,21 +36,29 @@ local function Describe(npc, rec)
 	if #who > 0 then b[#b + 1] = { "stat", L["Also visited by"], table.concat(who, ", ") } end
 	b[#b + 1] = { "stat", L["Visits"], tostring(rec.n or 1) }
 
-	b[#b + 1] = { "banner", (L["For sale (%d)"]):format(#(rec.stock or {})) }
+	local banner = #b + 1
+	b[banner] = { "banner", (L["For sale (%d)"]):format(#(rec.stock or {})) }
 	local slots = {}
 	for _, e in ipairs(rec.stock or {}) do
-		local note = PriceText(e)
-		if (e.stack or 1) > 1 then note = note .. NOTE .. "  x" .. e.stack .. "|r" end
-		local tip = {}
-		if (e.avail or -1) >= 0 then tip[#tip + 1] = (L["Limited: %d left when checked."]):format(e.avail) end
-		local was = rec.was and rec.was[e.id]
-		if was then
-			tip[#tip + 1] = (L["Was %s on %s."]):format(ns.MoneyText(was[1]), ns.DateText(was[2]))
-			note = note .. NOTE .. "  " .. L["(price changed)"] .. "|r"
+		if not match or match(ItemName(e.id)) then
+			local note = PriceText(e)
+			if (e.stack or 1) > 1 then note = note .. NOTE .. "  x" .. e.stack .. "|r" end
+			local tip = {}
+			if (e.avail or -1) >= 0 then tip[#tip + 1] = (L["Limited: %d left when checked."]):format(e.avail) end
+			local was = rec.was and rec.was[e.id]
+			if was then
+				tip[#tip + 1] = (L["Was %s on %s."]):format(ns.MoneyText(was[1]), ns.DateText(was[2]))
+				note = note .. NOTE .. "  " .. L["(price changed)"] .. "|r"
+			end
+			slots[#slots + 1] = { item = e.id, note = note, extra = #tip > 0 and table.concat(tip, " ") or nil }
 		end
-		slots[#slots + 1] = { item = e.id, note = note, extra = #tip > 0 and table.concat(tip, " ") or nil }
 	end
-	if #slots > 0 then b[#b + 1] = { "slots", slots } else b[#b + 1] = { "small", L["Nothing for sale when last checked."] } end
+	if match then
+		b[banner][2] = (L["For sale (%d of %d)"]):format(#slots, #(rec.stock or {}))
+	end
+	if #slots > 0 then b[#b + 1] = { "slots", slots }
+	elseif match and #(rec.stock or {}) > 0 then b[#b + 1] = { "small", L["Nothing they sell matches your search."] }
+	else b[#b + 1] = { "small", L["Nothing for sale when last checked."] } end
 	b[#b + 1] = { "small", L["Prices include the reputation discount you had at the time."] }
 	return b
 end
@@ -57,12 +75,13 @@ function ns.MerchantFacts(npc)
 end
 
 -- a merchant's own blocks for their People page: the stock with its prices, under a "For sale"
--- heading that also says your standing, your visits and when the stock was checked
-function ns.MerchantBlocks(npc)
+-- heading that also says your standing, your visits and when the stock was checked. With match
+-- (the page's stock search) only the lines whose item name it accepts, counted "N of M".
+function ns.MerchantBlocks(npc, match)
 	local rec = npc and ns.Store:Get("merchant", npc)
 	if not rec then return nil end
 	local b = {}
-	for i, block in ipairs(Describe(npc, rec)) do
+	for i, block in ipairs(Describe(npc, rec, match)) do
 		if block[1] == "banner" and i > 1 then
 			b[#b + 1] = block
 			b[#b + 1] = { "small", NOTE .. (STANDING[rec.reaction or 0] or "?") .. "  ·  " .. ns.N(rec.n or 1, "visit", "visits")
@@ -72,6 +91,12 @@ function ns.MerchantBlocks(npc)
 		end
 	end
 	return b
+end
+
+-- how many lines a merchant's stock has (the People page shows its search box when there are any)
+function ns.MerchantStockCount(npc)
+	local rec = npc and ns.Store:Get("merchant", npc)
+	return rec and #(rec.stock or {}) or 0
 end
 
 ns.UI:RegisterAlias("merchants", "townsfolk")

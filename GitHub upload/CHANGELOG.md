@@ -4,6 +4,10 @@ What changed in each version, newest first. Collected from the old task list (no
 
 Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues board on GitHub.
 
+## Unreleased
+
+- **People: search what someone teaches and sells.** A person's page with a Training or For sale list (vendors, trainers, profession trainers who also sell patterns) has a search box above the lists. Typing filters both as you type, by name and regardless of capitals ("belt" keeps Justicar's Belt and Pattern: Hillman's Belt); the headings say how many are left ("For sale (1 of 82)"), and a list with nothing matching says so. The search clears when you open someone else. Test: `test_people_stock_search.py`.
+
 ## 1.5.0 (2026-11-04)
 
 - **Your Deck: a stats strip, Your hand, and sections.** The deck screen is no longer one long grid. A **stats strip** on top shows how many cards you hold and their total power, how many are at each tier (Fought to Legendary, in the tier colours) and your strongest card. **Your hand** is a shelf of the five cards you've starred, with a dashed "Star a card" slot for each one still to choose, so starring shows. Below it your cards sit in a **section for each creature type** (the biggest first), each with a banner and its card count; starred cards are in the hand, not repeated. Searching, a tier filter or Starred only still give the plain grid of what matches. Same sort, same click to star. Test: `test_deck_page.py`.

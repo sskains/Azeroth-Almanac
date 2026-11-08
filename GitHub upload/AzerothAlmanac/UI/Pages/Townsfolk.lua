@@ -17,6 +17,9 @@ local view, crumb = "cards", nil -- "cards" | "list"; crumb: the open card's nam
 local cardBar, backBtn, crumbText, cardsBtn, listBtn
 local shown -- { npc = id } or { node = name }
 local collapsed = {}
+-- (2026-11-08) the search over a person's Training and For sale lists: its text, whose page it's
+-- for (cleared when another person opens), and the box, made once and placed as a block
+local stockFilter, stockFor, stockSearch = "", nil, nil
 
 local NOTE = "|cffbfbfbf"
 local FLIGHT_ICON = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" }
@@ -203,7 +206,7 @@ local function TrainingSlots(npc, t)
 		local need = (prof and rec.skill and (L["Skill %d"]):format(rec.skill)) or (rec.lvl and (L["Level %d"]):format(rec.lvl)) or nil
 		local price = cost and (cost > 0 and ns.MoneyText(cost) or L["free"]) or nil
 		slots[#slots + 1] = {
-			spell = id, icon = rec.icon, color = TRAIN_COLOR[st], done = st == "known",
+			spell = id, icon = rec.icon, color = TRAIN_COLOR[st], done = st == "known", search = rec.name,
 			name = (rec.name or "?") .. (rec.rank and ("  |cff999999" .. rec.rank .. "|r") or ""),
 			note = (need and price) and (need .. "   " .. price) or need or price,
 			extra = prof and L["Click to open in Recipes. Shift-click to link it."] or L["Shift-click to link it."],
@@ -286,6 +289,34 @@ local function CardBox()
 	return f
 end
 
+-- (2026-11-08) a search box over what they teach and sell, as a block of the detail pane. The same
+-- box every time, so it keeps its text and focus while the lists under it are drawn again.
+local function StockSearchBlock()
+	if not stockSearch then
+		local f = CreateFrame("Frame", nil, UIParent)
+		f:SetHeight(24)
+		f.box = W.Search(f, 240, function(text)
+			if f.quiet then return end
+			stockFilter = text or ""
+			page:RedrawStock()
+		end)
+		f.box:SetPoint("LEFT", f, "LEFT", 8, 0)
+		if type(f.box.Instructions) == "table" then f.box.Instructions:SetText(L["Search what they teach and sell"]) end
+		stockSearch = f
+	end
+	return { "frame", stockSearch, function(width)
+		stockSearch:SetWidth(width)
+		stockSearch.box:SetWidth(math.min(240, width - 16))
+		return 24
+	end }
+end
+
+-- whether a line's name holds the search text; nil when there's no search
+local function StockMatch()
+	if stockFilter == "" then return nil end
+	return function(name) return name ~= nil and name:lower():find(stockFilter, 1, true) ~= nil end
+end
+
 local function DescribePerson(p)
 	local b = {}
 	local m = p.recs.merchant
@@ -327,11 +358,28 @@ local function DescribePerson(p)
 
 	local wgBlocks = #b
 
+	-- (2026-11-08) a search over the two lists, when there's anything in them
+	local match = StockMatch()
+	local trainSlots = t and TrainingSlots(p.npc, t)
+	if (trainSlots and #trainSlots or 0) + (m and ns.MerchantStockCount and ns.MerchantStockCount(p.npc) or 0) > 0 then
+		b[#b + 1] = StockSearchBlock()
+	end
+
 	-- what they teach you (class spells, weapon skills, riding, recipes): only what they've shown you
 	if t then
-		local slots = TrainingSlots(p.npc, t)
-		b[#b + 1] = { "banner", (L["Training (%d)"]):format(#slots) }
-		if #slots > 0 then
+		local slots = trainSlots
+		if match then
+			local all = #slots
+			local kept = {}
+			for _, s in ipairs(slots) do if match(s.search) then kept[#kept + 1] = s end end
+			slots = kept
+			b[#b + 1] = { "banner", (L["Training (%d of %d)"]):format(#slots, all) }
+		else
+			b[#b + 1] = { "banner", (L["Training (%d)"]):format(#slots) }
+		end
+		if match and #slots == 0 and #trainSlots > 0 then
+			b[#b + 1] = { "small", L["Nothing they teach matches your search."] }
+		elseif #slots > 0 then
 			b[#b + 1] = { "slots", slots }
 			b[#b + 1] = { "small", "|cff40c040" .. L["green"] .. "|r " .. L["can learn now"] .. "   |cffe03030" .. L["red"] .. "|r "
 				.. L["not yet"] .. "   |TInterface\\RaidFrame\\ReadyCheck-Ready:14|t|cff999999" .. L["grey"] .. "|r " .. L["learned"] .. "  " .. L["(for the character you're playing)"] }
@@ -342,7 +390,7 @@ local function DescribePerson(p)
 
 	-- what they sell, with your standing and visits on its heading (Merchants is part of People)
 	if m and ns.MerchantBlocks then
-		for _, block in ipairs(ns.MerchantBlocks(p.npc) or {}) do b[#b + 1] = block end
+		for _, block in ipairs(ns.MerchantBlocks(p.npc, match) or {}) do b[#b + 1] = block end
 	end
 
 	-- quests they give and take in
@@ -459,6 +507,15 @@ local function Show(sel)
 	end
 	portrait:Show()
 	if p then
+		-- another person: their lists open unsearched
+		if p.npc ~= stockFor then
+			stockFor, stockFilter = p.npc, ""
+			if stockSearch then
+				stockSearch.quiet = true
+				stockSearch.box:SetText("")
+				stockSearch.quiet = nil
+			end
+		end
 		local fam = p.group.family
 		local ring = fam == "trainer" and { 0.95, 0.78, 0.3 } or fam == "service" and { 0.45, 0.7, 1 } or fam == "vendor" and { 0.5, 0.88, 0.45 } or { 0.85, 0.75, 0.5 }
 		portrait:SetRing(ring[1], ring[2], ring[3])
@@ -968,6 +1025,15 @@ end
 
 -- (the old Merchants page's way in: a merchant opens on their People page)
 function page:ShowMerchant(npc) self:ShowPerson(npc) end
+
+-- (2026-11-08) the stock search changed: the person's page again, where the reader was
+function page:RedrawStock()
+	local p = shown and shown.npc and Person(shown.npc)
+	if p and detail then detail:SetBlocks(DescribePerson(p), nil, true) end
+end
+
+-- (tests) the stock search's box
+function page:StockSearchBox() return stockSearch and stockSearch.box end
 
 ns:On("RESET", function() shown = nil if list then list:Select(nil) Show(nil) end end)
 
