@@ -1,9 +1,10 @@
 -- Ported from Plus Everything (same author) for Azeroth Almanac's quality-of-life helpers.
 -- Crafting profit: on the profession window, what the selected recipe costs to make and what
 -- the result sells for on the auction house (after the 5% cut), at the lowest current price
--- and at the 7-day average. Also profit badges in the
--- recipe list with the estimated daily sales (AuctionVolume.lua), a "Top profits" list
--- ranked by profit x daily sales, and "Crafting cost" in item tooltips.
+-- and at the 7-day average. Also profit badges in the recipe list (profit per item made,
+-- 2026-11-10: per item rather than per craft, and without the daily sales beside it, which
+-- read as profit per day), a "Top profits" list ranked by profit x daily sales (AuctionVolume.lua),
+-- and "Crafting cost" in item tooltips.
 -- Materials are priced at the cheaper of the auction house and a vendor; materials you
 -- already own count at market value. Vendor prices are learned at merchants, else
 -- estimated from the item's sell price for items vendors commonly sell (Data\VendorData.lua).
@@ -60,9 +61,14 @@ local function Volume(id)
 	return ns.AuctionVolume:DailyVolume(id)
 end
 
-local function VolumeText(id)
-	local short = id and ns.AuctionVolume and ns.AuctionVolume:ShortVolume(id)
-	return short or "-/d"
+-- A craft's profit for each item it makes (a recipe can make more than one).
+local function Each(recipe, profit)
+	return profit / ((recipe and recipe.count and recipe.count > 0) and recipe.count or 1)
+end
+
+-- the badge's text: "+2.6s ea"
+local function EachText(recipe, profit)
+	return ShortMoney(Each(recipe, profit)) .. " |cff999999ea|r"
 end
 
 ---------------------------------------------------------------------------
@@ -333,8 +339,7 @@ local function Badge(frame, node)
 	if not db.badges or not info or not info.recipeID or info.isDummyRecipe then badge:Hide() return end
 	local recipe, priced = CR:Analyze(info.recipeID, db.basis)
 	if not priced or not priced.profit then badge:Hide() return end
-	local output = recipe and recipe.output
-	badge:SetText(ShortMoney(priced.profit) .. "  |cff999999" .. VolumeText(output) .. "|r")
+	badge:SetText(EachText(recipe, priced.profit))
 	badge:SetTextColor(ProfitColor(priced.profit))
 	badge:Show()
 	-- Make room for the badge: the game puts the craftable count ("[2]") right after the name,
@@ -363,9 +368,11 @@ local function TopRecipes()
 		if info and info.learned then
 			local recipe, priced = CR:Analyze(id, db.basis)
 			if priced and priced.profit then
+				-- per item: the sales estimate counts items sold, not crafts
 				local perDay = Volume(recipe.output)
-				tinsert(out, { info = info, recipe = recipe, profit = priced.profit, perDay = perDay,
-					daily = perDay and priced.profit * perDay })
+				local each = Each(recipe, priced.profit)
+				tinsert(out, { info = info, recipe = recipe, profit = each, perDay = perDay,
+					daily = perDay and each * perDay })
 			end
 		end
 	end
@@ -451,7 +458,7 @@ function CR:ToggleTop()
 		if entry then
 			row.info, row.entry = entry.info, entry
 			row.name:SetText(entry.info.name)
-			row.profit:SetText(ShortMoney(entry.profit) .. "  |cff999999" .. VolumeText(entry.recipe.output) .. "|r")
+			row.profit:SetText(ShortMoney(entry.profit) .. " |cff999999ea|r")
 			row.profit:SetTextColor(ProfitColor(entry.profit))
 			row:Show()
 		else

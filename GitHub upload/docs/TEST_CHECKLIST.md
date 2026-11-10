@@ -6,6 +6,10 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
+## Unreleased (/reload)
+
+- [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
+
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)
 
 - [ ] **`/aa xp`:** with another Almanac player (party, guild or friend): `/aa xp Theirname` prints "Asked ... how far they are through their level..." and then their level, percent and experience to go (or the popup on their side, if their sharing is set to ask); targeting them and typing `/aa xp` does the same; `/aa xp` with nothing targeted gives the usage line; a level-60 target says they're already at the highest level; a name nobody's seen says it isn't a known Almanac player; asking twice in a row says to wait; `/aa help` lists it. No Lua errors.
