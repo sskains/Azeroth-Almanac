@@ -6,6 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Bag pins: items stay in their slots through Cleanup.** Alt+click an item in your bags to pin it to the slot it's in (a small pin shows in the slot's corner, and stays while the item is used up); Alt+click again to unpin. The game's Cleanup still sorts everything; once the bags have settled the pinned items are moved back to their slots, one swap at a time (whatever Cleanup put there trades places with them). A pin follows the item, so it comes back wherever Cleanup took it; an item that isn't in your bags is left alone. Per character. Settings > Bags and bank > Bag pins: the switch (on) and Unpin everything. New file `QoL/BagPins.lua`: needs a full game restart. Test: `test_bag_pins.py`.
 - **Crafting profit in the recipe list: per item, not per day.** Each recipe's badge on the profession window now shows the profit for each item made, marked "ea" ("+2.6s ea"), and the estimated daily sales no longer sit beside it, where "+2.6s ~136/d" read as profit per day. A recipe that makes several items at once had shown the profit for the whole craft; it's now split per item. Top profits shows the same, and its "profit x daily sales" ranking now multiplies profit per item by items sold a day (it had used the whole craft's profit, overrating recipes that make more than one). Daily sales are still on the recipe's Crafting profit card ("Sells about") and in the Top profits tooltips. Test: `test_crafting_badges.py`.
 
 ## 1.5.1 (2026-11-08)

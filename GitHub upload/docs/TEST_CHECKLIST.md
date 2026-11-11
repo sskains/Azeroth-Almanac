@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Bag pins (full game restart: new file QoL/BagPins.lua):** in the combined backpack and in separate bags, Alt+click an item: a chat line says it's pinned and a small pin shows in the slot's corner (say if the pin art is missing or ugly); Alt+click doesn't also pick the item up or use it; hover: the tooltip says it's pinned. Pin two or three items in different bags, press the game's Cleanup (the broom): everything sorts, then within a second or two the pinned items hop back to their slots; nothing ends up on the cursor or lost. Use up a pinned stack: the pin stays on the empty slot, and a new stack of it goes back there after the next Cleanup. Alt+click to unpin; Settings > Bags and bank > Bag pins > Unpin everything. Works in and out of combat (moving items isn't blocked); no "blocked from an action" popup.
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)
