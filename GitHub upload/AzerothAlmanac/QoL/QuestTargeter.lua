@@ -13,7 +13,8 @@ local ns = A.QoL
 local QT = ns:NewModule("QuestTargeter")
 
 local BUTTON_SIZE = 20
-local TRACKER_GAP = 18 -- space between our buttons and the tracker's own quest icons
+local TRACKER_GAP = 18 -- space between our buttons and the tracker's edge (when a quest's own icon isn't found)
+local ICON_GAP = 6     -- (2026-11-11) space between our badge and the game's own icon for that quest
 local BADGE_SPACING = 7 -- between badges side by side on one quest's row
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local MAX_SOURCES_IN_MACRO = 4
@@ -461,10 +462,35 @@ end
 -- Finding objective lines in the tracker
 ---------------------------------------------------------------------------
 
+-- (2026-11-11, Shannon: line our badges up with the game's own quest icons) of the small square
+-- frames found in the tracker, the icon the game drew at the left of a quest's title: just left of
+-- the title's text, level with its first line. Compared in screen units, since the tracker can be scaled.
+local function IconBeside(title, icons)
+	local s = title:GetEffectiveScale()
+	local left, top = title:GetLeft(), title:GetTop()
+	if not (left and top) then return nil end
+	local _, size = title:GetFont()
+	local lineY = (top - (size or 12) / 2) * s
+	left = left * s
+	local best, bestDY
+	for _, icon in ipairs(icons) do
+		local cs = icon:GetEffectiveScale()
+		local right, cx, cy = icon:GetRight(), icon:GetCenter()
+		if right and cy then
+			right, cy = right * cs, cy * cs
+			local dy = math.abs(cy - lineY)
+			if right <= left + 2 and left - right <= 50 and dy <= 14 and (not bestDY or dy < bestDY) then best, bestDY = icon, dy end
+		end
+	end
+	return best
+end
+QT.IconBeside = IconBeside
+
 -- Walks the tracker's frames looking for visible text lines we can make a button for.
 local function FindTrackerLines()
 	local found = {}
 	local titleRegions = {} -- quest title -> its line in the tracker
+	local icons = {}        -- small square frames in the tracker: the game's quest icons among them
 	local function scan(frame, depth)
 		if depth > 15 or not frame:IsVisible() then return end
 		for _, region in ipairs({ frame:GetRegions() }) do
@@ -487,6 +513,10 @@ local function FindTrackerLines()
 			end
 		end
 		for _, child in ipairs({ frame:GetChildren() }) do
+			-- (2026-11-11) a small square thing is a candidate for a quest's own icon (the game's "?",
+			-- "!" and "..." buttons): our badges line up with it (IconBeside)
+			local w, h = child:GetWidth(), child:GetHeight()
+			if child:IsVisible() and w and h and w >= 12 and w <= 34 and math.abs(w - h) <= 4 then icons[#icons + 1] = child end
 			scan(child, depth + 1)
 		end
 	end
@@ -494,10 +524,13 @@ local function FindTrackerLines()
 	-- right next to it, a quest's kill and loot objectives side by side going left.
 	local function Arrange()
 		local perQuest = {}
+		local iconFor = {}
 		for _, line in ipairs(found) do
 			local titleRegion = titleRegions[line.quest]
 			if titleRegion then
 				line.anchor = titleRegion
+				if iconFor[titleRegion] == nil then iconFor[titleRegion] = IconBeside(titleRegion, icons) or false end
+				line.icon = iconFor[titleRegion] or nil
 				perQuest[line.quest] = (perQuest[line.quest] or 0) + 1
 				line.slot = perQuest[line.quest]
 			else
@@ -1053,7 +1086,17 @@ local function Layout()
 		buttons[i] = b
 		local anchor = line.anchor or line.region
 		local top, bottom = anchor:GetTop(), anchor:GetBottom()
-		if x and top and bottom then
+		-- (2026-11-11) beside the game's own icon when there is one: level with its centre, a set gap
+		-- to its left (the title's text sits a little differently from the icon, so centring on the
+		-- text left some badges a few pixels low)
+		local rowX = x
+		if line.icon and line.icon:GetLeft() and line.icon:GetTop() then
+			local s = line.icon:GetEffectiveScale() / uiScale
+			top, bottom = line.icon:GetTop() * s, line.icon:GetBottom() * s
+			rowX = line.icon:GetLeft() * s - ICON_GAP
+			anchor = UIParent -- (top and bottom are already in UIParent's units)
+		end
+		if rowX and top and bottom then
 			local y = (top + bottom) / 2 * anchor:GetEffectiveScale() / uiScale
 			local macro = MacroFor(line.targets, line.kind)
 			if b.macro ~= macro then
@@ -1063,7 +1106,7 @@ local function Layout()
 			b.key, b.targets, b.quest, b.kind, b.npcID = line.key, line.targets, line.quest, line.kind, line.npcID
 			StyleBadge(b)
 			b:ClearAllPoints()
-			b:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", x - ((line.slot or 1) - 1) * (BUTTON_SIZE + BADGE_SPACING), y)
+			b:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", rowX - ((line.slot or 1) - 1) * (BUTTON_SIZE + BADGE_SPACING), y)
 			b:Show()
 		else
 			b.key = nil
