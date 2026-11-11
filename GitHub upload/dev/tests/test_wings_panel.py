@@ -122,6 +122,36 @@ check(p.eval("WW.Mood('Hold on! Here we go!')") == "excited", "two exclamation m
 check(p.eval("WW.Mood('A fine day for flying.')") is None, "otherwise content")
 check(p.eval("WW.Mood('A drink in the tavern.')") == "tipsy" and p.eval("WW.Mood('An alert eye.')") is None, "whole words only (alert isn't ale)")
 
+print("The flight bar with its countdown, more space between lines, the landing card closing on a step (2026-11-10)")
+p.lua("""
+-- (the stub's frames don't keep positions: record what the panel asks for)
+TITLE_Y = nil
+F.title.SetPoint = function(_, _, _, _, _, y) TITLE_Y = y end
+WW.ShowPanel({ creature = C1, kind = 'gryphon', species = 'gryphon', count = 2, body = 'Up we go.', fact = 'Feathers.',
+	flight = { from = 'Stormwind', to = 'Lakeshire', planned = 95 }, gem = 95 })
+FLIGHT_Y = TITLE_Y
+Step(0.05, 1)
+""")
+check(p.eval("F.track:IsShown()") and p.eval("F.timeLeft:IsShown()"), "a flight with a known length: the bar and its timer show")
+check(p.eval("F.timeLeft:GetText()") == "1:35", "the timer starts at the flight's length (%r)" % p.eval("F.timeLeft:GetText()"))
+p.lua("Step(1, 30)")
+check(p.eval("F.timeLeft:GetText()") == "1:05", "...and counts down (%r)" % p.eval("F.timeLeft:GetText()"))
+check(p.eval("F.progress:GetWidth()") > 1, "the bar fills as it goes")
+p.lua("Step(1, 70)")
+check(p.eval("F.timeLeft:GetText()") == "landing", "past its time: \"landing\"")
+p.lua("F.close:GetScript('OnClick')(F.close) Step(0.05, 12)")
+p.lua("WW.ShowPanel({ creature = C1, kind = 'gryphon', species = 'gryphon', count = 4, body = 'A word from the field.' }) Step(0.05, 5)")
+check(not p.eval("F.track:IsShown()") and not p.eval("F.timeLeft:IsShown()"), "no flight length (a sample): no bar")
+check(p.eval("FLIGHT_Y") - p.eval("TITLE_Y") == -16, "with the bar the title starts 16 px lower, below it (%s vs %s without)" % (p.eval("FLIGHT_Y"), p.eval("TITLE_Y")))
+
+p.lua("WW.ShowPanel({ creature = C1, kind = 'gryphon', species = 'gryphon', count = 4, body = 'Back on the ground.', landing = true }) Step(0.05, 2)")
+p.lua("FireEvent('PLAYER_STARTED_MOVING') Step(0.05, 12)")
+check(p.eval("F:IsShown()"), "the landing card: a nudge in its first half second doesn't close it")
+p.lua("Step(0.05, 6) FireEvent('PLAYER_STARTED_MOVING') Step(0.05, 12)")
+check(not p.eval("F:IsShown()"), "...walking off after that closes it")
+p.lua("WW.ShowPanel({ creature = C1, kind = 'gryphon', species = 'gryphon', count = 4, body = 'Up again.', gem = 135 }) Step(0.05, 20) FireEvent('PLAYER_STARTED_MOVING') Step(0.05, 12)")
+check(p.eval("F:IsShown()"), "the take-off card doesn't close on movement")
+
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

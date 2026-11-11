@@ -303,7 +303,11 @@ local PLATE_W, TEXT_W = 430, 326       -- the plate out to the right; the text c
 local PLATE_TOP = 20                   -- the plate starts this far below the ring's top
 local NAME_H = 28                      -- the name bar
 local TEXT_X = RING / 2 + 16           -- the text column, from the plate's left (under the ring's edge)
-local TRACK_X, TRACK_W = RING / 2 - 4, PLATE_W - RING / 2 - 20 -- the flight's progress line
+local TRACK_X, TRACK_W = RING / 2 - 4, PLATE_W - RING / 2 - 20 -- the flight's progress bar
+-- (2026-11-10, Shannon: "a little bit taller so that it can also show the timer") the bar's height,
+-- and how far it sits under the name bar; the words move down by both while it shows
+local TRACK_H, TRACK_GAP = 13, 3
+local LINE_GAP = 5                     -- (2026-11-10) a little more air between lines of the words
 local SLIDE, FADE = 0.38, 0.3          -- seconds: the plate sliding out; sliding away
 -- (2026-10-13, Shannon: 1, 3, 4, 5, 7, 8 of the "quieter, prettier" list)
 local GLINT_EVERY, GLINT_TIME = 10, 1.2 -- a glint runs round the gold ring
@@ -465,19 +469,28 @@ local function BuildPanel()
 	f.title:SetWordWrap(false)
 	f.text = plate:CreateFontString(nil, "OVERLAY")
 	Shadowed(f.text, BODY_FONT, 13, 1, 1, 1)
-	f.text:SetSpacing(3)
+	f.text:SetSpacing(LINE_GAP)
 	f.text:SetWidth(TEXT_W)
-	f.text:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -5)
-	-- (#5 of the second list) the flight's progress: a gold hairline under the name bar that fills as
-	-- you fly; hover it for the route and the time left (it passes drags on to the panel)
+	f.text:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -7)
+	-- (#5 of the second list) the flight's progress: a gold bar under the name bar that fills as you
+	-- fly, with the time left in it (2026-11-10: it was a 2 px hairline, the time only on hover);
+	-- hover it for the route (it passes drags on to the panel)
 	f.track = plate:CreateTexture(nil, "BORDER", nil, 2)
-	f.track:SetPoint("TOPLEFT", plate, "TOPLEFT", TRACK_X, -NAME_H - 2)
-	f.track:SetSize(TRACK_W, 2)
-	f.track:SetColorTexture(1, 0.85, 0.4, 0.12)
+	f.track:SetPoint("TOPLEFT", plate, "TOPLEFT", TRACK_X, -NAME_H - TRACK_GAP)
+	f.track:SetSize(TRACK_W, TRACK_H)
+	f.track:SetColorTexture(0.12, 0.08, 0.03, 0.55)
+	f.trackEdge = plate:CreateTexture(nil, "BORDER", nil, 1)
+	f.trackEdge:SetPoint("TOPLEFT", f.track, "TOPLEFT", -1, 1)
+	f.trackEdge:SetPoint("BOTTOMRIGHT", f.track, "BOTTOMRIGHT", 1, -1)
+	f.trackEdge:SetColorTexture(1, 0.85, 0.4, 0.35)
 	f.progress = plate:CreateTexture(nil, "BORDER", nil, 3)
 	f.progress:SetPoint("TOPLEFT", f.track, "TOPLEFT")
-	f.progress:SetSize(1, 2)
-	Gradient(f.progress, { 1, 0.78, 0.3, 0.95 }, { 1, 0.92, 0.6, 0.95 })
+	f.progress:SetSize(1, TRACK_H)
+	Gradient(f.progress, { 0.62, 0.42, 0.12, 0.9 }, { 0.95, 0.74, 0.3, 0.9 })
+	f.timeLeft = plate:CreateFontString(nil, "OVERLAY")
+	Shadowed(f.timeLeft, BODY_FONT, 10, 1, 0.96, 0.85)
+	f.timeLeft:SetPoint("RIGHT", f.track, "RIGHT", -6, 0)
+	f.timeLeft:SetJustifyH("RIGHT")
 	f.route = CreateFrame("Frame", nil, plate)
 	f.route:SetPoint("TOPLEFT", f.track, "TOPLEFT", 0, 4)
 	f.route:SetPoint("BOTTOMRIGHT", f.track, "BOTTOMRIGHT", 0, -4)
@@ -529,9 +542,9 @@ local function BuildPanel()
 	f.factHead:SetText("Fun Fact")
 	f.fact = f.card:CreateFontString(nil, "OVERLAY")
 	Shadowed(f.fact, BODY_FONT, 12, 0.95, 0.9, 0.81)
-	f.fact:SetSpacing(3)
+	f.fact:SetSpacing(LINE_GAP - 1)
 	f.fact:SetWidth(TEXT_W - 34 - 10)
-	f.fact:SetPoint("TOPLEFT", f.factHead, "BOTTOMLEFT", 0, -3)
+	f.fact:SetPoint("TOPLEFT", f.factHead, "BOTTOMLEFT", 0, -5)
 	-- a game for the flight (the three games' buttons; one recommended)
 	f.gem = GameRow(plate, function() f:Dismiss() end)
 	f.gem:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", -10, 8)
@@ -743,8 +756,15 @@ local function BuildPanel()
 		end
 		-- (#5) the flight's progress
 		if self.flight and self.flight.planned and self.flight.planned > 0 then
-			local pk = math.min(1, (GetTime() - self.flight.at) / self.flight.planned)
+			local gone = GetTime() - self.flight.at
+			local pk = math.min(1, gone / self.flight.planned)
 			self.progress:SetWidth(math.max(1, TRACK_W * pk))
+			-- the time left, counting down (whole seconds; "landing" once it's due)
+			local left = math.ceil(self.flight.planned - gone)
+			if left ~= self.leftShown then
+				self.leftShown = left
+				self.timeLeft:SetText(left > 0 and ("%d:%02d"):format(math.floor(left / 60), left % 60) or "landing")
+			end
 		end
 		-- (#9) a livelier creature: sways while it talks, breathes after; a tilt on "?", a dip on "."
 		local mood = self.mood
@@ -855,17 +875,24 @@ function WW.ShowPanel(info)
 	f.count:SetText(tostring(info.count or 1))
 	f.badge.tip = (info.count or 1) > 1 and ("Flight #%d together"):format(info.count) or "Your first flight together"
 
+	-- (#5) the flight's progress bar (take-off only, when the flight's length is known); the words
+	-- start under it while it shows
+	local flight = (not info.landing and info.flight and info.flight.planned) and info.flight or nil
+	local barH = flight and (TRACK_GAP + TRACK_H) or 0
+	f.title:ClearAllPoints()
+	f.title:SetPoint("TOPLEFT", f.plate, "TOPLEFT", TEXT_X, -NAME_H - 5 - barH)
+
 	-- measure the full texts first, so the plate is the right height before typing starts
 	local body, fact = info.body or "", info.fact
 	f.text:SetText(body)
 	local hasTitle = not info.landing
 	f.text:ClearAllPoints()
-	if hasTitle then f.text:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -5)
-	else f.text:SetPoint("TOPLEFT", f.plate, "TOPLEFT", TEXT_X, -NAME_H - 8) end
-	local height = NAME_H + 8 + (hasTitle and (13 + 5) or 0) + f.text:GetStringHeight()
+	if hasTitle then f.text:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -7)
+	else f.text:SetPoint("TOPLEFT", f.plate, "TOPLEFT", TEXT_X, -NAME_H - 8 - barH) end
+	local height = NAME_H + 8 + barH + (hasTitle and (13 + 7) or 0) + f.text:GetStringHeight()
 	if fact then
 		f.fact:SetText(fact)
-		local cardH = 7 + 16 + 3 + f.fact:GetStringHeight() + 9
+		local cardH = 7 + 16 + 5 + f.fact:GetStringHeight() + 9
 		f.card:SetHeight(cardH)
 		height = height + 9 + cardH
 	end
@@ -888,11 +915,14 @@ function WW.ShowPanel(info)
 	f.factHead:Show()
 	f.segIndex, f.typed, f.lastChar, f.typing, f.done, f.hideAt, f.pauseUntil = 1, 0, -1, true, false, nil, nil
 	f.tiltAt, f.dipAt, f.leaving, f.byeAt, f.doneAt, f.dim = nil, nil, nil, nil, nil, 1
-	-- (#5) the flight's progress line (take-off only, when the flight's length is known)
-	f.flight = (not info.landing and info.flight and info.flight.planned) and { from = info.flight.from, to = info.flight.to, planned = info.flight.planned, at = GetTime() } or nil
+	f.flight = flight and { from = flight.from, to = flight.to, planned = flight.planned, at = GetTime() } or nil
 	f.track:SetShown(f.flight ~= nil)
+	f.trackEdge:SetShown(f.flight ~= nil)
 	f.progress:SetShown(f.flight ~= nil)
 	f.progress:SetWidth(1)
+	f.timeLeft:SetShown(f.flight ~= nil)
+	f.timeLeft:SetText("")
+	f.leftShown = nil
 	f.route:SetShown(f.flight ~= nil)
 	-- (#4) feathers in the creature's colours (none for a bat)
 	local fc = info.kind ~= "rare" and FEATHER[info.species or ""]
@@ -1059,10 +1089,22 @@ function WW:OnInitialize(saved)
 	db.totals = db.totals or {}
 end
 
+-- (2026-11-10, Shannon) the landing card closes as soon as you walk off: you've read it, or you
+-- don't want it. (Not in its first half second, so the landing's own last nudge can't close it.)
+local LANDING_GRACE = 0.5
+function WW:MovedAfterLanding()
+	if panel and panel:IsShown() and not panel.persist and GetTime() - (panel.shownAt or 0) >= LANDING_GRACE then
+		panel:Dismiss()
+	end
+end
+
 function WW:OnLogin()
 	if ns.Travel and ns.Travel.OnFlight then
 		ns.Travel:OnFlight(function(event, flight, seconds)
 			if event == "takeoff" then OnTakeoff(flight) else OnLand(flight, seconds) end
 		end)
 	end
+	local moves = CreateFrame("Frame")
+	moves:RegisterEvent("PLAYER_STARTED_MOVING")
+	moves:SetScript("OnEvent", function() WW:MovedAfterLanding() end)
 end
