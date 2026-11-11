@@ -6,6 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Quest Targeter: no more "blocked from an action" popup on repeated clicks.** When a click landed on a mob someone else had tagged, the targeter dropped it with `ClearTarget`, which the game forbids an addon in combat: clicking the target button again mid-fight brought up "AzerothAlmanac has been blocked from an action only available to the Blizzard UI". Now the target is only dropped out of combat; in a fight it stays, and the chat note says "<mob> is someone else's: targets can't be changed for you mid-fight." Test: `test_qt_taken_guard.py`.
 - **Crafting profit in the recipe list: per item, not per day.** Each recipe's badge on the profession window now shows the profit for each item made, marked "ea" ("+2.6s ea"), and the estimated daily sales no longer sit beside it, where "+2.6s ~136/d" read as profit per day. A recipe that makes several items at once had shown the profit for the whole craft; it's now split per item. Top profits shows the same, and its "profit x daily sales" ranking now multiplies profit per item by items sold a day (it had used the whole craft's profit, overrating recipes that make more than one). Daily sales are still on the recipe's Crafting profit card ("Sells about") and in the Top profits tooltips. Test: `test_crafting_badges.py`.
 
 ## 1.5.1 (2026-11-08)
