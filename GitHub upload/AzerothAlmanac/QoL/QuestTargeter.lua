@@ -15,6 +15,10 @@ local QT = ns:NewModule("QuestTargeter")
 local BUTTON_SIZE = 20
 local TRACKER_GAP = 18 -- space between our buttons and the tracker's edge (when a quest's own icon isn't found)
 local ICON_GAP = 6     -- (2026-11-11) space between our badge and the game's own icon for that quest
+-- (2026-11-11, Shannon: "center the character in the middle better, like the ?") the part of a
+-- creature's portrait the badge shows: the game's portraits sit the face a little up and to the
+-- left of the middle, so the badge zooms in a touch and looks there. Left, right, top, bottom.
+local FACE_CROP = { 0.06, 0.86, 0.04, 0.84 }
 local BADGE_SPACING = 7 -- between badges side by side on one quest's row
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local MAX_SOURCES_IN_MACRO = 4
@@ -955,6 +959,7 @@ local function StyleBadge(b)
 	b.icon:ClearAllPoints()
 	if display and SetPortraitTextureFromCreatureDisplayID then
 		SetPortraitTextureFromCreatureDisplayID(b.portrait, display)
+		b.portrait:SetTexCoord(unpack(FACE_CROP))
 		b.portrait:Show()
 		b.icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
 		b.icon:SetSize(11, 11)
