@@ -8,7 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
-- [ ] **Wings & Whispers card:** take a flight: under the name, a gold bar fills as you fly with the time left in it, counting down (and "landing" at the end); the title and words sit below it, not under it; the lines of the words and the Fun Fact have a little more space and nothing overlaps or gets cut off at the bottom (the games row still fits). Land: the landing card shows, and walking (or turning with the keys) closes it; standing still, it slides away on its own as before. Hovering the bar still shows the route.
+- [ ] **Wings & Whispers card:** take a flight: under the name, a gold bar fills as you fly with the time left in it (the bar fades away smoothly on its right side, and the fill fades with it as it gets there), counting down (and "landing" at the end); the title and words sit below it, not under it; the lines of the words and the Fun Fact have a little more space and nothing overlaps or gets cut off at the bottom (the games row still fits). Land: the landing card shows, and walking (or turning with the keys) closes it; standing still, it slides away on its own as before. Hovering the bar still shows the route.
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)

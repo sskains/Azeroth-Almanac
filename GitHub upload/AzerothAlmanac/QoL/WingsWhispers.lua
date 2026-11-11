@@ -307,6 +307,9 @@ local TRACK_X, TRACK_W = RING / 2 - 4, PLATE_W - RING / 2 - 20 -- the flight's p
 -- (2026-11-10, Shannon: "a little bit taller so that it can also show the timer") the bar's height,
 -- and how far it sits under the name bar; the words move down by both while it shows
 local TRACK_H, TRACK_GAP = 13, 3
+local FADE_AT = 0.6                    -- (2026-11-11) the bar is solid this far along, then fades out
+local FADE_X = math.floor(TRACK_W * FADE_AT)
+local FILL_FROM, FILL_TO = { 0.62, 0.42, 0.12, 0.9 }, { 0.95, 0.74, 0.3, 0.9 } -- the fill's gold, left to right
 local LINE_GAP = 5                     -- (2026-11-10) a little more air between lines of the words
 local SLIDE, FADE = 0.38, 0.3          -- seconds: the plate sliding out; sliding away
 -- (2026-10-13, Shannon: 1, 3, 4, 5, 7, 8 of the "quieter, prettier" list)
@@ -475,18 +478,34 @@ local function BuildPanel()
 	-- (#5 of the second list) the flight's progress: a gold bar under the name bar that fills as you
 	-- fly, with the time left in it (2026-11-10: it was a 2 px hairline, the time only on hover);
 	-- hover it for the route (it passes drags on to the panel)
-	f.track = plate:CreateTexture(nil, "BORDER", nil, 2)
+	-- (2026-11-11, Shannon) the bar fades away to the right: solid to FADE_AT of its length, then the
+	-- background, its gold top and bottom edges and the fill all thin out to nothing at the end. A
+	-- texture's gradient spans the texture, so each part is a solid piece and a fading piece.
+	-- f.track is only the bar's frame now (the timer, the route hover and the pieces hang off it).
+	f.track = plate:CreateTexture(nil, "BORDER", nil, 1)
 	f.track:SetPoint("TOPLEFT", plate, "TOPLEFT", TRACK_X, -NAME_H - TRACK_GAP)
 	f.track:SetSize(TRACK_W, TRACK_H)
-	f.track:SetColorTexture(0.12, 0.08, 0.03, 0.55)
-	f.trackEdge = plate:CreateTexture(nil, "BORDER", nil, 1)
-	f.trackEdge:SetPoint("TOPLEFT", f.track, "TOPLEFT", -1, 1)
-	f.trackEdge:SetPoint("BOTTOMRIGHT", f.track, "BOTTOMRIGHT", 1, -1)
-	f.trackEdge:SetColorTexture(1, 0.85, 0.4, 0.35)
-	f.progress = plate:CreateTexture(nil, "BORDER", nil, 3)
-	f.progress:SetPoint("TOPLEFT", f.track, "TOPLEFT")
-	f.progress:SetSize(1, TRACK_H)
-	Gradient(f.progress, { 0.62, 0.42, 0.12, 0.9 }, { 0.95, 0.74, 0.3, 0.9 })
+	f.track:SetColorTexture(0, 0, 0, 0)
+	f.barParts = { f.track }
+	local function Piece(sub, x, y, w, h, left, right)
+		local t = plate:CreateTexture(nil, "BORDER", nil, sub)
+		t:SetPoint("TOPLEFT", f.track, "TOPLEFT", x, y)
+		t:SetSize(w, h)
+		Gradient(t, left, right)
+		f.barParts[#f.barParts + 1] = t
+		return t
+	end
+	local BG, EDGE = { 0.12, 0.08, 0.03, 0.55 }, { 1, 0.85, 0.4, 0.35 }
+	local function Gone(c) return { c[1], c[2], c[3], 0 } end
+	Piece(2, 0, 0, FADE_X, TRACK_H, BG, BG)                          -- the background
+	Piece(2, FADE_X, 0, TRACK_W - FADE_X, TRACK_H, BG, Gone(BG))
+	for _, y in ipairs({ 1, -TRACK_H }) do                            -- the gold edges, top and bottom
+		Piece(2, -1, y, FADE_X + 1, 1, EDGE, EDGE)
+		Piece(2, FADE_X, y, TRACK_W - FADE_X, 1, EDGE, Gone(EDGE))
+	end
+	Piece(2, -1, 1, 1, TRACK_H + 2, EDGE, EDGE)                       -- the left end
+	f.progress = Piece(3, 0, 0, 1, TRACK_H, FILL_FROM, FILL_TO)       -- the fill: solid, then fading
+	f.progressFade = Piece(3, FADE_X, 0, 1, TRACK_H, FILL_TO, FILL_TO)
 	f.timeLeft = plate:CreateFontString(nil, "OVERLAY")
 	Shadowed(f.timeLeft, BODY_FONT, 10, 1, 0.96, 0.85)
 	f.timeLeft:SetPoint("RIGHT", f.track, "RIGHT", -6, 0)
@@ -758,7 +777,18 @@ local function BuildPanel()
 		if self.flight and self.flight.planned and self.flight.planned > 0 then
 			local gone = GetTime() - self.flight.at
 			local pk = math.min(1, gone / self.flight.planned)
-			self.progress:SetWidth(math.max(1, TRACK_W * pk))
+			local fill = TRACK_W * pk
+			self.progress:SetWidth(math.max(1, math.min(fill, FADE_X)))
+			-- past FADE_AT the fill fades with the bar: as clear at its tip as the bar is there
+			local over = fill - FADE_X
+			if over >= 1 then
+				local tip = 1 - over / (TRACK_W - FADE_X)
+				self.progressFade:SetWidth(over)
+				Gradient(self.progressFade, FILL_TO, { FILL_TO[1], FILL_TO[2], FILL_TO[3], FILL_TO[4] * tip })
+				self.progressFade:Show()
+			else
+				self.progressFade:Hide()
+			end
 			-- the time left, counting down (whole seconds; "landing" once it's due)
 			local left = math.ceil(self.flight.planned - gone)
 			if left ~= self.leftShown then
@@ -916,10 +946,9 @@ function WW.ShowPanel(info)
 	f.segIndex, f.typed, f.lastChar, f.typing, f.done, f.hideAt, f.pauseUntil = 1, 0, -1, true, false, nil, nil
 	f.tiltAt, f.dipAt, f.leaving, f.byeAt, f.doneAt, f.dim = nil, nil, nil, nil, nil, 1
 	f.flight = flight and { from = flight.from, to = flight.to, planned = flight.planned, at = GetTime() } or nil
-	f.track:SetShown(f.flight ~= nil)
-	f.trackEdge:SetShown(f.flight ~= nil)
-	f.progress:SetShown(f.flight ~= nil)
+	for _, t in ipairs(f.barParts) do t:SetShown(f.flight ~= nil) end
 	f.progress:SetWidth(1)
+	f.progressFade:Hide()
 	f.timeLeft:SetShown(f.flight ~= nil)
 	f.timeLeft:SetText("")
 	f.leftShown = nil
