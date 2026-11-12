@@ -1356,7 +1356,7 @@ local function BuildTankTarget(P)
 	P:Picker(L["Look"], TT.looks, function()
 		for i, m in ipairs(TT.looks) do if m.key == db.look then return i end end
 		return 1
-	end, function(i) db.look = TT.looks[i].key TT:Refresh() end, nil, 1, L["Marker above: the tank shield over the nameplate. Outline: a coloured edge round its health bar, outside the threat edge."])
+	end, function(i) db.look = TT.looks[i].key TT:Refresh() end, nil, 1, L["Marker above: the tank shield over the nameplate. Outline: a coloured edge round its health bar, outside the threat edge. Red glow: a slowly pulsing red halo round its health bar, the nearest to the game's red circle on the ground (an addon can't draw on the ground)."])
 	P:Color(L["Outline colour"], function() return db.color end, function(r, g, b) db.color = { r, g, b } TT:Refresh() end, 1)
 	P:Check(L["Also when I'm the tank"], L["Your own target is marked by the game already; this adds the tank mark to it too."], function() return db.whenTank end, Set("whenTank"), 1)
 end

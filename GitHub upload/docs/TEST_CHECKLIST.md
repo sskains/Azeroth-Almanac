@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Tank's target, Red glow:** Settings > Group Settings > Tank's target > Look > Red glow; in a group with a tank: a red halo round the tank's target's health bar, breathing slowly, easy to pick out in a pack of mobs but not blinding; it moves with the tank's target; it doesn't hide the health bar or the name; next to Threat Monitor's edge on the same mob it still reads. Say if it should be bigger, redder or calmer.
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)
