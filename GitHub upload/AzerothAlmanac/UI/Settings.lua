@@ -1482,6 +1482,35 @@ local function BuildHealer(P)
 		function(v) HA:SetPanelAlpha(v / 100) end, 1, L["How see-through the window's dark background and border are."])
 	P:Stepper(L["Icon size"], 16, 40, 2, function() return db.iconSize end, function(v) db.iconSize = v Apply() end)
 	P:Stepper(L["Icons per line"], 3, 12, 1, function() return db.perRow end, function(v) db.perRow = v Apply() end)
+	-- (2026-11-11, Shannon: move, resize and reorganize) the space between icons, a nudge for the icons
+	-- beside the portraits, and the window's size (the window itself still drags)
+	P:Stepper(L["Space between icons"], 0, 10, 1, function() return db.gap or 2 end, function(v) db.gap = v Apply() end)
+	P:Stepper(L["Move the icons sideways"], -200, 200, 2, function() return db.offsetX or 0 end, function(v) db.offsetX = v Apply() end, 1,
+		L["Beside the portraits: right is more, left is less. The window is moved by dragging it."])
+	P:Stepper(L["Move the icons up or down"], -200, 200, 2, function() return db.offsetY or 0 end, function(v) db.offsetY = v Apply() end, 1,
+		L["Beside the portraits: up is more, down is less."])
+	P:Stepper(L["Window size (%)"], 50, 200, 5, function() return db.panelScale or 100 end, function(v) db.panelScale = v Apply() end, 1,
+		L["The Healer Assist window and its icons together."])
+
+	-- the spell buttons, in your order; a hidden one isn't suggested either
+	P:Section(L["Spell buttons"], L["The order your spells' buttons line up in, and which show. A hidden spell isn't suggested or flashed either. Changes apply out of combat."])
+	local spells = HA.SpellList and HA:SpellList() or {}
+	if #spells == 0 then
+		P:Text(L["Your spells show here once Healer Assist has read them (shamans, priests, druids, paladins and mages)."])
+	end
+	for i, s in ipairs(spells) do
+		local label = ("|T%s:16:16:0:0|t %s"):format(tostring(s.icon or 134400), s.label)
+		local cb, fs = P:Check(label, nil, function() return not (db.hiddenSpells and db.hiddenSpells[s.name]) end, function(v) HA:ShowSpell(s.name, v) end)
+		local up = W.Button(P.content, L["Up"], 54, function() if HA:MoveSpell(s.name, -1) then S:RebuildPage("healer") end end)
+		up:SetPoint("LEFT", cb, "RIGHT", 16, 0) -- (beside the tick box, in the controls column)
+		up:SetEnabled(i > 1)
+		local down = W.Button(P.content, L["Down"], 62, function() if HA:MoveSpell(s.name, 1) then S:RebuildPage("healer") end end)
+		down:SetPoint("LEFT", up, "RIGHT", 4, 0)
+		down:SetEnabled(i < #spells)
+	end
+	if #spells > 0 then
+		P:Buttons({ { L["Reset order"], 130, function() HA:ResetSpells() S:RebuildPage("healer") end } })
+	end
 
 	P:Section(L["What it recommends"])
 	P:Stepper(L["Fast heal at or below (%)"], 10, 50, 5, function() return db.critical end, function(v) db.critical = v end)
@@ -2011,6 +2040,19 @@ function S:Open(name)
 		end
 	end
 	if frame:IsShown() then SelectPage(frame.selected or "general") else frame:Show() end
+end
+
+-- (2026-11-11) a page built again in place (Healer Assist's spell list after Up / Down), at the
+-- same scroll position
+function S:RebuildPage(id)
+	if not (frame and pages[id]) then return end
+	local old = pages[id]
+	local at = old.scroll and old.scroll:GetVerticalScroll() or 0
+	old:Hide()
+	pages[id] = nil
+	SelectPage(id)
+	local page = pages[id]
+	if page and page.scroll then page.scroll:SetVerticalScroll(at) end
 end
 
 function S:ResetPosition()

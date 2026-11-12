@@ -6,6 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Healer Assist: move, resize and reorganize.** Settings > Healer Assist: a new **Spell buttons** list puts your spells' buttons in the order you choose (Up / Down beside each) and hides any you untick (a hidden spell isn't suggested or flashed either); Reset order puts the class's order back. Under Where the icons show: **Space between icons** (0-10 px), **Move the icons sideways** and **up or down** (the icons beside the portraits, -200 to 200 px; the window still drags), and **Window size** (50-200%, the window and its icons together). Your order is saved whole, so it holds as you learn new spells (they join at the end). Test: `test_heal_layout.py`.
 - **Crafting profit in the recipe list: per item, not per day.** Each recipe's badge on the profession window now shows the profit for each item made, marked "ea" ("+2.6s ea"), and the estimated daily sales no longer sit beside it, where "+2.6s ~136/d" read as profit per day. A recipe that makes several items at once had shown the profit for the whole craft; it's now split per item. Top profits shows the same, and its "profit x daily sales" ranking now multiplies profit per item by items sold a day (it had used the whole craft's profit, overrating recipes that make more than one). Daily sales are still on the recipe's Crafting profit card ("Sells about") and in the Top profits tooltips. Test: `test_crafting_badges.py`.
 
 ## 1.5.1 (2026-11-08)

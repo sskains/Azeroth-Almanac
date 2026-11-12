@@ -6,6 +6,9 @@
 --   is tanking and how low they are), cures for poison / disease / curse / magic, resurrections and
 --   (optional) buffs that are missing.
 --   Modes: on the Blizzard party / raid frames, or in a movable queue panel. /aa heal for commands.
+--   (2026-11-11) Your layout: the spell buttons in your order, any of them hidden (a hidden spell
+--   isn't suggested either); the icons beside the portraits nudged sideways / up and down; the
+--   window's size; the space between icons. Settings > Healer Assist.
 --
 -- The icons are secure buttons, which the game won't let an addon create, move or hide during combat.
 -- So the layout is set up out of combat (and re-done as soon as combat ends); in combat the icons
@@ -116,6 +119,8 @@ end
 local DIM, OFF, ABSENT = 0.22, 0.55, 0.12 -- (not needed: faint, so a recommendation stands out)
 local DANGER_PCT = 0.3 -- under this the recommendation throbs red (the default; Settings: Danger level)
 local db -- (the saved settings, set at login; declared here so DangerPct reads it, not a global: 2026-10-11)
+-- (2026-11-11) the space between icons (Settings > Healer Assist > Space between icons)
+local function Gap() return (db and db.gap) or GAP end
 local function DangerPct() return ((db and db.danger) or 30) / 100 end
 
 -- (2026-10-17, Shannon's raid screenshot) in a raid, on the raid frames: the icons go INSIDE each
@@ -223,6 +228,8 @@ local function EnglishName(name) return name and (ENG[name] or name) end
 ---------------------------------------------------------------------------
 
 local mine = {}          -- the catalog entries you know, with spell id / icon / cast time: { spell, id, icon, castTime, cost }
+                         -- (2026-11-11) in your order (Settings), without the ones you've hidden
+local known = {}         -- every one of them, hidden or not, in the catalog's order (Settings lists these)
 local entries = {}       -- unit token -> { token, buttons = { [spell name] = button }, order = { names }, res = last result }
 local roster = {}        -- unit tokens in the group right now
 local panel
@@ -366,7 +373,30 @@ local function Short(n)
 end
 
 -- Your spells from the catalog, at their highest rank.
+-- (2026-11-11, Shannon: reorganize the buttons) the spells you know in your order: the ones you've
+-- placed (db.spellOrder, by English name) first in that order, any others after in the catalog's
+-- order. With all, the hidden ones too (for Settings); without, mine.
+local function InYourOrder(all)
+	local pos = {}
+	for i, name in ipairs(db.spellOrder or {}) do pos[name] = i end
+	local list = {}
+	for i, m in ipairs(known) do list[#list + 1] = { m = m, k = pos[m.spell.name] or (1000 + i) } end
+	table.sort(list, function(a, b) return a.k < b.k end)
+	local out = {}
+	for _, x in ipairs(list) do
+		if all or not (db.hiddenSpells and db.hiddenSpells[x.m.spell.name]) then out[#out + 1] = x.m end
+	end
+	return out
+end
+
+local function ApplySpellOrder()
+	wipe(mine)
+	for _, m in ipairs(InYourOrder(false)) do mine[#mine + 1] = m end
+end
+HA.Mine = function() return mine end -- (for the tests)
+
 local function ResolveSpells()
+	wipe(known)
 	wipe(mine)
 	-- (English clients keep the English names: nothing to translate, and a wrong ID can't misfire)
 	for eng, id in pairs((A.LOCALE ~= "enUS" and A.LOCALE ~= "enGB") and SPELL_IDS or {}) do
@@ -400,12 +430,13 @@ local function ResolveSpells()
 	for _, spell in ipairs(list) do
 		local f = found[spell.name]
 		if f then
-			mine[#mine + 1] = {
+			known[#known + 1] = {
 				spell = spell, id = f.id, icon = SpellTexture(f.id),
 				castTime = CastTime(f.id), cost = ManaCost(f.id),
 			}
 		end
 	end
+	ApplySpellOrder()
 	wipe(amountCache)
 end
 
@@ -1469,13 +1500,20 @@ end
 local function Strip(e, anchorFrame, side, x, y)
 	local size, per = db.iconSize, math.max(1, db.perRow)
 	local col, line, extra, lastGroup = 0, 0, 0, nil
+	-- (2026-11-11) beside the portraits, your nudge; in the window, the window's size (the buttons
+	-- live in the secure holder, not the window, so they're scaled with it by hand: the same scale
+	-- on both keeps the positions, worked out in the window's units, lined up)
+	local beside = side == "right" or side == "below"
+	if beside then x, y = x + (db.offsetX or 0), y + (db.offsetY or 0) end
+	local scale = (side == "inside" and (db.panelScale or 100) / 100) or 1
 	for _, name in ipairs(e.order) do
 		local b = e.buttons[name]
 		local group = GroupOf(b)
 		if lastGroup and group ~= lastGroup and col > 0 then extra = extra + GROUP_GAP end
 		if col >= per then col, line, extra = 0, line + 1, 0 end
 		lastGroup = group
-		local px, py = x + extra + col * (size + GAP), y - line * (size + GAP)
+		local px, py = x + extra + col * (size + Gap()), y - line * (size + Gap())
+		b:SetScale(scale)
 		b:SetSize(size, size)
 		b:ClearAllPoints()
 		Layer(b, anchorFrame, 10)
@@ -1491,6 +1529,7 @@ local function Strip(e, anchorFrame, side, x, y)
 	end
 	return line + 1 -- (how many lines of icons it took)
 end
+HA.Strip = Strip -- (for the tests)
 
 -- beside a frame (side "right"): how far down its name plate ends, so the icons start under the
 -- name, level with the health bar (0.65.3)
@@ -1532,16 +1571,17 @@ local function RaidStrip(e, f)
 	local w, h = Pos(f.GetWidth and f:GetWidth()), Pos(f.GetHeight and f:GetHeight())
 	w, h = w or 72, h or 36
 	local size = math.max(12, math.min(db.iconSize or 26, math.floor(h * 0.42)))
-	local cap = math.min(math.max(1, math.floor((w * 0.7) / (size + GAP))), math.max(1, db.raidIcons or 3))
+	local cap = math.min(math.max(1, math.floor((w * 0.7) / (size + Gap()))), math.max(1, db.raidIcons or 3))
 	local n = 0
 	for group = 1, 3 do
 		for _, name in ipairs(e.order) do
 			local b = e.buttons[name]
 			if b and n < cap and GroupOf(b) == group then
+				b:SetScale(1) -- (in case it was last in the window, at the window's size)
 				b:SetSize(size, size)
 				b:ClearAllPoints()
 				Layer(b, f, 10)
-				b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -(2 + n * (size + GAP)), 2)
+				b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -(2 + n * (size + Gap())), 2)
 				ShowButton(b)
 				n = n + 1
 			end
@@ -1602,6 +1642,7 @@ local function LayoutPanel(list)
 	for k = 1, math.min(#list, db.maxRows) do top[k] = list[k] end
 	list = PetsUnderMasters(top)
 	local size, per = db.iconSize, math.max(1, db.perRow)
+	panel:SetScale((db.panelScale or 100) / 100) -- (2026-11-11) Window size; its buttons follow in Strip
 	panel:ClearAllPoints()
 	local p = db.pos
 	if p and p[1] then panel:SetPoint(p[1], UIParent, p[2] or p[1], p[3] or 0, p[4] or 0)
@@ -1613,7 +1654,7 @@ local function LayoutPanel(list)
 		local e = list[k]
 		panel.rowUnits[k] = e
 		local lines = math.max(1, math.ceil(#e.order / per))
-		local rowH = math.max(lines * (size + GAP), NAME_H + BAR_H + 3)
+		local rowH = math.max(lines * (size + Gap()), NAME_H + BAR_H + 3)
 
 		-- a tint behind the whole row that follows how urgent the member is
 		local bg = panel.rowBg[k]
@@ -1709,7 +1750,7 @@ local function LayoutPanel(list)
 		panel.bars[k]:Hide()
 		panel.rowBg[k]:Hide()
 	end
-	panel:SetSize(LABEL_W + per * (size + GAP) + GROUP_GAP * 2 + 10, y + 6)
+	panel:SetSize(LABEL_W + per * (size + Gap()) + GROUP_GAP * 2 + 10, y + 6)
 	panel.hint:SetShown(not db.locked)
 	panel:SetShown(rows > 0 or not db.locked)
 	-- see-through out of combat (only-in-combat mode) also means it must not catch the mouse
@@ -1758,7 +1799,7 @@ local function Layout()
 					elseif owner then
 						local size = db.iconSize
 						local ox = (db.side == "right" and db.aggroMarkers) and BADGE_ROOM or 4
-						Strip(e, owner.f, db.side, ox + 8, owner.y - owner.lines * (size + GAP) - 2)
+						Strip(e, owner.f, db.side, ox + 8, owner.y - owner.lines * (size + Gap()) - 2)
 						owner.lines = owner.lines + math.max(1, math.ceil(#e.order / math.max(1, db.perRow)))
 						keys[#keys + 1] = e.token .. "=under:" .. OwnerOf(e.token)
 					else
@@ -2418,6 +2459,45 @@ end
 function HA:SetPanelAlpha(a)
 	db.panelAlpha = a
 	if panel and panel.SetPanelAlpha then panel.chromeShown = nil panel:SetPanelAlpha(a) end
+end
+
+-- (2026-11-11) the spell buttons' order and which show (Settings > Healer Assist > Spell buttons).
+-- The spells you know, in your order, hidden ones included: { name (English), label, icon, shown }.
+function HA:SpellList()
+	local out = {}
+	for _, m in ipairs(InYourOrder(true)) do
+		local name = m.spell.name
+		out[#out + 1] = { name = name, label = LocalName(name), icon = m.icon, shown = not (db.hiddenSpells and db.hiddenSpells[name]) }
+	end
+	return out
+end
+
+-- one place earlier (delta -1) or later (+1); the whole order is saved, so it holds as spells are learned
+function HA:MoveSpell(name, delta)
+	local names = {}
+	for _, s in ipairs(self:SpellList()) do names[#names + 1] = s.name end
+	for i, n in ipairs(names) do
+		if n == name then
+			local j = i + delta
+			if j < 1 or j > #names then return false end
+			names[i], names[j] = names[j], names[i]
+			db.spellOrder = names
+			self:Apply()
+			return true
+		end
+	end
+	return false
+end
+
+function HA:ShowSpell(name, shown)
+	db.hiddenSpells = db.hiddenSpells or {}
+	db.hiddenSpells[name] = (not shown) or nil
+	self:Apply()
+end
+
+function HA:ResetSpells()
+	db.spellOrder, db.hiddenSpells = nil, nil
+	self:Apply()
 end
 
 function HA:ResetPosition()
