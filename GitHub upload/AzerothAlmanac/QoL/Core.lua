@@ -96,7 +96,11 @@ ns.defaults = {
 	tankTarget = {
 		enabled = true,         -- the enemy your group's tank has targeted is marked on its nameplate
 		look = "marker",        -- "marker" (tank shield above the plate), "outline" (round the health bar), "both"
-		color = { 0.25, 0.6, 1 }, -- the outline's colour
+		color = { 0.64, 0.21, 0.93 }, -- the outline's colour (2026-11-11: the game's epic purple, was blue)
+		outlineGlow = "soft",   -- (2026-11-11) a halo spreading out from the outline: "off", "soft", "strong"
+		lockOn = true,          -- (2026-11-11) your target is the tank's target: show it, on its nameplate
+		lockOnPlate = true,     --   (a brighter purple frame, pulsing)
+		lockOnFrame = true,     --   and round your Target frame (a purple halo)
 		whenTank = false,       -- mark your own target too when you're a tank
 	},
 }

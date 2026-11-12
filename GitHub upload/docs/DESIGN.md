@@ -1595,3 +1595,9 @@ _(add new ideas here)_
 - **Ground circle:** not possible: addons can't draw in the 3D world, and the game's circle is only for your own target and mouseover. Built instead: a fourth look, Red glow, a breathing red halo (the game's soft glow, added in red) round the tank's target's health bar (`QoL/TankTarget.lua`).
 - **Planned, waiting for an in-game check (Shannon):** assist macros built by the addon out of combat (`/cast [@targettarget,harm,nodead][] Spell`, also a focus style), a macro maker window, an optional bar swap that can be undone, a key that puts a marker over the tank's target (`/tm [@targettarget,harm] !8`) and a key that focuses the tank. To confirm first in game: that cast, that /tm, and `/focus party1`.
 - **Test:** `dev/tests/test_tank_target.py`.
+
+## 139. Tank's target: purple, the outline's halo, and lock-on (2026-11-11) [?]
+- **Asked for:** an enhanced outline (a glow), standard purple; and when you target the tank's mob, a purple glow on the target selection to say you've the right one.
+- **What:** the outline colour defaults to the game's epic purple (0.64, 0.21, 0.93); a saved colour still exactly the old default blue moves to purple once (`purpled`), a hand-picked one stays. `outlineGlow` Off / Soft (0.55) / Strong (0.95) adds the game's soft glow, added, in the outline's colour behind the edge. Lock-on: your target is the same unit as a tank's target (`UnitIsUnit`, so it holds without a nameplate) and attackable and alive: the mark on that plate shows our own 3 px purple frame with a halo, pulsing once a second, whatever the look; and a purple halo of ours sits behind the Target frame (anchored to it, not inside it: the Target frame is a protected unit frame). Checked on the 0.25 s poll in combat and on PLAYER_TARGET_CHANGED.
+- **Decision (Shannon):** our own frames rather than recolouring the game's nameplate selection highlight or Target frame textures.
+- **Test:** `dev/tests/test_tank_target.py`.

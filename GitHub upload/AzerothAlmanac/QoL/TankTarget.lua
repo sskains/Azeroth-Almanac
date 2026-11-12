@@ -37,6 +37,16 @@ local GLOW_COLOR = { 1, 0.16, 0.1 }
 local GLOW_PULSE = 1.4                 -- seconds for one breath
 local GLOW_LOW, GLOW_HIGH = 0.45, 0.95 -- its brightness, between breaths and at the top of one
 
+-- (2026-11-11, Shannon: "enhance the outline ... a glow ... standard purple") the outline's colour is
+-- the game's epic purple by default, and a soft halo of it spreads out from the outline
+TT.PURPLE = { 0.64, 0.21, 0.93 }
+local OLD_BLUE = { 0.25, 0.6, 1 }      -- the outline's first default: moved to purple once (OnInitialize)
+TT.glowLevels = { { name = "Off", key = "off", alpha = 0 }, { name = "Soft", key = "soft", alpha = 0.55 }, { name = "Strong", key = "strong", alpha = 0.95 } }
+-- (2026-11-11) "you're on it": your target is a tank's target. Its plate gets a brighter purple frame
+-- that pulses once a second, and your Target frame a purple halo. Our own frames: nothing of the
+-- game's (its nameplate highlight, its Target frame) is recoloured or changed.
+local LOCK_PULSE, LOCK_LOW, LOCK_HIGH = 1.0, 0.6, 1.0
+
 local db
 local R = function(v) return ns.Readable(v) end
 local tanks = {}      -- unit tokens of the group's tanks (and "player" with whenTank)
@@ -100,10 +110,32 @@ local function Mark(plate)
 	m.glow:SetBlendMode("ADD")
 	m.glow:SetVertexColor(GLOW_COLOR[1], GLOW_COLOR[2], GLOW_COLOR[3])
 	m.glow:Hide()
+	-- (2026-11-11) the outline's halo: the same soft glow in the outline's colour, behind the edge
+	m.edgeGlow = m:CreateTexture(nil, "BACKGROUND", nil, 1)
+	m.edgeGlow:SetTexture(GLOW_TEXTURE)
+	m.edgeGlow:SetBlendMode("ADD")
+	m.edgeGlow:Hide()
+	-- (2026-11-11) locked on (your target is this tank's target): a brighter purple frame and halo
+	m.lock = CreateFrame("Frame", nil, m, "BackdropTemplate")
+	m.lock:SetBackdrop({ edgeFile = WHITE, edgeSize = 3 })
+	m.lock:SetBackdropBorderColor(TT.PURPLE[1], TT.PURPLE[2], TT.PURPLE[3], 1)
+	m.lock.halo = m.lock:CreateTexture(nil, "BACKGROUND")
+	m.lock.halo:SetTexture(GLOW_TEXTURE)
+	m.lock.halo:SetBlendMode("ADD")
+	m.lock.halo:SetVertexColor(TT.PURPLE[1], TT.PURPLE[2], TT.PURPLE[3])
+	m.lock.halo:SetPoint("TOPLEFT", -18, 12)
+	m.lock.halo:SetPoint("BOTTOMRIGHT", 18, -12)
+	m.lock:Hide()
 	m:SetScript("OnUpdate", function(self)
-		if not self.glow:IsShown() then return end
-		local k = 0.5 + 0.5 * math.sin(GetTime() * 2 * math.pi / GLOW_PULSE)
-		self.glow:SetAlpha(GLOW_LOW + (GLOW_HIGH - GLOW_LOW) * k)
+		local now = GetTime()
+		if self.glow:IsShown() then
+			local k = 0.5 + 0.5 * math.sin(now * 2 * math.pi / GLOW_PULSE)
+			self.glow:SetAlpha(GLOW_LOW + (GLOW_HIGH - GLOW_LOW) * k)
+		end
+		if self.lock:IsShown() then
+			local k = 0.5 + 0.5 * math.sin(now * 2 * math.pi / LOCK_PULSE)
+			self.lock:SetAlpha(LOCK_LOW + (LOCK_HIGH - LOCK_LOW) * k)
+		end
 	end)
 	m:Hide()
 	marks[plate] = m
@@ -111,7 +143,12 @@ local function Mark(plate)
 end
 TT.MarkOf = function(plate) return marks[plate] end
 
-local function Place(m, plate)
+local function GlowAlpha()
+	for _, g in ipairs(TT.glowLevels) do if g.key == (db.outlineGlow or "soft") then return g.alpha end end
+	return 0
+end
+
+local function Place(m, plate, locked)
 	-- the plate's unit frame is pooled: anchor to whichever one the plate has now
 	local frame = plate.UnitFrame
 	local bar = frame and (frame.healthBar or frame.HealthBarsContainer)
@@ -127,14 +164,32 @@ local function Place(m, plate)
 	m.icon:SetPoint("BOTTOM", top, "TOP", 0, 16)
 	m.icon:SetShown(marker)
 	m.arrow:SetShown(marker and not m.noArrow)
+	local halo = outline and GlowAlpha() or 0
 	if outline then
-		local c = db.color or { 0.25, 0.6, 1 }
+		local c = db.color or TT.PURPLE
 		m.edge:ClearAllPoints()
 		m.edge:SetPoint("TOPLEFT", bar, "TOPLEFT", -4, 4)
 		m.edge:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 4, -4)
 		m.edge:SetBackdropBorderColor(c[1], c[2], c[3], 1)
+		if halo > 0 then
+			m.edgeGlow:ClearAllPoints()
+			m.edgeGlow:SetPoint("TOPLEFT", bar, "TOPLEFT", -18, 12)
+			m.edgeGlow:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 18, -12)
+			m.edgeGlow:SetVertexColor(c[1], c[2], c[3])
+			m.edgeGlow:SetAlpha(halo)
+		end
 	end
 	m.edge:SetShown(outline)
+	m.edgeGlow:SetShown(halo > 0)
+	-- locked on: the brighter purple frame round the bar (or the plate, with no bar), whatever the look
+	local lock = locked and db.lockOn ~= false and db.lockOnPlate ~= false
+	if lock then
+		local around = bar or plate
+		m.lock:ClearAllPoints()
+		m.lock:SetPoint("TOPLEFT", around, "TOPLEFT", -6, 6)
+		m.lock:SetPoint("BOTTOMRIGHT", around, "BOTTOMRIGHT", 6, -6)
+	end
+	m.lock:SetShown(lock and true or false)
 	if glow then
 		m.glow:ClearAllPoints()
 		m.glow:SetPoint("TOPLEFT", bar, "TOPLEFT", -22, 14)
@@ -143,9 +198,9 @@ local function Place(m, plate)
 	m.glow:SetShown(glow)
 end
 
-local function Show(plate)
+local function Show(plate, locked)
 	local m = Mark(plate)
-	Place(m, plate)
+	Place(m, plate, locked)
 	if not m:IsShown() then
 		m:Show()
 		-- fade in rather than pop, so a tank flicking between mobs doesn't flash
@@ -167,18 +222,55 @@ local function TargetPlate(tank)
 	return unit and C_NamePlate.GetNamePlateForUnit(unit)
 end
 
+-- (2026-11-11) your Target frame's purple halo: a frame of ours behind the game's, anchored to it but
+-- not inside it (the Target frame is a protected unit frame: nothing is added to or changed on it)
+local targetHalo
+local function TargetHalo()
+	if targetHalo or not TargetFrame then return targetHalo end
+	local h = CreateFrame("Frame", nil, UIParent)
+	h:SetPoint("TOPLEFT", TargetFrame, "TOPLEFT", -14, 12)
+	h:SetPoint("BOTTOMRIGHT", TargetFrame, "BOTTOMRIGHT", 14, -12)
+	h:SetFrameStrata(TargetFrame:GetFrameStrata() or "LOW")
+	h:SetFrameLevel(math.max(0, (TargetFrame:GetFrameLevel() or 1) - 1))
+	h.tex = h:CreateTexture(nil, "BACKGROUND")
+	h.tex:SetAllPoints()
+	h.tex:SetTexture(GLOW_TEXTURE)
+	h.tex:SetBlendMode("ADD")
+	h.tex:SetVertexColor(TT.PURPLE[1], TT.PURPLE[2], TT.PURPLE[3])
+	h:SetScript("OnUpdate", function(self)
+		local k = 0.5 + 0.5 * math.sin(GetTime() * 2 * math.pi / LOCK_PULSE)
+		self.tex:SetAlpha(LOCK_LOW + (LOCK_HIGH - LOCK_LOW) * k)
+	end)
+	h:Hide()
+	targetHalo = h
+	return h
+end
+TT.TargetHalo = function() return targetHalo end
+
+-- your target is this tank's target (the game's own same-unit check, so it holds without a nameplate)
+local function OnIt(tank)
+	return R(UnitExists("target")) and R(UnitIsUnit("target", tank .. "target")) == true
+end
+
 function TT:Update()
 	local want = {}
+	local lockedAny = false
 	if db and db.enabled then
 		for _, tank in ipairs(tanks) do
+			local okL, on = pcall(OnIt, tank)
+			on = okL and on and R(UnitCanAttack("player", "target")) and not R(UnitIsDead("target"))
+			if on then lockedAny = true end
 			local ok, plate = pcall(TargetPlate, tank)
-			if ok and plate then want[plate] = true end
+			if ok and plate then want[plate] = want[plate] or (on and true) or false end
 		end
 	end
-	for plate in pairs(want) do Show(plate) end
+	for plate, locked in pairs(want) do Show(plate, locked) end
 	for plate, m in pairs(marks) do
-		if not want[plate] then m:Hide() end
+		if want[plate] == nil then m:Hide() end
 	end
+	local halo = TargetHalo()
+	if halo then halo:SetShown(lockedAny and db.lockOn ~= false and db.lockOnFrame ~= false) end
+	TT.lockedOn = lockedAny
 end
 
 local function Tick() TT:Update() end
@@ -231,6 +323,13 @@ end
 
 function TT:OnInitialize(saved)
 	db = saved.tankTarget
+	-- (2026-11-11) the outline's default went from blue to purple: a colour still at the old default
+	-- moves over, once; one picked by hand stays
+	local c = db.color
+	if not db.purpled and type(c) == "table" and c[1] == OLD_BLUE[1] and c[2] == OLD_BLUE[2] and c[3] == OLD_BLUE[3] then
+		db.color = { TT.PURPLE[1], TT.PURPLE[2], TT.PURPLE[3] }
+	end
+	db.purpled = true
 end
 
 function TT:OnLogin()
