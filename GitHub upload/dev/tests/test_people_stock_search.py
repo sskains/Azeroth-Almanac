@@ -94,6 +94,21 @@ check(p.eval("OK2") and p.eval("PAGE:StockSearchBox():GetText()") == "", "openin
 p.lua('PAGE:ShowPerson(5511) RunTimers(1) R = Look(PERSON)')
 check("For sale (3)" in p.eval("R.banners"), "...and the first person's lists are whole again")
 
+# (2026-11-11, Shannon: "crusader" found no one, though a vendor sold the plans) the page's own search
+# also finds people by what they sell or teach, and opens their lists already searched
+p.lua("""
+PAGE:Search("hillman") RunTimers(0.5)
+""")
+check(p.eval("PAGE:Matches(5511)") and not p.eval("PAGE:Matches(5512)"), "the People search \"hillman\" finds Therum, who sells Pattern: Hillman's Belt (by what he sells, not his name)")
+p.lua("PAGE:ShowPerson(5511) RunTimers(1) R = Look(PERSON)")
+check(p.eval("PAGE:StockSearchBox():GetText()") == "hillman", "...and opening him carries the search into his lists")
+check(p.eval("R.items") == "4293,4294", "...so his For sale list shows just the Hillman's patterns (%s)" % p.eval("R.items"))
+p.lua('PAGE:Search("therum") RunTimers(0.5) PAGE:ShowPerson(5512) RunTimers(0.5) PAGE:ShowPerson(5511) RunTimers(1) R = Look(PERSON)')
+check(p.eval("PAGE:StockSearchBox():GetText()") == "" and "For sale (3)" in p.eval("R.banners"), "found by his name: his lists open whole")
+p.lua('PAGE:Search("justicar") RunTimers(0.5) PAGE:ShowPerson(5512) RunTimers(0.5) PAGE:ShowPerson(5511) RunTimers(1)')
+check(p.eval("PAGE:StockSearchBox():GetText()") == "justicar", "found by what he teaches (Justicar's Belt): his lists open searched too")
+p.lua('PAGE:Search("") RunTimers(0.5)')
+
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

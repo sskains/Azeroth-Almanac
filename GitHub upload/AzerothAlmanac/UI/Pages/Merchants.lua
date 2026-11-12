@@ -19,6 +19,7 @@ local function ItemName(id)
 	local ok, name = pcall(getInfo, id)
 	return ok and name or nil
 end
+ns.MerchantItemName = ItemName -- (2026-11-11: the People search looks through what people sell)
 
 -- match(name) -> whether a stock line stays (the People page's search); nil keeps everything
 local function Describe(npc, rec, match)
