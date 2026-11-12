@@ -23,6 +23,7 @@ python3 "dev/tests/test_upgrades.py"
 - `test_wg_abilities.py`: Execute's reach (any enemy card smaller than your biggest card on the board, protocol 14) and Mind Control's 10-spike limit, with the old neighbour rule and the old 8-spike limit still in force in a match on protocol 13.
 - `test_wg_cards.py`: Wild Gambit's earned cards (#54): a card from the first kill, starters, NPC cards from wins (friendly, neutral, enemy), a practice win counted, stronger NPCs, the iron ring on the Creatures page, and the card toast (new, upgrade, held in combat, stacked, off).
 - `test_auction_post.py`: Alt+Right-click a bag item at the Auction House (#60): into the slot, whole stack, undercut price (per item or per stack), posting by a second Alt+Right-click or Enter, and when it stays out of the way.
+- `test_auctions_rescan.py`: Characters > Auctions is re-read after posting, cancelling and opening the Auction House's Auctions tab, and never wiped while the Auction House is closed.
 - `test_wg_resume.py`: a Wild Gambit game across a /reload (#50): practice comes back as it was and plays on; a player match asks for the moves it missed (theirs made meanwhile, and its own that never left) and plays to the end; a game that wasn't kept tells the other side at once.
 - `test_items_page.py`: the Items page (#55): cards, the tree's branches and folding, a card's filtered tree, search, "Can't use", an item opened from elsewhere.
 - `test_creatures_page.py`: the Creatures page's cards draw (smoke test).

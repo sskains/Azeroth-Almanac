@@ -374,6 +374,33 @@ local function ScanAuctions()
 	c.auctions = { items = list, time = now }
 	Touch()
 end
+INV.ScanAuctions = ScanAuctions
+
+-- (2026-11-11, Shannon: new auctions missing after looking at the Auctions tab) the owned list was only
+-- read on OWNED_AUCTIONS_UPDATED, which comes after the game is asked for the list: posting or
+-- cancelling doesn't bring it, and the Auctions tab didn't always ask, so new auctions sat unread.
+-- Now, whenever they can have changed, the game is asked again and the list read a moment later;
+-- only while the auction house is open (closed, the game's list is empty: reading it would wipe ours).
+-- (a client without the newer auction house frame: as before, the event alone decides)
+local function AHOpen() return not AuctionHouseFrame or AuctionHouseFrame:IsShown() and true or false end
+local function Requery()
+	if AHOpen() and C_AuctionHouse and C_AuctionHouse.QueryOwnedAuctions then pcall(C_AuctionHouse.QueryOwnedAuctions, {}) end
+end
+local function RereadSoon()
+	C_Timer.After(0.5, Requery)
+	for _, t in ipairs({ 1.5, 3 }) do
+		C_Timer.After(t, function() if AHOpen() then ScanAuctions() end end)
+	end
+end
+INV.RereadAuctions = RereadSoon
+
+local auctionsTabHooked
+local function HookAuctionsTab()
+	local tab = AuctionHouseFrame and AuctionHouseFrame.AuctionsFrame
+	if auctionsTabHooked or not (tab and tab.HookScript) then return end
+	auctionsTabHooked = true
+	tab:HookScript("OnShow", RereadSoon)
+end
 
 -- The main profession skill lines. The game can also list a same-named sub-line (another ID)
 -- for a profession; only one entry per profession is kept, preferring these.
@@ -585,8 +612,14 @@ function INV:OnLogin()
 		MAIL_CLOSED = function() ScanMail() mailOpen = false end,
 		MAIL_SEND_SUCCESS = ApplySentMail,
 		MAIL_FAILED = function() pendingMail = nil end,
-		OWNED_AUCTIONS_UPDATED = ScanAuctions,
-		AUCTION_HOUSE_SHOW = function() if C_AuctionHouse and C_AuctionHouse.QueryOwnedAuctions then pcall(C_AuctionHouse.QueryOwnedAuctions, {}) end end,
+		OWNED_AUCTIONS_UPDATED = function() if AHOpen() then ScanAuctions() end end,
+		AUCTION_HOUSE_SHOW = function()
+			if C_AuctionHouse and C_AuctionHouse.QueryOwnedAuctions then pcall(C_AuctionHouse.QueryOwnedAuctions, {}) end
+			HookAuctionsTab()
+		end,
+		-- (2026-11-11) posted or cancelled: ask again and read the list
+		AUCTION_HOUSE_AUCTION_CREATED = RereadSoon,
+		AUCTION_CANCELED = RereadSoon,
 		SKILL_LINES_CHANGED = ScanProfessions,
 		CHARACTER_POINTS_CHANGED = function() pcall(ScanTalents) end,
 		PLAYER_TALENT_UPDATE = function() pcall(ScanTalents) end,

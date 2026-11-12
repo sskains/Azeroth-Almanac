@@ -6,6 +6,8 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Characters > Auctions: new auctions show up.** The list was only read when the Auction House sent its list of your auctions, which it does on opening and not always after you post, so an auction posted while it was open could be missing until the next visit. Now, while the Auction House is open, your auctions are asked for again and re-read just after you post or cancel one and each time you open its Auctions tab. Closing the Auction House never empties the list. Test: `test_auctions_rescan.py`.
+
 - **Crafting profit in the recipe list: per item, not per day.** Each recipe's badge on the profession window now shows the profit for each item made, marked "ea" ("+2.6s ea"), and the estimated daily sales no longer sit beside it, where "+2.6s ~136/d" read as profit per day. A recipe that makes several items at once had shown the profit for the whole craft; it's now split per item. Top profits shows the same, and its "profit x daily sales" ranking now multiplies profit per item by items sold a day (it had used the whole craft's profit, overrating recipes that make more than one). Daily sales are still on the recipe's Crafting profit card ("Sells about") and in the Top profits tooltips. Test: `test_crafting_badges.py`.
 
 ## 1.5.1 (2026-11-08)
