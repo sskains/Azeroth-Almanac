@@ -99,6 +99,12 @@ ns.defaults = {
 		color = { 0.25, 0.6, 1 }, -- the outline's colour
 		whenTank = false,       -- mark your own target too when you're a tank
 	},
+	healerTarget = {
+		enabled = true,         -- (2026-11-11) the member another healer is healing is marked on their unit frame
+		selected = true,        -- also the member they've only selected (a dimmer badge)
+		glow = true,            -- a green glow round the frame while their heal is on its way
+		names = true,           -- the healer's name on the badge
+	},
 }
 
 local function ApplyDefaults(target, defaults)

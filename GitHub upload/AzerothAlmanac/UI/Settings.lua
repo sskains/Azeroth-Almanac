@@ -1440,6 +1440,19 @@ local function BuildGroup(P)
 	BuildFollow(P)
 end
 
+-- (2026-11-11) who the other healers are on, marked on the group's unit frames (QoL/HealerTarget.lua)
+local function BuildHealerTarget(P)
+	local db = Q.db.healerTarget
+	local HT = Q.HealerTarget
+	local function Set(key) return function(v) db[key] = v HT:Refresh() end end
+	P:Section(L["Other healers' targets"], L["In a group with another healer, the member they're healing is marked on that member's frame: a badge with their name, and a green glow while their heal is on its way. Pick someone else and no heal is wasted. A healer is anyone in the healer role or, with no role set, a priest, druid, paladin or shaman."])
+	P:Check(L["Show who the other healers are healing"], nil, function() return db.enabled end, Set("enabled"))
+	P:Check(L["Also who they've selected"], L["A dimmer badge on the member they have targeted, before they cast."], function() return db.selected ~= false end, Set("selected"), 1)
+	P:Check(L["Green glow while a heal is on its way"], nil, function() return db.glow ~= false end, Set("glow"), 1)
+	P:Check(L["The healer's name on the badge"], L["Off: just the healer cross."], function() return db.names ~= false end, Set("names"), 1)
+	P:Buttons({ { L["Preview"], 110, function() HT:Preview() end } }, 1)
+end
+
 local function BuildHealer(P)
 	local db = Q.db.healAssist
 	local HA = Q.HealAssist
@@ -1497,6 +1510,7 @@ local function BuildHealer(P)
 		{ L["Reset panel position"], 160, function() HA:ResetPosition() end },
 		{ L["What can the game read?"], 190, function() HA:Command("debug") end },
 	})
+	BuildHealerTarget(P)
 end
 
 Confirm("AZEROTHALMANAC_RESET_GEMS", L["Reset your Gem Match best scores?"], function() Q.GemMatch:ResetBests() end)

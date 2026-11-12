@@ -67,6 +67,7 @@ QoL\PartyPlates.lua
 QoL\NameplateDistance.lua
 QoL\ThreatMonitor.lua
 QoL\TankTarget.lua
+QoL\HealerTarget.lua
 QoL\FollowButton.lua
 QoL\SpellRanker.lua
 QoL\TalentData.lua

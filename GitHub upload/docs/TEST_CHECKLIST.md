@@ -8,6 +8,8 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Other healers' targets** (**full game restart**: the new file QoL/HealerTarget.lua): in a party with another healer (Asia), with the party frames and with raid-style frames: when she selects a member, a dim badge (healer cross, her name in class colour) sits on the top edge of that member's frame, not covering their name or health; when she casts a heal, the badge brightens and a green glow pulses round the frame until the heal lands, then it goes back to dim; a heal she casts by mouseover or a click on a frame (without targeting) still lights the right frame; a heal on you lights your own frame; she targets an enemy: no badge; in combat it follows her switches within a moment. A priest/druid/paladin/shaman in the damage role isn't counted. The switches in Settings > Healer Assist > Other healers' targets each do what they say; Preview shows the look for 10 seconds. Badges sit beside Healer Assist's icons and aggro glow without hiding them. No Lua errors, no frame-rate drop in a raid.
+
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)
