@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **People, the lists' search in the top bar:** open a vendor with a long list (a blacksmithing supplier): "Search what they teach and sell" sits in the top bar right of the page's Search, over the person's page; scroll the list to the bottom: it's still there; type "boots": the list narrows at once; it's hidden for a flight path and for someone with nothing to teach or sell; opening another person clears it. It doesn't overlap the "N of M" count on the right.
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)

@@ -41,7 +41,7 @@ NOBODY = { npc = 9999, name = "Nobody", recs = {}, group = { family = "other" } 
 function Look(person)
 	local out = { banners = {}, items = {}, spells = {}, small = {}, search = false }
 	for _, b in ipairs(DescribePerson(person)) do
-		if b[1] == "frame" and b[2].box == A.UI:GetPage("townsfolk"):StockSearchBox() then out.search = true end
+		
 		if b[1] == "banner" then out.banners[#out.banners + 1] = b[2] end
 		if b[1] == "small" then out.small[#out.small + 1] = b[2] end
 		if b[1] == "slots" then
@@ -51,6 +51,7 @@ function Look(person)
 			end
 		end
 	end
+	out.search = A.UI:GetPage("townsfolk"):StockSearchShown()
 	out.banners = table.concat(out.banners, "|") out.small = table.concat(out.small, "|")
 	out.items = table.concat(out.items, ",") out.spells = table.concat(out.spells, ",")
 	return out
@@ -66,7 +67,7 @@ OPENED, OPEN_ERR = pcall(function() A.UI:Open("townsfolk") RunTimers(1) PAGE:Sho
 """)
 check(p.eval("OPENED"), "the People page opens on someone who teaches and sells (%s)" % p.eval("tostring(OPEN_ERR)"))
 p.lua("R = Look(PERSON)")
-check(p.eval("R.search"), "a search box over their lists")
+check(p.eval("R.search"), "a search box for their lists, in the window's top bar (always in view, 2026-11-11)")
 check("Training (2)" in p.eval("R.banners") and "For sale (3)" in p.eval("R.banners"), "no search: every line, counted as before (%s)" % p.eval("R.banners"))
 
 p.lua('Type("belt") R = Look(PERSON)')
