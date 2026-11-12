@@ -904,7 +904,10 @@ local function Collect()
 	for h in pairs(byHead) do heads[#heads + 1] = h end
 	table.sort(heads)
 	for _, h in ipairs(heads) do
-		rows[#rows + 1] = { header = h, count = #byHead[h] }
+		-- (2026-11-11, Shannon) how many of them you have in your log, beside the zone's name
+		local inLog = 0
+		for _, q in ipairs(byHead[h]) do if LogIndex(q.qid) then inLog = inLog + 1 end end
+		rows[#rows + 1] = { header = h, count = #byHead[h], inLog = inLog }
 		table.sort(byHead[h], function(a, b)
 			if (a.lvl or 0) ~= (b.lvl or 0) then return (a.lvl or 0) < (b.lvl or 0) end
 			return (a.rec.name or "") < (b.rec.name or "")
@@ -1117,7 +1120,9 @@ function page:Build(parent, header)
 			row:SetHeader(r.header ~= nil, r.header and collapsed[r.newHeader and "new" or r.header])
 			if ns.New then ns.New:MarkRow(row, r.isNew, "quests", r.newKey) end
 			if r.header then
-				row.text:SetText(r.header)
+				-- the quests you have there now, in gold beside the name; every one known, grey on the right
+				local mine = (r.inLog or 0) > 0 and Q():ZoneCountsOn() and ("  |cffffd100(" .. r.inLog .. ")|r") or ""
+				row.text:SetText(r.header .. mine)
 				row.right:SetText(r.newHeader and "" or ("|cff999999" .. r.count .. "|r"))
 			else
 				local s = Q():MyStatus(r.qid)

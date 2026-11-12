@@ -6,6 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Quest counts beside zone names.** How many quests you have in each zone, in gold just after the zone's name: on the Almanac's Quests page ("Duskwood (3)", the grey number on the right still counts every quest the Almanac knows there) and in the game's own quest log ("Duskwood (9)"). Settings > Quests > Quest counts beside zone names (on). The game's log isn't changed: the count is a label of ours placed just past the heading's text after the log redraws. New file `QoL/QuestLogCounts.lua`: needs a full game restart. Test: `test_quest_zone_counts.py`.
 - **Crafting profit in the recipe list: per item, not per day.** Each recipe's badge on the profession window now shows the profit for each item made, marked "ea" ("+2.6s ea"), and the estimated daily sales no longer sit beside it, where "+2.6s ~136/d" read as profit per day. A recipe that makes several items at once had shown the profit for the whole craft; it's now split per item. Top profits shows the same, and its "profit x daily sales" ranking now multiplies profit per item by items sold a day (it had used the whole craft's profit, overrating recipes that make more than one). Daily sales are still on the recipe's Crafting profit card ("Sells about") and in the Top profits tooltips. Test: `test_crafting_badges.py`.
 
 ## 1.5.1 (2026-11-08)

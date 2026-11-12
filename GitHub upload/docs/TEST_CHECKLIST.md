@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Quest counts beside zone names (full game restart: new file QoL/QuestLogCounts.lua):** open the game's quest log (L): each zone heading reads like "Duskwood (9)", the number matching the quests listed under it, in gold right after the name and clear of the collapse button; collapse a zone: the count stays; scroll, search the log, accept and abandon a quest: the counts keep up and none sits on a quest's own line. The Almanac's Quests page: "(n)" in gold after each zone you have quests in, the grey total still on the right. Settings > Quests > Quest counts beside zone names off: both go.
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)
