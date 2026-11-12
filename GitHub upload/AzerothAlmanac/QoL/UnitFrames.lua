@@ -191,9 +191,12 @@ end
 ---------------------------------------------------------------------------
 -- Each status-bar slot (main and secondary) has its own experience bar. Blizzard's text
 -- ("1200 / 5600", on hover or always with the game's option) gets "- 4400 to go", and a
--- small label on the bar's right end always shows what's left.
+-- small label towards the bar's right end (clear of the gryphon) always shows what's left.
 
 local xpBars = {} -- experience bar -> our label
+-- (2026-11-11, Shannon) how far in from the bar's right end the label ends: the action bar's gryphon
+-- statue covers the last stretch of the bar (it was 6 px, under the statue's paws)
+local XP_LABEL_INSET = 80
 
 local function Number(n)
 	return BreakUpLargeNumbers and BreakUpLargeNumbers(n) or tostring(n)
@@ -231,7 +234,7 @@ local function MakeXPLabels()
 		local bar = container.bars and container.bars[enum.Experience]
 		if bar and not xpBars[bar] and bar.OverlayFrame then
 			local label = bar.OverlayFrame:CreateFontString(nil, "OVERLAY", "TextStatusBarText")
-			label:SetPoint("RIGHT", bar, "RIGHT", -6, 1)
+			label:SetPoint("RIGHT", bar, "RIGHT", -XP_LABEL_INSET, 1)
 			label:SetJustifyH("RIGHT")
 			label:SetTextColor(1, 0.92, 0.7)
 			xpBars[bar] = label
