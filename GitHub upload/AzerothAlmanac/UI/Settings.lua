@@ -1356,13 +1356,13 @@ local function BuildTankTarget(P)
 	P:Picker(L["Look"], TT.looks, function()
 		for i, m in ipairs(TT.looks) do if m.key == db.look then return i end end
 		return 1
-	end, function(i) db.look = TT.looks[i].key TT:Refresh() end, nil, 1, L["Marker above: the tank shield over the nameplate. Outline: a coloured edge round its health bar, outside the threat edge. Red glow: a slowly pulsing red halo round its health bar, the nearest to the game's red circle on the ground (an addon can't draw on the ground)."])
-	P:Color(L["Outline colour"], function() return db.color end, function(r, g, b) db.color = { r, g, b } TT:Refresh() end, 1)
+	end, function(i) db.look = TT.looks[i].key TT:Refresh() end, nil, 1, L["Marker above: the tank shield over the nameplate. Soft glow: a glow round its health bar in the colour below, no hard edge. Red glow: a slowly pulsing red halo round its health bar, the nearest to the game's red circle on the ground (an addon can't draw on the ground)."])
+	P:Color(L["Glow colour"], function() return db.color end, function(r, g, b) db.color = { r, g, b } TT:Refresh() end, 1)
 	-- (2026-11-11) the outline's halo, and "you're on it" when your target is the tank's
-	P:Picker(L["Outline glow"], TT.glowLevels, function()
+	P:Picker(L["Glow strength"], TT.glowLevels, function()
 		for i, g in ipairs(TT.glowLevels) do if g.key == (db.outlineGlow or "soft") then return i end end
-		return 2
-	end, function(i) db.outlineGlow = TT.glowLevels[i].key TT:Refresh() end, nil, 1, L["A soft halo in the outline's colour spreading out from it (Outline and Both looks)."])
+		return 1
+	end, function(i) db.outlineGlow = TT.glowLevels[i].key TT:Refresh() end, nil, 1, L["How bright the soft glow round the bar is (Soft glow and Both looks)."])
 	P:Check(L["Show when my target is the tank's target"], L["Purple, so you know you're hitting what the tank is holding."], function() return db.lockOn ~= false end, Set("lockOn"))
 	P:Check(L["Brighter glow on its nameplate"], nil, function() return db.lockOnPlate ~= false end, Set("lockOnPlate"), 1)
 	P:Check(L["Glow round my Target frame"], L["Shows even when the mob's nameplate is out of range."], function() return db.lockOnFrame ~= false end, Set("lockOnFrame"), 1)

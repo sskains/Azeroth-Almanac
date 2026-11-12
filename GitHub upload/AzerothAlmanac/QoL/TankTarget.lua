@@ -1,6 +1,6 @@
 -- (2026-11-06) The tank's target: in a group with a tank (the tank role, or a raid's main tank),
 -- the enemy each tank has targeted is marked on its nameplate, all the time - a tank shield with
--- an arrow above the plate, an outline round its health bar, or both (Settings > Group Settings).
+-- an arrow above the plate, a soft glow round its health bar, or both (Settings > Group Settings).
 --
 -- In combat the tanks' targets are read every POLL seconds, as asked: UNIT_TARGET says when a
 -- tank switches, but it can be late or missing for a groupmate far off, and the poll is what
@@ -12,10 +12,12 @@
 -- (only friendly ones are locked there), but there is no plate to mark until the mob is in
 -- nameplate range, or with enemy nameplates switched off.
 --
--- The marker sits above the plate and the outline outside Threat Monitor's edge (which hugs the
--- bar at 2 px), so the two never cover each other. The red glow (2026-11-11) is a fourth look:
--- a breathing red halo behind the bar, the nearest an addon gets to the game's ground circle. Game art first: the role icon atlas, with the
--- old role texture as the fallback (ground rule 7).
+-- The marker sits above the plate; the glows sit behind the bar, outside Threat Monitor's edge
+-- (which hugs the bar at 2 px), so they never cover each other. (2026-11-11) The soft glow (the
+-- "outline" look, glow only: no hard edge, Shannon) is purple by default; the red glow is a fourth
+-- look, breathing, the nearest an addon gets to the game's ground circle; and your target being a
+-- tank's target lights a brighter purple glow on its plate and a halo behind your Target frame.
+-- Game art first: the role icon atlas, with the old role texture as the fallback (ground rule 7).
 
 local _, A = ...
 local ns = A.QoL
@@ -23,11 +25,12 @@ local TT = ns:NewModule("TankTarget")
 
 local POLL = 0.25
 TT.POLL = POLL
-local WHITE = "Interface\\Buttons\\WHITE8X8"
 local ROLE_ATLAS, ARROW_ATLAS = "roleicon-tiny-tank", "npe_arrowdown"
 local ROLE_TEXTURE = "Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES"
 
-TT.looks = { { name = "Marker above", key = "marker" }, { name = "Outline", key = "outline" }, { name = "Both", key = "both" },
+-- (2026-11-11, Shannon: "just a glow, no hard outline") the "outline" look is a glow round the bar now:
+-- its name says so; its key stays, so saved choices still mean the same
+TT.looks = { { name = "Marker above", key = "marker" }, { name = "Soft glow", key = "outline" }, { name = "Both", key = "both" },
 	{ name = "Red glow", key = "glow" } }
 -- (2026-11-11, Shannon: "a red selection under its feet, like the normal selection in the world") an
 -- addon can't draw on the ground, so the closest is on the plate: a red halo round the health bar,
@@ -37,13 +40,14 @@ local GLOW_COLOR = { 1, 0.16, 0.1 }
 local GLOW_PULSE = 1.4                 -- seconds for one breath
 local GLOW_LOW, GLOW_HIGH = 0.45, 0.95 -- its brightness, between breaths and at the top of one
 
--- (2026-11-11, Shannon: "enhance the outline ... a glow ... standard purple") the outline's colour is
--- the game's epic purple by default, and a soft halo of it spreads out from the outline
+-- (2026-11-11, Shannon: "enhance the outline ... a glow ... standard purple"; then "just a glow, no
+-- hard outline") the glow round the bar, in the game's epic purple by default; no edge drawn
 TT.PURPLE = { 0.64, 0.21, 0.93 }
 local OLD_BLUE = { 0.25, 0.6, 1 }      -- the outline's first default: moved to purple once (OnInitialize)
-TT.glowLevels = { { name = "Off", key = "off", alpha = 0 }, { name = "Soft", key = "soft", alpha = 0.55 }, { name = "Strong", key = "strong", alpha = 0.95 } }
--- (2026-11-11) "you're on it": your target is a tank's target. Its plate gets a brighter purple frame
--- that pulses once a second, and your Target frame a purple halo. Our own frames: nothing of the
+-- (with no edge, the glow is the whole look: no "Off"; an "off" saved earlier reads as Soft)
+TT.glowLevels = { { name = "Soft", key = "soft", alpha = 0.6 }, { name = "Strong", key = "strong", alpha = 0.95 } }
+-- (2026-11-11) "you're on it": your target is a tank's target. Its plate gets a brighter purple glow
+-- (no hard frame) that pulses once a second, and your Target frame a purple halo. Our own frames: nothing of the
 -- game's (its nameplate highlight, its Target frame) is recoloured or changed.
 local LOCK_PULSE, LOCK_LOW, LOCK_HIGH = 1.0, 0.6, 1.0
 
@@ -88,9 +92,6 @@ local function Mark(plate)
 	if m then return m end
 	m = CreateFrame("Frame", nil, plate)
 	m:SetFrameStrata("HIGH")
-	-- the outline: outside Threat Monitor's 2 px edge
-	m.edge = CreateFrame("Frame", nil, m, "BackdropTemplate")
-	m.edge:SetBackdrop({ edgeFile = WHITE, edgeSize = 2 })
 	-- the marker: the tank shield, an arrow under it pointing at the plate
 	m.icon = m:CreateTexture(nil, "OVERLAY")
 	m.icon:SetSize(18, 18)
@@ -110,21 +111,20 @@ local function Mark(plate)
 	m.glow:SetBlendMode("ADD")
 	m.glow:SetVertexColor(GLOW_COLOR[1], GLOW_COLOR[2], GLOW_COLOR[3])
 	m.glow:Hide()
-	-- (2026-11-11) the outline's halo: the same soft glow in the outline's colour, behind the edge
+	-- (2026-11-11) the soft glow round the bar (the "outline" look): the game's soft glow in the
+	-- chosen colour, and nothing else (Shannon: no hard outline)
 	m.edgeGlow = m:CreateTexture(nil, "BACKGROUND", nil, 1)
 	m.edgeGlow:SetTexture(GLOW_TEXTURE)
 	m.edgeGlow:SetBlendMode("ADD")
 	m.edgeGlow:Hide()
-	-- (2026-11-11) locked on (your target is this tank's target): a brighter purple frame and halo
-	m.lock = CreateFrame("Frame", nil, m, "BackdropTemplate")
-	m.lock:SetBackdrop({ edgeFile = WHITE, edgeSize = 3 })
-	m.lock:SetBackdropBorderColor(TT.PURPLE[1], TT.PURPLE[2], TT.PURPLE[3], 1)
+	-- (2026-11-11) locked on (your target is this tank's target): a bigger, brighter purple glow, no frame
+	m.lock = CreateFrame("Frame", nil, m)
 	m.lock.halo = m.lock:CreateTexture(nil, "BACKGROUND")
 	m.lock.halo:SetTexture(GLOW_TEXTURE)
 	m.lock.halo:SetBlendMode("ADD")
 	m.lock.halo:SetVertexColor(TT.PURPLE[1], TT.PURPLE[2], TT.PURPLE[3])
-	m.lock.halo:SetPoint("TOPLEFT", -18, 12)
-	m.lock.halo:SetPoint("BOTTOMRIGHT", 18, -12)
+	m.lock.halo:SetPoint("TOPLEFT", -24, 16)
+	m.lock.halo:SetPoint("BOTTOMRIGHT", 24, -16)
 	m.lock:Hide()
 	m:SetScript("OnUpdate", function(self)
 		local now = GetTime()
@@ -144,8 +144,8 @@ end
 TT.MarkOf = function(plate) return marks[plate] end
 
 local function GlowAlpha()
-	for _, g in ipairs(TT.glowLevels) do if g.key == (db.outlineGlow or "soft") then return g.alpha end end
-	return 0
+	for _, g in ipairs(TT.glowLevels) do if g.key == db.outlineGlow then return g.alpha end end
+	return TT.glowLevels[1].alpha
 end
 
 local function Place(m, plate, locked)
@@ -164,24 +164,16 @@ local function Place(m, plate, locked)
 	m.icon:SetPoint("BOTTOM", top, "TOP", 0, 16)
 	m.icon:SetShown(marker)
 	m.arrow:SetShown(marker and not m.noArrow)
-	local halo = outline and GlowAlpha() or 0
 	if outline then
 		local c = db.color or TT.PURPLE
-		m.edge:ClearAllPoints()
-		m.edge:SetPoint("TOPLEFT", bar, "TOPLEFT", -4, 4)
-		m.edge:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 4, -4)
-		m.edge:SetBackdropBorderColor(c[1], c[2], c[3], 1)
-		if halo > 0 then
-			m.edgeGlow:ClearAllPoints()
-			m.edgeGlow:SetPoint("TOPLEFT", bar, "TOPLEFT", -18, 12)
-			m.edgeGlow:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 18, -12)
-			m.edgeGlow:SetVertexColor(c[1], c[2], c[3])
-			m.edgeGlow:SetAlpha(halo)
-		end
+		m.edgeGlow:ClearAllPoints()
+		m.edgeGlow:SetPoint("TOPLEFT", bar, "TOPLEFT", -18, 12)
+		m.edgeGlow:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 18, -12)
+		m.edgeGlow:SetVertexColor(c[1], c[2], c[3])
+		m.edgeGlow:SetAlpha(GlowAlpha())
 	end
-	m.edge:SetShown(outline)
-	m.edgeGlow:SetShown(halo > 0)
-	-- locked on: the brighter purple frame round the bar (or the plate, with no bar), whatever the look
+	m.edgeGlow:SetShown(outline)
+	-- locked on: the brighter purple glow round the bar (or the plate, with no bar), whatever the look
 	local lock = locked and db.lockOn ~= false and db.lockOnPlate ~= false
 	if lock then
 		local around = bar or plate
