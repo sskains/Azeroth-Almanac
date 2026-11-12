@@ -6,6 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Alt+Right-click to sell: matches the lowest live price again.** When an item went into the sell frame before the auction house's search was back, it was priced from your last scan; when the live listings then arrived, they were only looked at if the price box had changed, and often it hadn't, so the item went up at the old scan's price instead of the lowest listed. The live listings are now read every time, whatever the box holds (live beats the last scan). For items that aren't commodities, the listings are found by the item's full key from the sell frame (they were looked up by its bare ID, which finds nothing for items with an item level, leaving the game's own suggestion). Test: `test_auction_post.py`.
 - **Crafting profit in the recipe list: per item, not per day.** Each recipe's badge on the profession window now shows the profit for each item made, marked "ea" ("+2.6s ea"), and the estimated daily sales no longer sit beside it, where "+2.6s ~136/d" read as profit per day. A recipe that makes several items at once had shown the profit for the whole craft; it's now split per item. Top profits shows the same, and its "profit x daily sales" ranking now multiplies profit per item by items sold a day (it had used the whole craft's profit, overrating recipes that make more than one). Daily sales are still on the recipe's Crafting profit card ("Sells about") and in the Top profits tooltips. Test: `test_crafting_badges.py`.
 
 ## 1.5.1 (2026-11-08)

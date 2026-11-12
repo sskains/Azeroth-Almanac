@@ -224,6 +224,43 @@ check("last refused" in out and "Internal auction error" in out, "a refused post
 p.lua("KEY:GetScript('OnKeyDown')(KEY, 'ENTER')")
 check(p.eval("NPOSTS") == 2, "after a refusal, Enter can try again")
 
+# (2026-11-11, Shannon: "it isn't doing the lowest price match correctly") the search lands after the
+# last scan's price went in, and the game leaves the box as it is: the live lowest must still win
+p = newah()
+p.lua("""
+RESULTS = {}
+C_AuctionHouse = { GetNumCommoditySearchResults = function() return #RESULTS end,
+	GetCommoditySearchResultInfo = function(id, i) return RESULTS[i] end }
+-- the game: the item goes in; its search comes back late, and it doesn't touch the price box
+AuctionHouseFrame.SetPostItem = function(self, loc) SELLF.item = loc self.mode = 2 SELLF.PriceInput.amount = 0
+	C_Timer.After(1.0, function() RESULTS = { { unitPrice = 4550 }, { unitPrice = 7000 } } FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED") end) end
+FireEvent("GLOBAL_MOUSE_DOWN", "RightButton") RunTimers(0.5)
+EARLY = SELLF.PriceInput.amount
+RunTimers(3)
+""")
+check(p.eval("EARLY") == 100, "before the search is back: the last scan's price (1s)")
+check(p.eval("SELLF.PriceInput.amount") == 4500, "the search lands with a lower live price and the box kept the scan's: matched to the lowest listed (45s 50c, to the silver: 45s)")
+
+# a non-commodity item: its results are under its full item key, not one made from the bare ID
+p = newah()
+p.lua("""
+AuctionHouseFrame.mode = 3
+ITEMSELL = AuctionHouseFrame.ItemSellFrame
+ITEMSELL.PriceInput = SELLF.PriceInput ITEMSELL.QuantityInput = SELLF.QuantityInput ITEMSELL.GetItem = SELLF.GetItem ITEMSELL.PostButton = SELLF.PostButton
+ITEMSELL.IsShown = function() return true end
+FULLKEY = { itemID = 2589, itemLevel = 5 }
+C_AuctionHouse = {
+	MakeItemKey = function(id) return { itemID = id } end,
+	GetItemKeyFromItem = function(loc) return FULLKEY end,
+	GetNumItemSearchResults = function(key) return key == FULLKEY and 2 or 0 end,
+	GetItemSearchResultInfo = function(key, i) return ({ { buyoutAmount = 3000, quantity = 1 }, { buyoutAmount = 5000, quantity = 1 } })[i] end,
+}
+AuctionHouseFrame.SetPostItem = function(self, loc) SELLF.item = loc self.mode = 3 SELLF.PriceInput.amount = 0
+	C_Timer.After(0.5, function() SELLF.PriceInput.amount = 5000 FireEvent("ITEM_SEARCH_RESULTS_UPDATED") end) end
+MousePress() RunTimers(3)
+""")
+check(p.eval("SELLF.PriceInput.amount") == 3000, "an item (not a commodity): its listings found by its full key, matched to the lowest (30s), not the game's suggestion (50s)")
+
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

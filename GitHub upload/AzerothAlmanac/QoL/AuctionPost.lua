@@ -136,8 +136,20 @@ local function LiveLows(sf, id)
 			if okI and type(r) == "table" then Look(r.unitPrice, r.containsOwnerItem) end
 		end
 	elseif AHC.GetNumItemSearchResults and AHC.GetItemSearchResultInfo and AHC.MakeItemKey then
-		local okK, key = pcall(AHC.MakeItemKey, id)
-		local ok, n = pcall(AHC.GetNumItemSearchResults, okK and key or nil)
+		-- (2026-11-11) the game files an item's results under its full key (item level and all): the
+		-- key of the item in the sell frame, where it can say; a key from the bare ID finds nothing for
+		-- such items, and the price fell back to the game's own suggestion
+		local key
+		local loc = sf and sf.GetItem and sf:GetItem()
+		if loc and AHC.GetItemKeyFromItem then
+			local okL, k = pcall(AHC.GetItemKeyFromItem, loc)
+			if okL and type(k) == "table" then key = k end
+		end
+		if not key then
+			local okK, k = pcall(AHC.MakeItemKey, id)
+			key = okK and k or nil
+		end
+		local ok, n = pcall(AHC.GetNumItemSearchResults, key)
 		for i = 1, ok and tonumber(n) or 0 do
 			local okI, r = pcall(AHC.GetItemSearchResultInfo, key, i)
 			if okI and type(r) == "table" then Look(r.buyoutAmount and r.buyoutAmount / math.max(r.quantity or 1, 1), r.containsOwnerItem) end
@@ -156,11 +168,20 @@ local function NewFill(final)
 	if not sf then return end
 	local live = PriceOf(sf)
 	local each, low, from
-	if live and live > 0 and live ~= pending.set then
-		local others, own = LiveLows(sf, ItemIDOf(pending.link))
-		low = math.min(others or math.huge, own or math.huge)
-		if low == math.huge then low = live end
+	-- (2026-11-11, Shannon: "it isn't doing the lowest price match correctly") the live listings are
+	-- read on every pass, whatever the price box holds. They used to be read only when the box had
+	-- changed from the price set here; but once the last scan's price was put in (before the game's
+	-- search was back), the box often kept it when the search landed, so the live lowest was never
+	-- looked at and the item went up at the old scan's price.
+	local others, own = LiveLows(sf, ItemIDOf(pending.link))
+	local found = math.min(others or math.huge, own or math.huge)
+	if found < math.huge then
+		low = found
 		each, from = Silver(low), (own and own == low) and "your own listing at" or "lowest listed now"
+	elseif live and live > 0 and live ~= pending.set then
+		-- (no listings to read: the game's own fill, once its search is back, is the live lowest)
+		low = live
+		each, from = Silver(low), "lowest listed now"
 	elseif not pending.set then
 		each, low = AH.UnitPrice(pending.link)
 		each, from = Silver(each), "last scan"

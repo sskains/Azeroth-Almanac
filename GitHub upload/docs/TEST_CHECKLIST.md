@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Alt+Right-click to sell, lowest price:** at the auction house, Alt+Right-click a stack of something with several listings (cloth, herbs): the price ends on the lowest listed per item (rounded down to the silver), even when the chat line first says "last scan"; the chat line names where the price came from. Try a piece of gear (not stackable) that's listed by others: it's priced at the lowest buyout listed, not the game's own suggestion. A second stack of what you just posted matches your own listing.
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)
