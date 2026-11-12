@@ -50,6 +50,47 @@ check(p.eval("QT.IconBeside(ST, { SI }) == SI"), "a scaled tracker: compared in 
 p.lua('TWO = Box("two-line title", 100, 500, 180, 28)')
 check(p.eval("QT.IconBeside(TWO, { QICON }) == QICON"), "a title on two lines: the icon by its first line")
 
+# (2026-11-11) a turn-in's "?" copies the game's own icon, texture by texture, scaled to the badge
+p.lua("""
+local function Tex(atlas, file, l, t, w, h, layer)
+  local x = CreateFrame("Frame"):CreateTexture()
+  x.GetObjectType = function() return "Texture" end
+  x.GetAtlas = function() return atlas end
+  x.GetTexture = function() return file end
+  x.GetTexCoord = function() return 0, 1, 0, 1 end
+  x.GetLeft = function() return l end x.GetRight = function() return l + w end
+  x.GetTop = function() return t end x.GetBottom = function() return t - h end
+  x.GetDrawLayer = function() return layer or "ARTWORK", 0 end
+  x.IsShown = function() return true end
+  x.GetBlendMode = function() return "BLEND" end
+  x.GetAlpha = function() return 1 end
+  return x
+end
+GAME = Box("game ?", 74, 504, 40, 40)
+RING = Tex("questlog-icon-ring", nil, 74, 504, 40, 40, "BORDER")
+MARK = Tex("QuestTurnin", nil, 84, 494, 20, 20, "ARTWORK")
+GLOW = Tex("hover-glow", nil, 74, 504, 40, 40, "HIGHLIGHT")
+GAME.GetRegions = function() return RING, MARK, GLOW end
+GAME.GetChildren = function() end
+HOST = CreateFrame("Frame")
+SET = {}
+local real = HOST.CreateTexture
+HOST.CreateTexture = function(self, ...)
+  local m = real(self, ...)
+  m.SetAtlas = function(_, a) m._atlas = a end
+  m.SetSize = function(_, w, h) m._w, m._h = w, h end
+  m.SetPoint = function(_, _, _, _, x, y) m._x, m._y = x, y end
+  return m
+end
+OK = QT.MirrorIcon(HOST, GAME, 20)
+""")
+check(p.eval("OK"), "the game's icon can be copied")
+check(p.eval("#HOST.mirror") == 2, "its ring and its ? are copied, not the hover glow (%d textures)" % p.eval("#HOST.mirror"))
+check(p.eval("HOST.mirror[1]._atlas") == "questlog-icon-ring" and p.eval("HOST.mirror[2]._atlas") == "QuestTurnin", "...with the game's own art")
+check(p.eval("HOST.mirror[1]._w") == 20 and p.eval("HOST.mirror[2]._w") == 10, "...scaled to the badge (40 px icon to 20: the ring 20, the ? 10)")
+check(p.eval("HOST.mirror[2]._x") == 5 and p.eval("HOST.mirror[2]._y") == -5, "...in the same place within it (the ? 5 px in)")
+check(p.eval("QT.MirrorIcon(HOST, nil, 20)") is False and not p.eval("HOST.mirror[1]:IsShown()"), "no game icon: nothing copied, the copy cleared (the badge keeps its own look)")
+
 print()
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)
