@@ -33,6 +33,7 @@ python3 "dev/tests/test_upgrades.py"
 - `test_people_stock_search.py`: the search over a person's Training and For sale lists on People: the box shows only when there's something listed, filters both by name (case-blind), counts "N of M", says when nothing matches, and clears when another person opens.
 - `test_search_all.py`: search everything: a page's own box takes part, matches grouped by page (most first, closest names first, the current page left out), the panel after a pause, a name opening on its page (every kind, class spells on their trainer's People page), a heading opening its page with the search, the "Look in" lines, text set by the Almanac opening nothing, and closing on focus loss or under two letters.
 - `test_crafting_badges.py`: the recipe list's profit badge is per item made (a two-a-craft recipe's profit halved), marked "ea", with no daily sales beside it; Top profits ranks by profit per item x items sold a day.
+- `test_auctions_total.py`: the Characters page's Auctions total (buyouts, a bid where there's no buyout, and 5% less after the cut) and the tab drawing with it.
 - `test_upgrades.py`: upgrade arrows (#55 part 2): talents saved, the spec, green for you, "Upgrade at NN", gold for an alt with an unbound copy, soulbound and other-realm cases, rings, two-handers, the Settings override and switch.
 
 Run the tests after any change to Wild Gambit's messages or rules. When a test needs another file, add it to `WG_FILES` in `harness.py` in `.toc` order, and anything the client provides to `wow_stub.lua`.

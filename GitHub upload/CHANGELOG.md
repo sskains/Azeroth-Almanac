@@ -6,6 +6,7 @@ Testing status isn't tracked here: see `docs/TEST_CHECKLIST.md` and the Issues b
 
 ## Unreleased
 
+- **Characters > Auctions: the total.** The Posted auctions heading now says what they're all worth, adding up the prices listed (the buyout, else the bid), and what you'd get after the auction house's 5% cut: "7 · total 59s (56s after the 5% cut, seen 1m ago)". Test: `test_auctions_total.py`.
 - **Crafting profit in the recipe list: per item, not per day.** Each recipe's badge on the profession window now shows the profit for each item made, marked "ea" ("+2.6s ea"), and the estimated daily sales no longer sit beside it, where "+2.6s ~136/d" read as profit per day. A recipe that makes several items at once had shown the profit for the whole craft; it's now split per item. Top profits shows the same, and its "profit x daily sales" ranking now multiplies profit per item by items sold a day (it had used the whole craft's profit, overrating recipes that make more than one). Daily sales are still on the recipe's Crafting profit card ("Sells about") and in the Top profits tooltips. Test: `test_crafting_badges.py`.
 
 ## 1.5.1 (2026-11-08)
