@@ -211,6 +211,41 @@ check(p.eval("SAVED_A.tankTarget.color[1]") == 0.64, "the old default blue becom
 check(p.eval("SAVED_B.tankTarget.color[1]") == 1, "a colour picked by hand stays")
 check(p.eval("SAVED_C.tankTarget.color[1]") == 0.25, "...and blue picked again after the switch stays too (it's done once)")
 
+# (2026-11-13) inside a dungeon: a creature's GUID is secret, and other answers can be too
+p.lua("""
+SECRET = setmetatable({}, { __tostring = function() return "secret" end })
+issecretvalue = function(v) return v == SECRET end
+ORIG = { UnitGUID = UnitGUID, UnitIsUnit = UnitIsUnit, UnitCanAttack = UnitCanAttack, ForUnit = C_NamePlate.GetNamePlateForUnit }
+UnitGUID = function(u) local g = ORIG.UnitGUID(u) if g and g:find("^Creature") then return SECRET end return g end
+COMBAT = false FireEvent("PLAYER_REGEN_ENABLED")
+TARGET.party1 = "wolf" TARGET[""] = nil
+FireEvent("PLAYER_ENTERING_WORLD") FireEvent("UNIT_TARGET", "party1")
+""")
+check(p.eval("Marked('nameplate1')") and p.eval("TT.howFound.party1") == "same", "in a dungeon (GUIDs secret): the tank's target is still marked, found by comparing plates")
+p.lua("""
+UnitIsUnit = function() return SECRET end
+C_NamePlate.GetNamePlateForUnit = function(u)
+  local w = PLATES[u] and u or nil
+  if w then return PLATES[u] end
+  local who = u:match("^(.-)target$") and TARGET[u:match("^(.-)target$")]
+  for tok, mob in pairs(PLATE_OF) do if mob == who then return PLATES[tok] end end
+end
+TARGET.party1 = "boar" FireEvent("UNIT_TARGET", "party1")
+""")
+check(p.eval("Marked('nameplate2')") and not p.eval("Marked('nameplate1')") and p.eval("TT.howFound.party1") == "token",
+      "...and with the same-unit check secret too: found by the game's own lookup of the tank's target")
+p.lua('UnitCanAttack = function() return SECRET end FireEvent("UNIT_TARGET", "party1")')
+check(p.eval("Marked('nameplate2')"), "...an \"is it an enemy\" the game won't answer doesn't rule it out")
+p.lua('TARGET[""] = "boar" FireEvent("PLAYER_TARGET_CHANGED")')
+check(p.eval("TT.lockedOn") and p.eval("TT.TargetHalo():IsShown()"), "...and your target being the tank's lights the purple lock-on (same plate)")
+p.lua('TARGET[""] = "wolf" FireEvent("PLAYER_TARGET_CHANGED")')
+check(not p.eval("TT.lockedOn"), "...a different mob: no lock-on")
+check(p.eval("(pcall(TT.Why, TT))"), "/aa tank why runs")
+p.lua("""
+UnitGUID, UnitIsUnit, UnitCanAttack, C_NamePlate.GetNamePlateForUnit = ORIG.UnitGUID, ORIG.UnitIsUnit, ORIG.UnitCanAttack, ORIG.ForUnit
+issecretvalue = nil TARGET[""] = nil FireEvent("PLAYER_TARGET_CHANGED")
+""")
+
 check(p.eval("#TT_ERRORS") == 0, "no Lua errors from TankTarget.lua (%s)" % p.eval("TT_ERRORS[1]"))
 
 print()

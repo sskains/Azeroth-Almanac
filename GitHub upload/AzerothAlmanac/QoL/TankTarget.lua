@@ -55,6 +55,7 @@ local db
 local R = function(v) return ns.Readable(v) end
 local tanks = {}      -- unit tokens of the group's tanks (and "player" with whenTank)
 local plateUnit = {}  -- GUID -> nameplate unit token, for the enemy plates on screen
+local onScreen = {}   -- nameplate unit token -> true, for every plate on screen (GUIDs can be secret)
 local marks = {}      -- plate -> its mark frame (kept, hidden, for when the plate comes back)
 local ticker
 
@@ -204,14 +205,42 @@ end
 -- What the tanks have targeted, and marking it
 ---------------------------------------------------------------------------
 
--- The plate of tank's target, if it's an enemy worth marking.
-local function TargetPlate(tank)
-	if not R(UnitIsConnected(tank)) or R(UnitIsDeadOrGhost(tank)) then return nil end
-	local t = tank .. "target"
-	if not R(UnitExists(t)) or R(UnitIsDead(t)) or not R(UnitCanAttack("player", t)) then return nil end
+-- (2026-11-13, Shannon: "not working in dungeons") inside instances the game keeps a creature's GUID
+-- secret, so a plate can't be found by GUID there, and a yes/no the game won't tell (a secret) must
+-- not count as "no". The plate is found three ways, the first that works:
+--   1. the game's own lookup by the unit token ("party1target"): no GUID needed
+--   2. by GUID, in the map of plates on screen (out in the world)
+--   3. each plate on screen asked "is this the same unit?" (the game compares, secrets and all)
+local function Plate(u)
+	local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, u)
+	if ok and plate and not A.IsSecret(plate) then return plate end
+end
+TT.howFound = {}  -- tank -> "token", "guid" or "same": how its target's plate was last found (/aa tank why)
+
+local function FindPlate(t)
+	local plate = Plate(t)
+	if plate then return plate, "token" end
 	local guid = R(UnitGUID(t))
 	local unit = guid and plateUnit[guid]
-	return unit and C_NamePlate.GetNamePlateForUnit(unit)
+	plate = unit and Plate(unit)
+	if plate then return plate, "guid" end
+	for u in pairs(onScreen) do
+		local ok, same = pcall(UnitIsUnit, u, t)
+		if ok and R(same) == true then
+			plate = Plate(u)
+			if plate then return plate, "same" end
+		end
+	end
+end
+
+-- The plate of tank's target, if it's an enemy worth marking (only a clear "no" rules one out).
+local function TargetPlate(tank)
+	if R(UnitIsConnected(tank)) == false or R(UnitIsDeadOrGhost(tank)) == true then return nil end
+	local t = tank .. "target"
+	if R(UnitExists(t)) == false or R(UnitIsDead(t)) == true or R(UnitCanAttack("player", t)) == false then return nil end
+	local plate, how = FindPlate(t)
+	TT.howFound[tank] = how
+	return plate
 end
 
 -- (2026-11-11) your Target frame's purple halo: a frame of ours behind the game's, anchored to it but
@@ -239,9 +268,13 @@ local function TargetHalo()
 end
 TT.TargetHalo = function() return targetHalo end
 
--- your target is this tank's target (the game's own same-unit check, so it holds without a nameplate)
-local function OnIt(tank)
-	return R(UnitExists("target")) and R(UnitIsUnit("target", tank .. "target")) == true
+-- your target is this tank's target: the game's own same-unit check, so it holds without a nameplate;
+-- where that's secret (in instances), the two having the same plate
+local function OnIt(tank, plate)
+	if R(UnitExists("target")) == false then return false end
+	local same = R(UnitIsUnit("target", tank .. "target"))
+	if same ~= nil then return same == true end
+	return plate ~= nil and Plate("target") == plate
 end
 
 function TT:Update()
@@ -249,10 +282,11 @@ function TT:Update()
 	local lockedAny = false
 	if db and db.enabled then
 		for _, tank in ipairs(tanks) do
-			local okL, on = pcall(OnIt, tank)
-			on = okL and on and R(UnitCanAttack("player", "target")) and not R(UnitIsDead("target"))
-			if on then lockedAny = true end
 			local ok, plate = pcall(TargetPlate, tank)
+			plate = ok and plate or nil
+			local okL, on = pcall(OnIt, tank, plate)
+			on = okL and on and R(UnitCanAttack("player", "target")) ~= false and R(UnitIsDead("target")) ~= true
+			if on then lockedAny = true end
 			if ok and plate then want[plate] = want[plate] or (on and true) or false end
 		end
 	end
@@ -282,11 +316,13 @@ TT.Polling = function() return ticker ~= nil end
 ---------------------------------------------------------------------------
 
 local function PlateAdded(unit)
+	onScreen[unit] = true
 	local guid = R(UnitGUID(unit))
 	if guid then plateUnit[guid] = unit end
 end
 
 local function PlateRemoved(unit)
+	onScreen[unit] = nil
 	for guid, u in pairs(plateUnit) do
 		if u == unit then plateUnit[guid] = nil end
 	end
@@ -296,9 +332,52 @@ end
 
 local function ReadPlates()
 	wipe(plateUnit)
+	wipe(onScreen)
 	for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
 		local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
 		if unit then PlateAdded(unit) end
+	end
+end
+
+---------------------------------------------------------------------------
+-- /aa tank why: what the game tells us, step by step (for a dungeon where the mark doesn't show)
+---------------------------------------------------------------------------
+
+local function Say(v)
+	if v == nil then return "nil" end
+	if A.IsSecret(v) then return "|cffff8040secret|r" end
+	return tostring(v)
+end
+
+function TT:Why()
+	local P = ns.Print
+	local inInstance, kind = IsInInstance()
+	P(("Tank's target: %s; %s; in %s."):format(db.enabled and "on" or "|cffff4040off|r", IsInRaid() and "raid" or IsInGroup() and "party" or "no group",
+		inInstance and ("an instance (" .. Say(kind) .. ")") or "the open world"))
+	local cv = GetCVar and GetCVar("nameplateShowEnemies")
+	local n = 0
+	for _ in pairs(onScreen) do n = n + 1 end
+	P(("Enemy nameplates: %s; %d plates on screen."):format(cv == "1" and "on" or "|cffff4040off|r (V)", n))
+	ReadTanks()
+	if #tanks == 0 then
+		P("|cffff4040No tank found.|r Someone needs the tank role (right-click their portrait > Set Role > Tank), or the raid's main tank.")
+		local prefix, count = IsInRaid() and "raid" or "party", IsInRaid() and 40 or 4
+		for i = 1, count do
+			local u = prefix .. i
+			if R(UnitExists(u)) then P(("  %s: %s, role %s"):format(u, Say(UnitName(u)), Say(UnitGroupRolesAssigned and UnitGroupRolesAssigned(u)))) end
+		end
+		return
+	end
+	for _, tank in ipairs(tanks) do
+		local t = tank .. "target"
+		P(("Tank %s (%s): target exists %s, name %s, enemy %s, dead %s, GUID %s."):format(tank, Say(UnitName(tank)), Say(UnitExists(t)),
+			Say(UnitName(t)), Say(UnitCanAttack("player", t)), Say(UnitIsDead(t)), A.IsSecret(UnitGUID(t)) and "|cffff8040secret|r" or (UnitGUID(t) and "readable" or "nil")))
+		local ok, plate = pcall(TargetPlate, tank)
+		local how = ok and plate and TT.howFound[tank]
+		P(("  its nameplate: %s"):format(how and ("found (" .. ({ token = "by unit", guid = "by GUID", same = "by comparing plates" })[how] .. ")")
+			or ok and "|cffff4040not found|r (out of nameplate range, or the game won't say)" or ("|cffff4040error|r " .. tostring(plate))))
+		local okL, on = pcall(OnIt, tank, ok and plate or nil)
+		P(("  your target is it: %s"):format(okL and tostring(on) or ("error " .. tostring(on))))
 	end
 end
 
