@@ -65,6 +65,37 @@ local panel, scroll, child, deckButton
 local pool, rowsData = {}, {}
 local state = { text = "", sort = "power", tier = 0, favOnly = false }
 
+-- (2026-11-13, Shannon: "a New section ... to show new cards since they last looked") the cards you
+-- held, and at what tier, when this page last opened (account-wide, like the deck): a card that
+-- wasn't there, or has gone up a tier, is new. Worked out as the page opens and kept for that visit,
+-- so starring or sorting while you look doesn't make the section vanish; the next visit starts over.
+-- The very first visit marks everything seen (a whole collection isn't "new"). The meadow critters
+-- and your own hero card are never new.
+local newKeys = {}  -- card key -> true, for this visit
+local function CardKey(c)
+	if not c or c.starter or c.hero then return nil end
+	return (c.pet and "pet:" or "") .. tostring(c.npc or c.name or "")
+end
+local function Seen()
+	local d = ns.db and ns.db.wildGambit
+	return d, d and d.deckSeen
+end
+local function ReadNew(cards)
+	newKeys = {}
+	local d, seen = Seen()
+	if not d then return end
+	local now = {}
+	for _, c in ipairs(cards) do
+		local k = CardKey(c)
+		if k then
+			now[k] = c.tier or 0
+			if seen and (seen[k] == nil or (c.tier or 0) > seen[k]) then newKeys[k] = true end
+		end
+	end
+	d.deckSeen = now
+end
+WG.DeckNewKeys = function() return newKeys end -- (for the tests)
+
 local SORTS = {
 	{ key = "power", name = "Power" },
 	{ key = "name",  name = "Name" },
@@ -371,7 +402,7 @@ end
 
 -- the blocks for what is showing. `focus`: no search or filter, so the stats, the hand and the
 -- sections; the starred cards sit in the hand and so are left out of the sections.
-local function Blocks(rows, focus)
+local function Blocks(rows, focus, fresh)
 	local out, at = {}, 8
 	local ch = WG.D.CH
 	local function add(b, h) b.y, b.h = at, h out[#out + 1] = b at = at + h end
@@ -384,6 +415,12 @@ local function Blocks(rows, focus)
 	end
 	if focus then
 		add({ kind = "stats" }, STATS_H + BLOCK_GAP)
+		-- new since you last looked: at the top, before the hand (they're still in their sections too)
+		if fresh and #fresh > 0 then
+			add({ kind = "head", type = "New", n = #fresh, new = true }, HEAD_H)
+			gridOf(fresh)
+			at = at + BLOCK_GAP
+		end
 		add({ kind = "hand" }, HAND_HEAD + ch + 20 + BLOCK_GAP)
 		local groups, order = {}, {}
 		for _, r in ipairs(rows) do
@@ -471,7 +508,13 @@ local function Layout()
 				f:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -b.y)
 				f:SetSize(width, HEAD_H - 6)
 				f.name:SetText(b.type)
-				f.count:SetText(("|cffc8bca0%d %s|r"):format(b.n, b.n == 1 and "card" or "cards"))
+				if b.new then
+					f.name:SetTextColor(0.6, 1, 0.45)
+					f.count:SetText(("|cffc8bca0%d %s since you last looked (new, or a tier up)|r"):format(b.n, b.n == 1 and "card" or "cards"))
+				else
+					f.name:SetTextColor(1, 0.82, 0.35)
+					f.count:SetText(("|cffc8bca0%d %s|r"):format(b.n, b.n == 1 and "card" or "cards"))
+				end
 				f:Show()
 			else
 				for col, item in ipairs(b.items) do
@@ -489,7 +532,12 @@ Refresh = function()
 	allCards = WG:Collection() or {}
 	rowsData = Rows()
 	local focus = state.text == "" and state.tier == 0 and not state.favOnly and #allCards > 0
-	blocks, contentH = Blocks(rowsData, focus)
+	local fresh = {}
+	for _, r in ipairs(rowsData) do
+		local k = CardKey(r.card)
+		if k and newKeys[k] then fresh[#fresh + 1] = r end
+	end
+	blocks, contentH = Blocks(rowsData, focus, fresh)
 	Layout()
 	if panel.empty then
 		panel.empty:SetText(EmptyText())
@@ -675,6 +723,7 @@ function WG:ShowDeck()
 	end
 	StowTable()
 	if panel.Place then panel:Place() end
+	if not panel:IsShown() then ReadNew(WG:Collection() or {}) end
 	panel:Show()
 	if scroll then scroll:SetVerticalScroll(0) end
 	Refresh()

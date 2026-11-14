@@ -68,6 +68,22 @@ check(p.eval("Tier(530)") == 4, "...killed once, its 5 wins count: Master Hunter
 p.lua('Creature(540, { name = "Kobold", lo = 5, hi = 5, class = "normal", type = "Humanoid", kills = 0 })')
 p.lua('for i = 1, 3 do WG.AddWin({ npc = 540, name = "Kobold" }) end')
 check(p.eval("Tier(540)") == 0, "an opponent from the Almanac with no standing known counts as an enemy")
+# (2026-11-13) a win that earns nothing says why; the lobby offers creatures whose card you hold
+p.lua('CHAT = {} WG.AddWin({ npc = 540, name = "Kobold" }) LAST = CHAT[#CHAT] or ""')
+check("Kobold is an enemy" in p.eval("LAST") and "first kill" in p.eval("LAST") and "4 wins" in p.eval("LAST"),
+      "...and a win against it says so: its card comes with the first kill, its wins count then")
+p.lua('CHAT = {} WG.AddWin({ npc = 960, name = "Innkeeper Allison", reaction = "friendly" }) LAST2 = table.concat(CHAT, " | ")')
+check("is an enemy" not in p.eval("LAST2"), "...a friendly NPC's win never says that")
+p.lua("""
+FB, BAD = {}, 0
+for i = 1, 60 do
+  local o = WG:FallbackOpponent()
+  FB[o.npc] = true
+  if WG.EarnedTier(o.npc) < 2 then BAD = BAD + 1 end
+end
+""")
+check(p.eval("BAD") == 0 and p.eval("FB[540]") is None,
+      "the lobby's opponent from the Almanac: only creatures whose card you hold (never the unkilled Kobold)")
 
 print("a practice game")
 p.lua("""

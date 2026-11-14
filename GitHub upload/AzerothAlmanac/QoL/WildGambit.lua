@@ -518,6 +518,11 @@ function WG.AddWin(opp)
 		local tierText = ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, WL.TIERS[after])
 		-- (ns.Print: the file's Tell is declared further down, so it was nil here: 2026-10-11)
 		ns.Print("|cff9be36bWild Gambit:|r " .. (before < 2 and "you've earned %s's card: %s." or "%s's card is now %s."):format(w.name or "?", tierText))
+	elseif after < 2 then
+		-- (2026-11-13, Shannon: "won ... and was not rewarded their card") a win that earns nothing
+		-- said nothing either. An enemy's card comes with the first kill; its wins wait for that.
+		ns.Print(("|cff9be36bWild Gambit:|r %s is an enemy: its card comes with your first kill of one. Your %d %s against it will count then.")
+			:format(w.name or "?", w.w, w.w == 1 and "win" or "wins"))
 	end
 	return w.w
 end
@@ -834,18 +839,26 @@ function WG:NearbyOpponent()
 	return found[math.random(#found)]
 end
 
+-- (2026-11-13) only creatures whose card you hold, where there are any: the Almanac doesn't keep a
+-- creature's standing, so one picked from it counts as an enemy, and an enemy's wins earn nothing
+-- until you've killed one (a win against it there gave no card, and didn't say why)
 function WG:FallbackOpponent()
 	local B = A.Bestiary
 	local ranks = { {}, {}, {}, {} } -- dungeon bosses, named, elites, the rest
+	local any = { {}, {}, {}, {} }   -- the same, card or not
 	for npc, rec in pairs(A.Store and A.Store:Shown("creature") or {}) do
 		if type(rec) == "table" and rec.name and not (B and B.IsObject and B:IsObject(rec)) then
 			local r = (rec.boss or rec.class == "worldboss") and 1 or (rec.class == "rare" or rec.class == "rareelite") and 2
 				or rec.class == "elite" and 3 or 4
-			table.insert(ranks[r], { name = rec.name, npc = npc, display = rec.display })
+			local o = { name = rec.name, npc = npc, display = rec.display }
+			table.insert(any[r], o)
+			if WG.EarnedTier(npc, rec) >= 2 then table.insert(ranks[r], o) end
 		end
 	end
-	for _, list in ipairs(ranks) do
-		if #list > 0 then return list[math.random(#list)] end
+	for _, set in ipairs({ ranks, any }) do
+		for _, list in ipairs(set) do
+			if #list > 0 then return list[math.random(#list)] end
+		end
 	end
 end
 

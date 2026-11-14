@@ -8,6 +8,9 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Wild Gambit wins and cards:** right-click a friendly NPC (a guard, an innkeeper) > Play Wild Gambit and win: "you've earned X's card" and the card toast. Win against a hostile creature you've never killed: a chat line says it's an enemy whose card comes with the first kill, and how many wins are waiting; kill one, and the card arrives with those wins counted. Open Wild Gambit with no one about: the opponent offered is a creature whose card you already hold.
+- [ ] **Your Deck, New:** open Your Deck once (nothing new the first time), earn a card (a kill or a win), open it again: a green "New" heading under the stats with that card, also in its type section; star or sort while looking and it stays; close and reopen: gone. A card that went up a tier shows there too.
+
 - [ ] **Crafting profit badges:** open a profession window: each recipe's badge reads like "+2.6s ea" (green for a profit, red for a loss) with no "/d" figure; a recipe that makes two or more at once (Rough Sharpening Stone, Copper Shells, Smelting) shows the profit for one item; the name still fits beside the badge. Top profits: "ea" on each row, the tooltip's "Profit ... each" and "About ... a day" make sense together.
 
 ## 1.5.1 (**full game restart**: the new files QoL/TankTarget.lua and UI/SearchAll.lua)
