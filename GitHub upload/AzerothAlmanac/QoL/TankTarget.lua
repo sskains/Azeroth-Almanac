@@ -13,7 +13,8 @@
 -- nameplate range, or with enemy nameplates switched off.
 --
 -- The marker sits above the plate and the outline outside Threat Monitor's edge (which hugs the
--- bar at 2 px), so the two never cover each other. Game art first: the role icon atlas, with the
+-- bar at 2 px), so the two never cover each other. The red glow (2026-11-11) is a fourth look:
+-- a breathing red halo behind the bar, the nearest an addon gets to the game's ground circle. Game art first: the role icon atlas, with the
 -- old role texture as the fallback (ground rule 7).
 
 local _, A = ...
@@ -26,7 +27,15 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 local ROLE_ATLAS, ARROW_ATLAS = "roleicon-tiny-tank", "npe_arrowdown"
 local ROLE_TEXTURE = "Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES"
 
-TT.looks = { { name = "Marker above", key = "marker" }, { name = "Outline", key = "outline" }, { name = "Both", key = "both" } }
+TT.looks = { { name = "Marker above", key = "marker" }, { name = "Outline", key = "outline" }, { name = "Both", key = "both" },
+	{ name = "Red glow", key = "glow" } }
+-- (2026-11-11, Shannon: "a red selection under its feet, like the normal selection in the world") an
+-- addon can't draw on the ground, so the closest is on the plate: a red halo round the health bar,
+-- breathing slowly (the game's soft glow, drawn added so it reads as light, not paint)
+local GLOW_TEXTURE = "Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64"
+local GLOW_COLOR = { 1, 0.16, 0.1 }
+local GLOW_PULSE = 1.4                 -- seconds for one breath
+local GLOW_LOW, GLOW_HIGH = 0.45, 0.95 -- its brightness, between breaths and at the top of one
 
 local db
 local R = function(v) return ns.Readable(v) end
@@ -85,6 +94,17 @@ local function Mark(plate)
 	m.arrow:SetSize(14, 14)
 	if HasAtlas(ARROW_ATLAS) then m.arrow:SetAtlas(ARROW_ATLAS) else m.arrow:Hide() m.noArrow = true end
 	m.arrow:SetPoint("TOP", m.icon, "BOTTOM", 0, 2)
+	-- the red glow: behind the bar, wider than it, breathing while it shows
+	m.glow = m:CreateTexture(nil, "BACKGROUND")
+	m.glow:SetTexture(GLOW_TEXTURE)
+	m.glow:SetBlendMode("ADD")
+	m.glow:SetVertexColor(GLOW_COLOR[1], GLOW_COLOR[2], GLOW_COLOR[3])
+	m.glow:Hide()
+	m:SetScript("OnUpdate", function(self)
+		if not self.glow:IsShown() then return end
+		local k = 0.5 + 0.5 * math.sin(GetTime() * 2 * math.pi / GLOW_PULSE)
+		self.glow:SetAlpha(GLOW_LOW + (GLOW_HIGH - GLOW_LOW) * k)
+	end)
 	m:Hide()
 	marks[plate] = m
 	return m
@@ -97,7 +117,10 @@ local function Place(m, plate)
 	local bar = frame and (frame.healthBar or frame.HealthBarsContainer)
 	local top = (frame and frame.name) or bar or plate
 	local look = db.look or "marker"
-	local marker, outline = look ~= "outline", look ~= "marker" and bar ~= nil
+	-- (a plate with no health bar to go round gets the marker whatever the look)
+	local glow = look == "glow" and bar ~= nil
+	local outline = (look == "outline" or look == "both") and bar ~= nil
+	local marker = look == "marker" or look == "both" or not (glow or outline)
 	m:ClearAllPoints()
 	m:SetAllPoints(plate)
 	m.icon:ClearAllPoints()
@@ -112,6 +135,12 @@ local function Place(m, plate)
 		m.edge:SetBackdropBorderColor(c[1], c[2], c[3], 1)
 	end
 	m.edge:SetShown(outline)
+	if glow then
+		m.glow:ClearAllPoints()
+		m.glow:SetPoint("TOPLEFT", bar, "TOPLEFT", -22, 14)
+		m.glow:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 22, -14)
+	end
+	m.glow:SetShown(glow)
 end
 
 local function Show(plate)

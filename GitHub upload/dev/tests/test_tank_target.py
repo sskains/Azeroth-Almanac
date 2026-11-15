@@ -118,6 +118,15 @@ p.lua(db + '.look = "both" TT:Refresh()')
 check(p.eval(m + ".edge:IsShown()") and p.eval(m + ".icon:IsShown()"), "Both: edge and shield")
 p.lua(db + '.look = "marker" TT:Refresh()')
 check(not p.eval(m + ".edge:IsShown()") and p.eval(m + ".icon:IsShown()"), "Marker above: the shield, no edge")
+# (2026-11-11) the red glow: a breathing red halo round the bar, nothing else
+check(p.eval('(function() for _, l in ipairs(TT.looks) do if l.key == "glow" then return l.name end end end)()') == "Red glow", "a fourth look: Red glow")
+p.lua(db + '.look = "glow" TT:Refresh()')
+check(p.eval(m + ".glow:IsShown()") and not p.eval(m + ".edge:IsShown()") and not p.eval(m + ".icon:IsShown()"), "Red glow: the glow, no shield, no edge")
+p.lua("UPD = " + m + ":GetScript('OnUpdate') ALPHAS = {} for i = 1, 8 do NOW = (NOW or 100) + 0.2 UPD(" + m + ") ALPHAS[i] = " + m + ".glow._alpha end")
+alphas = [p.eval("ALPHAS[%d]" % i) for i in range(1, 9)]
+check(all(a is not None and 0.44 <= a <= 0.96 for a in alphas) and max(alphas) - min(alphas) > 0.2, "...it breathes, between dim and bright (%s)" % ["%.2f" % a for a in alphas if a is not None])
+p.lua(db + '.look = "marker" TT:Refresh()')
+check(not p.eval(m + ".glow:IsShown()"), "back to Marker above: the glow goes")
 
 # combat ends: the poll stops, the mark stays
 p.lua('COMBAT = false FireEvent("PLAYER_REGEN_ENABLED")')
