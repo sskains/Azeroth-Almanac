@@ -824,10 +824,19 @@ local function DropTakenTarget()
 		return Readable(UnitName("target")) or "that one"
 	end)
 	if not (ok and name) then return end
-	pcall(ClearTarget)
+	-- (2026-11-11) ClearTarget is protected in combat: called from here (PostClick runs as the
+	-- addon, not as the secure button) it raised "AzerothAlmanac has been blocked from an action"
+	-- when the button was clicked again mid-fight, and pcall doesn't stop that. In combat the
+	-- target stays, and the note says so.
+	local fighting = InCombatLockdown()
+	if not fighting then pcall(ClearTarget) end
 	if GetTime() - lastSkippedNote > 2 then
 		lastSkippedNote = GetTime()
-		ns.Print(("Skipped %s: someone else is fighting it."):format(name))
+		if fighting then
+			ns.Print(("%s is someone else's: targets can't be changed for you mid-fight."):format(name))
+		else
+			ns.Print(("Skipped %s: someone else is fighting it."):format(name))
+		end
 	end
 	QT.Recount(0.1)
 end
