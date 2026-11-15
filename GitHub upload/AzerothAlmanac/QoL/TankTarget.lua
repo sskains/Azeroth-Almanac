@@ -55,8 +55,16 @@ local db
 local R = function(v) return ns.Readable(v) end
 local tanks = {}      -- unit tokens of the group's tanks (and "player" with whenTank)
 local plateUnit = {}  -- GUID -> nameplate unit token, for the enemy plates on screen
+local onScreen = {}   -- nameplate unit token -> true, for every plate on screen (GUIDs can be secret)
 local marks = {}      -- plate -> its mark frame (kept, hidden, for when the plate comes back)
 local ticker
+-- (2026-11-14, Shannon: "still doesn't appear to work in a dungeon") a pickup group often never sets
+-- roles, and with nobody in the tank role there was no tank to follow. In a party with no tank, the
+-- member the mobs are on in combat (the game's "securely tanking") is taken as the tank: a warrior,
+-- paladin, druid or death knight is kept until the group changes; anyone else only while it lasts
+-- (a mage who pulls aggro once isn't the tank).
+local guessed, guessedName
+local TANK_CLASSES = { WARRIOR = true, PALADIN = true, DRUID = true, DEATHKNIGHT = true }
 
 local function HasAtlas(name)
 	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
@@ -80,8 +88,42 @@ local function ReadTanks()
 		end
 		if db.whenTank and ns.IsTankUnit("player") then tanks[#tanks + 1] = "player" end
 	end
+	-- the guessed tank: dropped when a real one is named or that slot is someone else now
+	if guessed and (#tanks > 0 or IsInRaid() or not IsInGroup() or R(UnitName(guessed)) ~= guessedName) then
+		guessed, guessedName = nil, nil
+	end
+	if guessed and #tanks == 0 then tanks[1] = guessed end
 end
 TT.Tanks = function() return tanks end
+TT.Guessed = function() return guessed end
+
+-- a party (not a raid) with nobody in the tank role: worth guessing in
+local function CanGuess()
+	return #tanks == 0 and IsInGroup() and not IsInRaid()
+end
+
+-- the party member securely tanking something (threat status 3), a tanking class first
+local function GuessTank()
+	if guessed then return guessed end
+	if not CanGuess() or not UnitThreatSituation then return nil end
+	local pick, pickTankClass
+	for i = 1, 4 do
+		local u = "party" .. i
+		if R(UnitExists(u)) then
+			local ok, status = pcall(UnitThreatSituation, u)
+			if ok and R(status) == 3 then
+				local _, class = UnitClass(u)
+				local tankClass = TANK_CLASSES[R(class) or ""] == true
+				if not pick or (tankClass and not pickTankClass) then pick, pickTankClass = u, tankClass end
+			end
+		end
+	end
+	if pick and pickTankClass then
+		guessed, guessedName = pick, R(UnitName(pick))
+		tanks[1] = pick
+	end
+	return pick
+end
 
 ---------------------------------------------------------------------------
 -- The mark on a plate
@@ -204,14 +246,42 @@ end
 -- What the tanks have targeted, and marking it
 ---------------------------------------------------------------------------
 
--- The plate of tank's target, if it's an enemy worth marking.
-local function TargetPlate(tank)
-	if not R(UnitIsConnected(tank)) or R(UnitIsDeadOrGhost(tank)) then return nil end
-	local t = tank .. "target"
-	if not R(UnitExists(t)) or R(UnitIsDead(t)) or not R(UnitCanAttack("player", t)) then return nil end
+-- (2026-11-13, Shannon: "not working in dungeons") inside instances the game keeps a creature's GUID
+-- secret, so a plate can't be found by GUID there, and a yes/no the game won't tell (a secret) must
+-- not count as "no". The plate is found three ways, the first that works:
+--   1. the game's own lookup by the unit token ("party1target"): no GUID needed
+--   2. by GUID, in the map of plates on screen (out in the world)
+--   3. each plate on screen asked "is this the same unit?" (the game compares, secrets and all)
+local function Plate(u)
+	local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, u)
+	if ok and plate and not A.IsSecret(plate) then return plate end
+end
+TT.howFound = {}  -- tank -> "token", "guid" or "same": how its target's plate was last found (/aa tank why)
+
+local function FindPlate(t)
+	local plate = Plate(t)
+	if plate then return plate, "token" end
 	local guid = R(UnitGUID(t))
 	local unit = guid and plateUnit[guid]
-	return unit and C_NamePlate.GetNamePlateForUnit(unit)
+	plate = unit and Plate(unit)
+	if plate then return plate, "guid" end
+	for u in pairs(onScreen) do
+		local ok, same = pcall(UnitIsUnit, u, t)
+		if ok and R(same) == true then
+			plate = Plate(u)
+			if plate then return plate, "same" end
+		end
+	end
+end
+
+-- The plate of tank's target, if it's an enemy worth marking (only a clear "no" rules one out).
+local function TargetPlate(tank)
+	if R(UnitIsConnected(tank)) == false or R(UnitIsDeadOrGhost(tank)) == true then return nil end
+	local t = tank .. "target"
+	if R(UnitExists(t)) == false or R(UnitIsDead(t)) == true or R(UnitCanAttack("player", t)) == false then return nil end
+	local plate, how = FindPlate(t)
+	TT.howFound[tank] = how
+	return plate
 end
 
 -- (2026-11-11) your Target frame's purple halo: a frame of ours behind the game's, anchored to it but
@@ -239,20 +309,32 @@ local function TargetHalo()
 end
 TT.TargetHalo = function() return targetHalo end
 
--- your target is this tank's target (the game's own same-unit check, so it holds without a nameplate)
-local function OnIt(tank)
-	return R(UnitExists("target")) and R(UnitIsUnit("target", tank .. "target")) == true
+-- your target is this tank's target: the game's own same-unit check, so it holds without a nameplate;
+-- where that's secret (in instances), the two having the same plate
+local function OnIt(tank, plate)
+	if R(UnitExists("target")) == false then return false end
+	local same = R(UnitIsUnit("target", tank .. "target"))
+	if same ~= nil then return same == true end
+	return plate ~= nil and Plate("target") == plate
 end
+
+local Record -- (below, with /aa tank why)
 
 function TT:Update()
 	local want = {}
 	local lockedAny = false
+	local list = tanks
+	if db and db.enabled and #tanks == 0 and InCombatLockdown() then
+		local g = GuessTank()
+		if g then list = { g } end
+	end
 	if db and db.enabled then
-		for _, tank in ipairs(tanks) do
-			local okL, on = pcall(OnIt, tank)
-			on = okL and on and R(UnitCanAttack("player", "target")) and not R(UnitIsDead("target"))
-			if on then lockedAny = true end
+		for _, tank in ipairs(list) do
 			local ok, plate = pcall(TargetPlate, tank)
+			plate = ok and plate or nil
+			local okL, on = pcall(OnIt, tank, plate)
+			on = okL and on and R(UnitCanAttack("player", "target")) ~= false and R(UnitIsDead("target")) ~= true
+			if on then lockedAny = true end
 			if ok and plate then want[plate] = want[plate] or (on and true) or false end
 		end
 	end
@@ -263,12 +345,13 @@ function TT:Update()
 	local halo = TargetHalo()
 	if halo then halo:SetShown(lockedAny and db.lockOn ~= false and db.lockOnFrame ~= false) end
 	TT.lockedOn = lockedAny
+	if Record and db and db.enabled and InCombatLockdown() and IsInGroup() then Record(next(want) ~= nil) end
 end
 
 local function Tick() TT:Update() end
 
 local function StartPolling()
-	if ticker or not (db and db.enabled) or #tanks == 0 then return end
+	if ticker or not (db and db.enabled) or (#tanks == 0 and not CanGuess()) then return end
 	ticker = C_Timer.NewTicker(POLL, Tick)
 end
 
@@ -282,11 +365,13 @@ TT.Polling = function() return ticker ~= nil end
 ---------------------------------------------------------------------------
 
 local function PlateAdded(unit)
+	onScreen[unit] = true
 	local guid = R(UnitGUID(unit))
 	if guid then plateUnit[guid] = unit end
 end
 
 local function PlateRemoved(unit)
+	onScreen[unit] = nil
 	for guid, u in pairs(plateUnit) do
 		if u == unit then plateUnit[guid] = nil end
 	end
@@ -296,10 +381,117 @@ end
 
 local function ReadPlates()
 	wipe(plateUnit)
+	wipe(onScreen)
 	for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
 		local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
 		if unit then PlateAdded(unit) end
 	end
+end
+
+---------------------------------------------------------------------------
+-- /aa tank why: what the game tells us, step by step (for a dungeon where the mark doesn't show)
+---------------------------------------------------------------------------
+
+local function Say(v)
+	if v == nil then return "nil" end
+	if A.IsSecret(v) then return "|cffff8040secret|r" end
+	return tostring(v)
+end
+
+-- each step on its own, so a dungeon that hides one shows which: the lookup by unit token, and how
+-- many plates on screen the game says are the same unit (or won't say)
+local function Probe(t)
+	local ok, p = pcall(C_NamePlate.GetNamePlateForUnit, t)
+	local token = not ok and ("error " .. tostring(p)) or p == nil and "nil" or A.IsSecret(p) and "secret" or "a plate"
+	local same, secret, errs = 0, 0, 0
+	for u in pairs(onScreen) do
+		local okS, s = pcall(UnitIsUnit, u, t)
+		if not okS then errs = errs + 1 elseif A.IsSecret(s) then secret = secret + 1 elseif s then same = same + 1 end
+	end
+	return ("  lookups: by unit %s; plates that are it %d, won't say %d, errors %d"):format(token, same, secret, errs)
+end
+
+-- what the game tells us, as lines (/aa tank why prints them; Record keeps them)
+local function Lines()
+	local out = {}
+	local function P(s) out[#out + 1] = s end
+	local okI, inInstance, kind = pcall(IsInInstance)
+	local where = not okI and "?" or A.IsSecret(inInstance) and "secret" or inInstance and ("an instance (" .. Say(kind) .. ")") or "the open world"
+	P(("Tank's target: %s; %s; in %s; combat %s; version %s."):format(db.enabled and "on" or "|cffff4040off|r",
+		IsInRaid() and "raid" or IsInGroup() and "party" or "no group", where, tostring(InCombatLockdown() and true or false), tostring(A.VERSION)))
+	local cv = GetCVar and GetCVar("nameplateShowEnemies")
+	local n = 0
+	for _ in pairs(onScreen) do n = n + 1 end
+	P(("Enemy nameplates: %s; %d plates on screen."):format(cv == "1" and "on" or "|cffff4040off|r (V)", n))
+	-- the group: roles, and who the mobs are on (what a guess goes by)
+	local prefix, count = IsInRaid() and "raid" or "party", IsInRaid() and 40 or 4
+	for i = 1, count do
+		local u = prefix .. i
+		if R(UnitExists(u)) then
+			local _, class = UnitClass(u)
+			local okT, threat = pcall(UnitThreatSituation or function() end, u)
+			P(("  %s: %s, %s, role %s, threat %s"):format(u, Say(UnitName(u)), Say(class), Say(UnitGroupRolesAssigned and UnitGroupRolesAssigned(u)),
+				okT and Say(threat) or "error"))
+		end
+	end
+	local list = tanks
+	if #list == 0 and guessed then list = { guessed } end
+	if #list == 0 then
+		P("|cffff4040No tank found.|r Nobody has the tank role (right-click their portrait > Set Role > Tank), and in a fight nobody was found holding the mobs.")
+		return out
+	end
+	if guessed then P(("No tank role set: %s is taken as the tank (holding the mobs)."):format(Say(UnitName(guessed)))) end
+	for _, tank in ipairs(list) do
+		local t = tank .. "target"
+		P(("Tank %s (%s): target exists %s, name %s, enemy %s, dead %s, GUID %s."):format(tank, Say(UnitName(tank)), Say(UnitExists(t)),
+			Say(UnitName(t)), Say(UnitCanAttack("player", t)), Say(UnitIsDead(t)), A.IsSecret(UnitGUID(t)) and "|cffff8040secret|r" or (UnitGUID(t) and "readable" or "nil")))
+		local ok, plate = pcall(TargetPlate, tank)
+		local how = ok and plate and TT.howFound[tank]
+		P(("  its nameplate: %s"):format(how and ("found (" .. ({ token = "by unit", guid = "by GUID", same = "by comparing plates" })[how] .. ")")
+			or ok and "|cffff4040not found|r (out of nameplate range, or the game won't say)" or ("|cffff4040error|r " .. tostring(plate))))
+		P(Probe(t))
+		local okL, on = pcall(OnIt, tank, ok and plate or nil)
+		P(("  your target is it: %s"):format(okL and tostring(on) or ("error " .. tostring(on))))
+	end
+	return out
+end
+
+-- (2026-11-14) the same lines, kept in the saved data (qol.tankWhy, the latest 10) without anyone
+-- having to type /aa tank why mid-fight: in combat in a group anywhere but the open world, when
+-- nothing could be marked (at most every 30 s), and once a visit when a mark did show there.
+-- Not a setting: profiles never copy it.
+TT.RECORD_GAP = 30
+local lastRecord, recordedOk = -math.huge, false
+local function Keep(reason, lines)
+	local qol = ns.db
+	if type(qol) ~= "table" then return end
+	qol.tankWhy = type(qol.tankWhy) == "table" and qol.tankWhy or {}
+	local log = qol.tankWhy
+	while #log >= 10 do table.remove(log, 1) end
+	local plain = {}
+	for i, l in ipairs(lines) do plain[i] = (l:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+	log[#log + 1] = { t = time(), when = date and date("%Y-%m-%d %H:%M:%S"), reason = reason, lines = plain }
+end
+Record = function(marked)
+	local okI, inInstance = pcall(IsInInstance)
+	if okI and not A.IsSecret(inInstance) and not inInstance then return end -- the open world (works there): nothing to learn
+	if marked then
+		if recordedOk then return end
+		recordedOk = true
+	else
+		local now = GetTime()
+		if now - lastRecord < TT.RECORD_GAP then return end
+		lastRecord = now
+	end
+	local ok, lines = pcall(Lines)
+	Keep(marked and "marked" or "nothing marked", ok and lines or { "error: " .. tostring(lines) })
+end
+
+function TT:Why()
+	ReadTanks()
+	local lines = Lines()
+	for _, l in ipairs(lines) do ns.Print(l) end
+	Keep("asked", lines)
 end
 
 ---------------------------------------------------------------------------
@@ -309,7 +501,7 @@ end
 -- after a setting changed (Settings > Group Settings > Tank's target)
 function TT:Refresh()
 	ReadTanks()
-	if InCombatLockdown() and #tanks > 0 and db.enabled then StartPolling() else StopPolling() end
+	if InCombatLockdown() and (#tanks > 0 or CanGuess()) and db.enabled then StartPolling() else StopPolling() end
 	self:Update()
 end
 
@@ -344,8 +536,9 @@ function TT:OnLogin()
 		elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" or event == "UNIT_CONNECTION" then
 			ReadTanks()
 			if InCombatLockdown() then StartPolling() end
-			if #tanks == 0 then StopPolling() end
+			if #tanks == 0 and not CanGuess() then StopPolling() end
 		elseif event == "PLAYER_ENTERING_WORLD" then
+			recordedOk = false -- a new place: a mark showing is worth writing down once here
 			ReadTanks()
 			ReadPlates()
 		end

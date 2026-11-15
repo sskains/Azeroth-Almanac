@@ -659,6 +659,8 @@ SlashCmdList.AZEROTHALMANAC = function(msg)
 	elseif cmd == "manacheck" then
 		-- (2026-10-15) a probe for the druid mana bar in forms
 		ns.QoL.UnitFrames:ManaCheck()
+	elseif cmd == "tank" then
+		if rest:lower() == "why" then ns.QoL.TankTarget:Why() else ns.Settings:Open("tank") end
 	elseif cmd == "threat" then
 		ns.QoL.ThreatMonitor:Preview()
 	elseif cmd == "wings" then
@@ -732,6 +734,7 @@ function ns.Help()
 	ns.Print("/aa gambit [Name|new|tutorial|leave] - " .. L["Wild Gambit, the creature card game (practice, or challenge another Almanac player)"])
 	ns.Print("/aa mtt [name|target|practice|leave|ping name|debug] - " .. L["Murloc Tac Toe: challenge another Azeroth Almanac player, or practise against a gnoll"])
 	ns.Print("/aa heal [test|debug|on|off] - " .. L["Healer Assist"])
+	ns.Print("/aa tank [why] - " .. L["Tank's target (why: what the game tells it, if the mark doesn't show)"])
 	ns.Print("/aa node herb|ore|chest|other|reset - " .. L["classify the node you're facing"])
 	ns.Print("/qt - " .. L["quest tracker target buttons (/qt help)"])
 	ns.Print("/aa stats - " .. L["what has been recorded, and how big the saved data is"])
