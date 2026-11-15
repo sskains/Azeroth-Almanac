@@ -61,6 +61,7 @@ QoL\FlightCrew.lua
 QoL\WingsWhispers.lua
 QoL\InventoryWindow.lua
 QoL\BagBank.lua
+QoL\BagPins.lua
 QoL\Social.lua
 QoL\UnitFrames.lua
 QoL\PartyPlates.lua

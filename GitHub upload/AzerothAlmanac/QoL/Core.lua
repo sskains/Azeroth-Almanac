@@ -93,6 +93,10 @@ ns.defaults = {
 		chars = {},             -- "Name-Realm" -> { class, code, time }: each character's current talents
 		trees = {},             -- classFile -> the three trees as the game has them (read from the client, merged over the data)
 	},
+	bagPins = {
+		enabled = true,         -- Alt+click pins a bag item to its slot; the game's Cleanup puts it back
+		chars = {},             -- "Name-Realm" -> { ["bag:slot"] = itemID }
+	},
 	tankTarget = {
 		enabled = true,         -- the enemy your group's tank has targeted is marked on its nameplate
 		look = "marker",        -- "marker" (tank shield above the plate), "outline" (round the health bar), "both"

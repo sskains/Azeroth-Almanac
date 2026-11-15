@@ -1275,6 +1275,15 @@ local function BuildInventory(P)
 	P:Check(L["Count my other characters' items"], L["In the crafting profit card."], function() return db.alts end, function(v) db.alts = v end)
 	P:Stepper(L["Remind me to visit a banker after (days)"], 1, 30, 1, function() return db.staleDays end, function(v) db.staleDays = v end)
 
+	-- (2026-11-11) items pinned to bag slots, put back after the game's Cleanup (QoL/BagPins.lua)
+	local BP = Q.BagPins
+	if BP then
+		local pins = Q.db.bagPins
+		P:Section(L["Bag pins"], L["Alt+click an item in your bags to pin it to its slot (a small pin shows in the corner); Alt+click again to unpin. The game's Cleanup still sorts everything, then the pinned items are moved back to their slots. Pins are kept per character."])
+		P:Check(L["Pin items to bag slots"], nil, function() return pins.enabled end, function(v) pins.enabled = v BP:Paint() end)
+		P:Buttons({ { L["Unpin everything"], 150, function() BP:UnpinAll() ns.Print(L["Every bag pin on this character removed."]) end } })
+	end
+
 	-- (#55) upgrade arrows on the Items page and item tooltips, and each character's role
 	local U = ns.Upgrades
 	if U and ns.StatWeights then
