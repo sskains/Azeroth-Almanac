@@ -59,6 +59,9 @@ ns.defaults = {
 		combatOnly = false, showWhenHurt = true, linger = true, lingerSeconds = 5, aggroMarkers = true,
 		aggroGlow = true, aggroBadge = true, buffs = false, tankFirst = true, critical = 25,
 		minMissing = 50, cover = 85, alertSound = false, alertFlash = false, danger = 30, pos = nil,
+		-- (2026-11-11) your layout: icons nudged beside the portraits (px), the window's size (%),
+		-- the space between icons (px); spellOrder / hiddenSpells (by English name) are set from Settings
+		offsetX = 0, offsetY = 0, panelScale = 100, gap = 2,
 	},
 	crafting = { rankByDaily = true, card = true, badges = true, basis = "avg", tooltip = true, vendorPrices = {}, recipes = {} },
 	inventory = { tooltip = true, alts = true, staleDays = 7, hidden = {}, chars = {}, bankTab = true, restCalibration = {} },
