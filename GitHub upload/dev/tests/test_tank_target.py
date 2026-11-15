@@ -186,11 +186,12 @@ check(not p.eval("TT.Polling()"), "...and combat doesn't start the poll")
 p.lua(db + '.enabled = true TT:Refresh()')
 check(p.eval("TT.Polling()") and p.eval("Marked('nameplate1')"), "switched back on in combat: polling and marked again")
 
-# no tank: nothing to do
-p.lua('COMBAT = false FireEvent("PLAYER_REGEN_ENABLED") ROLE.party1 = "DAMAGER" ROLE.player = "DAMAGER" FireEvent("GROUP_ROSTER_UPDATE")')
+# no tank in a raid: nothing to do (a party with none guesses: see the end)
+p.lua('COMBAT = false FireEvent("PLAYER_REGEN_ENABLED") IsInRaid = function() return true end ROLE.party1 = "DAMAGER" ROLE.player = "DAMAGER" FireEvent("GROUP_ROSTER_UPDATE")')
 p.lua('COMBAT = true FireEvent("PLAYER_REGEN_DISABLED")')
-check(p.eval("#TT.Tanks()") == 0 and not p.eval("TT.Polling()"), "a group without a tank: no poll in combat")
+check(p.eval("#TT.Tanks()") == 0 and not p.eval("TT.Polling()"), "a raid without a tank: no poll in combat")
 check(not any(p.eval("Marked('nameplate%d')" % i) for i in (1, 2, 3)), "...and nothing marked")
+p.lua('COMBAT = false FireEvent("PLAYER_REGEN_ENABLED") IsInRaid = function() return false end FireEvent("GROUP_ROSTER_UPDATE")')
 
 # Healer Assist still asks the same question
 check(p.eval("A.QoL.IsTankUnit('party1')") is False and p.eval("(function() ROLE.party1 = 'TANK' return A.QoL.IsTankUnit('party1') end)()") is True,
@@ -245,6 +246,50 @@ p.lua("""
 UnitGUID, UnitIsUnit, UnitCanAttack, C_NamePlate.GetNamePlateForUnit = ORIG.UnitGUID, ORIG.UnitIsUnit, ORIG.UnitCanAttack, ORIG.ForUnit
 issecretvalue = nil TARGET[""] = nil FireEvent("PLAYER_TARGET_CHANGED")
 """)
+
+# (2026-11-14) "still doesn't work in a dungeon": a pickup group with no roles set had no tank to follow
+p.lua("""
+ROLE = {} CLASS = { party1 = "WARRIOR", party2 = "MAGE" } THREAT = { party2 = 3 }
+UnitClass = function(u) return CLASS[u] or "PRIEST", CLASS[u] or "PRIEST" end
+UnitName = function(u) return u end
+UnitThreatSituation = function(u) return THREAT[u] end
+INSTANCE = true IsInInstance = function() return INSTANCE, "party" end
+TARGET.party1, TARGET.party2 = "wolf", "boar"
+COMBAT = false FireEvent("PLAYER_REGEN_ENABLED") FireEvent("GROUP_ROSTER_UPDATE")
+""")
+check(p.eval("#TT.Tanks()") == 0 and not p.eval("Marked('nameplate1')"), "no roles set: no tank, nothing marked")
+p.lua('COMBAT = true FireEvent("PLAYER_REGEN_DISABLED") RunTimers(0.25)')
+check(p.eval("TT.Polling()"), "...but a fight in a party polls anyway, to find who holds the mobs")
+check(p.eval("Marked('nameplate2')") and p.eval("TT.Guessed()") is None,
+      "...a mage holding the mobs is followed while it lasts, not kept as the tank")
+p.lua('THREAT = { party1 = 3, party2 = 3 } RunTimers(0.25)')
+check(p.eval("TT.Guessed()") == "party1" and p.eval("Marked('nameplate1')") and not p.eval("Marked('nameplate2')"),
+      "...the warrior holding them is taken as the tank, ahead of the mage")
+p.lua('THREAT = { party2 = 3 } COMBAT = false FireEvent("PLAYER_REGEN_ENABLED") FireEvent("UNIT_TARGET", "party1")')
+check(p.eval("TT.Guessed()") == "party1" and p.eval("Marked('nameplate1')"), "...and kept after the fight")
+p.lua('ROLE = { party2 = "TANK" } FireEvent("PLAYER_ROLES_ASSIGNED")')
+check(p.eval("TT.Guessed()") is None and p.eval("TT.Tanks()[1]") == "party2" and p.eval("Marked('nameplate2')"),
+      "...until someone is given the tank role")
+
+# the steps, kept in the saved data while in an instance
+p.lua("""
+A.QoL.db.tankWhy = nil
+TARGET.party2 = nil COMBAT = true FireEvent("PLAYER_REGEN_DISABLED") RunTimers(0.25)
+""")
+check(p.eval("#A.QoL.db.tankWhy") == 1 and p.eval("A.QoL.db.tankWhy[1].reason") == "nothing marked",
+      "in an instance, a fight with nothing marked is written down (qol.tankWhy)")
+check(any("lookups:" in (p.eval("A.QoL.db.tankWhy[1].lines[%d]" % i) or "") for i in range(1, 12)), "...with each lookup step")
+p.lua("RunTimers(0.25) RunTimers(0.25)")
+check(p.eval("#A.QoL.db.tankWhy") == 1, "...at most every 30 s")
+p.lua("for _ = 1, 125 do RunTimers(0.25) end")
+check(p.eval("#A.QoL.db.tankWhy") == 2, "...and again after 30 s")
+p.lua('FireEvent("PLAYER_ENTERING_WORLD") TARGET.party2 = "boar" RunTimers(0.25) RunTimers(0.25)')
+check(p.eval("A.QoL.db.tankWhy[3].reason") == "marked" and p.eval("#A.QoL.db.tankWhy") == 3, "...a mark that shows is written once")
+p.lua('A.QoL.db.tankWhy = nil INSTANCE = false TARGET.party2 = nil for _ = 1, 125 do RunTimers(0.25) end')
+check(p.eval("A.QoL.db.tankWhy") is None, "...nothing is written in the open world")
+p.lua('TT:Why()')
+check(p.eval("A.QoL.db.tankWhy[1].reason") == "asked", "/aa tank why writes its lines down too")
+p.lua('COMBAT = false FireEvent("PLAYER_REGEN_ENABLED")')
 
 check(p.eval("#TT_ERRORS") == 0, "no Lua errors from TankTarget.lua (%s)" % p.eval("TT_ERRORS[1]"))
 

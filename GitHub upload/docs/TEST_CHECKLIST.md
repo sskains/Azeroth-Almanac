@@ -8,6 +8,7 @@ Suggested order: Wild Gambit first (it changes the most), then the Almanac pages
 
 ## Unreleased (/reload)
 
+- [ ] **Tank's target with no roles set:** in a party where nobody has the tank role, in a dungeon: once the fight starts, the mob the warrior/paladin/druid holding aggro targets gets the mark / purple glow, and it stays on their target after the fight; giving someone the tank role switches to them. A mage who pulls aggro is followed only while they hold it. Then `/reload` or log out and tell Claude: the saved data has `tankWhy` lines from the dungeon, which say which lookup works there.
 - [ ] **Tank's target in a dungeon:** with a tank-role player, enemy nameplates on: inside a dungeon the tank's target gets the mark / purple glow, it follows them as they switch, and targeting the same mob lights the brighter purple glow and the Target frame halo. If it doesn't, type `/aa tank why` in the dungeon with the tank on a mob and send the chat lines (they say whether the tank was found, what the game tells about their target, and whether its nameplate was found). Out in the world it still works as before. No Lua errors.
 
 - [ ] **Tank's target, Red glow:** Settings > Group Settings > Tank's target > Look > Red glow; in a group with a tank: a red halo round the tank's target's health bar, breathing slowly, easy to pick out in a pack of mobs but not blinding; it moves with the tank's target; it doesn't hide the health bar or the name; next to Threat Monitor's edge on the same mob it still reads. Say if it should be bigger, redder or calmer.
