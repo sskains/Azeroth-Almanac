@@ -289,26 +289,23 @@ local function CardBox()
 	return f
 end
 
--- (2026-11-08) a search box over what they teach and sell, as a block of the detail pane. The same
--- box every time, so it keeps its text and focus while the lists under it are drawn again.
-local function StockSearchBlock()
-	if not stockSearch then
-		local f = CreateFrame("Frame", nil, UIParent)
-		f:SetHeight(24)
-		f.box = W.Search(f, 240, function(text)
-			if f.quiet then return end
-			stockFilter = text or ""
-			page:RedrawStock()
-		end)
-		f.box:SetPoint("LEFT", f, "LEFT", 8, 0)
-		if type(f.box.Instructions) == "table" then f.box.Instructions:SetText(L["Search what they teach and sell"]) end
-		stockSearch = f
-	end
-	return { "frame", stockSearch, function(width)
-		stockSearch:SetWidth(width)
-		stockSearch.box:SetWidth(math.min(240, width - 16))
-		return 24
-	end }
+-- (2026-11-08) a search box over what they teach and sell. (2026-11-11, Shannon: it was a block at
+-- the top of the scrolling detail pane, under the Wild Gambit card, so on a long list it scrolled
+-- out of sight and went unnoticed.) Now it sits in the window's top bar beside the page's own search,
+-- over the detail pane, always in view; shown for a person with anything to teach or sell.
+local function BuildStockSearch(header, pageSearch)
+	local f = CreateFrame("Frame", nil, header)
+	f:SetSize(260, 24)
+	f:SetPoint("LEFT", pageSearch, "RIGHT", 24, 0)
+	f.box = W.Search(f, 240, function(text)
+		if f.quiet then return end
+		stockFilter = text or ""
+		page:RedrawStock()
+	end)
+	f.box:SetPoint("LEFT", f, "LEFT", 8, 0)
+	if type(f.box.Instructions) == "table" then f.box.Instructions:SetText(L["Search what they teach and sell"]) end
+	f:Hide()
+	stockSearch = f
 end
 
 -- whether a line's name holds the search text; nil when there's no search
@@ -361,8 +358,8 @@ local function DescribePerson(p)
 	-- (2026-11-08) a search over the two lists, when there's anything in them
 	local match = StockMatch()
 	local trainSlots = t and TrainingSlots(p.npc, t)
-	if (trainSlots and #trainSlots or 0) + (m and ns.MerchantStockCount and ns.MerchantStockCount(p.npc) or 0) > 0 then
-		b[#b + 1] = StockSearchBlock()
+	if stockSearch then
+		stockSearch:SetShown((trainSlots and #trainSlots or 0) + (m and ns.MerchantStockCount and ns.MerchantStockCount(p.npc) or 0) > 0)
 	end
 
 	-- what they teach you (class spells, weapon skills, riding, recipes): only what they've shown you
@@ -503,6 +500,7 @@ local function Show(sel)
 		mapButton:Hide()
 		pinButton:Hide()
 		detail:SetBlocks(nil, L["Select someone you've met, or a flight path."])
+		if stockSearch then stockSearch:Hide() end
 		return
 	end
 	portrait:Show()
@@ -544,6 +542,7 @@ local function Show(sel)
 		nameText:SetText((node.name or "?"):gsub(",.*$", ""))
 		titleText:SetText(L["Flight path"])
 		placeText:SetText(NOTE .. (node.zone or ZoneName(node.map) or "?") .. "|r")
+		if stockSearch then stockSearch:Hide() end -- (a flight path has nothing to search)
 		detail:SetBlocks(DescribeNode(sel.node, node))
 	end
 	local map = Located()
@@ -807,6 +806,7 @@ function page:Build(parent, header)
 		page:Refresh()
 	end)
 	search:SetPoint("LEFT", header, "LEFT", 16, -2)
+	BuildStockSearch(header, search) -- (the person's own lists: their search, beside the page's)
 	countText = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	countText:SetPoint("RIGHT", header, "RIGHT", -12, -2)
 
@@ -1034,6 +1034,7 @@ end
 
 -- (tests) the stock search's box
 function page:StockSearchBox() return stockSearch and stockSearch.box end
+function page:StockSearchShown() return stockSearch ~= nil and stockSearch:IsShown() end
 
 ns:On("RESET", function() shown = nil if list then list:Select(nil) Show(nil) end end)
 
