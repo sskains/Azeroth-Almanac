@@ -20,6 +20,7 @@ local collapsed = {}
 -- (2026-11-08) the search over a person's Training and For sale lists: its text, whose page it's
 -- for (cleared when another person opens), and the box, made once and placed as a block
 local stockFilter, stockFor, stockSearch = "", nil, nil
+local GoodsMatch -- (2026-11-11: found by what they sell or teach; set with the search, below)
 
 local NOTE = "|cffbfbfbf"
 local FLIGHT_ICON = { "Ability_Mount_Gryphon_01", "Ability_Mount_Wyvern_01", "INV_Misc_Map_01" }
@@ -507,10 +508,12 @@ local function Show(sel)
 	if p then
 		-- another person: their lists open unsearched
 		if p.npc ~= stockFor then
-			stockFor, stockFilter = p.npc, ""
+			-- (2026-11-11) found through the page's search by something they sell or teach: their
+			-- lists open with that search, showing what was looked for
+			stockFor, stockFilter = p.npc, GoodsMatch(p) and filter or ""
 			if stockSearch then
 				stockSearch.quiet = true
-				stockSearch.box:SetText("")
+				stockSearch.box:SetText(stockFilter)
 				stockSearch.quiet = nil
 			end
 		end
@@ -559,13 +562,48 @@ end
 -- List, filters
 ---------------------------------------------------------------------------
 
-local function Matches(p)
-	if groupFilter and groupFilter ~= "nodes" and p.group.key ~= groupFilter then return false end
-	if filter == "" then return true end
+-- (2026-11-11, Shannon: "crusader" found no one, though Stondry Darkhammer sells Plans: Crusader's
+-- Silvered Chain Leggings) everything a person sells and teaches, as one lower-case string for the
+-- search. Kept until their stock is checked again or what they teach changes; not kept while any
+-- name is still unknown (the game sends item names a moment after they're first asked for).
+local goodsCache = {}
+local function GoodsText(p)
+	local m, t = p.recs.merchant, p.recs.trainer
+	if not (m or t) then return "" end
+	local stamp = tostring(m and m.checked or 0) .. ":" .. tostring(m and #(m.stock or {}) or 0) .. ":" .. tostring(t and #(t.teaches or {}) or 0)
+	local c = goodsCache[p.npc]
+	if c and c.stamp == stamp then return c.text end
+	local parts, whole = {}, true
+	for _, e in ipairs(m and m.stock or {}) do
+		local name = ns.MerchantItemName and ns.MerchantItemName(e.id)
+		if name then parts[#parts + 1] = name else whole = false end
+	end
+	for _, id in ipairs(t and t.teaches or {}) do
+		local rec = ns.Store:Get("spell", id)
+		if rec and rec.name then parts[#parts + 1] = rec.name end
+	end
+	local text = table.concat(parts, "\n"):lower()
+	if whole then goodsCache[p.npc] = { stamp = stamp, text = text } end
+	return text
+end
+
+-- the person themself: name, title, where, kind
+local function NameMatches(p)
 	for _, v in ipairs({ p.name, p.title, p.zone, p.sub, p.group.label }) do
 		if v and v:lower():find(filter, 1, true) then return true end
 	end
 	return false
+end
+
+-- (2026-11-11) found by what they sell or teach rather than who they are: their lists open searched
+function GoodsMatch(p)
+	return filter ~= "" and not NameMatches(p) and GoodsText(p):find(filter, 1, true) ~= nil
+end
+
+local function Matches(p)
+	if groupFilter and groupFilter ~= "nodes" and p.group.key ~= groupFilter then return false end
+	if filter == "" then return true end
+	return NameMatches(p) or GoodsText(p):find(filter, 1, true) ~= nil
 end
 
 -- (0.69.0, #38) a person as one record for "new": first met (by anyone, or by this character) in any role
@@ -800,11 +838,7 @@ end
 
 function page:Build(parent, header)
 	view, groupFilter, crumb = "cards", nil, nil -- (each session starts on the cards, as the Creatures page does)
-	local search = W.Search(header, 220, function(text)
-		filter = text or ""
-		if filter ~= "" and view == "cards" then view, groupFilter, crumb = "list", nil, nil end
-		page:Refresh()
-	end)
+	local search = W.Search(header, 220, function(text) page:Search(text) end)
 	search:SetPoint("LEFT", header, "LEFT", 16, -2)
 	BuildStockSearch(header, search) -- (the person's own lists: their search, beside the page's)
 	countText = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1031,6 +1065,18 @@ function page:RedrawStock()
 	local p = shown and shown.npc and Person(shown.npc)
 	if p and detail then detail:SetBlocks(DescribePerson(p), nil, true) end
 end
+
+-- the page's own search (its box, and the tests): people by name, title, place, and (2026-11-11)
+-- by what they sell or teach
+function page:Search(text)
+	filter = text or ""
+	if filter ~= "" and view == "cards" then view, groupFilter, crumb = "list", nil, nil end
+	stockFor = nil -- (the person showing is looked at again: found by their goods, their lists take the search)
+	page:Refresh()
+end
+
+-- (tests) whether someone is listed for the page's search now
+function page:Matches(npc) local p = Person(npc) return p ~= nil and Matches(p) end
 
 -- (tests) the stock search's box
 function page:StockSearchBox() return stockSearch and stockSearch.box end
