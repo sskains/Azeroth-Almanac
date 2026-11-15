@@ -663,6 +663,16 @@ local function DrawMail(content, c)
 	return DrawRows(content, rows, y)
 end
 
+-- (2026-11-11, Shannon) what a character's posted auctions are worth: the prices the list shows
+-- (buyout, else the bid), and what would reach them after the auction house's 5% cut
+local AH_CUT = 0.05
+local function AuctionsWorth(items)
+	local total = 0
+	for _, e in ipairs(items or {}) do total = total + (e.buyout or e.bid or 0) end
+	return total, math.floor(total * (1 - AH_CUT))
+end
+IW.AuctionsWorth = AuctionsWorth
+
 local function DrawAuctions(content, c)
 	local a = c.auctions
 	if not a then return EmptyNote(content, "No auctions seen yet. Open the auction house on this character to update.") end
@@ -671,10 +681,13 @@ local function DrawAuctions(content, c)
 	for _, e in ipairs(a.items) do
 		local left = e.ends and math.max(0, e.ends - now)
 		local ends = left and (left > 3600 and ("%dh left"):format(math.floor(left / 3600)) or ("%dm left"):format(math.floor(left / 60))) or ""
-		tinsert(rows, ItemRow(e[1], e[2], ends, e.buyout and Money(e.buyout) or (e.bid and Money(e.bid)) or ""))
+		local price = e.buyout or e.bid
+		tinsert(rows, ItemRow(e[1], e[2], ends, price and Money(price) or ""))
 	end
-	local y = SectionHeader(content, 4, "Interface\\Icons\\INV_Misc_Coin_02", "Posted auctions",
-		("%d  |cff999999(seen %s)|r"):format(#rows, Ago(a.time)))
+	local total, after = AuctionsWorth(a.items)
+	local worth = total > 0 and ("  \194\183  total %s  |cff999999(%s after the 5%% cut, seen %s)|r"):format(Money(total), Money(after), Ago(a.time))
+		or ("  |cff999999(seen %s)|r"):format(Ago(a.time))
+	local y = SectionHeader(content, 4, "Interface\\Icons\\INV_Misc_Coin_02", "Posted auctions", #rows .. worth)
 	return DrawRows(content, rows, y)
 end
 
