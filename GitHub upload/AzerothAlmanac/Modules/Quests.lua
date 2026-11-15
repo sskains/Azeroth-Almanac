@@ -256,6 +256,22 @@ local function LogEntries()
 	return out
 end
 
+-- (2026-11-11, Shannon) how many quests you have in each of the log's zone headings: { [heading] = n }.
+-- The game's quest log shows these beside each heading (QoL/QuestLogCounts.lua).
+function Q:CountsByZone()
+	local counts = {}
+	for _, e in ipairs(LogEntries()) do
+		if e.header then counts[e.header] = (counts[e.header] or 0) + 1 end
+	end
+	return counts
+end
+
+-- (the quest count beside zone names, the Almanac's page and the game's log: on unless switched off)
+function Q:ZoneCountsOn()
+	local s = ns.db and ns.db.settings
+	return not (s and s.questZoneCounts == false)
+end
+
 local function Goals(qid)
 	if not (C_QuestLog and C_QuestLog.GetQuestObjectives) then return nil end
 	local ok, list = pcall(C_QuestLog.GetQuestObjectives, qid)

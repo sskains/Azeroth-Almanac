@@ -47,6 +47,7 @@ QoL\Crafting.lua
 QoL\Merchant.lua
 QoL\MerchantList.lua
 QoL\QuestTargeter.lua
+QoL\QuestLogCounts.lua
 QoL\NodeHighlight.lua
 QoL\Travel.lua
 QoL\GemMatchLogic.lua

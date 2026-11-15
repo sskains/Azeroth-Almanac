@@ -880,6 +880,16 @@ local function BuildQuests(P)
 	local db = Q.db.questTargeter
 	local QT = Q.QuestTargeter
 	local function R() QT:Refresh() end
+	-- (2026-11-11) how many quests you have in each zone, beside its name: the Almanac's Quests page
+	-- and the game's quest log
+	P:Section(L["Quest counts"])
+	P:Check(L["Quest counts beside zone names"], L["How many quests you have in each zone, in gold beside the zone's name: on the Almanac's Quests page and in the game's quest log."],
+		function() return Opt().questZoneCounts ~= false end, function(v)
+			Opt().questZoneCounts = v
+			if Q.QuestLogCounts then Q.QuestLogCounts:Refresh() end
+			local page = ns.UI and ns.UI:GetPage("quests")
+			if page and page.Refresh then pcall(page.Refresh, page) end
+		end)
 	P:Section(L["Tracker buttons"])
 	P:Check(L["Target buttons in the quest tracker"], L["A sword beside each kill or loot objective targets the nearest matching mob (also on a hotkey)."],
 		function() return db.enabled end, function(v) db.enabled = v R() end)
