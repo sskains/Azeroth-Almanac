@@ -1,32 +1,29 @@
-# Azeroth Almanac 1.5.1: what's new
+# Azeroth Almanac 1.5.2: what's new
 
 Paste this into the "Changelog" box when uploading. It is written for players; the developer detail is in
-`CHANGELOG.md` under 1.5.1.
+`CHANGELOG.md` under 1.5.2.
 
-Needs a **full game restart**, not just `/reload`: this update adds two new files (`QoL/TankTarget.lua`,
-`UI/SearchAll.lua`).
+Needs a **full game restart**, not just `/reload`: this update adds three new files (`QoL/BagPins.lua`,
+`QoL/HealerTarget.lua`, `QoL/QuestLogCounts.lua`).
 
 ## New
 
-- **Search the whole Almanac from any page.** Type in any page's search box and, besides filtering that page,
-  a panel lists everything else that matches: creatures, items, quests, people and flight paths, places,
-  dungeons, gathering nodes and fishing waters, recipes and class spells. Click a name to open it, or a page's
-  heading to open that page already searched. The Journal and your characters' bags and bank are a click away
-  from the same panel.
-- **The tank's target, marked.** In a group with a tank, the enemy they're targeting gets a tank shield above its
-  nameplate, and the mark follows them as they switch, all fight long. Settings > Group Settings > Tank's
-  target: a marker, an outline round the health bar, or both, in a colour of your choice. Needs enemy
-  nameplates on.
-- **Search a vendor's or trainer's list.** On People, a search box over a person's Training and For sale lists
-  narrows both as you type ("belt", "pattern", "flux").
-- **`/aa xp Name`** asks another Almanac player how far they are through their level (or `/aa xp` with them
-  targeted): the same question as the right-click menu, typed.
+- **Bag pins.** Alt+click an item in your bags to pin it to its slot. The game's Cleanup still sorts everything else, and your pinned items go back where you put them. Alt+click again to unpin.
+- **See who the other healers are healing.** In a group with another healer, the person they've selected gets a badge with their name on their unit frame. While their heal is on the way, the frame glows green, so you can heal someone else and no heal is wasted.
+- **Tank's target: purple glow and "you're on it".** The outline is now a soft purple glow round the tank's target's health bar (Soft or Strong). When your own target is the tank's, its nameplate and your Target frame glow purple. There's also a new Red glow look. For now it works out in the world but not inside dungeons, where the game doesn't let addons see another player's target. `/aa tank why` explains what it can see.
+- **Quest counts by zone.** How many quests you have in each zone, beside the zone's name, both on the Almanac's Quests page and in the game's quest log.
+- **Auctions total.** Characters > Auctions shows what all your posted auctions are worth, and what you'd get after the 5% cut.
+- **Healer Assist your way.** Reorder or hide spell buttons, change the space between them, nudge the icons beside the portraits and resize the window.
+- **Find people by what they sell.** The People search now finds vendors and trainers by their goods: "crusader" finds the blacksmith selling the Crusader's leggings plans. The search box for a person's lists now stays in the top bar while you scroll.
+- **Your Deck: a New section.** Wild Gambit's Your Deck page opens with the cards you've earned or that went up a tier since you last looked.
+- **Flight countdown.** The take-off card has a proper progress bar with the time left counting down, and the landing card closes when you walk off.
 
-## Changed
+## Fixed and improved
 
-- **Talent Planner: WoW Forever's new talent trees.** The planner now has the trees from the latest client
-  (Paladin, Rogue and Druid were reworked; Warrior Fury, Mage, Shaman Elemental and Priest Holy changed too).
-  Builds you saved before move onto the new trees by themselves, each point to the talent of the same name;
-  anything the new trees no longer allow is left out, and a chat line at login names the builds to check.
-
-Talent data: talentsforever.com (https://talentsforever.com), CC BY 4.0.
+- **Wild Gambit says why a win earned no card.** An enemy's card comes with your first kill of one; a win before that now tells you so (your wins still count). The table picks opponents whose wins count.
+- **No more dungeon discoveries popping up days later.** Creatures from a dungeon you visited earlier no longer get announced as new discoveries in an unrelated session.
+- **Alt+Right-click to sell matches the lowest live price** again, not an old scan's.
+- **Characters > Auctions shows new auctions** right after you post, cancel, or open the Auctions tab.
+- **Crafting profit is per item** ("+2.6s ea"), not mixed up with sales per day.
+- **Quest Targeter:** no more "blocked from an action" popup when clicking the target button repeatedly in combat, and its badges now line up with the game's quest icons.
+- **"XP to level"** on the experience bar moved left so the gryphon no longer covers it.

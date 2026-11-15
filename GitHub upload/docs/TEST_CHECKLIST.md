@@ -6,7 +6,7 @@ Before testing: install the latest build, note the version (AddOns list), and co
 
 Suggested order: Wild Gambit first (it changes the most), then the Almanac pages, then the quality-of-life helpers.
 
-## Unreleased (/reload)
+## 1.5.2 (**full game restart**: the new files QoL/BagPins.lua, QoL/HealerTarget.lua and QoL/QuestLogCounts.lua)
 
 - [ ] **Quest Targeter badge alignment:** with several quests tracked (one-line and two-line titles, turn-ins, a quest with two target badges side by side): each badge is level with the game's own quest icon on that row and the same small gap from it; a turn-in badge's "?" looks like the game's own "?" beside it (same ring, colours and glyph, a little smaller), and so does the small "?" in a face badge's corner; hovering the game's icon doesn't leave a glow on ours; a badge with a face (turn-in NPC or quest mob) has the face in the middle of its circle, not up or to one side (try a few different creatures); nothing overlaps the game's icons; collapse and expand the tracker, scroll it, change the UI scale: the badges follow (after combat if it changed during one).
 - [ ] **Quest Targeter, no blocked popup:** near quest mobs that other players are fighting, click the target button several times, both before a fight and during one: no "blocked from an action" popup; out of combat a mob someone else is fighting is dropped ("Skipped ..."), in combat the target stays with the "someone else's ... mid-fight" note.
