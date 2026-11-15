@@ -13,7 +13,13 @@ local ns = A.QoL
 local QT = ns:NewModule("QuestTargeter")
 
 local BUTTON_SIZE = 20
-local TRACKER_GAP = 18 -- space between our buttons and the tracker's own quest icons
+local TRACKER_GAP = 18 -- space between our buttons and the tracker's edge (when a quest's own icon isn't found)
+local ICON_GAP = 6     -- (2026-11-11) space between our badge and the game's own icon for that quest
+-- (2026-11-11, Shannon: "center the character in the middle better, like the ?") the part of a
+-- creature's portrait the badge shows: the game's portraits sit the face a little up and to the
+-- left of the middle, so the badge zooms in a touch and looks there. Left, right, top, bottom.
+local FACE_CROP = { 0.06, 0.86, 0.04, 0.84 }
+local CORNER_SIZE = 12 -- the game's "?" copied small into a face badge's corner
 local BADGE_SPACING = 7 -- between badges side by side on one quest's row
 local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local MAX_SOURCES_IN_MACRO = 4
@@ -461,10 +467,35 @@ end
 -- Finding objective lines in the tracker
 ---------------------------------------------------------------------------
 
+-- (2026-11-11, Shannon: line our badges up with the game's own quest icons) of the small square
+-- frames found in the tracker, the icon the game drew at the left of a quest's title: just left of
+-- the title's text, level with its first line. Compared in screen units, since the tracker can be scaled.
+local function IconBeside(title, icons)
+	local s = title:GetEffectiveScale()
+	local left, top = title:GetLeft(), title:GetTop()
+	if not (left and top) then return nil end
+	local _, size = title:GetFont()
+	local lineY = (top - (size or 12) / 2) * s
+	left = left * s
+	local best, bestDY
+	for _, icon in ipairs(icons) do
+		local cs = icon:GetEffectiveScale()
+		local right, cx, cy = icon:GetRight(), icon:GetCenter()
+		if right and cy then
+			right, cy = right * cs, cy * cs
+			local dy = math.abs(cy - lineY)
+			if right <= left + 2 and left - right <= 50 and dy <= 14 and (not bestDY or dy < bestDY) then best, bestDY = icon, dy end
+		end
+	end
+	return best
+end
+QT.IconBeside = IconBeside
+
 -- Walks the tracker's frames looking for visible text lines we can make a button for.
 local function FindTrackerLines()
 	local found = {}
 	local titleRegions = {} -- quest title -> its line in the tracker
+	local icons = {}        -- small square frames in the tracker: the game's quest icons among them
 	local function scan(frame, depth)
 		if depth > 15 or not frame:IsVisible() then return end
 		for _, region in ipairs({ frame:GetRegions() }) do
@@ -487,6 +518,10 @@ local function FindTrackerLines()
 			end
 		end
 		for _, child in ipairs({ frame:GetChildren() }) do
+			-- (2026-11-11) a small square thing is a candidate for a quest's own icon (the game's "?",
+			-- "!" and "..." buttons): our badges line up with it (IconBeside)
+			local w, h = child:GetWidth(), child:GetHeight()
+			if child:IsVisible() and w and h and w >= 12 and w <= 34 and math.abs(w - h) <= 4 then icons[#icons + 1] = child end
 			scan(child, depth + 1)
 		end
 	end
@@ -494,10 +529,13 @@ local function FindTrackerLines()
 	-- right next to it, a quest's kill and loot objectives side by side going left.
 	local function Arrange()
 		local perQuest = {}
+		local iconFor = {}
 		for _, line in ipairs(found) do
 			local titleRegion = titleRegions[line.quest]
 			if titleRegion then
 				line.anchor = titleRegion
+				if iconFor[titleRegion] == nil then iconFor[titleRegion] = IconBeside(titleRegion, icons) or false end
+				line.icon = iconFor[titleRegion] or nil
 				perQuest[line.quest] = (perQuest[line.quest] or 0) + 1
 				line.slot = perQuest[line.quest]
 			else
@@ -911,6 +949,52 @@ end
 
 -- Badges show a face with a small icon in the corner: the turn-in NPC with a "?", the quest mob
 -- with a sword. Without a face, just the icon. (Only textures change here, so it's safe in combat.)
+-- (2026-11-11, Shannon: "get the ? looking more like the WoW in game ?") a turn-in's "?" is the
+-- game's own: the icon the tracker drew beside that quest (a turn-in's quest is done, so it's the
+-- game's "?") copied texture by texture, atlas or file, colours and layers, scaled to `size` on
+-- `host`. Returns false when there's nothing readable to copy (the badge keeps its own look).
+local function MirrorIcon(host, gameIcon, size)
+	host.mirror = host.mirror or {}
+	for _, t in ipairs(host.mirror) do t:Hide() end
+	if not (gameIcon and gameIcon.GetRegions and gameIcon:GetWidth()) then return false end
+	local gw = gameIcon:GetWidth()
+	local gl, gt = gameIcon:GetLeft(), gameIcon:GetTop()
+	if not (gw and gw > 0 and gl and gt) then return false end
+	local k = size / gw
+	local list = {}
+	local function collect(frame, depth)
+		for _, r in ipairs({ frame:GetRegions() }) do
+			-- (not the hover glow: the HIGHLIGHT layer counts as shown while it waits for the mouse)
+			if r:GetObjectType() == "Texture" and r:IsShown() and r:GetDrawLayer() ~= "HIGHLIGHT" then list[#list + 1] = r end
+		end
+		if depth < 2 then for _, c in ipairs({ frame:GetChildren() }) do if c:IsShown() then collect(c, depth + 1) end end end
+	end
+	collect(gameIcon, 0)
+	local n = 0
+	for _, r in ipairs(list) do
+		local l, rt, t, bm = r:GetLeft(), r:GetRight(), r:GetTop(), r:GetBottom()
+		local atlas = r.GetAtlas and r:GetAtlas()
+		local file = not atlas and r:GetTexture()
+		if l and rt and t and bm and (atlas or file) then
+			n = n + 1
+			local m = host.mirror[n]
+			if not m then m = host:CreateTexture(nil, "ARTWORK") host.mirror[n] = m end
+			local layer, sub = r:GetDrawLayer()
+			m:SetDrawLayer(layer or "ARTWORK", math.max(-8, math.min(7, sub or 0)))
+			if atlas then m:SetAtlas(atlas) else m:SetTexture(file) m:SetTexCoord(r:GetTexCoord()) end
+			m:SetVertexColor(r:GetVertexColor())
+			m:SetBlendMode(r:GetBlendMode() or "BLEND")
+			m:SetAlpha(r:GetAlpha() or 1)
+			m:ClearAllPoints()
+			m:SetPoint("TOPLEFT", host, "TOPLEFT", (l - gl) * k, (t - gt) * k)
+			m:SetSize(math.max(1, (rt - l) * k), math.max(1, (t - bm) * k))
+			m:Show()
+		end
+	end
+	return n > 0
+end
+QT.MirrorIcon = MirrorIcon
+
 local function StyleBadge(b)
 	local npcID
 	if b.kind == "turnin" then
@@ -919,19 +1003,32 @@ local function StyleBadge(b)
 		npcID = db.mobFaces and b.targets and MobID(b.targets[1])
 	end
 	local display = npcID and db.displayIDs[npcID]
+	local turnin = b.kind == "turnin"
 	b.icon:ClearAllPoints()
+	-- (only textures change: the two holders for the copied "?" were made with the button)
+	local copied = false
 	if display and SetPortraitTextureFromCreatureDisplayID then
 		SetPortraitTextureFromCreatureDisplayID(b.portrait, display)
+		b.portrait:SetTexCoord(unpack(FACE_CROP))
 		b.portrait:Show()
 		b.icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
 		b.icon:SetSize(11, 11)
+		-- the small "?" in the face badge's corner: the game's too
+		MirrorIcon(b.whole, nil, BUTTON_SIZE)
+		copied = turnin and MirrorIcon(b.corner, b.gameIcon, CORNER_SIZE)
+		b.ring:Show() b.bg:Show()
 	else
 		b.portrait:Hide()
 		b.icon:SetPoint("CENTER")
 		b.icon:SetSize(BUTTON_SIZE - 6, BUTTON_SIZE - 6)
 		if npcID then Resolve(npcID) end
+		-- a "?" on its own: the game's whole icon, ring and all, in place of ours
+		MirrorIcon(b.corner, nil, CORNER_SIZE)
+		copied = turnin and MirrorIcon(b.whole, b.gameIcon, BUTTON_SIZE)
+		b.ring:SetShown(not copied) b.bg:SetShown(not copied)
 	end
-	b.icon:SetTexture(b.kind == "turnin" and TURNIN_ICON or ATTACK_ICON)
+	b.icon:SetShown(not copied)
+	b.icon:SetTexture(turnin and TURNIN_ICON or ATTACK_ICON)
 end
 
 function StyleAllBadges()
@@ -980,6 +1077,15 @@ local function CreateButton(i)
 	b.icon:SetPoint("CENTER")
 	b.icon:SetSize(BUTTON_SIZE - 6, BUTTON_SIZE - 6)
 	b.icon:SetTexture(ATTACK_ICON)
+	-- (2026-11-11) holders for a copy of the game's own "?" (MirrorIcon): the whole badge, or the
+	-- face badge's corner. Plain frames that don't take the mouse, so clicks still reach the button.
+	b.whole = CreateFrame("Frame", nil, b)
+	b.whole:SetAllPoints()
+	b.whole:SetFrameLevel(b:GetFrameLevel() + 1)
+	b.corner = CreateFrame("Frame", nil, b)
+	b.corner:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 4, -4)
+	b.corner:SetSize(CORNER_SIZE, CORNER_SIZE)
+	b.corner:SetFrameLevel(b:GetFrameLevel() + 2)
 
 	local highlight = b:CreateTexture(nil, "HIGHLIGHT")
 	highlight:SetTexture(CIRCLE)
@@ -1053,7 +1159,17 @@ local function Layout()
 		buttons[i] = b
 		local anchor = line.anchor or line.region
 		local top, bottom = anchor:GetTop(), anchor:GetBottom()
-		if x and top and bottom then
+		-- (2026-11-11) beside the game's own icon when there is one: level with its centre, a set gap
+		-- to its left (the title's text sits a little differently from the icon, so centring on the
+		-- text left some badges a few pixels low)
+		local rowX = x
+		if line.icon and line.icon:GetLeft() and line.icon:GetTop() then
+			local s = line.icon:GetEffectiveScale() / uiScale
+			top, bottom = line.icon:GetTop() * s, line.icon:GetBottom() * s
+			rowX = line.icon:GetLeft() * s - ICON_GAP
+			anchor = UIParent -- (top and bottom are already in UIParent's units)
+		end
+		if rowX and top and bottom then
 			local y = (top + bottom) / 2 * anchor:GetEffectiveScale() / uiScale
 			local macro = MacroFor(line.targets, line.kind)
 			if b.macro ~= macro then
@@ -1061,9 +1177,10 @@ local function Layout()
 				b:SetAttribute("macrotext", macro)
 			end
 			b.key, b.targets, b.quest, b.kind, b.npcID = line.key, line.targets, line.quest, line.kind, line.npcID
+			b.gameIcon = line.icon -- (a turn-in's badge copies it: StyleBadge)
 			StyleBadge(b)
 			b:ClearAllPoints()
-			b:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", x - ((line.slot or 1) - 1) * (BUTTON_SIZE + BADGE_SPACING), y)
+			b:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", rowX - ((line.slot or 1) - 1) * (BUTTON_SIZE + BADGE_SPACING), y)
 			b:Show()
 		else
 			b.key = nil
