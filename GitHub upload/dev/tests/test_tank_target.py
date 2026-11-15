@@ -113,20 +113,59 @@ check(p.eval("Marked('nameplate2')"), "...and comes back when the plate does")
 # looks
 p.lua(db + '.look = "outline" TT:Refresh()')
 m = "TT.MarkOf(PLATES.nameplate1)"
-check(p.eval(m + ".edge:IsShown()") and not p.eval(m + ".icon:IsShown()"), "Outline: the edge, no shield")
+check(p.eval(m + ".edgeGlow:IsShown()") and not p.eval(m + ".icon:IsShown()"), "Soft glow: the glow round the bar, no shield")
+check(p.eval(m + ".edge == nil"), "...and no hard outline anywhere (2026-11-11: glow only)")
 p.lua(db + '.look = "both" TT:Refresh()')
-check(p.eval(m + ".edge:IsShown()") and p.eval(m + ".icon:IsShown()"), "Both: edge and shield")
+check(p.eval(m + ".edgeGlow:IsShown()") and p.eval(m + ".icon:IsShown()"), "Both: glow and shield")
 p.lua(db + '.look = "marker" TT:Refresh()')
-check(not p.eval(m + ".edge:IsShown()") and p.eval(m + ".icon:IsShown()"), "Marker above: the shield, no edge")
+check(not p.eval(m + ".edgeGlow:IsShown()") and p.eval(m + ".icon:IsShown()"), "Marker above: the shield, no glow")
 # (2026-11-11) the red glow: a breathing red halo round the bar, nothing else
 check(p.eval('(function() for _, l in ipairs(TT.looks) do if l.key == "glow" then return l.name end end end)()') == "Red glow", "a fourth look: Red glow")
 p.lua(db + '.look = "glow" TT:Refresh()')
-check(p.eval(m + ".glow:IsShown()") and not p.eval(m + ".edge:IsShown()") and not p.eval(m + ".icon:IsShown()"), "Red glow: the glow, no shield, no edge")
+check(p.eval(m + ".glow:IsShown()") and not p.eval(m + ".edgeGlow:IsShown()") and not p.eval(m + ".icon:IsShown()"), "Red glow: the red glow, no shield, no purple glow")
 p.lua("UPD = " + m + ":GetScript('OnUpdate') ALPHAS = {} for i = 1, 8 do NOW = (NOW or 100) + 0.2 UPD(" + m + ") ALPHAS[i] = " + m + ".glow._alpha end")
 alphas = [p.eval("ALPHAS[%d]" % i) for i in range(1, 9)]
 check(all(a is not None and 0.44 <= a <= 0.96 for a in alphas) and max(alphas) - min(alphas) > 0.2, "...it breathes, between dim and bright (%s)" % ["%.2f" % a for a in alphas if a is not None])
 p.lua(db + '.look = "marker" TT:Refresh()')
 check(not p.eval(m + ".glow:IsShown()"), "back to Marker above: the glow goes")
+
+# (2026-11-11) purple, and the outline's halo
+check(p.eval(db + ".color[1]") == 0.64 and p.eval(db + ".color[3]") == 0.93, "the outline is the game's epic purple by default")
+p.lua(db + '.look = "outline" ' + db + '.outlineGlow = "soft" TT:Refresh()')
+check(p.eval(m + ".edgeGlow:IsShown()") and abs(p.eval(m + ".edgeGlow:GetAlpha()") - 0.6) < 1e-9, "Soft glow at Soft")
+p.lua(db + '.outlineGlow = "strong" TT:Refresh()')
+check(abs(p.eval(m + ".edgeGlow:GetAlpha()") - 0.95) < 1e-9, "...Strong: brighter")
+p.lua(db + '.outlineGlow = "off" TT:Refresh()')
+check(p.eval(m + ".edgeGlow:IsShown()") and abs(p.eval(m + ".edgeGlow:GetAlpha()") - 0.6) < 1e-9, "...an \"Off\" saved before (no edge now, so nothing would show) reads as Soft")
+check(p.eval("#TT.glowLevels") == 2, "the choices are Soft and Strong")
+p.lua(db + '.look = "marker" TT:Refresh()')
+check(not p.eval(m + ".edgeGlow:IsShown()"), "Marker above: no halo")
+
+# (2026-11-11) locked on: your target is a tank's target
+m2 = "TT.MarkOf(PLATES.nameplate2)"
+p.lua('TARGET[""] = "wolf" FireEvent("PLAYER_TARGET_CHANGED") RunTimers(0.25)')
+check(p.eval(m + ".lock:IsShown()") and not p.eval(m2 + ".lock:IsShown()"), "your target is the first tank's (the wolf): its plate gets the brighter purple glow, the boar's doesn't")
+check(p.eval("TT.lockedOn") and p.eval("TT.TargetHalo() ~= nil and TT.TargetHalo():IsShown()"), "...and your Target frame its purple halo")
+p.lua("LUPD = " + m + ":GetScript('OnUpdate') LA = {} for i = 1, 6 do NOW = (NOW or 100) + 0.17 LUPD(" + m + ") LA[i] = " + m + ".lock._alpha end")
+la = [p.eval("LA[%d]" % i) for i in range(1, 7)]
+check(all(a is not None and 0.59 <= a <= 1.01 for a in la) and max(la) - min(la) > 0.2, "...it pulses (%s)" % ["%.2f" % a for a in la if a is not None])
+p.lua('TARGET[""] = "boar" FireEvent("PLAYER_TARGET_CHANGED") RunTimers(0.25)')
+check(not p.eval(m + ".lock:IsShown()") and p.eval(m2 + ".lock:IsShown()"), "you switch to the boar (the second tank's): the lock-on moves with you")
+p.lua('TARGET[""] = "guard" FireEvent("PLAYER_TARGET_CHANGED") RunTimers(0.25)')
+check(not p.eval(m + ".lock:IsShown()") and not p.eval(m2 + ".lock:IsShown()") and not p.eval("TT.TargetHalo():IsShown()"), "a target no tank has: no lock-on anywhere")
+p.lua('TARGET[""] = "boar" TARGET.party2 = "wolf" RunTimers(0.25)')
+check(not p.eval(m2 + ".lock:IsShown()") and not p.eval("TT.TargetHalo():IsShown()"), "the tank moves off your mob: the lock-on goes at the next poll")
+p.lua('TARGET.party2 = "boar" RunTimers(0.25)')
+check(p.eval(m2 + ".lock:IsShown()"), "...and comes back when the tank does")
+p.lua(db + '.lockOnPlate = false TT:Refresh()')
+check(not p.eval(m2 + ".lock:IsShown()") and p.eval("TT.TargetHalo():IsShown()"), "Brighter glow on its nameplate off: the Target frame halo alone")
+p.lua(db + '.lockOnPlate = true ' + db + '.lockOnFrame = false TT:Refresh()')
+check(p.eval(m2 + ".lock:IsShown()") and not p.eval("TT.TargetHalo():IsShown()"), "Glow round my Target frame off: the nameplate alone")
+p.lua(db + '.lockOnFrame = true FireEvent("NAME_PLATE_UNIT_REMOVED", "nameplate2") RunTimers(0.25)')
+check(p.eval("TT.TargetHalo():IsShown()"), "the mob out of nameplate range: the Target frame still shows you're on it")
+p.lua('FireEvent("NAME_PLATE_UNIT_ADDED", "nameplate2") ' + db + '.lockOn = false TT:Refresh()')
+check(not p.eval(m2 + ".lock:IsShown()") and not p.eval("TT.TargetHalo():IsShown()"), "Show when my target is the tank's target off: neither")
+p.lua(db + '.lockOn = true TARGET[""] = nil FireEvent("PLAYER_TARGET_CHANGED") RunTimers(0.25)')
 
 # combat ends: the poll stops, the mark stays
 p.lua('COMBAT = false FireEvent("PLAYER_REGEN_ENABLED")')
@@ -160,6 +199,17 @@ check(p.eval("A.QoL.IsTankUnit('party1')") is False and p.eval("(function() ROLE
 # the settings section builds (Settings > Group Settings, /aa settings tank)
 p.lua('SOK, SERR = pcall(function() A.QoL.Settings:Open("tank") RunTimers(1) end)')
 check(p.eval("SOK"), "the Group Settings page opens with the Tank's target section (%s)" % p.eval("tostring(SERR)"))
+
+# (2026-11-11) a saved outline colour still at the old default blue moves to purple, once; a picked one stays
+p.lua("""
+SAVED_A = { tankTarget = { color = { 0.25, 0.6, 1 } } } TT:OnInitialize(SAVED_A)
+SAVED_B = { tankTarget = { color = { 1, 0, 0 } } } TT:OnInitialize(SAVED_B)
+SAVED_C = { tankTarget = { color = { 0.25, 0.6, 1 }, purpled = true } } TT:OnInitialize(SAVED_C)
+TT:OnInitialize(A.QoL.db)
+""")
+check(p.eval("SAVED_A.tankTarget.color[1]") == 0.64, "the old default blue becomes purple")
+check(p.eval("SAVED_B.tankTarget.color[1]") == 1, "a colour picked by hand stays")
+check(p.eval("SAVED_C.tankTarget.color[1]") == 0.25, "...and blue picked again after the switch stays too (it's done once)")
 
 check(p.eval("#TT_ERRORS") == 0, "no Lua errors from TankTarget.lua (%s)" % p.eval("TT_ERRORS[1]"))
 
