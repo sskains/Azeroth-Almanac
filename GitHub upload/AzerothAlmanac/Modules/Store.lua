@@ -185,10 +185,17 @@ end
 -- Journal
 ---------------------------------------------------------------------------
 
-function Store:AddJournal(kind, id, text, where)
+-- t: when it happened, if not now (2026-11-14: a creature named days after its corpse was found goes
+-- in among that day's lines, not at the end; the journal is kept in time order)
+function Store:AddJournal(kind, id, text, where, t)
 	local j = ns.db.journal
 	where = where or ns.Where()
-	j[#j + 1] = { t = time(), k = kind, i = id, c = ns.CharKey(), s = text, m = where.map, x = where.x, y = where.y }
+	local e = { t = t or time(), k = kind, i = id, c = ns.CharKey(), s = text, m = where.map, x = where.x, y = where.y }
+	local at = #j + 1
+	if t then
+		while at > 1 and type(j[at - 1].t) == "number" and j[at - 1].t > t do at = at - 1 end
+	end
+	table.insert(j, at, e)
 	local max = ns.db.settings.journalMax or 5000
 	-- (trimmed in chunks of 250: shifting the whole journal for every entry past the cap was slow, 0.64.0)
 	if #j > max + 250 then

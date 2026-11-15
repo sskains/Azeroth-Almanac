@@ -514,13 +514,27 @@ function B:SharedKill(npc, guid)
 end
 
 -- names for the creatures known only by their corpse (the game answers once you're outside)
+-- (2026-11-14, a player: Deadmines discoveries announced days after she was there) the game often
+-- doesn't know the name on the way out, and the question is asked again at every zone change, so
+-- the answer can come days later, anywhere. A name that comes more than LATE_NAME after the corpse
+-- is written quietly: no alert, and its journal line goes in at the time of the corpse. A creature
+-- already in the Almanac under that name (a boss announced by its encounter, as a stand-in) isn't
+-- new at all: no alert and no second journal line.
+B.LATE_NAME = 3600
 function B:Named(npc, rec, name)
-	local pw = rec.pw
+	local pw, met = rec.pw, rec.f
+	local late = type(met) == "number" and time() - met > B.LATE_NAME
+	local known = false
+	for key, other in pairs(ns.Store:All("creature")) do
+		if key ~= npc and type(other) == "table" and other.name == name then known = true break end
+	end
 	rec.name, rec.unnamed, rec.pg, rec.pw = name, nil, nil, nil
 	if byName then byName[name] = npc end
 	-- (0.66.1) the journal places it where its corpse was, not where you stood when it was named
-	ns.Store:AddJournal("creature", npc, name, pw and { map = pw.m, x = pw.x, y = pw.y } or nil)
-	ns:Fire("DISCOVERY", "creature", npc, rec, name, false)
+	if not known then
+		ns.Store:AddJournal("creature", npc, name, pw and { map = pw.m, x = pw.x, y = pw.y } or nil, late and met or nil)
+	end
+	ns:Fire("DISCOVERY", "creature", npc, rec, name, (late or known) and true or false)
 	if ns.Dungeons and ns.Dungeons.MergeStandIn then pcall(ns.Dungeons.MergeStandIn, ns.Dungeons, npc, rec) end
 	ns:Fire("CHANGED", "creature", npc)
 end
